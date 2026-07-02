@@ -1,11 +1,12 @@
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
-    TaskId,
 };
+
+type TestCore = KernelCore<4, 4, 16, 4>;
 
 #[test]
 fn observes_resource_when_capability_allows_observe() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(7);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -26,7 +27,7 @@ fn observes_resource_when_capability_allows_observe() {
 
 #[test]
 fn denies_action_when_capability_does_not_include_operation() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(1);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -43,7 +44,7 @@ fn denies_action_when_capability_does_not_include_operation() {
 
 #[test]
 fn revoked_capability_can_no_longer_authorize_operation() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(2);
     let resource = core
         .register_resource(ResourceKind::Service, None)
@@ -63,7 +64,7 @@ fn revoked_capability_can_no_longer_authorize_operation() {
 
 #[test]
 fn checkpoint_and_rollback_events_are_recorded_in_order() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(3);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -94,7 +95,7 @@ fn checkpoint_and_rollback_events_are_recorded_in_order() {
 
 #[test]
 fn checkpoint_requires_checkpoint_capability() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(4);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -111,7 +112,7 @@ fn checkpoint_requires_checkpoint_capability() {
 
 #[test]
 fn action_and_verification_events_are_recorded_with_action_id() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(5);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -142,7 +143,7 @@ fn action_and_verification_events_are_recorded_with_action_id() {
 
 #[test]
 fn action_requires_action_capability() {
-    let mut core = KernelCore::<4, 4, 8>::new();
+    let mut core = TestCore::new();
     let agent = AgentId::new(6);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -154,50 +155,5 @@ fn action_requires_action_capability() {
     let result = core.act(agent, capability, ActionId::new(13), resource);
 
     assert!(result.is_err());
-    assert_eq!(core.events().len(), 0);
-}
-
-#[test]
-fn delegate_event_records_task_and_target_agent() {
-    let mut core = KernelCore::<4, 4, 8>::new();
-    let agent = AgentId::new(7);
-    let target_agent = AgentId::new(8);
-    let task = TaskId::new(21);
-    let resource = core
-        .register_resource(ResourceKind::Workspace, None)
-        .expect("resource should fit");
-    let capability = core
-        .grant_capability(agent, resource, OperationSet::only(Operation::Delegate))
-        .expect("capability should fit");
-
-    let event = core
-        .delegate(agent, capability, task, resource, target_agent)
-        .expect("delegate should be authorized");
-
-    assert_eq!(event.kind, EventKind::DelegationRequested);
-    assert_eq!(event.agent, agent);
-    assert_eq!(event.resource, Some(resource));
-    assert_eq!(event.capability, Some(capability));
-    assert_eq!(event.operation, Some(Operation::Delegate));
-    assert_eq!(event.task, Some(task));
-    assert_eq!(event.target_agent, Some(target_agent));
-    assert_eq!(core.events().len(), 1);
-}
-
-#[test]
-fn delegate_requires_delegate_capability() {
-    let mut core = KernelCore::<4, 4, 8>::new();
-    let agent = AgentId::new(9);
-    let target_agent = AgentId::new(10);
-    let resource = core
-        .register_resource(ResourceKind::Workspace, None)
-        .expect("resource should fit");
-    let capability = core
-        .grant_capability(agent, resource, OperationSet::only(Operation::Observe))
-        .expect("capability should fit");
-
-    let result = core.delegate(agent, capability, TaskId::new(22), resource, target_agent);
-
-    assert_eq!(result, Err(agent_kernel_core::KernelError::OperationDenied));
     assert_eq!(core.events().len(), 0);
 }

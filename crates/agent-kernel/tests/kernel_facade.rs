@@ -1,18 +1,22 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, EventKind, Operation, OperationSet, ResourceKind, TaskId,
+    TaskStatus,
 };
+
+type TestKernel = AgentKernel<4, 4, 16, 4>;
 
 #[test]
 fn kernel_starts_with_empty_event_log() {
-    let kernel = AgentKernel::<4, 4, 8>::new();
+    let kernel = TestKernel::new();
 
     assert!(kernel.events().is_empty());
+    assert!(kernel.tasks().is_empty());
 }
 
 #[test]
 fn observe_syscall_records_observation_event() {
-    let mut kernel = AgentKernel::<4, 4, 8>::new();
+    let mut kernel = TestKernel::new();
     let agent = AgentId::new(42);
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
@@ -33,7 +37,7 @@ fn observe_syscall_records_observation_event() {
 
 #[test]
 fn checkpoint_and_rollback_syscalls_record_kernel_events() {
-    let mut kernel = AgentKernel::<4, 4, 8>::new();
+    let mut kernel = TestKernel::new();
     let agent = AgentId::new(77);
     let checkpoint = CheckpointId::new(5);
     let resource = kernel
@@ -64,7 +68,7 @@ fn checkpoint_and_rollback_syscalls_record_kernel_events() {
 
 #[test]
 fn action_and_verify_syscalls_record_action_lifecycle() {
-    let mut kernel = AgentKernel::<4, 4, 8>::new();
+    let mut kernel = TestKernel::new();
     let agent = AgentId::new(88);
     let action = ActionId::new(3);
     let resource = kernel
@@ -97,22 +101,106 @@ fn action_and_verify_syscalls_record_action_lifecycle() {
 
 #[test]
 fn delegate_syscall_records_task_delegation() {
-    let mut kernel = AgentKernel::<4, 4, 8>::new();
+    let mut kernel = TestKernel::new();
     let agent = AgentId::new(99);
     let target_agent = AgentId::new(100);
-    let task = TaskId::new(4);
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let capability = kernel
-        .sys_grant(agent, resource, OperationSet::only(Operation::Delegate))
+        .sys_grant(
+            agent,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Delegate),
+        )
         .expect("capability should fit");
+    let task = kernel
+        .sys_create_task(agent, capability, resource)
+        .expect("task should be created");
 
     let event = kernel
-        .sys_delegate(agent, capability, task, resource, target_agent)
+        .sys_delegate_task(agent, capability, task, target_agent)
         .expect("delegate should be authorized");
 
     assert_eq!(event.kind, EventKind::DelegationRequested);
     assert_eq!(event.task, Some(task));
     assert_eq!(event.target_agent, Some(target_agent));
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Delegated);
+}
+
+#[test]
+fn task_syscalls_record_full_task_lifecycle() {
+    let mut kernel = TestKernel::new();
+    let owner = AgentId::new(101);
+    let assignee = AgentId::new(102);
+    let resource = kernel
+        .sys_register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let owner_capability = kernel
+        .sys_grant(
+            owner,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
+        )
+        .expect("owner capability should fit");
+    let assignee_capability = kernel
+        .sys_grant(assignee, resource, OperationSet::only(Operation::Act))
+        .expect("assignee capability should fit");
+
+    let task = kernel
+        .sys_create_task(owner, owner_capability, resource)
+        .expect("task should be created");
+    assert_eq!(task, TaskId::new(1));
+    kernel
+        .sys_delegate_task(owner, owner_capability, task, assignee)
+        .expect("task should be delegated");
+    kernel
+        .sys_accept_task(assignee, task)
+        .expect("task should be accepted");
+    kernel
+        .sys_complete_task(assignee, assignee_capability, task)
+        .expect("task should be completed");
+    kernel
+        .sys_verify_task(owner, owner_capability, task)
+        .expect("task should be verified");
+
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Verified);
+    assert_eq!(kernel.events()[0].kind, EventKind::TaskCreated);
+    assert_eq!(kernel.events()[1].kind, EventKind::DelegationRequested);
+    assert_eq!(kernel.events()[2].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[3].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[4].kind, EventKind::TaskVerified);
+}
+
+#[test]
+fn cancel_task_syscall_records_cancelled_task() {
+    let mut kernel = TestKernel::new();
+    let owner = AgentId::new(103);
+    let resource = kernel
+        .sys_register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = kernel
+        .sys_grant(
+            owner,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Rollback),
+        )
+        .expect("capability should fit");
+    let task = kernel
+        .sys_create_task(owner, capability, resource)
+        .expect("task should be created");
+
+    let event = kernel
+        .sys_cancel_task(owner, capability, task)
+        .expect("task should be cancelled");
+
+    assert_eq!(event.kind, EventKind::TaskCancelled);
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Cancelled);
 }

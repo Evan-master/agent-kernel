@@ -15,4 +15,8 @@ pub enum KernelError {
     AgentMismatch,
     ResourceMismatch,
     OperationDenied,
+    TaskStoreFull,
+    TaskNotFound,
+    TaskAgentMismatch,
+    TaskStatusMismatch,
 }

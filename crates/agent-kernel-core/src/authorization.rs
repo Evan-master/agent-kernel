@@ -5,8 +5,8 @@
 
 use crate::{AgentId, CapabilityId, KernelCore, KernelError, Operation, ResourceId};
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
-    KernelCore<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
+    KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
 {
     pub(crate) fn ensure_authorized(
         &self,

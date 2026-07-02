@@ -5,8 +5,8 @@
 
 use crate::{Event, KernelCore, KernelError};
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
-    KernelCore<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
+    KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
 {
     pub(crate) fn record(&mut self, event: Event) -> Result<Event, KernelError> {
         if self.event_len >= EVENTS {

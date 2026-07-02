@@ -7,16 +7,21 @@
 
 use agent_kernel_core::{
     ActionId, AgentId, CapabilityId, CheckpointId, Event, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind, TaskId,
+    OperationSet, ResourceId, ResourceKind, Task, TaskId,
 };
 
 #[derive(Debug)]
-pub struct AgentKernel<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize> {
-    core: KernelCore<RESOURCES, CAPS, EVENTS>,
+pub struct AgentKernel<
+    const RESOURCES: usize,
+    const CAPS: usize,
+    const EVENTS: usize,
+    const TASKS: usize,
+> {
+    core: KernelCore<RESOURCES, CAPS, EVENTS, TASKS>,
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
-    AgentKernel<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
+    AgentKernel<RESOURCES, CAPS, EVENTS, TASKS>
 {
     pub const fn new() -> Self {
         Self {
@@ -92,25 +97,68 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
         self.core.rollback(agent, capability, checkpoint, resource)
     }
 
-    pub fn events(&self) -> &[Event] {
-        self.core.events()
+    pub fn sys_create_task(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+    ) -> Result<TaskId, KernelError> {
+        self.core.create_task(agent, capability, resource)
     }
 
-    pub fn sys_delegate(
+    pub fn sys_delegate_task(
         &mut self,
         agent: AgentId,
         capability: CapabilityId,
         task: TaskId,
-        resource: ResourceId,
         target_agent: AgentId,
     ) -> Result<Event, KernelError> {
         self.core
-            .delegate(agent, capability, task, resource, target_agent)
+            .delegate_task(agent, capability, task, target_agent)
+    }
+
+    pub fn sys_accept_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
+        self.core.accept_task(agent, task)
+    }
+
+    pub fn sys_complete_task(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<Event, KernelError> {
+        self.core.complete_task(agent, capability, task)
+    }
+
+    pub fn sys_verify_task(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<Event, KernelError> {
+        self.core.verify_task(agent, capability, task)
+    }
+
+    pub fn sys_cancel_task(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<Event, KernelError> {
+        self.core.cancel_task(agent, capability, task)
+    }
+
+    pub fn events(&self) -> &[Event] {
+        self.core.events()
+    }
+
+    pub fn tasks(&self) -> &[Task] {
+        self.core.tasks()
     }
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize> Default
-    for AgentKernel<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize> Default
+    for AgentKernel<RESOURCES, CAPS, EVENTS, TASKS>
 {
     fn default() -> Self {
         Self::new()

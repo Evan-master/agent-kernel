@@ -9,7 +9,7 @@ tasks, delegation, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly resource, capability, task delegation, checkpoint, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly resource, capability, task store, lifecycle, checkpoint, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -27,12 +27,16 @@ The v0 flow is deliberately small:
 5. Request verification for that action.
 6. Create a checkpoint event.
 7. Request a rollback event.
-8. Request delegation of a `TaskId` to another agent.
-9. Print the kernel event log from the supervisor.
+8. Create a kernel-owned task.
+9. Delegate the task to another agent.
+10. Let the assignee accept and complete the task.
+11. Request verification for the completed task.
+12. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Action, verification,
-checkpoint, rollback, and delegation are first-class kernel events, not external
-tooling.
+checkpoint, rollback, task creation, task completion, task verification, and
+delegation are first-class kernel events, not external tooling. `TaskId` values
+are allocated by the kernel task store rather than invented by the supervisor.
 
 ## Boot Handoff
 
@@ -106,5 +110,9 @@ event[2] action agent=1 resource=1 action=1
 event[3] verification agent=1 resource=1 action=1
 event[4] checkpoint agent=1 resource=1 checkpoint=1
 event[5] rollback agent=1 resource=1 checkpoint=1
-event[6] delegation agent=1 resource=1 task=1 target_agent=2
+event[6] task_created agent=1 resource=1 task=1
+event[7] delegation agent=1 resource=1 task=1 target_agent=2
+event[8] task_accepted agent=2 resource=1 task=1
+event[9] task_completed agent=2 resource=1 task=1
+event[10] task_verified agent=1 resource=1 task=1
 ```

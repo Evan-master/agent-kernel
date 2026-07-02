@@ -6,78 +6,44 @@
 
 use crate::{
     ActionId, AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, KernelError,
-    Operation, OperationSet, Resource, ResourceId, ResourceKind, TaskId,
+    Operation, Resource, ResourceId, Task,
 };
 
 #[derive(Debug)]
-pub struct KernelCore<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize> {
+pub struct KernelCore<
+    const RESOURCES: usize,
+    const CAPS: usize,
+    const EVENTS: usize,
+    const TASKS: usize,
+> {
     pub(crate) resources: [Option<Resource>; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) events: [Event; EVENTS],
+    pub(crate) tasks: [Task; TASKS],
     pub(crate) event_len: usize,
+    pub(crate) task_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
+    pub(crate) next_task: u64,
     pub(crate) next_sequence: u64,
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
-    KernelCore<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
+    KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
 {
     pub const fn new() -> Self {
         Self {
             resources: [None; RESOURCES],
             capabilities: [None; CAPS],
             events: [Event::empty(); EVENTS],
+            tasks: [Task::empty(); TASKS],
             event_len: 0,
+            task_len: 0,
             next_resource: 1,
             next_capability: 1,
+            next_task: 1,
             next_sequence: 1,
         }
-    }
-
-    pub fn register_resource(
-        &mut self,
-        kind: ResourceKind,
-        parent: Option<ResourceId>,
-    ) -> Result<ResourceId, KernelError> {
-        if let Some(parent_id) = parent {
-            self.find_resource(parent_id)?;
-        }
-
-        let slot = self
-            .resources
-            .iter_mut()
-            .find(|resource| resource.is_none())
-            .ok_or(KernelError::ResourceStoreFull)?;
-        let id = ResourceId::new(self.next_resource);
-        self.next_resource += 1;
-        *slot = Some(Resource { id, kind, parent });
-        Ok(id)
-    }
-
-    pub fn grant_capability(
-        &mut self,
-        agent: AgentId,
-        resource: ResourceId,
-        operations: OperationSet,
-    ) -> Result<CapabilityId, KernelError> {
-        self.find_resource(resource)?;
-
-        let slot = self
-            .capabilities
-            .iter_mut()
-            .find(|capability| capability.is_none())
-            .ok_or(KernelError::CapabilityStoreFull)?;
-        let id = CapabilityId::new(self.next_capability);
-        self.next_capability += 1;
-        *slot = Some(Capability {
-            id,
-            agent,
-            resource,
-            operations,
-            revoked: false,
-        });
-        Ok(id)
     }
 
     pub fn authorize(
@@ -101,12 +67,6 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             task: None,
             target_agent: None,
         })
-    }
-
-    pub fn revoke_capability(&mut self, capability: CapabilityId) -> Result<(), KernelError> {
-        let cap = self.find_capability_mut(capability)?;
-        cap.revoked = true;
-        Ok(())
     }
 
     pub fn act(
@@ -197,36 +157,13 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
         })
     }
 
-    pub fn delegate(
-        &mut self,
-        agent: AgentId,
-        capability: CapabilityId,
-        task: TaskId,
-        resource: ResourceId,
-        target_agent: AgentId,
-    ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Delegate)?;
-        self.record(Event {
-            sequence: self.next_sequence,
-            agent,
-            kind: EventKind::DelegationRequested,
-            resource: Some(resource),
-            capability: Some(capability),
-            action: None,
-            operation: Some(Operation::Delegate),
-            checkpoint: None,
-            task: Some(task),
-            target_agent: Some(target_agent),
-        })
-    }
-
     pub fn events(&self) -> &[Event] {
         &self.events[..self.event_len]
     }
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize> Default
-    for KernelCore<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize> Default
+    for KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
 {
     fn default() -> Self {
         Self::new()

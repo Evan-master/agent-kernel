@@ -60,13 +60,18 @@ pub struct BootReport {
 }
 
 #[derive(Debug)]
-pub struct BootedKernel<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize> {
-    kernel: AgentKernel<RESOURCES, CAPS, EVENTS>,
+pub struct BootedKernel<
+    const RESOURCES: usize,
+    const CAPS: usize,
+    const EVENTS: usize,
+    const TASKS: usize,
+> {
+    kernel: AgentKernel<RESOURCES, CAPS, EVENTS, TASKS>,
     report: BootReport,
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
-    BootedKernel<RESOURCES, CAPS, EVENTS>
+impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
+    BootedKernel<RESOURCES, CAPS, EVENTS, TASKS>
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
         let mut kernel = AgentKernel::new();
@@ -114,7 +119,7 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
         &self.report
     }
 
-    pub const fn kernel(&self) -> &AgentKernel<RESOURCES, CAPS, EVENTS> {
+    pub const fn kernel(&self) -> &AgentKernel<RESOURCES, CAPS, EVENTS, TASKS> {
         &self.kernel
     }
 }

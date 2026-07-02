@@ -7,18 +7,17 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, Event, EventKind, Operation, OperationSet, ResourceKind,
-    TaskId,
 };
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 16>::new();
+    let mut kernel = AgentKernel::<8, 8, 16, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
     let workspace = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("workspace resource should fit in simulator kernel");
-    let capability = kernel
+    let owner_capability = kernel
         .sys_grant(
             agent,
             workspace,
@@ -31,28 +30,42 @@ fn main() {
                 .with(Operation::Delegate),
         )
         .expect("agent capability should fit in simulator kernel");
+    let assignee_capability = kernel
+        .sys_grant(target_agent, workspace, OperationSet::only(Operation::Act))
+        .expect("target agent capability should fit in simulator kernel");
 
     let action = ActionId::new(1);
     let checkpoint = CheckpointId::new(1);
-    let task = TaskId::new(1);
     kernel
-        .sys_observe(agent, capability, workspace)
+        .sys_observe(agent, owner_capability, workspace)
         .expect("agent should observe workspace");
     kernel
-        .sys_act(agent, capability, action, workspace)
+        .sys_act(agent, owner_capability, action, workspace)
         .expect("agent should execute action");
     kernel
-        .sys_verify(agent, capability, action, workspace)
+        .sys_verify(agent, owner_capability, action, workspace)
         .expect("agent should request verification");
     kernel
-        .sys_checkpoint(agent, capability, checkpoint, workspace)
+        .sys_checkpoint(agent, owner_capability, checkpoint, workspace)
         .expect("agent should checkpoint workspace");
     kernel
-        .sys_rollback(agent, capability, checkpoint, workspace)
+        .sys_rollback(agent, owner_capability, checkpoint, workspace)
         .expect("agent should request rollback");
+    let task = kernel
+        .sys_create_task(agent, owner_capability, workspace)
+        .expect("agent should create task");
     kernel
-        .sys_delegate(agent, capability, task, workspace, target_agent)
+        .sys_delegate_task(agent, owner_capability, task, target_agent)
         .expect("agent should request task delegation");
+    kernel
+        .sys_accept_task(target_agent, task)
+        .expect("target agent should accept task");
+    kernel
+        .sys_complete_task(target_agent, assignee_capability, task)
+        .expect("target agent should complete task");
+    kernel
+        .sys_verify_task(agent, owner_capability, task)
+        .expect("agent should verify task");
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {
@@ -119,5 +132,24 @@ fn format_event(event: &Event) -> String {
                 event.sequence, agent, resource, task, target_agent
             )
         }
+        EventKind::TaskCreated => format_task_event(event, "task_created"),
+        EventKind::TaskAccepted => format_task_event(event, "task_accepted"),
+        EventKind::TaskCompleted => format_task_event(event, "task_completed"),
+        EventKind::TaskVerified => format_task_event(event, "task_verified"),
+        EventKind::TaskCancelled => format_task_event(event, "task_cancelled"),
     }
+}
+
+fn format_task_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let task = event.task.map(|task| task.raw()).unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} task={}",
+        event.sequence, label, agent, resource, task
+    )
 }

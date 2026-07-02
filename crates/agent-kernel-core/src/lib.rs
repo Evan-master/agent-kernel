@@ -7,6 +7,7 @@
 
 mod authorization;
 mod capability;
+mod capability_store;
 mod core;
 mod error;
 mod event;
@@ -15,6 +16,9 @@ mod id;
 mod lookup;
 mod operation;
 mod resource;
+mod resource_store;
+mod task;
+mod task_store;
 
 pub use capability::Capability;
 pub use core::KernelCore;
@@ -23,3 +27,4 @@ pub use event::{Event, EventKind};
 pub use id::{ActionId, AgentId, CapabilityId, CheckpointId, ResourceId, TaskId};
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceKind};
+pub use task::{Task, TaskStatus};

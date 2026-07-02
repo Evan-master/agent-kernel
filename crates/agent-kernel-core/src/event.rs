@@ -13,6 +13,11 @@ pub enum EventKind {
     CheckpointCreated,
     RollbackRequested,
     DelegationRequested,
+    TaskCreated,
+    TaskAccepted,
+    TaskCompleted,
+    TaskVerified,
+    TaskCancelled,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
