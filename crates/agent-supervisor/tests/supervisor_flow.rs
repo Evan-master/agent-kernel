@@ -18,6 +18,8 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[6] task_created agent=1 resource=1 task=1"));
     assert!(stdout.contains("event[7] delegation agent=1 resource=1 task=1 target_agent=2"));
     assert!(stdout.contains("event[8] task_accepted agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[9] task_completed agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[10] task_verified agent=1 resource=1 task=1"));
+    assert!(stdout.contains("event[9] task_queued agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[10] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[11] task_completed agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[12] task_verified agent=1 resource=1 task=1"));
 }

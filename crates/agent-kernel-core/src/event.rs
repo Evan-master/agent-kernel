@@ -1,7 +1,8 @@
 //! Kernel event records.
 //!
 //! This module owns the replayable event shape for observations, actions,
-//! verification requests, checkpoints, rollback requests, and delegation.
+//! verification requests, checkpoints, rollback requests, delegation, and
+//! scheduler decisions.
 
 use crate::{ActionId, AgentId, CapabilityId, CheckpointId, Operation, ResourceId, TaskId};
 
@@ -18,6 +19,9 @@ pub enum EventKind {
     TaskCompleted,
     TaskVerified,
     TaskCancelled,
+    TaskQueued,
+    TaskDispatched,
+    TaskYielded,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

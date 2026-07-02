@@ -2,7 +2,7 @@ use agent_kernel_core::{
     AgentId, EventKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskStatus,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4>;
+type TestCore = KernelCore<4, 4, 16, 4, 4>;
 
 #[test]
 fn create_task_requires_action_capability() {
@@ -92,7 +92,7 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
 
 #[test]
 fn task_store_capacity_returns_task_store_full() {
-    let mut core = KernelCore::<4, 4, 8, 1>::new();
+    let mut core = KernelCore::<4, 4, 8, 1, 1>::new();
     let agent = AgentId::new(16);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)

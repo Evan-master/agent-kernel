@@ -19,7 +19,7 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
 
-    match BootedKernel::<8, 8, 16, 4>::boot(BootConfig::default()) {
+    match BootedKernel::<8, 8, 16, 4, 4>::boot(BootConfig::default()) {
         Ok(booted) => {
             for event in booted.kernel().events() {
                 serial_write_str("event[");
@@ -58,6 +58,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     }
                     EventKind::TaskCancelled => {
                         serial_write_line("task_cancelled");
+                    }
+                    EventKind::TaskQueued => {
+                        serial_write_line("task_queued");
+                    }
+                    EventKind::TaskDispatched => {
+                        serial_write_line("task_dispatched");
+                    }
+                    EventKind::TaskYielded => {
+                        serial_write_line("task_yielded");
                     }
                 }
             }

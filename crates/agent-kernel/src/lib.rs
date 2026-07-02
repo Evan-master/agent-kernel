@@ -5,6 +5,8 @@
 //! deterministic methods that a user-space supervisor can call without
 //! reaching into core state directly.
 
+mod scheduler;
+
 use agent_kernel_core::{
     ActionId, AgentId, CapabilityId, CheckpointId, Event, KernelCore, KernelError, Operation,
     OperationSet, ResourceId, ResourceKind, Task, TaskId,
@@ -16,12 +18,18 @@ pub struct AgentKernel<
     const CAPS: usize,
     const EVENTS: usize,
     const TASKS: usize,
+    const RUN_QUEUE: usize,
 > {
-    core: KernelCore<RESOURCES, CAPS, EVENTS, TASKS>,
+    pub(crate) core: KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>,
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
-    AgentKernel<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     pub const fn new() -> Self {
         Self {
@@ -157,8 +165,13 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS
     }
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize> Default
-    for AgentKernel<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > Default for AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     fn default() -> Self {
         Self::new()

@@ -9,8 +9,13 @@ use crate::{
     TaskId, TaskStatus,
 };
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
-    KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     pub fn create_task(
         &mut self,

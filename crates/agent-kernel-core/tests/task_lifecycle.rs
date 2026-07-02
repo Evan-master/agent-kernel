@@ -2,7 +2,7 @@ use agent_kernel_core::{
     AgentId, EventKind, KernelCore, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4>;
+type TestCore = KernelCore<4, 4, 16, 4, 4>;
 
 #[test]
 fn create_task_allocates_kernel_task_and_records_event() {

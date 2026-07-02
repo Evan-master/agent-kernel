@@ -1,10 +1,10 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, EventKind, Operation, OperationSet, ResourceKind, TaskId,
-    TaskStatus,
+    ActionId, AgentId, CheckpointId, EventKind, Operation, OperationSet, ResourceKind,
+    RunQueueEntry, TaskId, TaskStatus,
 };
 
-type TestKernel = AgentKernel<4, 4, 16, 4>;
+type TestKernel = AgentKernel<4, 6, 32, 6, 4>;
 
 #[test]
 fn kernel_starts_with_empty_event_log() {
@@ -203,4 +203,69 @@ fn cancel_task_syscall_records_cancelled_task() {
 
     assert_eq!(event.kind, EventKind::TaskCancelled);
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Cancelled);
+}
+
+#[test]
+fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
+    let mut kernel = TestKernel::new();
+    let owner = AgentId::new(200);
+    let first_agent = AgentId::new(201);
+    let second_agent = AgentId::new(202);
+    let resource = kernel
+        .sys_register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let owner_capability = kernel
+        .sys_grant(
+            owner,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Delegate),
+        )
+        .expect("owner capability should fit");
+    let first = kernel
+        .sys_create_task(owner, owner_capability, resource)
+        .expect("first task should be created");
+    let second = kernel
+        .sys_create_task(owner, owner_capability, resource)
+        .expect("second task should be created");
+    kernel
+        .sys_delegate_task(owner, owner_capability, first, first_agent)
+        .expect("first task should delegate");
+    kernel
+        .sys_delegate_task(owner, owner_capability, second, second_agent)
+        .expect("second task should delegate");
+    kernel
+        .sys_accept_task(first_agent, first)
+        .expect("first task should accept");
+    kernel
+        .sys_accept_task(second_agent, second)
+        .expect("second task should accept");
+
+    kernel
+        .sys_enqueue_task(first_agent, first)
+        .expect("first task should enqueue");
+    kernel
+        .sys_yield_task(second_agent, second)
+        .expect("second task should yield into queue");
+    let dispatched = kernel
+        .sys_dispatch_next(first_agent)
+        .expect("first task should dispatch");
+
+    assert_eq!(dispatched, first);
+    assert_eq!(
+        kernel.run_queue(),
+        &[RunQueueEntry {
+            task: second,
+            agent: second_agent,
+        }]
+    );
+    assert_eq!(
+        kernel
+            .events()
+            .last()
+            .expect("dispatch event should exist")
+            .kind,
+        EventKind::TaskDispatched
+    );
 }

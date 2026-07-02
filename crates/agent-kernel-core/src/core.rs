@@ -6,7 +6,7 @@
 
 use crate::{
     ActionId, AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, KernelError,
-    Operation, Resource, ResourceId, Task,
+    Operation, Resource, ResourceId, RunQueueEntry, Task,
 };
 
 #[derive(Debug)]
@@ -15,21 +15,29 @@ pub struct KernelCore<
     const CAPS: usize,
     const EVENTS: usize,
     const TASKS: usize,
+    const RUN_QUEUE: usize,
 > {
     pub(crate) resources: [Option<Resource>; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) events: [Event; EVENTS],
     pub(crate) tasks: [Task; TASKS],
+    pub(crate) run_queue: [RunQueueEntry; RUN_QUEUE],
     pub(crate) event_len: usize,
     pub(crate) task_len: usize,
+    pub(crate) run_queue_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_task: u64,
     pub(crate) next_sequence: u64,
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
-    KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     pub const fn new() -> Self {
         Self {
@@ -37,8 +45,10 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS
             capabilities: [None; CAPS],
             events: [Event::empty(); EVENTS],
             tasks: [Task::empty(); TASKS],
+            run_queue: [RunQueueEntry::empty(); RUN_QUEUE],
             event_len: 0,
             task_len: 0,
+            run_queue_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_task: 1,
@@ -162,8 +172,13 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS
     }
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize> Default
-    for KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > Default for KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     fn default() -> Self {
         Self::new()

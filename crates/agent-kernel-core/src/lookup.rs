@@ -6,8 +6,13 @@
 
 use crate::{Capability, CapabilityId, KernelCore, KernelError, Resource, ResourceId};
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
-    KernelCore<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     pub(crate) fn find_resource(&self, id: ResourceId) -> Result<Resource, KernelError> {
         self.resources

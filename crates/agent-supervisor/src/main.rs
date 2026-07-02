@@ -10,7 +10,7 @@ use agent_kernel_core::{
 };
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 16, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 24, 8, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
@@ -60,6 +60,13 @@ fn main() {
     kernel
         .sys_accept_task(target_agent, task)
         .expect("target agent should accept task");
+    kernel
+        .sys_enqueue_task(target_agent, task)
+        .expect("target agent should enqueue accepted task");
+    let dispatched = kernel
+        .sys_dispatch_next(target_agent)
+        .expect("target agent should dispatch next task");
+    assert_eq!(dispatched, task);
     kernel
         .sys_complete_task(target_agent, assignee_capability, task)
         .expect("target agent should complete task");
@@ -137,6 +144,9 @@ fn format_event(event: &Event) -> String {
         EventKind::TaskCompleted => format_task_event(event, "task_completed"),
         EventKind::TaskVerified => format_task_event(event, "task_verified"),
         EventKind::TaskCancelled => format_task_event(event, "task_cancelled"),
+        EventKind::TaskQueued => format_task_event(event, "task_queued"),
+        EventKind::TaskDispatched => format_task_event(event, "task_dispatched"),
+        EventKind::TaskYielded => format_task_event(event, "task_yielded"),
     }
 }
 

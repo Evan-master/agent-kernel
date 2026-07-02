@@ -17,6 +17,8 @@ mod lookup;
 mod operation;
 mod resource;
 mod resource_store;
+mod run_queue;
+mod scheduler;
 mod task;
 mod task_store;
 
@@ -27,4 +29,5 @@ pub use event::{Event, EventKind};
 pub use id::{ActionId, AgentId, CapabilityId, CheckpointId, ResourceId, TaskId};
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceKind};
+pub use run_queue::RunQueueEntry;
 pub use task::{Task, TaskStatus};

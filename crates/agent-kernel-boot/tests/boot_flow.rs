@@ -3,7 +3,7 @@ use agent_kernel_core::{ActionId, EventKind};
 
 #[test]
 fn boot_records_phase_sequence() {
-    let booted = BootedKernel::<8, 8, 16, 4>::boot(BootConfig::default())
+    let booted = BootedKernel::<8, 8, 16, 4, 4>::boot(BootConfig::default())
         .expect("boot flow should fit fixed stores");
 
     assert_eq!(
@@ -20,7 +20,7 @@ fn boot_records_phase_sequence() {
 fn boot_records_observe_action_and_verify_events() {
     let config = BootConfig::default().with_boot_action(ActionId::new(99));
     let booted =
-        BootedKernel::<8, 8, 16, 4>::boot(config).expect("boot flow should fit fixed stores");
+        BootedKernel::<8, 8, 16, 4, 4>::boot(config).expect("boot flow should fit fixed stores");
 
     let events = booted.kernel().events();
     assert_eq!(events.len(), 3);

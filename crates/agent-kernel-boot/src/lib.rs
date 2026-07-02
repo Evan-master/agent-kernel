@@ -65,13 +65,19 @@ pub struct BootedKernel<
     const CAPS: usize,
     const EVENTS: usize,
     const TASKS: usize,
+    const RUN_QUEUE: usize,
 > {
-    kernel: AgentKernel<RESOURCES, CAPS, EVENTS, TASKS>,
+    kernel: AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>,
     report: BootReport,
 }
 
-impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS: usize>
-    BootedKernel<RESOURCES, CAPS, EVENTS, TASKS>
+impl<
+        const RESOURCES: usize,
+        const CAPS: usize,
+        const EVENTS: usize,
+        const TASKS: usize,
+        const RUN_QUEUE: usize,
+    > BootedKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
         let mut kernel = AgentKernel::new();
@@ -119,7 +125,7 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize, const TASKS
         &self.report
     }
 
-    pub const fn kernel(&self) -> &AgentKernel<RESOURCES, CAPS, EVENTS, TASKS> {
+    pub const fn kernel(&self) -> &AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE> {
         &self.kernel
     }
 }
