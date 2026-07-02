@@ -127,6 +127,7 @@ fn delegate_syscall_records_task_delegation() {
     assert_eq!(event.kind, EventKind::DelegationRequested);
     assert_eq!(event.task, Some(task));
     assert_eq!(event.target_agent, Some(target_agent));
+    assert_eq!(kernel.tasks()[0].delegated_capability, event.capability);
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Delegated);
 }
 
@@ -148,10 +149,6 @@ fn task_syscalls_record_full_task_lifecycle() {
                 .with(Operation::Verify),
         )
         .expect("owner capability should fit");
-    let assignee_capability = kernel
-        .sys_grant(assignee, resource, OperationSet::only(Operation::Act))
-        .expect("assignee capability should fit");
-
     let task = kernel
         .sys_create_task(owner, owner_capability, resource)
         .expect("task should be created");
@@ -159,6 +156,9 @@ fn task_syscalls_record_full_task_lifecycle() {
     kernel
         .sys_delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = kernel.tasks()[0]
+        .delegated_capability
+        .expect("delegation should derive assignee capability");
     kernel
         .sys_accept_task(assignee, task)
         .expect("task should be accepted");
@@ -305,15 +305,15 @@ fn completing_task_before_dispatch_is_rejected_by_facade() {
                 .with(Operation::Delegate),
         )
         .expect("owner capability should fit");
-    let assignee_capability = kernel
-        .sys_grant(assignee, resource, OperationSet::only(Operation::Act))
-        .expect("assignee capability should fit");
     let task = kernel
         .sys_create_task(owner, owner_capability, resource)
         .expect("task should be created");
     kernel
         .sys_delegate_task(owner, owner_capability, task, assignee)
         .expect("task should delegate");
+    let assignee_capability = kernel.tasks()[0]
+        .delegated_capability
+        .expect("delegation should derive assignee capability");
     kernel
         .sys_accept_task(assignee, task)
         .expect("task should accept");

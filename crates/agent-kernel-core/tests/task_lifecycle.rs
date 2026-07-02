@@ -25,6 +25,7 @@ fn create_task_allocates_kernel_task_and_records_event() {
     assert_eq!(core.tasks()[0].owner, agent);
     assert_eq!(core.tasks()[0].resource, resource);
     assert_eq!(core.tasks()[0].assignee, None);
+    assert_eq!(core.tasks()[0].delegated_capability, None);
     assert_eq!(core.tasks()[0].status, TaskStatus::Created);
     assert_eq!(core.events()[0].kind, EventKind::TaskCreated);
     assert_eq!(core.events()[0].task, Some(task));
@@ -48,15 +49,14 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
                 .with(Operation::Verify),
         )
         .expect("owner capability should fit");
-    let assignee_capability = core
-        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
-        .expect("assignee capability should fit");
-
     let task = core
         .create_task(owner, owner_capability, resource)
         .expect("task should be created");
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = core.tasks()[0]
+        .delegated_capability
+        .expect("delegation should derive assignee capability");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)

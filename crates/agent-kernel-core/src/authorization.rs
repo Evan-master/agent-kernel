@@ -3,7 +3,9 @@
 //! This module owns the invariant that resource operations require a matching,
 //! non-revoked capability for the agent, resource, and operation.
 
-use crate::{AgentId, CapabilityId, KernelCore, KernelError, Operation, ResourceId};
+use crate::{
+    AgentId, Capability, CapabilityId, KernelCore, KernelError, Operation, ResourceId, TaskId,
+};
 
 impl<
         const RESOURCES: usize,
@@ -20,6 +22,39 @@ impl<
         resource: ResourceId,
         operation: Operation,
     ) -> Result<(), KernelError> {
+        let cap = self.ensure_capability_base(agent, capability, resource, operation)?;
+        if cap.task.is_some() {
+            return Err(KernelError::CapabilityScopeMismatch);
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn ensure_authorized_for_task(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        operation: Operation,
+        task: TaskId,
+    ) -> Result<(), KernelError> {
+        let cap = self.ensure_capability_base(agent, capability, resource, operation)?;
+        if let Some(scope) = cap.task {
+            if scope != task {
+                return Err(KernelError::CapabilityScopeMismatch);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn ensure_capability_base(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        operation: Operation,
+    ) -> Result<Capability, KernelError> {
         self.find_resource(resource)?;
         let cap = self.find_capability(capability)?;
 
@@ -36,6 +71,6 @@ impl<
             return Err(KernelError::OperationDenied);
         }
 
-        Ok(())
+        Ok(cap)
     }
 }

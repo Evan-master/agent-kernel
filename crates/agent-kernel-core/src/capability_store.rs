@@ -4,7 +4,9 @@
 //! allocation and revocation while preserving the invariant that all grants
 //! point at an existing resource.
 
-use crate::{AgentId, Capability, CapabilityId, KernelCore, KernelError, OperationSet, ResourceId};
+use crate::{
+    AgentId, Capability, CapabilityId, KernelCore, KernelError, OperationSet, ResourceId, TaskId,
+};
 
 impl<
         const RESOURCES: usize,
@@ -35,6 +37,34 @@ impl<
             resource,
             operations,
             revoked: false,
+            task: None,
+        });
+        Ok(id)
+    }
+
+    pub(crate) fn derive_task_capability(
+        &mut self,
+        agent: AgentId,
+        resource: ResourceId,
+        operations: OperationSet,
+        task: TaskId,
+    ) -> Result<CapabilityId, KernelError> {
+        self.find_resource(resource)?;
+
+        let slot = self
+            .capabilities
+            .iter_mut()
+            .find(|capability| capability.is_none())
+            .ok_or(KernelError::CapabilityStoreFull)?;
+        let id = CapabilityId::new(self.next_capability);
+        self.next_capability += 1;
+        *slot = Some(Capability {
+            id,
+            agent,
+            resource,
+            operations,
+            revoked: false,
+            task: Some(task),
         });
         Ok(id)
     }

@@ -30,10 +30,6 @@ fn main() {
                 .with(Operation::Delegate),
         )
         .expect("agent capability should fit in simulator kernel");
-    let assignee_capability = kernel
-        .sys_grant(target_agent, workspace, OperationSet::only(Operation::Act))
-        .expect("target agent capability should fit in simulator kernel");
-
     let action = ActionId::new(1);
     let checkpoint = CheckpointId::new(1);
     kernel
@@ -57,6 +53,9 @@ fn main() {
     kernel
         .sys_delegate_task(agent, owner_capability, task, target_agent)
         .expect("agent should request task delegation");
+    let assignee_capability = kernel.tasks()[0]
+        .delegated_capability
+        .expect("delegation should derive target agent capability");
     kernel
         .sys_accept_task(target_agent, task)
         .expect("target agent should accept task");

@@ -41,6 +41,8 @@ delegation are first-class kernel events, not external tooling. Accepted tasks
 move through a fixed-capacity FIFO run queue and become `Running` before
 completion. `TaskId` values are allocated by the kernel task store rather than
 invented by the supervisor.
+Delegation derives a task-scoped action capability for the assignee, so the
+supervisor does not grant broad resource authority to complete delegated work.
 
 ## Boot Handoff
 

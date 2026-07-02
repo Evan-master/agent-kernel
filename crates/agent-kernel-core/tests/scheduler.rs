@@ -51,14 +51,15 @@ fn accepted_task_with_capabilities<
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
-    let assignee_capability = core
-        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
-        .expect("assignee capability should fit");
     let task = core
         .create_task(owner, owner_capability, resource)
         .expect("task should be created");
-    core.delegate_task(owner, owner_capability, task, assignee)
+    let delegation = core
+        .delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = delegation
+        .capability
+        .expect("delegation should derive assignee capability");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     AcceptedTask {

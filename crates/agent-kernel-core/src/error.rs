@@ -12,6 +12,7 @@ pub enum KernelError {
     ResourceNotFound,
     CapabilityNotFound,
     CapabilityRevoked,
+    CapabilityScopeMismatch,
     AgentMismatch,
     ResourceMismatch,
     OperationDenied,

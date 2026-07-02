@@ -5,8 +5,8 @@
 //! recording. It performs no allocation or host I/O.
 
 use crate::{
-    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, Operation, ResourceId, Task,
-    TaskId, TaskStatus,
+    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceId, Task, TaskId, TaskStatus,
 };
 
 impl<
@@ -36,6 +36,7 @@ impl<
             owner: agent,
             resource,
             assignee: None,
+            delegated_capability: None,
             status: TaskStatus::Created,
         };
         self.task_len += 1;
@@ -52,16 +53,24 @@ impl<
     ) -> Result<Event, KernelError> {
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Delegate)?;
+        self.ensure_authorized(agent, capability, current.resource, Operation::Act)?;
         ensure_status(current.status, &[TaskStatus::Created])?;
         self.ensure_task_event_capacity()?;
 
+        let delegated_capability = self.derive_task_capability(
+            target_agent,
+            current.resource,
+            OperationSet::only(Operation::Act),
+            task,
+        )?;
         let task_ref = self.find_task_mut(task)?;
         task_ref.assignee = Some(target_agent);
+        task_ref.delegated_capability = Some(delegated_capability);
         task_ref.status = TaskStatus::Delegated;
         self.record_task_event(
             EventKind::DelegationRequested,
             agent,
-            Some(capability),
+            Some(delegated_capability),
             task,
             Some(target_agent),
         )
@@ -86,7 +95,7 @@ impl<
         task: TaskId,
     ) -> Result<Event, KernelError> {
         let current = self.find_task(task)?;
-        self.ensure_authorized(agent, capability, current.resource, Operation::Act)?;
+        self.ensure_authorized_for_task(agent, capability, current.resource, Operation::Act, task)?;
         ensure_status(current.status, &[TaskStatus::Running])?;
         if current.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
