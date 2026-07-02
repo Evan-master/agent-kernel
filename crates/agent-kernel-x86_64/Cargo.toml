@@ -1,0 +1,17 @@
+[package]
+name = "agent-kernel-x86_64"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+agent-kernel-boot = { path = "../agent-kernel-boot" }
+agent-kernel-core = { path = "../agent-kernel-core" }
+bootloader_api = "0.11.15"
+
+[[bin]]
+name = "agent-kernel-x86_64"
+path = "src/main.rs"
+test = false
+bench = false

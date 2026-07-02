@@ -1,0 +1,16 @@
+[package]
+name = "agent-kernel-image"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bootloader = { version = "0.11.15", default-features = false, features = ["bios"] }
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "agent-kernel-image"
+path = "src/main.rs"

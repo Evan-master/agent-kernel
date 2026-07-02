@@ -12,6 +12,8 @@ and event logs.
 - `agent-kernel-core`: no_std-friendly resource, capability, checkpoint, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
+- `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype.
 
 ## Current Behavior
@@ -41,12 +43,12 @@ checkpoint, and rollback are first-class kernel events, not external tooling.
 5. Record observation, action, and verification events.
 6. Mark the kernel ready for supervisor handoff.
 
-This is a no_std handoff crate, not a QEMU image yet. QEMU is not installed in
-the current local environment, so emulator boot wiring is intentionally deferred.
+The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
 ## Non-Goals For V0
 
-- Booting on hardware or in QEMU.
+- Booting on physical hardware.
+- UEFI image support.
 - POSIX compatibility.
 - Linux syscall compatibility.
 - A filesystem, network stack, scheduler, or driver model.
@@ -55,16 +57,43 @@ the current local environment, so emulator boot wiring is intentionally deferred
 ## Commands
 
 ```bash
-cargo fmt --check
-cargo test --workspace
-cargo run -p agent-supervisor
-cargo build -p agent-kernel-boot
-RUSTC=$(rustup which rustc) rustup run stable cargo build -p agent-kernel-boot --target x86_64-unknown-none
+PATH="$HOME/.cargo/bin:$PATH" rustup run nightly cargo fmt --check
+PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" rustup run nightly cargo test --workspace
+PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" rustup run nightly cargo run -p agent-supervisor
+scripts/run-qemu.sh
 ```
 
-The explicit `RUSTC=$(rustup which rustc)` prefix is needed on this local
-machine because Homebrew's `rustc` appears earlier in `PATH` than rustup's
-toolchain shim.
+The explicit `PATH` and `RUSTC` prefixes are needed on this local machine
+because Homebrew's `cargo` and `rustc` appear earlier in `PATH` than rustup's
+toolchain shims.
+
+## QEMU Boot
+
+QEMU is installed through Homebrew:
+
+```bash
+brew install qemu
+```
+
+Build a BIOS disk image and boot it in QEMU:
+
+```bash
+scripts/build-qemu-image.sh
+scripts/run-qemu.sh
+```
+
+Expected QEMU serial output:
+
+```text
+AGENT_KERNEL_QEMU_BOOT_OK
+event[1] observation
+event[2] action
+event[3] verification
+SUPERVISOR_HANDOFF_READY
+```
+
+`scripts/run-qemu.sh` treats QEMU exit code `33` as success because the kernel
+exits through the `isa-debug-exit` device with value `0x10`.
 
 Expected supervisor output:
 
