@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "crates/agent-kernel-core",
+    "crates/agent-kernel",
+    "crates/agent-supervisor",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Evan-master/agent-kernel"

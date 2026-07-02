@@ -1,0 +1,56 @@
+//! Typed identifiers for Agent Kernel resources.
+//!
+//! This module owns small copyable ID wrappers. It has no dependencies and is
+//! safe to use from no_std kernel code, tests, and host simulators.
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentId(u64);
+
+impl AgentId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ResourceId(u64);
+
+impl ResourceId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct CapabilityId(u64);
+
+impl CapabilityId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct CheckpointId(u64);
+
+impl CheckpointId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}

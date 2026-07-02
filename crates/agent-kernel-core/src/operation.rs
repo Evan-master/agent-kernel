@@ -1,0 +1,48 @@
+//! Agent-native operation model.
+//!
+//! This module owns the operation vocabulary and fixed-width operation set used
+//! by capabilities. It deliberately avoids POSIX-style permission bits.
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Operation {
+    Observe,
+    Act,
+    Verify,
+    Checkpoint,
+    Rollback,
+    Delegate,
+}
+
+impl Operation {
+    const fn bit(self) -> u16 {
+        match self {
+            Self::Observe => 1 << 0,
+            Self::Act => 1 << 1,
+            Self::Verify => 1 << 2,
+            Self::Checkpoint => 1 << 3,
+            Self::Rollback => 1 << 4,
+            Self::Delegate => 1 << 5,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct OperationSet(u16);
+
+impl OperationSet {
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn only(operation: Operation) -> Self {
+        Self(operation.bit())
+    }
+
+    pub const fn with(self, operation: Operation) -> Self {
+        Self(self.0 | operation.bit())
+    }
+
+    pub const fn allows(self, operation: Operation) -> bool {
+        self.0 & operation.bit() != 0
+    }
+}
