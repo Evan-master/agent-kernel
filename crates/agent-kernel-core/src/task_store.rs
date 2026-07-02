@@ -55,7 +55,7 @@ impl<
         self.ensure_authorized(agent, capability, current.resource, Operation::Delegate)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Act)?;
         ensure_status(current.status, &[TaskStatus::Created])?;
-        self.ensure_task_event_capacity()?;
+        self.ensure_event_slots(2)?;
 
         let delegated_capability = self.derive_task_capability(
             target_agent,
@@ -192,8 +192,10 @@ impl<
             kind,
             resource: Some(task_record.resource),
             capability,
+            source_capability: None,
             action: None,
             operation: None,
+            operations: OperationSet::empty(),
             checkpoint: None,
             task: Some(task),
             target_agent,

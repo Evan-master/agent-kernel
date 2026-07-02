@@ -5,7 +5,8 @@
 //! point at an existing resource.
 
 use crate::{
-    AgentId, Capability, CapabilityId, KernelCore, KernelError, OperationSet, ResourceId, TaskId,
+    AgentId, Capability, CapabilityId, Event, EventKind, KernelCore, KernelError, OperationSet,
+    ResourceId, TaskId,
 };
 
 impl<
@@ -26,12 +27,14 @@ impl<
 
         let slot = self
             .capabilities
-            .iter_mut()
-            .find(|capability| capability.is_none())
+            .iter()
+            .position(|capability| capability.is_none())
             .ok_or(KernelError::CapabilityStoreFull)?;
+        self.ensure_event_slots(1)?;
+
         let id = CapabilityId::new(self.next_capability);
         self.next_capability += 1;
-        *slot = Some(Capability {
+        self.capabilities[slot] = Some(Capability {
             id,
             agent,
             resource,
@@ -40,6 +43,16 @@ impl<
             task: None,
             parent: None,
         });
+        self.record_capability_event(
+            EventKind::CapabilityGranted,
+            agent,
+            resource,
+            id,
+            None,
+            operations,
+            None,
+            None,
+        )?;
         Ok(id)
     }
 
@@ -52,16 +65,18 @@ impl<
         parent: CapabilityId,
     ) -> Result<CapabilityId, KernelError> {
         self.find_resource(resource)?;
-        self.find_capability(parent)?;
+        let parent_capability = self.find_capability(parent)?;
 
         let slot = self
             .capabilities
-            .iter_mut()
-            .find(|capability| capability.is_none())
+            .iter()
+            .position(|capability| capability.is_none())
             .ok_or(KernelError::CapabilityStoreFull)?;
+        self.ensure_event_slots(1)?;
+
         let id = CapabilityId::new(self.next_capability);
         self.next_capability += 1;
-        *slot = Some(Capability {
+        self.capabilities[slot] = Some(Capability {
             id,
             agent,
             resource,
@@ -70,12 +85,61 @@ impl<
             task: Some(task),
             parent: Some(parent),
         });
+        self.record_capability_event(
+            EventKind::CapabilityDerived,
+            parent_capability.agent,
+            resource,
+            id,
+            Some(parent),
+            operations,
+            Some(task),
+            Some(agent),
+        )?;
         Ok(id)
     }
 
     pub fn revoke_capability(&mut self, capability: CapabilityId) -> Result<(), KernelError> {
-        let cap = self.find_capability_mut(capability)?;
-        cap.revoked = true;
+        let cap = self.find_capability(capability)?;
+        self.ensure_event_slots(1)?;
+
+        self.find_capability_mut(capability)?.revoked = true;
+        self.record_capability_event(
+            EventKind::CapabilityRevoked,
+            cap.agent,
+            cap.resource,
+            capability,
+            None,
+            cap.operations,
+            cap.task,
+            None,
+        )?;
         Ok(())
+    }
+
+    fn record_capability_event(
+        &mut self,
+        kind: EventKind,
+        agent: AgentId,
+        resource: ResourceId,
+        capability: CapabilityId,
+        source_capability: Option<CapabilityId>,
+        operations: OperationSet,
+        task: Option<TaskId>,
+        target_agent: Option<AgentId>,
+    ) -> Result<Event, KernelError> {
+        self.record(Event {
+            sequence: self.next_sequence,
+            agent,
+            kind,
+            resource: Some(resource),
+            capability: Some(capability),
+            source_capability,
+            action: None,
+            operation: None,
+            operations,
+            checkpoint: None,
+            task,
+            target_agent,
+        })
     }
 }

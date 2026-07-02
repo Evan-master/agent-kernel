@@ -22,7 +22,9 @@ fn observes_resource_when_capability_allows_observe() {
     assert_eq!(event.agent, agent);
     assert_eq!(event.resource, Some(resource));
     assert_eq!(event.kind, EventKind::Observation);
-    assert_eq!(core.events().len(), 1);
+    assert_eq!(core.events().len(), 2);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[1].kind, EventKind::Observation);
 }
 
 #[test]
@@ -39,7 +41,8 @@ fn denies_action_when_capability_does_not_include_operation() {
     let result = core.authorize(agent, capability, resource, Operation::Act);
 
     assert!(result.is_err());
-    assert_eq!(core.events().len(), 0);
+    assert_eq!(core.events().len(), 1);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
 }
 
 #[test]
@@ -59,7 +62,9 @@ fn revoked_capability_can_no_longer_authorize_operation() {
     assert!(core
         .authorize(agent, capability, resource, Operation::Observe)
         .is_err());
-    assert_eq!(core.events().len(), 0);
+    assert_eq!(core.events().len(), 2);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[1].kind, EventKind::CapabilityRevoked);
 }
 
 #[test]
@@ -86,11 +91,12 @@ fn checkpoint_and_rollback_events_are_recorded_in_order() {
         .expect("rollback event should fit");
 
     let events = core.events();
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].kind, EventKind::CheckpointCreated);
-    assert_eq!(events[1].kind, EventKind::RollbackRequested);
-    assert_eq!(events[0].checkpoint, Some(checkpoint));
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[1].kind, EventKind::CheckpointCreated);
+    assert_eq!(events[2].kind, EventKind::RollbackRequested);
     assert_eq!(events[1].checkpoint, Some(checkpoint));
+    assert_eq!(events[2].checkpoint, Some(checkpoint));
 }
 
 #[test]
@@ -107,7 +113,8 @@ fn checkpoint_requires_checkpoint_capability() {
     let result = core.checkpoint(agent, capability, CheckpointId::new(10), resource);
 
     assert!(result.is_err());
-    assert_eq!(core.events().len(), 0);
+    assert_eq!(core.events().len(), 1);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
 }
 
 #[test]
@@ -134,11 +141,12 @@ fn action_and_verification_events_are_recorded_with_action_id() {
         .expect("verify event should fit");
 
     let events = core.events();
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].kind, EventKind::ActionExecuted);
-    assert_eq!(events[1].kind, EventKind::VerificationRequested);
-    assert_eq!(events[0].action, Some(action));
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[1].kind, EventKind::ActionExecuted);
+    assert_eq!(events[2].kind, EventKind::VerificationRequested);
     assert_eq!(events[1].action, Some(action));
+    assert_eq!(events[2].action, Some(action));
 }
 
 #[test]
@@ -155,5 +163,6 @@ fn action_requires_action_capability() {
     let result = core.act(agent, capability, ActionId::new(13), resource);
 
     assert!(result.is_err());
-    assert_eq!(core.events().len(), 0);
+    assert_eq!(core.events().len(), 1);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
 }

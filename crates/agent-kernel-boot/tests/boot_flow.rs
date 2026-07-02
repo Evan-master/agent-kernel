@@ -23,10 +23,11 @@ fn boot_records_observe_action_and_verify_events() {
         BootedKernel::<8, 8, 16, 4, 4>::boot(config).expect("boot flow should fit fixed stores");
 
     let events = booted.kernel().events();
-    assert_eq!(events.len(), 3);
-    assert_eq!(events[0].kind, EventKind::Observation);
-    assert_eq!(events[1].kind, EventKind::ActionExecuted);
-    assert_eq!(events[2].kind, EventKind::VerificationRequested);
-    assert_eq!(events[1].action, Some(ActionId::new(99)));
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[1].kind, EventKind::Observation);
+    assert_eq!(events[2].kind, EventKind::ActionExecuted);
+    assert_eq!(events[3].kind, EventKind::VerificationRequested);
     assert_eq!(events[2].action, Some(ActionId::new(99)));
+    assert_eq!(events[3].action, Some(ActionId::new(99)));
 }

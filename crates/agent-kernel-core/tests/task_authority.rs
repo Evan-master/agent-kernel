@@ -19,7 +19,8 @@ fn create_task_requires_action_capability() {
 
     assert_eq!(result, Err(KernelError::OperationDenied));
     assert_eq!(core.tasks().len(), 0);
-    assert_eq!(core.events().len(), 0);
+    assert_eq!(core.events().len(), 1);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
 }
 
 #[test]

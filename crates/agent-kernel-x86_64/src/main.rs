@@ -26,6 +26,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                 serial_write_u64(event.sequence);
                 serial_write_str("] ");
                 match event.kind {
+                    EventKind::CapabilityGranted => {
+                        serial_write_line("capability_granted");
+                    }
+                    EventKind::CapabilityDerived => {
+                        serial_write_line("capability_derived");
+                    }
+                    EventKind::CapabilityRevoked => {
+                        serial_write_line("capability_revoked");
+                    }
                     EventKind::Observation => {
                         serial_write_line("observation");
                     }

@@ -13,10 +13,16 @@ impl<
         const RUN_QUEUE: usize,
     > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
 {
-    pub(crate) fn record(&mut self, event: Event) -> Result<Event, KernelError> {
-        if self.event_len >= EVENTS {
-            return Err(KernelError::EventLogFull);
+    pub(crate) fn ensure_event_slots(&self, needed: usize) -> Result<(), KernelError> {
+        if EVENTS.saturating_sub(self.event_len) < needed {
+            Err(KernelError::EventLogFull)
+        } else {
+            Ok(())
         }
+    }
+
+    pub(crate) fn record(&mut self, event: Event) -> Result<Event, KernelError> {
+        self.ensure_event_slots(1)?;
 
         let mut event = event;
         event.sequence = self.next_sequence;

@@ -5,8 +5,8 @@
 //! records scheduler events, and does not grant resource authority.
 
 use crate::{
-    AgentId, Event, EventKind, KernelCore, KernelError, ResourceId, RunQueueEntry, Task, TaskId,
-    TaskStatus,
+    AgentId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId, RunQueueEntry,
+    Task, TaskId, TaskStatus,
 };
 
 impl<
@@ -115,8 +115,10 @@ impl<
             kind,
             resource: Some(resource),
             capability: None,
+            source_capability: None,
             action: None,
             operation: None,
+            operations: OperationSet::empty(),
             checkpoint: None,
             task: Some(task),
             target_agent: None,

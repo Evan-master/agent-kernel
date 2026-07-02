@@ -87,6 +87,9 @@ fn format_event(event: &Event) -> String {
         .unwrap_or_default();
 
     match event.kind {
+        EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
+        EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
+        EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),
         EventKind::Observation => {
             format!(
                 "event[{}] observation agent={} resource={}",
@@ -160,5 +163,22 @@ fn format_task_event(event: &Event, label: &str) -> String {
     format!(
         "event[{}] {} agent={} resource={} task={}",
         event.sequence, label, agent, resource, task
+    )
+}
+
+fn format_capability_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let capability = event
+        .capability
+        .map(|capability| capability.raw())
+        .unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} capability={}",
+        event.sequence, label, agent, resource, capability
     )
 }

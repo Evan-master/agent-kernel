@@ -27,8 +27,9 @@ fn create_task_allocates_kernel_task_and_records_event() {
     assert_eq!(core.tasks()[0].assignee, None);
     assert_eq!(core.tasks()[0].delegated_capability, None);
     assert_eq!(core.tasks()[0].status, TaskStatus::Created);
-    assert_eq!(core.events()[0].kind, EventKind::TaskCreated);
-    assert_eq!(core.events()[0].task, Some(task));
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[1].kind, EventKind::TaskCreated);
+    assert_eq!(core.events()[1].task, Some(task));
 }
 
 #[test]
@@ -69,12 +70,15 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
 
     assert_eq!(core.tasks()[0].status, TaskStatus::Verified);
     assert_eq!(core.tasks()[0].assignee, Some(assignee));
-    assert_eq!(core.events()[0].kind, EventKind::TaskCreated);
-    assert_eq!(core.events()[1].kind, EventKind::DelegationRequested);
-    assert_eq!(core.events()[1].target_agent, Some(assignee));
-    assert_eq!(core.events()[2].kind, EventKind::TaskAccepted);
-    assert_eq!(core.events()[3].kind, EventKind::TaskQueued);
-    assert_eq!(core.events()[4].kind, EventKind::TaskDispatched);
-    assert_eq!(core.events()[5].kind, EventKind::TaskCompleted);
-    assert_eq!(core.events()[6].kind, EventKind::TaskVerified);
+    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[1].kind, EventKind::TaskCreated);
+    assert_eq!(core.events()[2].kind, EventKind::CapabilityDerived);
+    assert_eq!(core.events()[2].target_agent, Some(assignee));
+    assert_eq!(core.events()[3].kind, EventKind::DelegationRequested);
+    assert_eq!(core.events()[3].target_agent, Some(assignee));
+    assert_eq!(core.events()[4].kind, EventKind::TaskAccepted);
+    assert_eq!(core.events()[5].kind, EventKind::TaskQueued);
+    assert_eq!(core.events()[6].kind, EventKind::TaskDispatched);
+    assert_eq!(core.events()[7].kind, EventKind::TaskCompleted);
+    assert_eq!(core.events()[8].kind, EventKind::TaskVerified);
 }

@@ -32,7 +32,9 @@ fn observe_syscall_records_observation_event() {
     assert_eq!(event.kind, EventKind::Observation);
     assert_eq!(event.agent, agent);
     assert_eq!(event.resource, Some(resource));
-    assert_eq!(kernel.events().len(), 1);
+    assert_eq!(kernel.events().len(), 2);
+    assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(kernel.events()[1].kind, EventKind::Observation);
 }
 
 #[test]
@@ -61,9 +63,10 @@ fn checkpoint_and_rollback_syscalls_record_kernel_events() {
         .expect("rollback event should fit");
 
     let events = kernel.events();
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].kind, EventKind::CheckpointCreated);
-    assert_eq!(events[1].kind, EventKind::RollbackRequested);
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[1].kind, EventKind::CheckpointCreated);
+    assert_eq!(events[2].kind, EventKind::RollbackRequested);
 }
 
 #[test]
@@ -92,11 +95,12 @@ fn action_and_verify_syscalls_record_action_lifecycle() {
         .expect("verify should be authorized");
 
     let events = kernel.events();
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].kind, EventKind::ActionExecuted);
-    assert_eq!(events[1].kind, EventKind::VerificationRequested);
-    assert_eq!(events[0].action, Some(action));
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[1].kind, EventKind::ActionExecuted);
+    assert_eq!(events[2].kind, EventKind::VerificationRequested);
     assert_eq!(events[1].action, Some(action));
+    assert_eq!(events[2].action, Some(action));
 }
 
 #[test]
@@ -176,13 +180,15 @@ fn task_syscalls_record_full_task_lifecycle() {
         .expect("task should be verified");
 
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Verified);
-    assert_eq!(kernel.events()[0].kind, EventKind::TaskCreated);
-    assert_eq!(kernel.events()[1].kind, EventKind::DelegationRequested);
-    assert_eq!(kernel.events()[2].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[3].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[4].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[5].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[6].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(kernel.events()[1].kind, EventKind::TaskCreated);
+    assert_eq!(kernel.events()[2].kind, EventKind::CapabilityDerived);
+    assert_eq!(kernel.events()[3].kind, EventKind::DelegationRequested);
+    assert_eq!(kernel.events()[4].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[5].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[6].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[7].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[8].kind, EventKind::TaskVerified);
 }
 
 #[test]
