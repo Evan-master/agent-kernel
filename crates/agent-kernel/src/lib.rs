@@ -6,8 +6,8 @@
 //! reaching into core state directly.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, CheckpointId, Event, KernelCore, KernelError, Operation, OperationSet,
-    ResourceId, ResourceKind,
+    ActionId, AgentId, CapabilityId, CheckpointId, Event, KernelCore, KernelError, Operation,
+    OperationSet, ResourceId, ResourceKind,
 };
 
 #[derive(Debug)]
@@ -49,6 +49,26 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
     ) -> Result<Event, KernelError> {
         self.core
             .authorize(agent, capability, resource, Operation::Observe)
+    }
+
+    pub fn sys_act(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        action: ActionId,
+        resource: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.core.act(agent, capability, action, resource)
+    }
+
+    pub fn sys_verify(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        action: ActionId,
+        resource: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.core.verify(agent, capability, action, resource)
     }
 
     pub fn sys_checkpoint(

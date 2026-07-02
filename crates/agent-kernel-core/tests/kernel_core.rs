@@ -1,5 +1,5 @@
 use agent_kernel_core::{
-    AgentId, CheckpointId, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
+    ActionId, AgentId, CheckpointId, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
 };
 
 #[test]
@@ -103,6 +103,54 @@ fn checkpoint_requires_checkpoint_capability() {
         .expect("capability should fit");
 
     let result = core.checkpoint(agent, capability, CheckpointId::new(10), resource);
+
+    assert!(result.is_err());
+    assert_eq!(core.events().len(), 0);
+}
+
+#[test]
+fn action_and_verification_events_are_recorded_with_action_id() {
+    let mut core = KernelCore::<4, 4, 8>::new();
+    let agent = AgentId::new(5);
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(
+            agent,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
+        .expect("capability should fit");
+    let action = ActionId::new(12);
+
+    core.act(agent, capability, action, resource)
+        .expect("act event should fit");
+    core.verify(agent, capability, action, resource)
+        .expect("verify event should fit");
+
+    let events = core.events();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].kind, EventKind::ActionExecuted);
+    assert_eq!(events[1].kind, EventKind::VerificationRequested);
+    assert_eq!(events[0].action, Some(action));
+    assert_eq!(events[1].action, Some(action));
+}
+
+#[test]
+fn action_requires_action_capability() {
+    let mut core = KernelCore::<4, 4, 8>::new();
+    let agent = AgentId::new(6);
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(agent, resource, OperationSet::only(Operation::Observe))
+        .expect("capability should fit");
+
+    let result = core.act(agent, capability, ActionId::new(13), resource);
 
     assert!(result.is_err());
     assert_eq!(core.events().len(), 0);

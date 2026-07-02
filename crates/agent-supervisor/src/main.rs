@@ -6,7 +6,7 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, CheckpointId, Event, EventKind, Operation, OperationSet, ResourceKind,
+    ActionId, AgentId, CheckpointId, Event, EventKind, Operation, OperationSet, ResourceKind,
 };
 
 fn main() {
@@ -22,15 +22,24 @@ fn main() {
             workspace,
             OperationSet::empty()
                 .with(Operation::Observe)
+                .with(Operation::Act)
+                .with(Operation::Verify)
                 .with(Operation::Checkpoint)
                 .with(Operation::Rollback),
         )
         .expect("agent capability should fit in simulator kernel");
 
+    let action = ActionId::new(1);
     let checkpoint = CheckpointId::new(1);
     kernel
         .sys_observe(agent, capability, workspace)
         .expect("agent should observe workspace");
+    kernel
+        .sys_act(agent, capability, action, workspace)
+        .expect("agent should execute action");
+    kernel
+        .sys_verify(agent, capability, action, workspace)
+        .expect("agent should request verification");
     kernel
         .sys_checkpoint(agent, capability, checkpoint, workspace)
         .expect("agent should checkpoint workspace");
@@ -79,15 +88,17 @@ fn format_event(event: &Event) -> String {
             )
         }
         EventKind::ActionExecuted => {
+            let action = event.action.map(|action| action.raw()).unwrap_or_default();
             format!(
-                "event[{}] action agent={} resource={}",
-                event.sequence, agent, resource
+                "event[{}] action agent={} resource={} action={}",
+                event.sequence, agent, resource, action
             )
         }
         EventKind::VerificationRequested => {
+            let action = event.action.map(|action| action.raw()).unwrap_or_default();
             format!(
-                "event[{}] verification agent={} resource={}",
-                event.sequence, agent, resource
+                "event[{}] verification agent={} resource={} action={}",
+                event.sequence, agent, resource, action
             )
         }
         EventKind::DelegationRequested => {

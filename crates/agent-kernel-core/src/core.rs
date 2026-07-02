@@ -5,19 +5,19 @@
 //! host I/O and keeps state deterministic for replay and supervisor inspection.
 
 use crate::{
-    AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, KernelError, Operation,
-    OperationSet, Resource, ResourceId, ResourceKind,
+    ActionId, AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, KernelError,
+    Operation, OperationSet, Resource, ResourceId, ResourceKind,
 };
 
 #[derive(Debug)]
 pub struct KernelCore<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize> {
-    resources: [Option<Resource>; RESOURCES],
-    capabilities: [Option<Capability>; CAPS],
-    events: [Event; EVENTS],
-    event_len: usize,
-    next_resource: u64,
-    next_capability: u64,
-    next_sequence: u64,
+    pub(crate) resources: [Option<Resource>; RESOURCES],
+    pub(crate) capabilities: [Option<Capability>; CAPS],
+    pub(crate) events: [Event; EVENTS],
+    pub(crate) event_len: usize,
+    pub(crate) next_resource: u64,
+    pub(crate) next_capability: u64,
+    pub(crate) next_sequence: u64,
 }
 
 impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
@@ -95,6 +95,7 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             kind: event_kind(operation),
             resource: Some(resource),
             capability: Some(capability),
+            action: None,
             operation: Some(operation),
             checkpoint: None,
         })
@@ -104,6 +105,46 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
         let cap = self.find_capability_mut(capability)?;
         cap.revoked = true;
         Ok(())
+    }
+
+    pub fn act(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        action: ActionId,
+        resource: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.ensure_authorized(agent, capability, resource, Operation::Act)?;
+        self.record(Event {
+            sequence: self.next_sequence,
+            agent,
+            kind: EventKind::ActionExecuted,
+            resource: Some(resource),
+            capability: Some(capability),
+            action: Some(action),
+            operation: Some(Operation::Act),
+            checkpoint: None,
+        })
+    }
+
+    pub fn verify(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        action: ActionId,
+        resource: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.ensure_authorized(agent, capability, resource, Operation::Verify)?;
+        self.record(Event {
+            sequence: self.next_sequence,
+            agent,
+            kind: EventKind::VerificationRequested,
+            resource: Some(resource),
+            capability: Some(capability),
+            action: Some(action),
+            operation: Some(Operation::Verify),
+            checkpoint: None,
+        })
     }
 
     pub fn checkpoint(
@@ -120,6 +161,7 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             kind: EventKind::CheckpointCreated,
             resource: Some(resource),
             capability: Some(capability),
+            action: None,
             operation: Some(Operation::Checkpoint),
             checkpoint: Some(checkpoint),
         })
@@ -139,6 +181,7 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             kind: EventKind::RollbackRequested,
             resource: Some(resource),
             capability: Some(capability),
+            action: None,
             operation: Some(Operation::Rollback),
             checkpoint: Some(checkpoint),
         })
@@ -146,71 +189,6 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
 
     pub fn events(&self) -> &[Event] {
         &self.events[..self.event_len]
-    }
-
-    fn record(&mut self, event: Event) -> Result<Event, KernelError> {
-        if self.event_len >= EVENTS {
-            return Err(KernelError::EventLogFull);
-        }
-
-        let mut event = event;
-        event.sequence = self.next_sequence;
-        self.next_sequence += 1;
-        self.events[self.event_len] = event;
-        self.event_len += 1;
-        Ok(event)
-    }
-
-    fn ensure_authorized(
-        &self,
-        agent: AgentId,
-        capability: CapabilityId,
-        resource: ResourceId,
-        operation: Operation,
-    ) -> Result<(), KernelError> {
-        self.find_resource(resource)?;
-        let cap = self.find_capability(capability)?;
-
-        if cap.revoked {
-            return Err(KernelError::CapabilityRevoked);
-        }
-        if cap.agent != agent {
-            return Err(KernelError::AgentMismatch);
-        }
-        if cap.resource != resource {
-            return Err(KernelError::ResourceMismatch);
-        }
-        if !cap.operations.allows(operation) {
-            return Err(KernelError::OperationDenied);
-        }
-
-        Ok(())
-    }
-
-    fn find_resource(&self, id: ResourceId) -> Result<Resource, KernelError> {
-        self.resources
-            .iter()
-            .flatten()
-            .find(|resource| resource.id == id)
-            .copied()
-            .ok_or(KernelError::ResourceNotFound)
-    }
-
-    fn find_capability(&self, id: CapabilityId) -> Result<Capability, KernelError> {
-        self.capabilities
-            .iter()
-            .flatten()
-            .find(|capability| capability.id == id)
-            .copied()
-            .ok_or(KernelError::CapabilityNotFound)
-    }
-
-    fn find_capability_mut(&mut self, id: CapabilityId) -> Result<&mut Capability, KernelError> {
-        self.capabilities
-            .iter_mut()
-            .flatten()
-            .find(|capability| capability.id == id)
-            .ok_or(KernelError::CapabilityNotFound)
     }
 }
 
