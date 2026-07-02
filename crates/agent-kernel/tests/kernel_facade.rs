@@ -1,6 +1,6 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, EventKind, Operation, OperationSet, ResourceKind,
+    ActionId, AgentId, CheckpointId, EventKind, Operation, OperationSet, ResourceKind, TaskId,
 };
 
 #[test]
@@ -93,4 +93,26 @@ fn action_and_verify_syscalls_record_action_lifecycle() {
     assert_eq!(events[1].kind, EventKind::VerificationRequested);
     assert_eq!(events[0].action, Some(action));
     assert_eq!(events[1].action, Some(action));
+}
+
+#[test]
+fn delegate_syscall_records_task_delegation() {
+    let mut kernel = AgentKernel::<4, 4, 8>::new();
+    let agent = AgentId::new(99);
+    let target_agent = AgentId::new(100);
+    let task = TaskId::new(4);
+    let resource = kernel
+        .sys_register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = kernel
+        .sys_grant(agent, resource, OperationSet::only(Operation::Delegate))
+        .expect("capability should fit");
+
+    let event = kernel
+        .sys_delegate(agent, capability, task, resource, target_agent)
+        .expect("delegate should be authorized");
+
+    assert_eq!(event.kind, EventKind::DelegationRequested);
+    assert_eq!(event.task, Some(task));
+    assert_eq!(event.target_agent, Some(target_agent));
 }

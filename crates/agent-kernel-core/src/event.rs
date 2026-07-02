@@ -3,7 +3,7 @@
 //! This module owns the replayable event shape for observations, actions,
 //! verification requests, checkpoints, rollback requests, and delegation.
 
-use crate::{ActionId, AgentId, CapabilityId, CheckpointId, Operation, ResourceId};
+use crate::{ActionId, AgentId, CapabilityId, CheckpointId, Operation, ResourceId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EventKind {
@@ -25,6 +25,8 @@ pub struct Event {
     pub action: Option<ActionId>,
     pub operation: Option<Operation>,
     pub checkpoint: Option<CheckpointId>,
+    pub task: Option<TaskId>,
+    pub target_agent: Option<AgentId>,
 }
 
 impl Event {
@@ -38,6 +40,8 @@ impl Event {
             action: None,
             operation: None,
             checkpoint: None,
+            task: None,
+            target_agent: None,
         }
     }
 }

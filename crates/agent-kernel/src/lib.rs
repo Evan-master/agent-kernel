@@ -7,7 +7,7 @@
 
 use agent_kernel_core::{
     ActionId, AgentId, CapabilityId, CheckpointId, Event, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind,
+    OperationSet, ResourceId, ResourceKind, TaskId,
 };
 
 #[derive(Debug)]
@@ -94,6 +94,18 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
 
     pub fn events(&self) -> &[Event] {
         self.core.events()
+    }
+
+    pub fn sys_delegate(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        resource: ResourceId,
+        target_agent: AgentId,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .delegate(agent, capability, task, resource, target_agent)
     }
 }
 

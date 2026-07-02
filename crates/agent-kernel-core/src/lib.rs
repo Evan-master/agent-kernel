@@ -20,6 +20,6 @@ pub use capability::Capability;
 pub use core::KernelCore;
 pub use error::KernelError;
 pub use event::{Event, EventKind};
-pub use id::{ActionId, AgentId, CapabilityId, CheckpointId, ResourceId};
+pub use id::{ActionId, AgentId, CapabilityId, CheckpointId, ResourceId, TaskId};
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceKind};

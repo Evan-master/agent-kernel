@@ -5,11 +5,11 @@ It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 
 The project starts from new OS primitives instead of POSIX compatibility:
 resources, capabilities, actions, observations, checkpoints, rollback, verification,
-and event logs.
+tasks, delegation, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly resource, capability, checkpoint, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly resource, capability, task delegation, checkpoint, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -21,16 +21,18 @@ and event logs.
 The v0 flow is deliberately small:
 
 1. Register a workspace resource.
-2. Grant an agent a capability for observe, act, verify, checkpoint, and rollback.
+2. Grant an agent a capability for observe, act, verify, checkpoint, rollback, and delegation.
 3. Observe the resource.
 4. Execute an action event with an `ActionId`.
 5. Request verification for that action.
 6. Create a checkpoint event.
 7. Request a rollback event.
-8. Print the kernel event log from the supervisor.
+8. Request delegation of a `TaskId` to another agent.
+9. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Action, verification,
-checkpoint, and rollback are first-class kernel events, not external tooling.
+checkpoint, rollback, and delegation are first-class kernel events, not external
+tooling.
 
 ## Boot Handoff
 
@@ -104,4 +106,5 @@ event[2] action agent=1 resource=1 action=1
 event[3] verification agent=1 resource=1 action=1
 event[4] checkpoint agent=1 resource=1 checkpoint=1
 event[5] rollback agent=1 resource=1 checkpoint=1
+event[6] delegation agent=1 resource=1 task=1 target_agent=2
 ```

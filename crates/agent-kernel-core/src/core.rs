@@ -6,7 +6,7 @@
 
 use crate::{
     ActionId, AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, KernelError,
-    Operation, OperationSet, Resource, ResourceId, ResourceKind,
+    Operation, OperationSet, Resource, ResourceId, ResourceKind, TaskId,
 };
 
 #[derive(Debug)]
@@ -98,6 +98,8 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             action: None,
             operation: Some(operation),
             checkpoint: None,
+            task: None,
+            target_agent: None,
         })
     }
 
@@ -124,6 +126,8 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             action: Some(action),
             operation: Some(Operation::Act),
             checkpoint: None,
+            task: None,
+            target_agent: None,
         })
     }
 
@@ -144,6 +148,8 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             action: Some(action),
             operation: Some(Operation::Verify),
             checkpoint: None,
+            task: None,
+            target_agent: None,
         })
     }
 
@@ -164,6 +170,8 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             action: None,
             operation: Some(Operation::Checkpoint),
             checkpoint: Some(checkpoint),
+            task: None,
+            target_agent: None,
         })
     }
 
@@ -184,6 +192,31 @@ impl<const RESOURCES: usize, const CAPS: usize, const EVENTS: usize>
             action: None,
             operation: Some(Operation::Rollback),
             checkpoint: Some(checkpoint),
+            task: None,
+            target_agent: None,
+        })
+    }
+
+    pub fn delegate(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        resource: ResourceId,
+        target_agent: AgentId,
+    ) -> Result<Event, KernelError> {
+        self.ensure_authorized(agent, capability, resource, Operation::Delegate)?;
+        self.record(Event {
+            sequence: self.next_sequence,
+            agent,
+            kind: EventKind::DelegationRequested,
+            resource: Some(resource),
+            capability: Some(capability),
+            action: None,
+            operation: Some(Operation::Delegate),
+            checkpoint: None,
+            task: Some(task),
+            target_agent: Some(target_agent),
         })
     }
 

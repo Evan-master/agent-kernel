@@ -7,11 +7,13 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, Event, EventKind, Operation, OperationSet, ResourceKind,
+    TaskId,
 };
 
 fn main() {
     let mut kernel = AgentKernel::<8, 8, 16>::new();
     let agent = AgentId::new(1);
+    let target_agent = AgentId::new(2);
 
     let workspace = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
@@ -25,12 +27,14 @@ fn main() {
                 .with(Operation::Act)
                 .with(Operation::Verify)
                 .with(Operation::Checkpoint)
-                .with(Operation::Rollback),
+                .with(Operation::Rollback)
+                .with(Operation::Delegate),
         )
         .expect("agent capability should fit in simulator kernel");
 
     let action = ActionId::new(1);
     let checkpoint = CheckpointId::new(1);
+    let task = TaskId::new(1);
     kernel
         .sys_observe(agent, capability, workspace)
         .expect("agent should observe workspace");
@@ -46,6 +50,9 @@ fn main() {
     kernel
         .sys_rollback(agent, capability, checkpoint, workspace)
         .expect("agent should request rollback");
+    kernel
+        .sys_delegate(agent, capability, task, workspace, target_agent)
+        .expect("agent should request task delegation");
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {
@@ -102,9 +109,14 @@ fn format_event(event: &Event) -> String {
             )
         }
         EventKind::DelegationRequested => {
+            let task = event.task.map(|task| task.raw()).unwrap_or_default();
+            let target_agent = event
+                .target_agent
+                .map(|agent| agent.raw())
+                .unwrap_or_default();
             format!(
-                "event[{}] delegation agent={} resource={}",
-                event.sequence, agent, resource
+                "event[{}] delegation agent={} resource={} task={} target_agent={}",
+                event.sequence, agent, resource, task, target_agent
             )
         }
     }

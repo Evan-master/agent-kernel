@@ -15,4 +15,5 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[3] verification agent=1 resource=1 action=1"));
     assert!(stdout.contains("event[4] checkpoint agent=1 resource=1 checkpoint=1"));
     assert!(stdout.contains("event[5] rollback agent=1 resource=1 checkpoint=1"));
+    assert!(stdout.contains("event[6] delegation agent=1 resource=1 task=1 target_agent=2"));
 }

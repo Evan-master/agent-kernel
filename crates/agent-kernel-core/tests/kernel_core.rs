@@ -1,5 +1,6 @@
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
+    TaskId,
 };
 
 #[test]
@@ -153,5 +154,50 @@ fn action_requires_action_capability() {
     let result = core.act(agent, capability, ActionId::new(13), resource);
 
     assert!(result.is_err());
+    assert_eq!(core.events().len(), 0);
+}
+
+#[test]
+fn delegate_event_records_task_and_target_agent() {
+    let mut core = KernelCore::<4, 4, 8>::new();
+    let agent = AgentId::new(7);
+    let target_agent = AgentId::new(8);
+    let task = TaskId::new(21);
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(agent, resource, OperationSet::only(Operation::Delegate))
+        .expect("capability should fit");
+
+    let event = core
+        .delegate(agent, capability, task, resource, target_agent)
+        .expect("delegate should be authorized");
+
+    assert_eq!(event.kind, EventKind::DelegationRequested);
+    assert_eq!(event.agent, agent);
+    assert_eq!(event.resource, Some(resource));
+    assert_eq!(event.capability, Some(capability));
+    assert_eq!(event.operation, Some(Operation::Delegate));
+    assert_eq!(event.task, Some(task));
+    assert_eq!(event.target_agent, Some(target_agent));
+    assert_eq!(core.events().len(), 1);
+}
+
+#[test]
+fn delegate_requires_delegate_capability() {
+    let mut core = KernelCore::<4, 4, 8>::new();
+    let agent = AgentId::new(9);
+    let target_agent = AgentId::new(10);
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(agent, resource, OperationSet::only(Operation::Observe))
+        .expect("capability should fit");
+
+    let result = core.delegate(agent, capability, TaskId::new(22), resource, target_agent);
+
+    assert_eq!(result, Err(agent_kernel_core::KernelError::OperationDenied));
     assert_eq!(core.events().len(), 0);
 }
