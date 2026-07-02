@@ -41,6 +41,7 @@ impl<
         self.ensure_scheduler_event_capacity()?;
 
         self.shift_run_queue_left();
+        self.find_task_mut(entry.task)?.status = TaskStatus::Running;
         self.record_scheduler_event(
             EventKind::TaskDispatched,
             agent,
@@ -51,11 +52,15 @@ impl<
     }
 
     pub fn yield_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
-        let task_record = self.find_runnable_task(agent, task)?;
+        let task_record = self.find_task(task)?;
+        if task_record.status != TaskStatus::Running || task_record.assignee != Some(agent) {
+            return Err(KernelError::TaskNotRunnable);
+        }
         self.ensure_not_queued(task)?;
         self.ensure_run_queue_capacity()?;
         self.ensure_scheduler_event_capacity()?;
 
+        self.find_task_mut(task)?.status = TaskStatus::Accepted;
         self.run_queue[self.run_queue_len] = RunQueueEntry { task, agent };
         self.run_queue_len += 1;
         self.record_scheduler_event(EventKind::TaskYielded, agent, task, task_record.resource)

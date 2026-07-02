@@ -87,7 +87,7 @@ impl<
     ) -> Result<Event, KernelError> {
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Act)?;
-        ensure_status(current.status, &[TaskStatus::Accepted])?;
+        ensure_status(current.status, &[TaskStatus::Running])?;
         if current.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
         }
@@ -132,6 +132,7 @@ impl<
                 TaskStatus::Created,
                 TaskStatus::Delegated,
                 TaskStatus::Accepted,
+                TaskStatus::Running,
                 TaskStatus::Completed,
             ],
         )?;

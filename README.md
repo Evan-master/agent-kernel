@@ -30,16 +30,17 @@ The v0 flow is deliberately small:
 8. Create a kernel-owned task.
 9. Delegate the task to another agent.
 10. Let the assignee accept the task.
-11. Enqueue and dispatch the accepted task through the kernel run queue.
-12. Let the assignee complete the dispatched task.
+11. Enqueue the accepted task and dispatch it into `Running` state through the kernel run queue.
+12. Let the assignee complete the running task.
 13. Request verification for the completed task.
 14. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Action, verification,
 checkpoint, rollback, task creation, task completion, task verification, and
 delegation are first-class kernel events, not external tooling. Accepted tasks
-move through a fixed-capacity FIFO run queue before completion. `TaskId` values
-are allocated by the kernel task store rather than invented by the supervisor.
+move through a fixed-capacity FIFO run queue and become `Running` before
+completion. `TaskId` values are allocated by the kernel task store rather than
+invented by the supervisor.
 
 ## Boot Handoff
 

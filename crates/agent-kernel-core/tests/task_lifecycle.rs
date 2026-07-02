@@ -59,6 +59,9 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
         .expect("task should be delegated");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
+    core.enqueue_task(assignee, task)
+        .expect("task should enqueue");
+    core.dispatch_next(assignee).expect("task should dispatch");
     core.complete_task(assignee, assignee_capability, task)
         .expect("task should be completed");
     core.verify_task(owner, owner_capability, task)
@@ -70,6 +73,8 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
     assert_eq!(core.events()[1].kind, EventKind::DelegationRequested);
     assert_eq!(core.events()[1].target_agent, Some(assignee));
     assert_eq!(core.events()[2].kind, EventKind::TaskAccepted);
-    assert_eq!(core.events()[3].kind, EventKind::TaskCompleted);
-    assert_eq!(core.events()[4].kind, EventKind::TaskVerified);
+    assert_eq!(core.events()[3].kind, EventKind::TaskQueued);
+    assert_eq!(core.events()[4].kind, EventKind::TaskDispatched);
+    assert_eq!(core.events()[5].kind, EventKind::TaskCompleted);
+    assert_eq!(core.events()[6].kind, EventKind::TaskVerified);
 }

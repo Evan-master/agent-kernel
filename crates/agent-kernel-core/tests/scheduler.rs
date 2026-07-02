@@ -1,9 +1,16 @@
 use agent_kernel_core::{
-    AgentId, EventKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind,
-    RunQueueEntry, TaskId,
+    AgentId, CapabilityId, EventKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceKind, RunQueueEntry, TaskId, TaskStatus,
 };
 
 type TestCore = KernelCore<4, 6, 32, 6, 4>;
+
+#[derive(Copy, Clone)]
+struct AcceptedTask {
+    task: TaskId,
+    owner_capability: CapabilityId,
+    assignee_capability: CapabilityId,
+}
 
 fn accepted_task<
     const RESOURCES: usize,
@@ -16,6 +23,20 @@ fn accepted_task<
     owner: AgentId,
     assignee: AgentId,
 ) -> TaskId {
+    accepted_task_with_capabilities(core, owner, assignee).task
+}
+
+fn accepted_task_with_capabilities<
+    const RESOURCES: usize,
+    const CAPS: usize,
+    const EVENTS: usize,
+    const TASKS: usize,
+    const RUN_QUEUE: usize,
+>(
+    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>,
+    owner: AgentId,
+    assignee: AgentId,
+) -> AcceptedTask {
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -26,9 +47,13 @@ fn accepted_task<
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
-                .with(Operation::Verify),
+                .with(Operation::Verify)
+                .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
+    let assignee_capability = core
+        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
+        .expect("assignee capability should fit");
     let task = core
         .create_task(owner, owner_capability, resource)
         .expect("task should be created");
@@ -36,7 +61,11 @@ fn accepted_task<
         .expect("task should be delegated");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
-    task
+    AcceptedTask {
+        task,
+        owner_capability,
+        assignee_capability,
+    }
 }
 
 #[test]
@@ -82,6 +111,7 @@ fn dispatch_next_pops_oldest_task_and_records_event() {
         .expect("first agent should dispatch first queued task");
 
     assert_eq!(dispatched, first);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Running);
     assert_eq!(
         core.run_queue(),
         &[RunQueueEntry {
@@ -171,21 +201,26 @@ fn dispatch_from_empty_queue_returns_run_queue_empty() {
 }
 
 #[test]
-fn yield_task_requeues_accepted_task_at_back() {
+fn yield_task_requeues_running_task_as_accepted_at_back() {
     let mut core = TestCore::new();
     let owner = AgentId::new(13);
     let first_agent = AgentId::new(14);
     let second_agent = AgentId::new(15);
     let first = accepted_task(&mut core, owner, first_agent);
     let second = accepted_task(&mut core, owner, second_agent);
+    core.enqueue_task(first_agent, first)
+        .expect("first task should enqueue");
     core.enqueue_task(second_agent, second)
-        .expect("second task should enqueue first");
+        .expect("second task should enqueue");
+    core.dispatch_next(first_agent)
+        .expect("first task should dispatch");
 
     let event = core
         .yield_task(first_agent, first)
-        .expect("accepted task should yield into queue");
+        .expect("running task should yield into queue");
 
     assert_eq!(event.kind, EventKind::TaskYielded);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
     assert_eq!(
         core.run_queue(),
         &[
@@ -198,5 +233,78 @@ fn yield_task_requeues_accepted_task_at_back() {
                 agent: first_agent,
             },
         ]
+    );
+}
+
+#[test]
+fn completing_accepted_task_before_dispatch_is_rejected_without_events() {
+    let mut core = TestCore::new();
+    let owner = AgentId::new(16);
+    let assignee = AgentId::new(17);
+    let accepted = accepted_task_with_capabilities(&mut core, owner, assignee);
+    let events_before = core.events().len();
+
+    let result = core.complete_task(assignee, accepted.assignee_capability, accepted.task);
+
+    assert_eq!(result, Err(KernelError::TaskStatusMismatch));
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn completing_running_task_records_completed_status() {
+    let mut core = TestCore::new();
+    let owner = AgentId::new(18);
+    let assignee = AgentId::new(19);
+    let accepted = accepted_task_with_capabilities(&mut core, owner, assignee);
+    core.enqueue_task(assignee, accepted.task)
+        .expect("accepted task should enqueue");
+    core.dispatch_next(assignee)
+        .expect("accepted task should dispatch");
+
+    let event = core
+        .complete_task(assignee, accepted.assignee_capability, accepted.task)
+        .expect("running task should complete");
+
+    assert_eq!(event.kind, EventKind::TaskCompleted);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Completed);
+}
+
+#[test]
+fn yielding_accepted_task_without_dispatch_is_rejected_without_state_changes() {
+    let mut core = TestCore::new();
+    let owner = AgentId::new(20);
+    let assignee = AgentId::new(21);
+    let accepted = accepted_task_with_capabilities(&mut core, owner, assignee);
+    let events_before = core.events().len();
+
+    let result = core.yield_task(assignee, accepted.task);
+
+    assert_eq!(result, Err(KernelError::TaskNotRunnable));
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert!(core.run_queue().is_empty());
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn cancelling_running_task_marks_cancelled_and_blocks_completion() {
+    let mut core = TestCore::new();
+    let owner = AgentId::new(22);
+    let assignee = AgentId::new(23);
+    let accepted = accepted_task_with_capabilities(&mut core, owner, assignee);
+    core.enqueue_task(assignee, accepted.task)
+        .expect("accepted task should enqueue");
+    core.dispatch_next(assignee)
+        .expect("accepted task should dispatch");
+
+    let event = core
+        .cancel_task(owner, accepted.owner_capability, accepted.task)
+        .expect("running task should cancel");
+
+    assert_eq!(event.kind, EventKind::TaskCancelled);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Cancelled);
+    assert_eq!(
+        core.complete_task(assignee, accepted.assignee_capability, accepted.task),
+        Err(KernelError::TaskStatusMismatch)
     );
 }

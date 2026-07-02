@@ -1,6 +1,6 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, EventKind, Operation, OperationSet, ResourceKind,
+    ActionId, AgentId, CheckpointId, EventKind, KernelError, Operation, OperationSet, ResourceKind,
     RunQueueEntry, TaskId, TaskStatus,
 };
 
@@ -163,6 +163,12 @@ fn task_syscalls_record_full_task_lifecycle() {
         .sys_accept_task(assignee, task)
         .expect("task should be accepted");
     kernel
+        .sys_enqueue_task(assignee, task)
+        .expect("task should enqueue");
+    kernel
+        .sys_dispatch_next(assignee)
+        .expect("task should dispatch");
+    kernel
         .sys_complete_task(assignee, assignee_capability, task)
         .expect("task should be completed");
     kernel
@@ -173,8 +179,10 @@ fn task_syscalls_record_full_task_lifecycle() {
     assert_eq!(kernel.events()[0].kind, EventKind::TaskCreated);
     assert_eq!(kernel.events()[1].kind, EventKind::DelegationRequested);
     assert_eq!(kernel.events()[2].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[3].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[4].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[3].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[4].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[5].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[6].kind, EventKind::TaskVerified);
 }
 
 #[test]
@@ -246,26 +254,74 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
         .sys_enqueue_task(first_agent, first)
         .expect("first task should enqueue");
     kernel
-        .sys_yield_task(second_agent, second)
-        .expect("second task should yield into queue");
+        .sys_enqueue_task(second_agent, second)
+        .expect("second task should enqueue");
     let dispatched = kernel
         .sys_dispatch_next(first_agent)
         .expect("first task should dispatch");
+    kernel
+        .sys_yield_task(first_agent, first)
+        .expect("running task should yield into queue");
 
     assert_eq!(dispatched, first);
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Accepted);
     assert_eq!(
         kernel.run_queue(),
-        &[RunQueueEntry {
-            task: second,
-            agent: second_agent,
-        }]
+        &[
+            RunQueueEntry {
+                task: second,
+                agent: second_agent,
+            },
+            RunQueueEntry {
+                task: first,
+                agent: first_agent,
+            }
+        ]
     );
     assert_eq!(
         kernel
             .events()
             .last()
-            .expect("dispatch event should exist")
+            .expect("yield event should exist")
             .kind,
-        EventKind::TaskDispatched
+        EventKind::TaskYielded
     );
+}
+
+#[test]
+fn completing_task_before_dispatch_is_rejected_by_facade() {
+    let mut kernel = TestKernel::new();
+    let owner = AgentId::new(203);
+    let assignee = AgentId::new(204);
+    let resource = kernel
+        .sys_register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let owner_capability = kernel
+        .sys_grant(
+            owner,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Delegate),
+        )
+        .expect("owner capability should fit");
+    let assignee_capability = kernel
+        .sys_grant(assignee, resource, OperationSet::only(Operation::Act))
+        .expect("assignee capability should fit");
+    let task = kernel
+        .sys_create_task(owner, owner_capability, resource)
+        .expect("task should be created");
+    kernel
+        .sys_delegate_task(owner, owner_capability, task, assignee)
+        .expect("task should delegate");
+    kernel
+        .sys_accept_task(assignee, task)
+        .expect("task should accept");
+    let events_before = kernel.events().len();
+
+    let result = kernel.sys_complete_task(assignee, assignee_capability, task);
+
+    assert_eq!(result, Err(KernelError::TaskStatusMismatch));
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(kernel.events().len(), events_before);
 }

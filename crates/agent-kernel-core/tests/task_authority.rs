@@ -196,6 +196,9 @@ fn verified_task_rejects_further_transitions_without_events() {
         .expect("task should be delegated");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
+    core.enqueue_task(assignee, task)
+        .expect("task should enqueue");
+    core.dispatch_next(assignee).expect("task should dispatch");
     core.complete_task(assignee, assignee_capability, task)
         .expect("task should be completed");
     core.verify_task(owner, owner_capability, task)
