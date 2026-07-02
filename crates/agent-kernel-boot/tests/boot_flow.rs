@@ -1,0 +1,31 @@
+use agent_kernel_boot::{BootConfig, BootPhase, BootedKernel};
+use agent_kernel_core::{ActionId, EventKind};
+
+#[test]
+fn boot_records_phase_sequence() {
+    let booted = BootedKernel::<8, 8, 16>::boot(BootConfig::default())
+        .expect("boot flow should fit fixed stores");
+
+    assert_eq!(
+        booted.report().phases,
+        [
+            BootPhase::EnteredKernel,
+            BootPhase::KernelInitialized,
+            BootPhase::SupervisorHandoffReady,
+        ]
+    );
+}
+
+#[test]
+fn boot_records_observe_action_and_verify_events() {
+    let config = BootConfig::default().with_boot_action(ActionId::new(99));
+    let booted = BootedKernel::<8, 8, 16>::boot(config).expect("boot flow should fit fixed stores");
+
+    let events = booted.kernel().events();
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].kind, EventKind::Observation);
+    assert_eq!(events[1].kind, EventKind::ActionExecuted);
+    assert_eq!(events[2].kind, EventKind::VerificationRequested);
+    assert_eq!(events[1].action, Some(ActionId::new(99)));
+    assert_eq!(events[2].action, Some(ActionId::new(99)));
+}

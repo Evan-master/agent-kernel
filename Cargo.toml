@@ -2,6 +2,7 @@
 members = [
     "crates/agent-kernel-core",
     "crates/agent-kernel",
+    "crates/agent-kernel-boot",
     "crates/agent-supervisor",
 ]
 resolver = "2"
