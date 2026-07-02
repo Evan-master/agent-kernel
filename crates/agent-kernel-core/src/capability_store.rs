@@ -38,6 +38,7 @@ impl<
             operations,
             revoked: false,
             task: None,
+            parent: None,
         });
         Ok(id)
     }
@@ -48,8 +49,10 @@ impl<
         resource: ResourceId,
         operations: OperationSet,
         task: TaskId,
+        parent: CapabilityId,
     ) -> Result<CapabilityId, KernelError> {
         self.find_resource(resource)?;
+        self.find_capability(parent)?;
 
         let slot = self
             .capabilities
@@ -65,6 +68,7 @@ impl<
             operations,
             revoked: false,
             task: Some(task),
+            parent: Some(parent),
         });
         Ok(id)
     }

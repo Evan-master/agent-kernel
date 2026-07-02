@@ -1,7 +1,7 @@
 //! Capability authorization checks.
 //!
 //! This module owns the invariant that resource operations require a matching,
-//! non-revoked capability for the agent, resource, and operation.
+//! non-revoked capability chain for the agent, resource, and operation.
 
 use crate::{
     AgentId, Capability, CapabilityId, KernelCore, KernelError, Operation, ResourceId, TaskId,
@@ -58,9 +58,7 @@ impl<
         self.find_resource(resource)?;
         let cap = self.find_capability(capability)?;
 
-        if cap.revoked {
-            return Err(KernelError::CapabilityRevoked);
-        }
+        self.ensure_capability_chain_active(cap)?;
         if cap.agent != agent {
             return Err(KernelError::AgentMismatch);
         }
@@ -72,5 +70,22 @@ impl<
         }
 
         Ok(cap)
+    }
+
+    fn ensure_capability_chain_active(&self, capability: Capability) -> Result<(), KernelError> {
+        let mut current = capability;
+
+        for _ in 0..CAPS {
+            if current.revoked {
+                return Err(KernelError::CapabilityRevoked);
+            }
+
+            let Some(parent) = current.parent else {
+                return Ok(());
+            };
+            current = self.find_capability(parent)?;
+        }
+
+        Err(KernelError::CapabilityNotFound)
     }
 }

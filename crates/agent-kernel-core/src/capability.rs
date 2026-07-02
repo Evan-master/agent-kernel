@@ -13,4 +13,5 @@ pub struct Capability {
     pub operations: OperationSet,
     pub revoked: bool,
     pub task: Option<TaskId>,
+    pub parent: Option<CapabilityId>,
 }

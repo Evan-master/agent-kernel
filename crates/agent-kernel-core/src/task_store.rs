@@ -62,6 +62,7 @@ impl<
             current.resource,
             OperationSet::only(Operation::Act),
             task,
+            capability,
         )?;
         let task_ref = self.find_task_mut(task)?;
         task_ref.assignee = Some(target_agent);

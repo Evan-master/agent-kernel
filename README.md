@@ -43,6 +43,8 @@ completion. `TaskId` values are allocated by the kernel task store rather than
 invented by the supervisor.
 Delegation derives a task-scoped action capability for the assignee, so the
 supervisor does not grant broad resource authority to complete delegated work.
+Revoking the source capability that authorized delegation also invalidates the
+derived task-scoped capability before future task authorization succeeds.
 
 ## Boot Handoff
 
