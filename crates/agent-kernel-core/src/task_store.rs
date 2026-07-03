@@ -41,7 +41,7 @@ impl<
         capability: CapabilityId,
         intent: IntentId,
     ) -> Result<TaskId, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         let intent_record = self.find_intent(intent)?;
         if intent_record.owner != agent {
             return Err(KernelError::IntentAgentMismatch);
@@ -85,12 +85,12 @@ impl<
         task: TaskId,
         target_agent: AgentId,
     ) -> Result<Event, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Delegate)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Act)?;
         ensure_status(current.status, &[TaskStatus::Created])?;
-        self.find_agent(target_agent)?;
+        self.ensure_agent_active(target_agent)?;
         self.ensure_event_slots(2)?;
 
         let delegated_capability = self.derive_task_capability(
@@ -114,7 +114,7 @@ impl<
     }
 
     pub fn accept_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         let current = self.find_task(task)?;
         if current.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
@@ -132,7 +132,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized_for_task(agent, capability, current.resource, Operation::Act, task)?;
         ensure_status(current.status, &[TaskStatus::Running])?;
@@ -157,7 +157,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Verify)?;
         ensure_status(current.status, &[TaskStatus::Completed])?;
@@ -178,7 +178,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Rollback)?;
         ensure_status(

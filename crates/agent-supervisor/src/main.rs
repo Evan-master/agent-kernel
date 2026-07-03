@@ -103,16 +103,10 @@ fn format_event(event: &Event) -> String {
         .unwrap_or_default();
 
     match event.kind {
-        EventKind::AgentRegistered => {
-            let target_agent = event
-                .target_agent
-                .map(|agent| agent.raw())
-                .unwrap_or_default();
-            format!(
-                "event[{}] agent_registered agent={} target_agent={}",
-                event.sequence, agent, target_agent
-            )
-        }
+        EventKind::AgentRegistered => format_agent_event(event, "agent_registered"),
+        EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
+        EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
+        EventKind::AgentRetired => format_agent_event(event, "agent_retired"),
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
         EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),
@@ -180,6 +174,19 @@ fn format_event(event: &Event) -> String {
         EventKind::TaskDispatched => format_task_event(event, "task_dispatched"),
         EventKind::TaskYielded => format_task_event(event, "task_yielded"),
     }
+}
+
+fn format_agent_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let target_agent = event
+        .target_agent
+        .map(|agent| agent.raw())
+        .unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} target_agent={}",
+        event.sequence, label, agent, target_agent
+    )
 }
 
 fn format_intent_event(event: &Event, label: &str) -> String {

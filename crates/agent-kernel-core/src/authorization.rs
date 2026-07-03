@@ -73,7 +73,7 @@ impl<
         resource: ResourceId,
         operation: Operation,
     ) -> Result<Capability, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         self.find_resource(resource)?;
         let cap = self.find_capability(capability)?;
 
@@ -98,6 +98,7 @@ impl<
             if current.revoked {
                 return Err(KernelError::CapabilityRevoked);
             }
+            self.ensure_agent_active(current.agent)?;
 
             let Some(parent) = current.parent else {
                 return Ok(());

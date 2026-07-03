@@ -75,6 +75,18 @@ impl<
         self.core.register_agent(agent)
     }
 
+    pub fn sys_suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        self.core.suspend_agent(agent)
+    }
+
+    pub fn sys_resume_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        self.core.resume_agent(agent)
+    }
+
+    pub fn sys_retire_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        self.core.retire_agent(agent)
+    }
+
     pub fn sys_register_resource(
         &mut self,
         kind: ResourceKind,

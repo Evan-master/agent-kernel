@@ -9,6 +9,8 @@ use crate::AgentId;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentStatus {
     Active,
+    Suspended,
+    Retired,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

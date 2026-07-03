@@ -187,10 +187,28 @@ reject unknown actors before authorization, state, queue, or capacity checks.
 - [x] Update design and README docs to describe registered-actor syscall
   enforcement and error ordering.
 
+## Follow-Up: Agent Lifecycle Status
+
+**Goal:** Make agent registry status part of the authority boundary.
+
+- [x] Add red tests for `suspend_agent`, `resume_agent`, and `retire_agent`
+  status transitions and lifecycle events.
+- [x] Add red tests proving suspended and retired agents cannot receive new
+  capabilities or use existing authority.
+- [x] Add red tests proving a suspended source agent invalidates derived task
+  authority through the capability parent chain.
+- [x] Extend `AgentStatus` with `Suspended` and `Retired`.
+- [x] Add lifecycle event kinds and agent status errors.
+- [x] Add core lifecycle APIs and facade syscall wrappers.
+- [x] Enforce active-agent status in grant, derive, authorization, task, and
+  scheduler entrypoints.
+- [x] Update supervisor and QEMU event formatting for lifecycle event labels.
+- [x] Update README and design docs with lifecycle authority semantics.
+
 ## Self-Review
 
 Spec coverage: the plan covers first-class agent records, fixed capacity, duplicate and capacity errors, facade visibility, boot/supervisor registration, README updates, and verification.
 
 Placeholder scan: no TODO, TBD, or open-ended implementation placeholders remain.
 
-Type consistency: `AgentRecord`, `AgentStatus`, `AgentStoreFull`, `AgentAlreadyExists`, `AgentNotFound`, `AgentRegistered`, `register_agent`, `sys_register_agent`, and `agents()` are used consistently.
+Type consistency: `AgentRecord`, `AgentStatus`, `AgentStoreFull`, `AgentAlreadyExists`, `AgentNotFound`, `AgentSuspended`, `AgentRetired`, `AgentStatusMismatch`, `AgentRegistered`, `AgentSuspended`, `AgentResumed`, `AgentRetired`, `register_agent`, `suspend_agent`, `resume_agent`, `retire_agent`, `sys_register_agent`, `sys_suspend_agent`, `sys_resume_agent`, `sys_retire_agent`, and `agents()` are used consistently.

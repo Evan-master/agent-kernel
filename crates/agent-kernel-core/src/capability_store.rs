@@ -40,7 +40,7 @@ impl<
         resource: ResourceId,
         operations: OperationSet,
     ) -> Result<CapabilityId, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         self.find_resource(resource)?;
 
         let slot = self
@@ -83,7 +83,7 @@ impl<
         task: TaskId,
         parent: CapabilityId,
     ) -> Result<CapabilityId, KernelError> {
-        self.find_agent(agent)?;
+        self.ensure_agent_active(agent)?;
         self.find_resource(resource)?;
         let parent_capability = self.find_capability(parent)?;
         let task_record = self.find_task(task)?;

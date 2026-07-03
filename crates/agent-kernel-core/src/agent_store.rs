@@ -1,8 +1,9 @@
 //! Fixed-capacity kernel agent registry.
 //!
-//! This module owns deterministic agent registration and read-only inspection.
-//! It emits replayable events without allocation and keeps registration failure
-//! paths atomic with respect to both the registry and the event log.
+//! This module owns deterministic agent registration, lifecycle status changes,
+//! active-agent authority checks, and read-only inspection. It emits replayable
+//! events without allocation and keeps failure paths atomic with respect to both
+//! the registry and the event log.
 
 use crate::{
     AgentId, AgentRecord, AgentStatus, Event, EventKind, KernelCore, KernelError, OperationSet,
@@ -69,6 +70,37 @@ impl<
         })
     }
 
+    pub fn suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        let record = self.find_agent(agent)?;
+        match record.status {
+            AgentStatus::Active => self.set_agent_status(agent, AgentStatus::Suspended),
+            AgentStatus::Suspended => Err(KernelError::AgentStatusMismatch),
+            AgentStatus::Retired => Err(KernelError::AgentRetired),
+        }?;
+        self.record_agent_lifecycle_event(EventKind::AgentSuspended, agent)
+    }
+
+    pub fn resume_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        let record = self.find_agent(agent)?;
+        match record.status {
+            AgentStatus::Suspended => self.set_agent_status(agent, AgentStatus::Active),
+            AgentStatus::Active => Err(KernelError::AgentStatusMismatch),
+            AgentStatus::Retired => Err(KernelError::AgentRetired),
+        }?;
+        self.record_agent_lifecycle_event(EventKind::AgentResumed, agent)
+    }
+
+    pub fn retire_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        let record = self.find_agent(agent)?;
+        match record.status {
+            AgentStatus::Active | AgentStatus::Suspended => {
+                self.set_agent_status(agent, AgentStatus::Retired)
+            }
+            AgentStatus::Retired => Err(KernelError::AgentRetired),
+        }?;
+        self.record_agent_lifecycle_event(EventKind::AgentRetired, agent)
+    }
+
     pub fn agents(&self) -> &[AgentRecord] {
         &self.agents[..self.agent_len]
     }
@@ -81,5 +113,55 @@ impl<
         }
 
         Err(KernelError::AgentNotFound)
+    }
+
+    pub(crate) fn ensure_agent_active(&self, id: AgentId) -> Result<AgentRecord, KernelError> {
+        let agent = self.find_agent(id)?;
+        match agent.status {
+            AgentStatus::Active => Ok(agent),
+            AgentStatus::Suspended => Err(KernelError::AgentSuspended),
+            AgentStatus::Retired => Err(KernelError::AgentRetired),
+        }
+    }
+
+    fn find_agent_mut(&mut self, id: AgentId) -> Result<&mut AgentRecord, KernelError> {
+        for agent in &mut self.agents[..self.agent_len] {
+            if agent.id == id {
+                return Ok(agent);
+            }
+        }
+
+        Err(KernelError::AgentNotFound)
+    }
+
+    fn set_agent_status(&mut self, agent: AgentId, status: AgentStatus) -> Result<(), KernelError> {
+        self.ensure_event_slots(1)?;
+        self.find_agent_mut(agent)?.status = status;
+        Ok(())
+    }
+
+    fn record_agent_lifecycle_event(
+        &mut self,
+        kind: EventKind,
+        agent: AgentId,
+    ) -> Result<Event, KernelError> {
+        self.record(Event {
+            sequence: 0,
+            agent,
+            kind,
+            resource: None,
+            capability: None,
+            source_capability: None,
+            intent: None,
+            intent_kind: None,
+            action: None,
+            observation: None,
+            operation: None,
+            operations: OperationSet::empty(),
+            verification: VerificationRequirement::Optional,
+            checkpoint: None,
+            task: None,
+            target_agent: Some(agent),
+        })
     }
 }
