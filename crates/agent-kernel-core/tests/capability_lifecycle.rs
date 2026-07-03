@@ -3,7 +3,7 @@ use agent_kernel_core::{
     Operation, OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 32, 2, 2, 6, 6, 4>;
+type TestCore = KernelCore<4, 8, 32, 2, 2, 2, 6, 6, 4>;
 
 fn declare_action_intent(
     core: &mut TestCore,
@@ -50,7 +50,7 @@ fn grant_capability_records_capability_granted_event() {
 
 #[test]
 fn grant_capability_returns_event_log_full_without_allocating() {
-    let mut core = KernelCore::<1, 1, 0, 2, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<1, 1, 0, 2, 2, 2, 0, 0, 0>::new();
     let agent = AgentId::new(2);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -99,7 +99,7 @@ fn revoke_capability_records_capability_revoked_event() {
 
 #[test]
 fn revoke_capability_returns_event_log_full_without_revoking() {
-    let mut core = KernelCore::<1, 1, 1, 2, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<1, 1, 1, 2, 2, 2, 0, 0, 0>::new();
     let agent = AgentId::new(4);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -166,7 +166,7 @@ fn delegate_task_records_capability_derived_before_delegation() {
 
 #[test]
 fn delegate_task_requires_two_event_slots_for_derive_and_delegation() {
-    let mut core = KernelCore::<1, 4, 4, 2, 2, 1, 2, 2>::new();
+    let mut core = KernelCore::<1, 4, 4, 2, 2, 2, 1, 2, 2>::new();
     let owner = AgentId::new(7);
     let assignee = AgentId::new(8);
     let resource = core

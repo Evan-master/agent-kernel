@@ -1,11 +1,11 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, ActionStatus, AgentId, CapabilityId, CheckpointId, EventKind, IntentId, IntentKind,
-    KernelError, Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry, TaskId,
-    TaskStatus, VerificationRequirement,
+    ActionId, ActionStatus, AgentId, CapabilityId, CheckpointId, CheckpointStatus, EventKind,
+    IntentId, IntentKind, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
+    RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<4, 6, 64, 8, 8, 8, 8, 4>;
+type TestKernel = AgentKernel<4, 6, 64, 8, 8, 8, 8, 8, 4>;
 
 fn declare_action_intent(
     kernel: &mut TestKernel,
@@ -29,6 +29,7 @@ fn kernel_starts_with_empty_event_log() {
     let kernel = TestKernel::new();
 
     assert!(kernel.events().is_empty());
+    assert!(kernel.checkpoints().is_empty());
     assert!(kernel.tasks().is_empty());
 }
 
@@ -90,6 +91,12 @@ fn checkpoint_and_rollback_syscalls_record_kernel_events() {
     assert_eq!(events[0].kind, EventKind::CapabilityGranted);
     assert_eq!(events[1].kind, EventKind::CheckpointCreated);
     assert_eq!(events[2].kind, EventKind::RollbackRequested);
+    assert_eq!(kernel.checkpoints().len(), 1);
+    assert_eq!(kernel.checkpoints()[0].id, checkpoint);
+    assert_eq!(
+        kernel.checkpoints()[0].status,
+        CheckpointStatus::RollbackRequested
+    );
 }
 
 #[test]

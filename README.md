@@ -9,7 +9,7 @@ rollback, verification, tasks, delegation, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly resource, capability, action, observation, intent store, task store, lifecycle, FIFO run queue, checkpoint, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -26,8 +26,8 @@ The v0 flow is deliberately small:
 4. Observe the resource and store an observation record.
 5. Execute an action with an ActionId and store an action record.
 6. Request verification for that action.
-7. Create a checkpoint event.
-8. Request a rollback event.
+7. Create and store a checkpoint record.
+8. Request rollback for that checkpoint.
 9. Declare a typed action intent that requires verification.
 10. Create a kernel-owned task from that intent.
 11. Bind the intent to the task.
@@ -42,10 +42,12 @@ The v0 flow is deliberately small:
 
 All resource operations go through explicit capabilities. Capability grants,
 derived task capabilities, typed intent declarations, action, verification,
-checkpoint, rollback, task creation, intent binding, task completion, task
-verification, intent fulfillment, and delegation are first-class kernel events,
-not external tooling. Accepted tasks move through a fixed-capacity FIFO run queue
-and become `Running` before completion. `IntentId` and `TaskId` values are
+checkpoint creation, rollback requests, task creation, intent binding, task
+completion, task verification, intent fulfillment, and delegation are first-class
+kernel events, not external tooling. Checkpoints are also queryable
+fixed-capacity kernel records, and rollback moves the checkpoint into
+`RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO run
+queue and become `Running` before completion. `IntentId` and `TaskId` values are
 allocated by fixed-capacity kernel stores rather than invented by the supervisor.
 Delegation derives a task-scoped action capability for the assignee, so the
 supervisor does not grant broad resource authority to complete delegated work.

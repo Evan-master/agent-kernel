@@ -10,6 +10,8 @@ mod action_store;
 mod authorization;
 mod capability;
 mod capability_store;
+mod checkpoint;
+mod checkpoint_store;
 mod core;
 mod error;
 mod event;
@@ -32,6 +34,7 @@ mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};
 pub use capability::Capability;
+pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
 pub use error::KernelError;
 pub use event::{Event, EventKind};

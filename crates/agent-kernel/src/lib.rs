@@ -8,9 +8,9 @@
 mod scheduler;
 
 use agent_kernel_core::{
-    ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, Event, Intent, IntentId,
-    IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet, ResourceId, ResourceKind,
-    Task, TaskId, VerificationRequirement,
+    ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, CheckpointRecord, Event, Intent,
+    IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet, ResourceId,
+    ResourceKind, Task, TaskId, VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -20,12 +20,22 @@ pub struct AgentKernel<
     const EVENTS: usize,
     const ACTIONS: usize,
     const OBSERVATIONS: usize,
+    const CHECKPOINTS: usize,
     const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 > {
-    pub(crate) core:
-        KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>,
+    pub(crate) core: KernelCore<
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        CHECKPOINTS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    >,
 }
 
 impl<
@@ -34,10 +44,22 @@ impl<
         const EVENTS: usize,
         const ACTIONS: usize,
         const OBSERVATIONS: usize,
+        const CHECKPOINTS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > AgentKernel<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
+    >
+    AgentKernel<
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        CHECKPOINTS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    >
 {
     pub const fn new() -> Self {
         Self {
@@ -187,6 +209,10 @@ impl<
         self.core.observations()
     }
 
+    pub fn checkpoints(&self) -> &[CheckpointRecord] {
+        self.core.checkpoints()
+    }
+
     pub fn intents(&self) -> &[Intent] {
         self.core.intents()
     }
@@ -202,11 +228,22 @@ impl<
         const EVENTS: usize,
         const ACTIONS: usize,
         const OBSERVATIONS: usize,
+        const CHECKPOINTS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
     > Default
-    for AgentKernel<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
+    for AgentKernel<
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        CHECKPOINTS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    >
 {
     fn default() -> Self {
         Self::new()

@@ -15,10 +15,22 @@ impl<
         const EVENTS: usize,
         const ACTIONS: usize,
         const OBSERVATIONS: usize,
+        const CHECKPOINTS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
+    >
+    KernelCore<
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        CHECKPOINTS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    >
 {
     pub fn enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         let task_record = self.find_runnable_task(agent, task)?;

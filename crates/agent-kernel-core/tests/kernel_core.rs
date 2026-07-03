@@ -3,7 +3,7 @@ use agent_kernel_core::{
     OperationSet, ResourceKind,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4, 4, 0, 4, 4>;
+type TestCore = KernelCore<4, 4, 16, 4, 4, 2, 0, 4, 4>;
 
 #[test]
 fn observes_resource_when_capability_allows_observe() {
