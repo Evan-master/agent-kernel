@@ -30,21 +30,23 @@ The v0 flow is deliberately small:
 8. Request a rollback event.
 9. Declare a typed action intent that requires verification.
 10. Create a kernel-owned task from that intent.
-11. Delegate the task to another agent.
-12. Record the derived task-scoped capability in the kernel event log.
-13. Let the assignee accept the task.
-14. Enqueue the accepted task and dispatch it into `Running` state through the kernel run queue.
-15. Let the assignee complete the running task.
-16. Request verification for the completed task.
-17. Print the kernel event log from the supervisor.
+11. Bind the intent to the task.
+12. Delegate the task to another agent.
+13. Record the derived task-scoped capability in the kernel event log.
+14. Let the assignee accept the task.
+15. Enqueue the accepted task and dispatch it into `Running` state through the kernel run queue.
+16. Let the assignee complete the running task.
+17. Request verification for the completed task.
+18. Mark the intent fulfilled after task verification.
+19. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Capability grants,
 derived task capabilities, typed intent declarations, action, verification,
-checkpoint, rollback, task creation, task completion, task verification, and
-delegation are first-class kernel events, not external tooling. Accepted tasks
-move through a fixed-capacity FIFO run queue and become `Running` before
-completion. `IntentId` and `TaskId` values are allocated by fixed-capacity
-kernel stores rather than invented by the supervisor.
+checkpoint, rollback, task creation, intent binding, task completion, task
+verification, intent fulfillment, and delegation are first-class kernel events,
+not external tooling. Accepted tasks move through a fixed-capacity FIFO run queue
+and become `Running` before completion. `IntentId` and `TaskId` values are
+allocated by fixed-capacity kernel stores rather than invented by the supervisor.
 Delegation derives a task-scoped action capability for the assignee, so the
 supervisor does not grant broad resource authority to complete delegated work.
 Revoking the source capability that authorized delegation also invalidates the
@@ -126,11 +128,13 @@ event[5] checkpoint agent=1 resource=1 checkpoint=1
 event[6] rollback agent=1 resource=1 checkpoint=1
 event[7] intent_declared agent=1 resource=1 intent=1
 event[8] task_created agent=1 resource=1 task=1
-event[9] capability_derived agent=1 resource=1 capability=2
-event[10] delegation agent=1 resource=1 task=1 target_agent=2
-event[11] task_accepted agent=2 resource=1 task=1
-event[12] task_queued agent=2 resource=1 task=1
-event[13] task_dispatched agent=2 resource=1 task=1
-event[14] task_completed agent=2 resource=1 task=1
-event[15] task_verified agent=1 resource=1 task=1
+event[9] intent_bound agent=1 resource=1 intent=1
+event[10] capability_derived agent=1 resource=1 capability=2
+event[11] delegation agent=1 resource=1 task=1 target_agent=2
+event[12] task_accepted agent=2 resource=1 task=1
+event[13] task_queued agent=2 resource=1 task=1
+event[14] task_dispatched agent=2 resource=1 task=1
+event[15] task_completed agent=2 resource=1 task=1
+event[16] task_verified agent=1 resource=1 task=1
+event[17] intent_fulfilled agent=1 resource=1 intent=1
 ```

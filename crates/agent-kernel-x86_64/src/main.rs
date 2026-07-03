@@ -38,6 +38,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::IntentDeclared => {
                         serial_write_line("intent_declared");
                     }
+                    EventKind::IntentBound => {
+                        serial_write_line("intent_bound");
+                    }
+                    EventKind::IntentFulfilled => {
+                        serial_write_line("intent_fulfilled");
+                    }
+                    EventKind::IntentCancelled => {
+                        serial_write_line("intent_cancelled");
+                    }
                     EventKind::Observation => {
                         serial_write_line("observation");
                     }

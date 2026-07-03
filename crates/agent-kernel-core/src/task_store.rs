@@ -5,8 +5,8 @@
 //! recording. It performs no allocation or host I/O.
 
 use crate::{
-    AgentId, CapabilityId, Event, EventKind, IntentId, KernelCore, KernelError, Operation,
-    OperationSet, Task, TaskId, TaskStatus,
+    intent_event::IntentTaskEventKind, AgentId, CapabilityId, Event, EventKind, IntentId,
+    IntentStatus, KernelCore, KernelError, Operation, OperationSet, Task, TaskId, TaskStatus,
 };
 
 impl<
@@ -28,6 +28,9 @@ impl<
         if intent_record.owner != agent {
             return Err(KernelError::IntentAgentMismatch);
         }
+        if intent_record.status != IntentStatus::Declared {
+            return Err(KernelError::IntentStatusMismatch);
+        }
         self.ensure_authorized(
             agent,
             capability,
@@ -37,7 +40,7 @@ impl<
         if self.task_len >= TASKS {
             return Err(KernelError::TaskStoreFull);
         }
-        self.ensure_event_slots(1)?;
+        self.ensure_event_slots(2)?;
 
         let task = TaskId::new(self.next_task);
         self.next_task += 1;
@@ -52,6 +55,8 @@ impl<
         };
         self.task_len += 1;
         self.record_task_event(EventKind::TaskCreated, agent, Some(capability), task, None)?;
+        self.set_intent_status(intent, IntentStatus::Bound)?;
+        self.record_intent_task_event(IntentTaskEventKind::Bound, agent, task)?;
         Ok(task)
     }
 
@@ -133,10 +138,15 @@ impl<
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Verify)?;
         ensure_status(current.status, &[TaskStatus::Completed])?;
-        self.ensure_event_slots(1)?;
+        self.ensure_intent_status(current.intent, IntentStatus::Bound)?;
+        self.ensure_event_slots(2)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Verified;
-        self.record_task_event(EventKind::TaskVerified, agent, Some(capability), task, None)
+        let event =
+            self.record_task_event(EventKind::TaskVerified, agent, Some(capability), task, None)?;
+        self.set_intent_status(current.intent, IntentStatus::Fulfilled)?;
+        self.record_intent_task_event(IntentTaskEventKind::Fulfilled, agent, task)?;
+        Ok(event)
     }
 
     pub fn cancel_task(
@@ -157,16 +167,20 @@ impl<
                 TaskStatus::Completed,
             ],
         )?;
-        self.ensure_event_slots(1)?;
+        self.ensure_intent_status(current.intent, IntentStatus::Bound)?;
+        self.ensure_event_slots(2)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Cancelled;
-        self.record_task_event(
+        let event = self.record_task_event(
             EventKind::TaskCancelled,
             agent,
             Some(capability),
             task,
             None,
-        )
+        )?;
+        self.set_intent_status(current.intent, IntentStatus::Cancelled)?;
+        self.record_intent_task_event(IntentTaskEventKind::Cancelled, agent, task)?;
+        Ok(event)
     }
 
     pub fn tasks(&self) -> &[Task] {

@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentId, CapabilityId, EventKind, IntentId, IntentKind, IntentStatus, KernelCore, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<4, 4, 24, 4, 4, 4>;
@@ -118,7 +118,7 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
 
 #[test]
 fn task_store_capacity_returns_task_store_full() {
-    let mut core = KernelCore::<4, 4, 8, 1, 1, 1>::new();
+    let mut core = KernelCore::<4, 4, 8, 2, 1, 1>::new();
     let agent = AgentId::new(16);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -138,7 +138,16 @@ fn task_store_capacity_returns_task_store_full() {
 
     core.create_task(agent, capability, intent)
         .expect("first task should fit");
-    let result = core.create_task(agent, capability, intent);
+    let second_intent = core
+        .declare_intent(
+            agent,
+            capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("second intent should be declared");
+    let result = core.create_task(agent, capability, second_intent);
 
     assert_eq!(result, Err(KernelError::TaskStoreFull));
     assert_eq!(core.tasks().len(), 1);
@@ -197,6 +206,14 @@ fn cancel_task_marks_task_cancelled_and_terminal() {
 
     assert_eq!(event.kind, EventKind::TaskCancelled);
     assert_eq!(core.tasks()[0].status, TaskStatus::Cancelled);
+    assert_eq!(core.intents()[0].status, IntentStatus::Cancelled);
+    assert_eq!(
+        core.events()
+            .last()
+            .expect("intent cancel event should record")
+            .kind,
+        EventKind::IntentCancelled
+    );
     assert_eq!(
         core.delegate_task(owner, capability, task, assignee),
         Err(KernelError::TaskStatusMismatch)

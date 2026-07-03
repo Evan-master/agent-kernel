@@ -147,16 +147,19 @@ fn delegate_task_records_capability_derived_before_delegation() {
         .expect("delegation should derive capability");
 
     let events = core.events();
-    assert_eq!(events[3].kind, EventKind::CapabilityDerived);
-    assert_eq!(events[3].agent, owner);
-    assert_eq!(events[3].target_agent, Some(assignee));
-    assert_eq!(events[3].resource, Some(resource));
-    assert_eq!(events[3].capability, Some(derived));
-    assert_eq!(events[3].source_capability, Some(owner_capability));
-    assert_eq!(events[3].operations, OperationSet::only(Operation::Act));
+    assert_eq!(events[3].kind, EventKind::IntentBound);
     assert_eq!(events[3].task, Some(task));
     assert_eq!(events[3].intent, Some(intent));
-    assert_eq!(events[4].kind, EventKind::DelegationRequested);
+    assert_eq!(events[4].kind, EventKind::CapabilityDerived);
+    assert_eq!(events[4].agent, owner);
+    assert_eq!(events[4].target_agent, Some(assignee));
+    assert_eq!(events[4].resource, Some(resource));
+    assert_eq!(events[4].capability, Some(derived));
+    assert_eq!(events[4].source_capability, Some(owner_capability));
+    assert_eq!(events[4].operations, OperationSet::only(Operation::Act));
+    assert_eq!(events[4].task, Some(task));
+    assert_eq!(events[4].intent, Some(intent));
+    assert_eq!(events[5].kind, EventKind::DelegationRequested);
     assert_eq!(delegation.capability, Some(derived));
 }
 

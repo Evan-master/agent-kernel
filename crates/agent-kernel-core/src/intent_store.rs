@@ -5,8 +5,8 @@
 //! storing natural language, prompts, or host planning state.
 
 use crate::{
-    AgentId, CapabilityId, Event, EventKind, Intent, IntentId, IntentKind, KernelCore, KernelError,
-    OperationSet, ResourceId, VerificationRequirement,
+    AgentId, CapabilityId, Event, EventKind, Intent, IntentId, IntentKind, IntentStatus,
+    KernelCore, KernelError, OperationSet, ResourceId, VerificationRequirement,
 };
 
 impl<
@@ -40,6 +40,7 @@ impl<
             owner: agent,
             resource,
             kind,
+            status: IntentStatus::Declared,
             verification,
         };
         self.intent_len += 1;
@@ -57,6 +58,35 @@ impl<
             .find(|intent| intent.id == id)
             .copied()
             .ok_or(KernelError::IntentNotFound)
+    }
+
+    fn find_intent_mut(&mut self, id: IntentId) -> Result<&mut Intent, KernelError> {
+        self.intents[..self.intent_len]
+            .iter_mut()
+            .find(|intent| intent.id == id)
+            .ok_or(KernelError::IntentNotFound)
+    }
+
+    pub(crate) fn ensure_intent_status(
+        &self,
+        id: IntentId,
+        expected: IntentStatus,
+    ) -> Result<Intent, KernelError> {
+        let intent = self.find_intent(id)?;
+        if intent.status == expected {
+            Ok(intent)
+        } else {
+            Err(KernelError::IntentStatusMismatch)
+        }
+    }
+
+    pub(crate) fn set_intent_status(
+        &mut self,
+        id: IntentId,
+        status: IntentStatus,
+    ) -> Result<(), KernelError> {
+        self.find_intent_mut(id)?.status = status;
+        Ok(())
     }
 
     fn record_intent_event(

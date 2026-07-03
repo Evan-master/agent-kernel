@@ -100,7 +100,10 @@ fn format_event(event: &Event) -> String {
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
         EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),
-        EventKind::IntentDeclared => format_intent_event(event),
+        EventKind::IntentDeclared => format_intent_event(event, "intent_declared"),
+        EventKind::IntentBound => format_intent_event(event, "intent_bound"),
+        EventKind::IntentFulfilled => format_intent_event(event, "intent_fulfilled"),
+        EventKind::IntentCancelled => format_intent_event(event, "intent_cancelled"),
         EventKind::Observation => {
             format!(
                 "event[{}] observation agent={} resource={}",
@@ -163,7 +166,7 @@ fn format_event(event: &Event) -> String {
     }
 }
 
-fn format_intent_event(event: &Event) -> String {
+fn format_intent_event(event: &Event, label: &str) -> String {
     let agent = event.agent.raw();
     let resource = event
         .resource
@@ -172,8 +175,8 @@ fn format_intent_event(event: &Event) -> String {
     let intent = event.intent.map(|intent| intent.raw()).unwrap_or_default();
 
     format!(
-        "event[{}] intent_declared agent={} resource={} intent={}",
-        event.sequence, agent, resource, intent
+        "event[{}] {} agent={} resource={} intent={}",
+        event.sequence, label, agent, resource, intent
     )
 }
 

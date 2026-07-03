@@ -34,11 +34,21 @@ pub enum VerificationRequirement {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum IntentStatus {
+    Declared,
+    Bound,
+    Fulfilled,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Intent {
     pub id: IntentId,
     pub owner: AgentId,
     pub resource: ResourceId,
     pub kind: IntentKind,
+    pub status: IntentStatus,
     pub verification: VerificationRequirement,
 }
 
@@ -49,6 +59,7 @@ impl Intent {
             owner: AgentId::new(0),
             resource: ResourceId::new(0),
             kind: IntentKind::Act,
+            status: IntentStatus::Declared,
             verification: VerificationRequirement::Optional,
         }
     }

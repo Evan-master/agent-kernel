@@ -51,6 +51,9 @@ fn create_task_allocates_kernel_task_and_records_event() {
     assert_eq!(core.events()[2].kind, EventKind::TaskCreated);
     assert_eq!(core.events()[2].task, Some(task));
     assert_eq!(core.events()[2].intent, Some(intent));
+    assert_eq!(core.events()[3].kind, EventKind::IntentBound);
+    assert_eq!(core.events()[3].task, Some(task));
+    assert_eq!(core.events()[3].intent, Some(intent));
 }
 
 #[test]
@@ -95,16 +98,18 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
     assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
     assert_eq!(core.events()[1].kind, EventKind::IntentDeclared);
     assert_eq!(core.events()[2].kind, EventKind::TaskCreated);
-    assert_eq!(core.events()[3].kind, EventKind::CapabilityDerived);
-    assert_eq!(core.events()[3].target_agent, Some(assignee));
-    assert_eq!(core.events()[4].kind, EventKind::DelegationRequested);
+    assert_eq!(core.events()[3].kind, EventKind::IntentBound);
+    assert_eq!(core.events()[4].kind, EventKind::CapabilityDerived);
     assert_eq!(core.events()[4].target_agent, Some(assignee));
-    assert_eq!(core.events()[5].kind, EventKind::TaskAccepted);
-    assert_eq!(core.events()[6].kind, EventKind::TaskQueued);
-    assert_eq!(core.events()[7].kind, EventKind::TaskDispatched);
-    assert_eq!(core.events()[8].kind, EventKind::TaskCompleted);
-    assert_eq!(core.events()[9].kind, EventKind::TaskVerified);
-    for event in &core.events()[2..=9] {
+    assert_eq!(core.events()[5].kind, EventKind::DelegationRequested);
+    assert_eq!(core.events()[5].target_agent, Some(assignee));
+    assert_eq!(core.events()[6].kind, EventKind::TaskAccepted);
+    assert_eq!(core.events()[7].kind, EventKind::TaskQueued);
+    assert_eq!(core.events()[8].kind, EventKind::TaskDispatched);
+    assert_eq!(core.events()[9].kind, EventKind::TaskCompleted);
+    assert_eq!(core.events()[10].kind, EventKind::TaskVerified);
+    assert_eq!(core.events()[11].kind, EventKind::IntentFulfilled);
+    for event in &core.events()[2..=11] {
         assert_eq!(event.intent, Some(intent));
     }
 }

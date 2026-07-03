@@ -19,6 +19,7 @@ pub enum KernelError {
     IntentStoreFull,
     IntentNotFound,
     IntentAgentMismatch,
+    IntentStatusMismatch,
     TaskStoreFull,
     TaskNotFound,
     TaskAgentMismatch,

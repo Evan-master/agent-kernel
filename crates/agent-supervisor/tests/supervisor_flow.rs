@@ -18,11 +18,13 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[6] rollback agent=1 resource=1 checkpoint=1"));
     assert!(stdout.contains("event[7] intent_declared agent=1 resource=1 intent=1"));
     assert!(stdout.contains("event[8] task_created agent=1 resource=1 task=1"));
-    assert!(stdout.contains("event[9] capability_derived agent=1 resource=1 capability=2"));
-    assert!(stdout.contains("event[10] delegation agent=1 resource=1 task=1 target_agent=2"));
-    assert!(stdout.contains("event[11] task_accepted agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[12] task_queued agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[13] task_dispatched agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[14] task_completed agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[15] task_verified agent=1 resource=1 task=1"));
+    assert!(stdout.contains("event[9] intent_bound agent=1 resource=1 intent=1"));
+    assert!(stdout.contains("event[10] capability_derived agent=1 resource=1 capability=2"));
+    assert!(stdout.contains("event[11] delegation agent=1 resource=1 task=1 target_agent=2"));
+    assert!(stdout.contains("event[12] task_accepted agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[13] task_queued agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[14] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[15] task_completed agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[16] task_verified agent=1 resource=1 task=1"));
+    assert!(stdout.contains("event[17] intent_fulfilled agent=1 resource=1 intent=1"));
 }

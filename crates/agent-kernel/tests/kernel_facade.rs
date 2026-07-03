@@ -203,14 +203,16 @@ fn task_syscalls_record_full_task_lifecycle() {
     assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
     assert_eq!(kernel.events()[1].kind, EventKind::IntentDeclared);
     assert_eq!(kernel.events()[2].kind, EventKind::TaskCreated);
-    assert_eq!(kernel.events()[3].kind, EventKind::CapabilityDerived);
-    assert_eq!(kernel.events()[4].kind, EventKind::DelegationRequested);
-    assert_eq!(kernel.events()[5].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[6].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[7].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[8].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[9].kind, EventKind::TaskVerified);
-    for event in &kernel.events()[2..=9] {
+    assert_eq!(kernel.events()[3].kind, EventKind::IntentBound);
+    assert_eq!(kernel.events()[4].kind, EventKind::CapabilityDerived);
+    assert_eq!(kernel.events()[5].kind, EventKind::DelegationRequested);
+    assert_eq!(kernel.events()[6].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[7].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[8].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[9].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[10].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[11].kind, EventKind::IntentFulfilled);
+    for event in &kernel.events()[2..=11] {
         assert_eq!(event.intent, Some(intent));
     }
 }
