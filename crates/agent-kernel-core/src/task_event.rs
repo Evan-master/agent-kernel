@@ -13,10 +13,12 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub(crate) fn record_task_event(
         &mut self,
@@ -37,6 +39,7 @@ impl<
             intent: Some(task_record.intent),
             intent_kind: None,
             action: None,
+            observation: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

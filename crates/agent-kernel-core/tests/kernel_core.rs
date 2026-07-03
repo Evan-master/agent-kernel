@@ -1,8 +1,9 @@
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
+    ActionId, ActionStatus, AgentId, CheckpointId, EventKind, KernelCore, KernelError, Operation,
+    OperationSet, ResourceKind,
 };
 
-type TestCore = KernelCore<4, 4, 16, 0, 4, 4>;
+type TestCore = KernelCore<4, 4, 16, 4, 4, 0, 4, 4>;
 
 #[test]
 fn observes_resource_when_capability_allows_observe() {
@@ -16,15 +17,24 @@ fn observes_resource_when_capability_allows_observe() {
         .expect("capability should fit");
 
     let event = core
-        .authorize(agent, capability, resource, Operation::Observe)
+        .observe(agent, capability, resource)
         .expect("observe should be authorized");
+    let observation = core.observations()[0];
 
     assert_eq!(event.agent, agent);
     assert_eq!(event.resource, Some(resource));
+    assert_eq!(event.capability, Some(capability));
     assert_eq!(event.kind, EventKind::Observation);
+    assert_eq!(event.operation, Some(Operation::Observe));
+    assert_eq!(event.observation, Some(observation.id));
+    assert_eq!(core.observations().len(), 1);
+    assert_eq!(observation.agent, agent);
+    assert_eq!(observation.resource, resource);
+    assert_eq!(observation.capability, capability);
     assert_eq!(core.events().len(), 2);
     assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
     assert_eq!(core.events()[1].kind, EventKind::Observation);
+    assert_eq!(core.events()[1].observation, Some(observation.id));
 }
 
 #[test]
@@ -38,9 +48,10 @@ fn denies_action_when_capability_does_not_include_operation() {
         .grant_capability(agent, resource, OperationSet::only(Operation::Observe))
         .expect("capability should fit");
 
-    let result = core.authorize(agent, capability, resource, Operation::Act);
+    let result = core.act(agent, capability, ActionId::new(1), resource);
 
-    assert!(result.is_err());
+    assert_eq!(result, Err(KernelError::OperationDenied));
+    assert!(core.actions().is_empty());
     assert_eq!(core.events().len(), 1);
     assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
 }
@@ -59,9 +70,10 @@ fn revoked_capability_can_no_longer_authorize_operation() {
     core.revoke_capability(capability)
         .expect("capability should exist");
 
-    assert!(core
-        .authorize(agent, capability, resource, Operation::Observe)
-        .is_err());
+    let result = core.observe(agent, capability, resource);
+
+    assert_eq!(result, Err(KernelError::CapabilityRevoked));
+    assert!(core.observations().is_empty());
     assert_eq!(core.events().len(), 2);
     assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
     assert_eq!(core.events()[1].kind, EventKind::CapabilityRevoked);
@@ -140,6 +152,11 @@ fn action_and_verification_events_are_recorded_with_action_id() {
     core.verify(agent, capability, action, resource)
         .expect("verify event should fit");
 
+    assert_eq!(core.actions().len(), 1);
+    assert_eq!(
+        core.actions()[0].status,
+        ActionStatus::VerificationRequested
+    );
     let events = core.events();
     assert_eq!(events.len(), 3);
     assert_eq!(events[0].kind, EventKind::CapabilityGranted);
@@ -162,7 +179,8 @@ fn action_requires_action_capability() {
 
     let result = core.act(agent, capability, ActionId::new(13), resource);
 
-    assert!(result.is_err());
+    assert_eq!(result, Err(KernelError::OperationDenied));
+    assert!(core.actions().is_empty());
     assert_eq!(core.events().len(), 1);
     assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
 }

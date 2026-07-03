@@ -13,10 +13,12 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub fn declare_intent(
         &mut self,
@@ -108,6 +110,7 @@ impl<
             intent: Some(intent),
             intent_kind: Some(kind),
             action: None,
+            observation: None,
             operation: Some(kind.required_operation()),
             operations: OperationSet::empty(),
             verification,

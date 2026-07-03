@@ -1,11 +1,11 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CapabilityId, CheckpointId, EventKind, IntentId, IntentKind, KernelError,
-    Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry, TaskId, TaskStatus,
-    VerificationRequirement,
+    ActionId, ActionStatus, AgentId, CapabilityId, CheckpointId, EventKind, IntentId, IntentKind,
+    KernelError, Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry, TaskId,
+    TaskStatus, VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<4, 6, 64, 8, 8, 4>;
+type TestKernel = AgentKernel<4, 6, 64, 8, 8, 8, 8, 4>;
 
 fn declare_action_intent(
     kernel: &mut TestKernel,
@@ -53,6 +53,11 @@ fn observe_syscall_records_observation_event() {
     assert_eq!(kernel.events().len(), 2);
     assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
     assert_eq!(kernel.events()[1].kind, EventKind::Observation);
+    assert_eq!(kernel.observations().len(), 1);
+    assert_eq!(
+        kernel.events()[1].observation,
+        Some(kernel.observations()[0].id)
+    );
 }
 
 #[test]
@@ -119,6 +124,11 @@ fn action_and_verify_syscalls_record_action_lifecycle() {
     assert_eq!(events[2].kind, EventKind::VerificationRequested);
     assert_eq!(events[1].action, Some(action));
     assert_eq!(events[2].action, Some(action));
+    assert_eq!(kernel.actions().len(), 1);
+    assert_eq!(
+        kernel.actions()[0].status,
+        ActionStatus::VerificationRequested
+    );
 }
 
 #[test]

@@ -56,6 +56,19 @@ impl ActionId {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ObservationId(u64);
+
+impl ObservationId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct CheckpointId(u64);
 
 impl CheckpointId {

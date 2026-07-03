@@ -3,7 +3,7 @@ use agent_kernel_core::{
     ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4, 4, 4>;
+type TestCore = KernelCore<4, 4, 16, 2, 2, 4, 4, 4>;
 
 fn declare_action_intent(
     core: &mut TestCore,

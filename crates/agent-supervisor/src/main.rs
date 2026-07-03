@@ -11,7 +11,7 @@ use agent_kernel_core::{
 };
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 32, 8, 8, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 32, 8, 8, 8, 8, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 

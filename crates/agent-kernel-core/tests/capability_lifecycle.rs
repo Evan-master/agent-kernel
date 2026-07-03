@@ -1,9 +1,9 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
+    ActionId, AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 32, 6, 6, 4>;
+type TestCore = KernelCore<4, 8, 32, 2, 2, 6, 6, 4>;
 
 fn declare_action_intent(
     core: &mut TestCore,
@@ -50,7 +50,7 @@ fn grant_capability_records_capability_granted_event() {
 
 #[test]
 fn grant_capability_returns_event_log_full_without_allocating() {
-    let mut core = KernelCore::<1, 1, 0, 0, 0, 0>::new();
+    let mut core = KernelCore::<1, 1, 0, 2, 2, 0, 0, 0>::new();
     let agent = AgentId::new(2);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -60,10 +60,11 @@ fn grant_capability_returns_event_log_full_without_allocating() {
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert!(core.events().is_empty());
-    assert_eq!(
-        core.authorize(agent, CapabilityId::new(1), resource, Operation::Observe),
-        Err(KernelError::CapabilityNotFound)
-    );
+    let result = core.observe(agent, CapabilityId::new(1), resource);
+
+    assert_eq!(result, Err(KernelError::CapabilityNotFound));
+    assert!(core.events().is_empty());
+    assert!(core.observations().is_empty());
 }
 
 #[test]
@@ -89,16 +90,16 @@ fn revoke_capability_records_capability_revoked_event() {
     assert_eq!(events[1].capability, Some(capability));
     assert_eq!(events[1].operations, operations);
     assert_eq!(events[1].source_capability, None);
-    assert_eq!(
-        core.authorize(agent, capability, resource, Operation::Observe),
-        Err(KernelError::CapabilityRevoked)
-    );
+    let result = core.observe(agent, capability, resource);
+
+    assert_eq!(result, Err(KernelError::CapabilityRevoked));
     assert_eq!(core.events().len(), 2);
+    assert!(core.observations().is_empty());
 }
 
 #[test]
 fn revoke_capability_returns_event_log_full_without_revoking() {
-    let mut core = KernelCore::<1, 1, 1, 0, 0, 0>::new();
+    let mut core = KernelCore::<1, 1, 1, 2, 2, 0, 0, 0>::new();
     let agent = AgentId::new(4);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -110,11 +111,11 @@ fn revoke_capability_returns_event_log_full_without_revoking() {
     let result = core.revoke_capability(capability);
 
     assert_eq!(result, Err(KernelError::EventLogFull));
-    assert_eq!(
-        core.authorize(agent, capability, resource, Operation::Act),
-        Err(KernelError::OperationDenied)
-    );
+    let result = core.act(agent, capability, ActionId::new(1), resource);
+
+    assert_eq!(result, Err(KernelError::OperationDenied));
     assert_eq!(core.events().len(), 1);
+    assert!(core.actions().is_empty());
 }
 
 #[test]
@@ -165,7 +166,7 @@ fn delegate_task_records_capability_derived_before_delegation() {
 
 #[test]
 fn delegate_task_requires_two_event_slots_for_derive_and_delegation() {
-    let mut core = KernelCore::<1, 4, 4, 1, 2, 2>::new();
+    let mut core = KernelCore::<1, 4, 4, 2, 2, 1, 2, 2>::new();
     let owner = AgentId::new(7);
     let assignee = AgentId::new(8);
     let resource = core

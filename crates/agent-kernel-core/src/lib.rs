@@ -5,6 +5,8 @@
 //! event model. It performs no host I/O and keeps state in fixed-capacity
 //! stores so the kernel facade can replay and inspect behavior deterministically.
 
+mod action;
+mod action_store;
 mod authorization;
 mod capability;
 mod capability_store;
@@ -17,6 +19,8 @@ mod intent;
 mod intent_event;
 mod intent_store;
 mod lookup;
+mod observation;
+mod observation_store;
 mod operation;
 mod resource;
 mod resource_store;
@@ -26,12 +30,16 @@ mod task;
 mod task_event;
 mod task_store;
 
+pub use action::{ActionRecord, ActionStatus};
 pub use capability::Capability;
 pub use core::KernelCore;
 pub use error::KernelError;
 pub use event::{Event, EventKind};
-pub use id::{ActionId, AgentId, CapabilityId, CheckpointId, IntentId, ResourceId, TaskId};
+pub use id::{
+    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, ObservationId, ResourceId, TaskId,
+};
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
+pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceKind};
 pub use run_queue::RunQueueEntry;

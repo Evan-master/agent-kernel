@@ -3,7 +3,7 @@ use agent_kernel_core::{
     ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 6, 32, 6, 6, 4>;
+type TestCore = KernelCore<4, 6, 32, 4, 2, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct AcceptedTask {
@@ -16,11 +16,22 @@ fn accepted_task<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const ACTIONS: usize,
+    const OBSERVATIONS: usize,
     const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 >(
-    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>,
+    core: &mut KernelCore<
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    >,
     owner: AgentId,
     assignee: AgentId,
 ) -> TaskId {
@@ -31,11 +42,22 @@ fn accepted_task_with_capabilities<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const ACTIONS: usize,
+    const OBSERVATIONS: usize,
     const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 >(
-    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>,
+    core: &mut KernelCore<
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    >,
     owner: AgentId,
     assignee: AgentId,
 ) -> AcceptedTask {
@@ -189,7 +211,7 @@ fn scheduler_rejects_invalid_queue_operations_without_state_changes() {
 
 #[test]
 fn enqueue_returns_run_queue_full_when_capacity_is_exhausted() {
-    let mut core = KernelCore::<4, 6, 32, 4, 4, 1>::new();
+    let mut core = KernelCore::<4, 6, 32, 4, 2, 4, 4, 1>::new();
     let owner = AgentId::new(9);
     let first_agent = AgentId::new(10);
     let second_agent = AgentId::new(11);

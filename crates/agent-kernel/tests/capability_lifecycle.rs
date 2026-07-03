@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{AgentId, EventKind, Operation, OperationSet, ResourceKind};
 
-type TestKernel = AgentKernel<2, 2, 4, 0, 1, 1>;
+type TestKernel = AgentKernel<2, 2, 4, 1, 1, 0, 1, 1>;
 
 #[test]
 fn sys_grant_records_capability_granted_event() {

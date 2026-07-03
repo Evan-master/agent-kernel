@@ -3,7 +3,7 @@ use agent_kernel_core::{
     ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 32, 6, 6, 4>;
+type TestCore = KernelCore<4, 8, 32, 2, 2, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct RunningDelegatedTask {

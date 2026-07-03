@@ -3,7 +3,7 @@ use agent_kernel_core::{
     Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 32, 6, 6, 4>;
+type TestCore = KernelCore<4, 8, 32, 4, 2, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct DelegatedTask {
@@ -204,7 +204,7 @@ fn delegate_requires_source_act_authority_for_derived_capability() {
 
 #[test]
 fn delegate_returns_capability_store_full_without_state_changes() {
-    let mut core = KernelCore::<2, 1, 8, 1, 2, 2>::new();
+    let mut core = KernelCore::<2, 1, 8, 4, 2, 1, 2, 2>::new();
     let owner = AgentId::new(11);
     let assignee = AgentId::new(12);
     let resource = core

@@ -14,7 +14,7 @@ pub(crate) enum IntentTaskEventKind {
 }
 
 impl IntentTaskEventKind {
-    const fn event_kind(self) -> EventKind {
+    const fn as_event(self) -> EventKind {
         match self {
             Self::Bound => EventKind::IntentBound,
             Self::Fulfilled => EventKind::IntentFulfilled,
@@ -27,10 +27,12 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub(crate) fn record_intent_task_event(
         &mut self,
@@ -43,13 +45,14 @@ impl<
         self.record(Event {
             sequence: self.next_sequence,
             agent,
-            kind: kind.event_kind(),
+            kind: kind.as_event(),
             resource: Some(intent_record.resource),
             capability: None,
             source_capability: None,
             intent: Some(intent_record.id),
             intent_kind: Some(intent_record.kind),
             action: None,
+            observation: None,
             operation: Some(intent_record.kind.required_operation()),
             operations: OperationSet::empty(),
             verification: intent_record.verification,

@@ -13,10 +13,12 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub fn grant_capability(
         &mut self,
@@ -143,6 +145,7 @@ impl<
             intent,
             intent_kind: None,
             action: None,
+            observation: None,
             operation: None,
             operations,
             verification: VerificationRequirement::Optional,

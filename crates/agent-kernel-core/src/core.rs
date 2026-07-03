@@ -5,8 +5,9 @@
 //! host I/O and keeps state deterministic for replay and supervisor inspection.
 
 use crate::{
-    ActionId, AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, Intent,
-    KernelError, Operation, OperationSet, Resource, ResourceId, RunQueueEntry, Task,
+    ActionRecord, AgentId, Capability, CapabilityId, CheckpointId, Event, EventKind, Intent,
+    KernelError, ObservationRecord, Operation, OperationSet, Resource, ResourceId, RunQueueEntry,
+    Task,
 };
 
 #[derive(Debug)]
@@ -14,6 +15,8 @@ pub struct KernelCore<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const ACTIONS: usize,
+    const OBSERVATIONS: usize,
     const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
@@ -22,14 +25,19 @@ pub struct KernelCore<
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
     pub(crate) events: [Event; EVENTS],
+    pub(crate) actions: [ActionRecord; ACTIONS],
+    pub(crate) observations: [ObservationRecord; OBSERVATIONS],
     pub(crate) tasks: [Task; TASKS],
     pub(crate) run_queue: [RunQueueEntry; RUN_QUEUE],
     pub(crate) event_len: usize,
+    pub(crate) action_len: usize,
+    pub(crate) observation_len: usize,
     pub(crate) intent_len: usize,
     pub(crate) task_len: usize,
     pub(crate) run_queue_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
+    pub(crate) next_observation: u64,
     pub(crate) next_intent: u64,
     pub(crate) next_task: u64,
     pub(crate) next_sequence: u64,
@@ -39,10 +47,12 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub const fn new() -> Self {
         Self {
@@ -50,76 +60,23 @@ impl<
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
             events: [Event::empty(); EVENTS],
+            actions: [ActionRecord::empty(); ACTIONS],
+            observations: [ObservationRecord::empty(); OBSERVATIONS],
             tasks: [Task::empty(); TASKS],
             run_queue: [RunQueueEntry::empty(); RUN_QUEUE],
             event_len: 0,
+            action_len: 0,
+            observation_len: 0,
             intent_len: 0,
             task_len: 0,
             run_queue_len: 0,
             next_resource: 1,
             next_capability: 1,
+            next_observation: 1,
             next_intent: 1,
             next_task: 1,
             next_sequence: 1,
         }
-    }
-
-    pub fn authorize(
-        &mut self,
-        agent: AgentId,
-        capability: CapabilityId,
-        resource: ResourceId,
-        operation: Operation,
-    ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, operation)?;
-
-        self.record(resource_event(
-            agent,
-            event_kind(operation),
-            resource,
-            capability,
-            Some(operation),
-            None,
-            None,
-        ))
-    }
-
-    pub fn act(
-        &mut self,
-        agent: AgentId,
-        capability: CapabilityId,
-        action: ActionId,
-        resource: ResourceId,
-    ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Act)?;
-        self.record(resource_event(
-            agent,
-            EventKind::ActionExecuted,
-            resource,
-            capability,
-            Some(Operation::Act),
-            Some(action),
-            None,
-        ))
-    }
-
-    pub fn verify(
-        &mut self,
-        agent: AgentId,
-        capability: CapabilityId,
-        action: ActionId,
-        resource: ResourceId,
-    ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Verify)?;
-        self.record(resource_event(
-            agent,
-            EventKind::VerificationRequested,
-            resource,
-            capability,
-            Some(Operation::Verify),
-            Some(action),
-            None,
-        ))
     }
 
     pub fn checkpoint(
@@ -136,7 +93,6 @@ impl<
             resource,
             capability,
             Some(Operation::Checkpoint),
-            None,
             Some(checkpoint),
         ))
     }
@@ -155,7 +111,6 @@ impl<
             resource,
             capability,
             Some(Operation::Rollback),
-            None,
             Some(checkpoint),
         ))
     }
@@ -169,10 +124,13 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > Default for KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > Default
+    for KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     fn default() -> Self {
         Self::new()
@@ -185,7 +143,6 @@ fn resource_event(
     resource: ResourceId,
     capability: CapabilityId,
     operation: Option<Operation>,
-    action: Option<ActionId>,
     checkpoint: Option<CheckpointId>,
 ) -> Event {
     Event {
@@ -197,23 +154,13 @@ fn resource_event(
         source_capability: None,
         intent: None,
         intent_kind: None,
-        action,
+        action: None,
+        observation: None,
         operation,
         operations: OperationSet::empty(),
         verification: crate::VerificationRequirement::Optional,
         checkpoint,
         task: None,
         target_agent: None,
-    }
-}
-
-const fn event_kind(operation: Operation) -> EventKind {
-    match operation {
-        Operation::Observe => EventKind::Observation,
-        Operation::Act => EventKind::ActionExecuted,
-        Operation::Verify => EventKind::VerificationRequested,
-        Operation::Checkpoint => EventKind::CheckpointCreated,
-        Operation::Rollback => EventKind::RollbackRequested,
-        Operation::Delegate => EventKind::DelegationRequested,
     }
 }

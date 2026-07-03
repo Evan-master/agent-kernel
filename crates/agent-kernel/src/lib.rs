@@ -8,9 +8,9 @@
 mod scheduler;
 
 use agent_kernel_core::{
-    ActionId, AgentId, CapabilityId, CheckpointId, Event, Intent, IntentId, IntentKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceId, ResourceKind, Task, TaskId,
-    VerificationRequirement,
+    ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, Event, Intent, IntentId,
+    IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet, ResourceId, ResourceKind,
+    Task, TaskId, VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -18,21 +18,26 @@ pub struct AgentKernel<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const ACTIONS: usize,
+    const OBSERVATIONS: usize,
     const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 > {
-    pub(crate) core: KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>,
+    pub(crate) core:
+        KernelCore<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>,
 }
 
 impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > AgentKernel<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > AgentKernel<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub const fn new() -> Self {
         Self {
@@ -63,8 +68,7 @@ impl<
         capability: CapabilityId,
         resource: ResourceId,
     ) -> Result<Event, KernelError> {
-        self.core
-            .authorize(agent, capability, resource, Operation::Observe)
+        self.core.observe(agent, capability, resource)
     }
 
     pub fn sys_act(
@@ -175,6 +179,14 @@ impl<
         self.core.events()
     }
 
+    pub fn actions(&self) -> &[ActionRecord] {
+        self.core.actions()
+    }
+
+    pub fn observations(&self) -> &[ObservationRecord] {
+        self.core.observations()
+    }
+
     pub fn intents(&self) -> &[Intent] {
         self.core.intents()
     }
@@ -188,10 +200,13 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const ACTIONS: usize,
+        const OBSERVATIONS: usize,
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > Default for AgentKernel<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
+    > Default
+    for AgentKernel<RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, INTENTS, TASKS, RUN_QUEUE>
 {
     fn default() -> Self {
         Self::new()

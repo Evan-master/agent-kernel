@@ -9,7 +9,7 @@ rollback, verification, tasks, delegation, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly resource, capability, intent store, task store, lifecycle, FIFO run queue, checkpoint, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly resource, capability, action, observation, intent store, task store, lifecycle, FIFO run queue, checkpoint, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -23,8 +23,8 @@ The v0 flow is deliberately small:
 1. Register a workspace resource.
 2. Grant an agent a capability for observe, act, verify, checkpoint, rollback, and delegation.
 3. Record the capability grant in the kernel event log.
-4. Observe the resource.
-5. Execute an action event with an `ActionId`.
+4. Observe the resource and store an observation record.
+5. Execute an action with an ActionId and store an action record.
 6. Request verification for that action.
 7. Create a checkpoint event.
 8. Request a rollback event.
