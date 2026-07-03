@@ -8,6 +8,7 @@ use agent_kernel_core::{AgentId, Event, KernelError, RunQueueEntry, TaskId};
 use crate::AgentKernel;
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -19,6 +20,7 @@ impl<
         const RUN_QUEUE: usize,
     >
     AgentKernel<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,

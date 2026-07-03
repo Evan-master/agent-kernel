@@ -5,7 +5,7 @@ use agent_kernel_core::{
     RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<4, 6, 64, 8, 8, 8, 8, 8, 4>;
+type TestKernel = AgentKernel<2, 4, 6, 64, 8, 8, 8, 8, 8, 4>;
 
 fn declare_action_intent(
     kernel: &mut TestKernel,

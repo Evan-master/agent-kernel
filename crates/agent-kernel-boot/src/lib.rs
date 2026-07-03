@@ -61,6 +61,7 @@ pub struct BootReport {
 
 #[derive(Debug)]
 pub struct BootedKernel<
+    const AGENTS: usize,
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
@@ -72,6 +73,7 @@ pub struct BootedKernel<
     const RUN_QUEUE: usize,
 > {
     kernel: AgentKernel<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -86,6 +88,7 @@ pub struct BootedKernel<
 }
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -97,6 +100,7 @@ impl<
         const RUN_QUEUE: usize,
     >
     BootedKernel<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -110,6 +114,7 @@ impl<
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
         let mut kernel = AgentKernel::new();
+        kernel.sys_register_agent(config.bootstrap_agent)?;
         let resource = kernel.sys_register_resource(config.bootstrap_resource_kind, None)?;
         let capability = kernel.sys_grant(
             config.bootstrap_agent,
@@ -157,6 +162,7 @@ impl<
     pub const fn kernel(
         &self,
     ) -> &AgentKernel<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,

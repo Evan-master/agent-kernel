@@ -4,7 +4,7 @@ use agent_kernel_core::{
     TaskId, VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<4, 4, 16, 4, 4, 4, 4, 4, 4>;
+type TestKernel = AgentKernel<2, 4, 4, 16, 4, 4, 4, 4, 4, 4>;
 
 #[test]
 fn sys_declare_intent_records_and_exposes_intent() {

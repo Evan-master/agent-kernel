@@ -3,7 +3,7 @@ use agent_kernel_core::{
     OperationSet, ResourceKind,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4, 4, 2, 0, 0, 0>;
+type TestCore = KernelCore<2, 4, 4, 16, 4, 4, 2, 0, 0, 0>;
 
 #[test]
 fn observe_records_observation_and_event() {
@@ -53,7 +53,7 @@ fn observe_records_observation_and_event() {
 
 #[test]
 fn observe_store_full_leaves_events_unchanged() {
-    let mut core = KernelCore::<1, 1, 4, 1, 0, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 4, 1, 0, 2, 0, 0, 0>::new();
     let agent = AgentId::new(2);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -74,7 +74,7 @@ fn observe_store_full_leaves_events_unchanged() {
 
 #[test]
 fn observe_event_log_full_leaves_observations_unchanged() {
-    let mut core = KernelCore::<1, 1, 1, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 1, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(3);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -160,7 +160,7 @@ fn act_rejects_duplicate_action_without_event() {
 
 #[test]
 fn act_store_full_leaves_events_unchanged() {
-    let mut core = KernelCore::<1, 1, 4, 0, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 4, 0, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(6);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -181,7 +181,7 @@ fn act_store_full_leaves_events_unchanged() {
 
 #[test]
 fn act_event_log_full_leaves_actions_unchanged() {
-    let mut core = KernelCore::<1, 1, 1, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 1, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(7);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -267,7 +267,7 @@ fn verify_missing_action_leaves_events_unchanged() {
 
 #[test]
 fn verify_rejects_action_resource_mismatch_without_status_change() {
-    let mut core = KernelCore::<2, 2, 8, 2, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 2, 2, 8, 2, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(10);
     let first_resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -363,7 +363,7 @@ fn verify_rejects_repeated_verification_without_event() {
 
 #[test]
 fn verify_event_log_full_leaves_action_status_executed() {
-    let mut core = KernelCore::<1, 1, 2, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(12);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)

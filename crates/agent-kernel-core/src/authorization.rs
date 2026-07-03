@@ -8,6 +8,7 @@ use crate::{
 };
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -19,6 +20,7 @@ impl<
         const RUN_QUEUE: usize,
     >
     KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,

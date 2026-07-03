@@ -11,10 +11,16 @@ use agent_kernel_core::{
 };
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 32, 8, 8, 8, 8, 8, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 32, 8, 8, 8, 8, 8, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
+    kernel
+        .sys_register_agent(agent)
+        .expect("owner agent should fit in simulator kernel");
+    kernel
+        .sys_register_agent(target_agent)
+        .expect("target agent should fit in simulator kernel");
     let workspace = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("workspace resource should fit in simulator kernel");
@@ -97,6 +103,16 @@ fn format_event(event: &Event) -> String {
         .unwrap_or_default();
 
     match event.kind {
+        EventKind::AgentRegistered => {
+            let target_agent = event
+                .target_agent
+                .map(|agent| agent.raw())
+                .unwrap_or_default();
+            format!(
+                "event[{}] agent_registered agent={} target_agent={}",
+                event.sequence, agent, target_agent
+            )
+        }
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
         EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),

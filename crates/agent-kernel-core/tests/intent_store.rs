@@ -3,9 +3,10 @@ use agent_kernel_core::{
     OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 64, 2, 2, 2, 4, 6, 4>;
+type TestCore = KernelCore<2, 4, 8, 64, 2, 2, 2, 4, 6, 4>;
 
 fn grant_owner_capability<
+    const AGENTS: usize,
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
@@ -17,6 +18,7 @@ fn grant_owner_capability<
     const RUN_QUEUE: usize,
 >(
     core: &mut KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -50,6 +52,7 @@ fn grant_owner_capability<
 }
 
 fn declare_required_action_intent<
+    const AGENTS: usize,
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
@@ -61,6 +64,7 @@ fn declare_required_action_intent<
     const RUN_QUEUE: usize,
 >(
     core: &mut KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -86,6 +90,7 @@ fn declare_required_action_intent<
 }
 
 fn complete_task_flow<
+    const AGENTS: usize,
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
@@ -97,6 +102,7 @@ fn complete_task_flow<
     const RUN_QUEUE: usize,
 >(
     core: &mut KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -200,7 +206,7 @@ fn declare_intent_requires_matching_operation_capability() {
 
 #[test]
 fn declare_intent_returns_intent_store_full_without_mutation() {
-    let mut core = KernelCore::<1, 1, 4, 2, 2, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 4, 2, 2, 2, 0, 0, 0>::new();
     let agent = AgentId::new(3);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -225,7 +231,7 @@ fn declare_intent_returns_intent_store_full_without_mutation() {
 
 #[test]
 fn declare_intent_returns_event_log_full_without_mutation() {
-    let mut core = KernelCore::<1, 1, 1, 2, 2, 2, 1, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 1, 2, 2, 2, 1, 0, 0>::new();
     let agent = AgentId::new(4);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -342,7 +348,7 @@ fn create_task_rejects_already_bound_intent_without_mutation() {
 
 #[test]
 fn create_task_requires_two_event_slots_without_mutation() {
-    let mut core = KernelCore::<1, 1, 3, 2, 2, 2, 1, 1, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 3, 2, 2, 2, 1, 1, 0>::new();
     let agent = AgentId::new(9);
     let (capability, resource) = grant_owner_capability(&mut core, agent);
     let intent = declare_required_action_intent(&mut core, agent, capability, resource);
@@ -414,7 +420,7 @@ fn cancel_task_cancels_bound_intent_and_records_event() {
 
 #[test]
 fn verify_task_requires_two_event_slots_without_mutation() {
-    let mut core = KernelCore::<1, 4, 11, 2, 2, 2, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 4, 11, 2, 2, 2, 1, 1, 1>::new();
     let owner = AgentId::new(13);
     let assignee = AgentId::new(14);
     let (owner_capability, resource) = grant_owner_capability(&mut core, owner);
@@ -435,7 +441,7 @@ fn verify_task_requires_two_event_slots_without_mutation() {
 
 #[test]
 fn cancel_task_requires_two_event_slots_without_mutation() {
-    let mut core = KernelCore::<1, 1, 5, 2, 2, 2, 1, 1, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 5, 2, 2, 2, 1, 1, 0>::new();
     let owner = AgentId::new(15);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)

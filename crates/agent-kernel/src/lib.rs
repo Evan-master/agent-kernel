@@ -8,13 +8,14 @@
 mod scheduler;
 
 use agent_kernel_core::{
-    ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, CheckpointRecord, Event, Intent,
-    IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet, ResourceId,
-    ResourceKind, Task, TaskId, VerificationRequirement,
+    ActionId, ActionRecord, AgentId, AgentRecord, CapabilityId, CheckpointId, CheckpointRecord,
+    Event, Intent, IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet,
+    ResourceId, ResourceKind, Task, TaskId, VerificationRequirement,
 };
 
 #[derive(Debug)]
 pub struct AgentKernel<
+    const AGENTS: usize,
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
@@ -26,6 +27,7 @@ pub struct AgentKernel<
     const RUN_QUEUE: usize,
 > {
     pub(crate) core: KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -39,6 +41,7 @@ pub struct AgentKernel<
 }
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -50,6 +53,7 @@ impl<
         const RUN_QUEUE: usize,
     >
     AgentKernel<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -65,6 +69,10 @@ impl<
         Self {
             core: KernelCore::new(),
         }
+    }
+
+    pub fn sys_register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
+        self.core.register_agent(agent)
     }
 
     pub fn sys_register_resource(
@@ -201,6 +209,10 @@ impl<
         self.core.events()
     }
 
+    pub fn agents(&self) -> &[AgentRecord] {
+        self.core.agents()
+    }
+
     pub fn actions(&self) -> &[ActionRecord] {
         self.core.actions()
     }
@@ -223,6 +235,7 @@ impl<
 }
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -234,6 +247,7 @@ impl<
         const RUN_QUEUE: usize,
     > Default
     for AgentKernel<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,

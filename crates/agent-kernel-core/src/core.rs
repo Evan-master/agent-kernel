@@ -5,12 +5,13 @@
 //! host I/O and keeps state deterministic for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, Capability, CheckpointRecord, Event, Intent, ObservationRecord, Resource,
-    RunQueueEntry, Task,
+    ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, Intent, ObservationRecord,
+    Resource, RunQueueEntry, Task,
 };
 
 #[derive(Debug)]
 pub struct KernelCore<
+    const AGENTS: usize,
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
@@ -21,6 +22,7 @@ pub struct KernelCore<
     const TASKS: usize,
     const RUN_QUEUE: usize,
 > {
+    pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) resources: [Option<Resource>; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
@@ -30,6 +32,7 @@ pub struct KernelCore<
     pub(crate) checkpoints: [CheckpointRecord; CHECKPOINTS],
     pub(crate) tasks: [Task; TASKS],
     pub(crate) run_queue: [RunQueueEntry; RUN_QUEUE],
+    pub(crate) agent_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
     pub(crate) observation_len: usize,
@@ -46,6 +49,7 @@ pub struct KernelCore<
 }
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -57,6 +61,7 @@ impl<
         const RUN_QUEUE: usize,
     >
     KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,
@@ -70,6 +75,7 @@ impl<
 {
     pub const fn new() -> Self {
         Self {
+            agents: [AgentRecord::empty(); AGENTS],
             resources: [None; RESOURCES],
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
@@ -79,6 +85,7 @@ impl<
             checkpoints: [CheckpointRecord::empty(); CHECKPOINTS],
             tasks: [Task::empty(); TASKS],
             run_queue: [RunQueueEntry::empty(); RUN_QUEUE],
+            agent_len: 0,
             event_len: 0,
             action_len: 0,
             observation_len: 0,
@@ -101,6 +108,7 @@ impl<
 }
 
 impl<
+        const AGENTS: usize,
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
@@ -112,6 +120,7 @@ impl<
         const RUN_QUEUE: usize,
     > Default
     for KernelCore<
+        AGENTS,
         RESOURCES,
         CAPS,
         EVENTS,

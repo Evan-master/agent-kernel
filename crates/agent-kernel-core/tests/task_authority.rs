@@ -3,7 +3,7 @@ use agent_kernel_core::{
     Operation, OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 4, 24, 2, 2, 2, 4, 4, 4>;
+type TestCore = KernelCore<2, 4, 4, 24, 2, 2, 2, 4, 4, 4>;
 
 fn declare_action_intent(
     core: &mut TestCore,
@@ -118,7 +118,7 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
 
 #[test]
 fn task_store_capacity_returns_task_store_full() {
-    let mut core = KernelCore::<4, 4, 8, 2, 2, 2, 2, 1, 1>::new();
+    let mut core = KernelCore::<2, 4, 4, 8, 2, 2, 2, 2, 1, 1>::new();
     let agent = AgentId::new(16);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)

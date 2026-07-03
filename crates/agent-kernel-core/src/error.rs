@@ -6,12 +6,15 @@
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum KernelError {
+    AgentStoreFull,
     ResourceStoreFull,
     CapabilityStoreFull,
     EventLogFull,
     ActionStoreFull,
     ObservationStoreFull,
     CheckpointStoreFull,
+    AgentAlreadyExists,
+    AgentNotFound,
     ResourceNotFound,
     CapabilityNotFound,
     ActionAlreadyExists,

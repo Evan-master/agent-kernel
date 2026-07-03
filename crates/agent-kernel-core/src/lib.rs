@@ -7,6 +7,8 @@
 
 mod action;
 mod action_store;
+mod agent;
+mod agent_store;
 mod authorization;
 mod capability;
 mod capability_store;
@@ -33,6 +35,7 @@ mod task_event;
 mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};
+pub use agent::{AgentRecord, AgentStatus};
 pub use capability::Capability;
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;

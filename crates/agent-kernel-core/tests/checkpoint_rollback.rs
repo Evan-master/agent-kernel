@@ -3,7 +3,7 @@ use agent_kernel_core::{
     OperationSet, ResourceKind,
 };
 
-type TestCore = KernelCore<4, 4, 16, 2, 2, 4, 0, 0, 0>;
+type TestCore = KernelCore<2, 4, 4, 16, 2, 2, 4, 0, 0, 0>;
 
 #[test]
 fn rollback_existing_checkpoint_updates_status_and_event() {
@@ -90,7 +90,7 @@ fn rollback_missing_checkpoint_leaves_events_unchanged() {
 
 #[test]
 fn rollback_rejects_checkpoint_resource_mismatch_without_status_change() {
-    let mut core = KernelCore::<2, 2, 8, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 2, 2, 8, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(9);
     let first_resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -162,7 +162,7 @@ fn rollback_rejects_repeated_request_without_event() {
 
 #[test]
 fn rollback_event_log_full_leaves_checkpoint_status_created() {
-    let mut core = KernelCore::<1, 1, 2, 1, 1, 1, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 1, 0, 0, 0>::new();
     let agent = AgentId::new(11);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)

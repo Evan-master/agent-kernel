@@ -3,7 +3,7 @@ use agent_kernel_core::{
     OperationSet, ResourceKind,
 };
 
-type TestCore = KernelCore<4, 4, 16, 2, 2, 4, 0, 0, 0>;
+type TestCore = KernelCore<2, 4, 4, 16, 2, 2, 4, 0, 0, 0>;
 
 #[test]
 fn checkpoint_records_checkpoint_and_event() {
@@ -88,7 +88,7 @@ fn checkpoint_requires_checkpoint_operation_without_mutation() {
 
 #[test]
 fn checkpoint_store_full_leaves_events_unchanged() {
-    let mut core = KernelCore::<1, 1, 4, 1, 1, 0, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 4, 1, 1, 0, 0, 0, 0>::new();
     let agent = AgentId::new(4);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -109,7 +109,7 @@ fn checkpoint_store_full_leaves_events_unchanged() {
 
 #[test]
 fn checkpoint_event_log_full_leaves_checkpoints_unchanged() {
-    let mut core = KernelCore::<1, 1, 1, 1, 1, 1, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 1, 1, 1, 1, 0, 0, 0>::new();
     let agent = AgentId::new(5);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)

@@ -4,12 +4,12 @@ Agent Kernel is an early prototype for an agent-native operating system kernel.
 It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 
 The project starts from new OS primitives instead of POSIX compatibility:
-resources, capabilities, typed intents, actions, observations, checkpoints,
-rollback, verification, tasks, delegation, and event logs.
+agents, resources, capabilities, typed intents, actions, observations,
+checkpoints, rollback, verification, tasks, delegation, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -20,32 +20,33 @@ rollback, verification, tasks, delegation, and event logs.
 
 The v0 flow is deliberately small:
 
-1. Register a workspace resource.
-2. Grant an agent a capability for observe, act, verify, checkpoint, rollback, and delegation.
-3. Record the capability grant in the kernel event log.
-4. Observe the resource and store an observation record.
-5. Execute an action with an ActionId and store an action record.
-6. Request verification for that action.
-7. Create and store a checkpoint record.
-8. Request rollback for that checkpoint.
-9. Declare a typed action intent that requires verification.
-10. Create a kernel-owned task from that intent.
-11. Bind the intent to the task.
-12. Delegate the task to another agent.
-13. Record the derived task-scoped capability in the kernel event log.
-14. Let the assignee accept the task.
-15. Enqueue the accepted task and dispatch it into `Running` state through the kernel run queue.
-16. Let the assignee complete the running task.
-17. Request verification for the completed task.
-18. Mark the intent fulfilled after task verification.
-19. Print the kernel event log from the supervisor.
+1. Register the owner and target agents.
+2. Register a workspace resource.
+3. Grant the owner agent a capability for observe, act, verify, checkpoint, rollback, and delegation.
+4. Record the capability grant in the kernel event log.
+5. Observe the resource and store an observation record.
+6. Execute an action with an ActionId and store an action record.
+7. Request verification for that action.
+8. Create and store a checkpoint record.
+9. Request rollback for that checkpoint.
+10. Declare a typed action intent that requires verification.
+11. Create a kernel-owned task from that intent.
+12. Bind the intent to the task.
+13. Delegate the task to another agent.
+14. Record the derived task-scoped capability in the kernel event log.
+15. Let the assignee accept the task.
+16. Enqueue the accepted task and dispatch it into `Running` state through the kernel run queue.
+17. Let the assignee complete the running task.
+18. Request verification for the completed task.
+19. Mark the intent fulfilled after task verification.
+20. Print the kernel event log from the supervisor.
 
-All resource operations go through explicit capabilities. Capability grants,
-derived task capabilities, typed intent declarations, action, verification,
-checkpoint creation, rollback requests, task creation, intent binding, task
-completion, task verification, intent fulfillment, and delegation are first-class
-kernel events, not external tooling. Checkpoints are also queryable
-fixed-capacity kernel records, and rollback moves the checkpoint into
+All resource operations go through explicit capabilities. Agent registration,
+capability grants, derived task capabilities, typed intent declarations, action,
+verification, checkpoint creation, rollback requests, task creation, intent
+binding, task completion, task verification, intent fulfillment, and delegation
+are first-class kernel events, not external tooling. Agents and checkpoints are
+also queryable fixed-capacity kernel records, and rollback moves the checkpoint into
 `RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO run
 queue and become `Running` before completion. `IntentId` and `TaskId` values are
 allocated by fixed-capacity kernel stores rather than invented by the supervisor.
@@ -60,10 +61,11 @@ derived task-scoped capability before future task authorization succeeds.
 
 1. Enter kernel phase.
 2. Initialize `AgentKernel`.
-3. Register a bootstrap resource.
-4. Grant observe/act/verify capability to the bootstrap agent.
-5. Record observation, action, and verification events.
-6. Mark the kernel ready for supervisor handoff.
+3. Register the bootstrap agent.
+4. Register a bootstrap resource.
+5. Grant observe/act/verify capability to the bootstrap agent.
+6. Record observation, action, and verification events.
+7. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -108,10 +110,11 @@ Expected QEMU serial output:
 
 ```text
 AGENT_KERNEL_QEMU_BOOT_OK
-event[1] capability_granted
-event[2] observation
-event[3] action
-event[4] verification
+event[1] agent_registered
+event[2] capability_granted
+event[3] observation
+event[4] action
+event[5] verification
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -122,21 +125,23 @@ Expected supervisor output:
 
 ```text
 Agent Kernel supervisor boot
-event[1] capability_granted agent=1 resource=1 capability=1
-event[2] observation agent=1 resource=1
-event[3] action agent=1 resource=1 action=1
-event[4] verification agent=1 resource=1 action=1
-event[5] checkpoint agent=1 resource=1 checkpoint=1
-event[6] rollback agent=1 resource=1 checkpoint=1
-event[7] intent_declared agent=1 resource=1 intent=1
-event[8] task_created agent=1 resource=1 task=1
-event[9] intent_bound agent=1 resource=1 intent=1
-event[10] capability_derived agent=1 resource=1 capability=2
-event[11] delegation agent=1 resource=1 task=1 target_agent=2
-event[12] task_accepted agent=2 resource=1 task=1
-event[13] task_queued agent=2 resource=1 task=1
-event[14] task_dispatched agent=2 resource=1 task=1
-event[15] task_completed agent=2 resource=1 task=1
-event[16] task_verified agent=1 resource=1 task=1
-event[17] intent_fulfilled agent=1 resource=1 intent=1
+event[1] agent_registered agent=1 target_agent=1
+event[2] agent_registered agent=2 target_agent=2
+event[3] capability_granted agent=1 resource=1 capability=1
+event[4] observation agent=1 resource=1
+event[5] action agent=1 resource=1 action=1
+event[6] verification agent=1 resource=1 action=1
+event[7] checkpoint agent=1 resource=1 checkpoint=1
+event[8] rollback agent=1 resource=1 checkpoint=1
+event[9] intent_declared agent=1 resource=1 intent=1
+event[10] task_created agent=1 resource=1 task=1
+event[11] intent_bound agent=1 resource=1 intent=1
+event[12] capability_derived agent=1 resource=1 capability=2
+event[13] delegation agent=1 resource=1 task=1 target_agent=2
+event[14] task_accepted agent=2 resource=1 task=1
+event[15] task_queued agent=2 resource=1 task=1
+event[16] task_dispatched agent=2 resource=1 task=1
+event[17] task_completed agent=2 resource=1 task=1
+event[18] task_verified agent=1 resource=1 task=1
+event[19] intent_fulfilled agent=1 resource=1 intent=1
 ```
