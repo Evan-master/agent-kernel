@@ -6,16 +6,17 @@
 
 use crate::{
     AgentId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId, RunQueueEntry,
-    Task, TaskId, TaskStatus,
+    Task, TaskId, TaskStatus, VerificationRequirement,
 };
 
 impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub fn enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         let task_record = self.find_runnable_task(agent, task)?;
@@ -109,6 +110,7 @@ impl<
         task: TaskId,
         resource: ResourceId,
     ) -> Result<Event, KernelError> {
+        let task_record = self.find_task(task)?;
         self.record(Event {
             sequence: self.next_sequence,
             agent,
@@ -116,9 +118,12 @@ impl<
             resource: Some(resource),
             capability: None,
             source_capability: None,
+            intent: Some(task_record.intent),
+            intent_kind: None,
             action: None,
             operation: None,
             operations: OperationSet::empty(),
+            verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: Some(task),
             target_agent: None,

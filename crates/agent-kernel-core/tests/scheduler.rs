@@ -1,9 +1,9 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceKind, RunQueueEntry, TaskId, TaskStatus,
+    AgentId, CapabilityId, EventKind, IntentKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 6, 32, 6, 4>;
+type TestCore = KernelCore<4, 6, 32, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct AcceptedTask {
@@ -16,10 +16,11 @@ fn accepted_task<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 >(
-    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>,
+    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>,
     owner: AgentId,
     assignee: AgentId,
 ) -> TaskId {
@@ -30,10 +31,11 @@ fn accepted_task_with_capabilities<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 >(
-    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>,
+    core: &mut KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>,
     owner: AgentId,
     assignee: AgentId,
 ) -> AcceptedTask {
@@ -51,8 +53,17 @@ fn accepted_task_with_capabilities<
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
+    let intent = core
+        .declare_intent(
+            owner,
+            owner_capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should be declared");
     let task = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     let delegation = core
         .delegate_task(owner, owner_capability, task, assignee)
@@ -138,8 +149,17 @@ fn scheduler_rejects_invalid_queue_operations_without_state_changes() {
     let capability = core
         .grant_capability(owner, resource, OperationSet::only(Operation::Act))
         .expect("capability should fit");
+    let intent = core
+        .declare_intent(
+            owner,
+            capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should be declared");
     let created = core
-        .create_task(owner, capability, resource)
+        .create_task(owner, capability, intent)
         .expect("task should be created");
     let accepted = accepted_task(&mut core, owner, assignee);
     core.enqueue_task(assignee, accepted)
@@ -169,7 +189,7 @@ fn scheduler_rejects_invalid_queue_operations_without_state_changes() {
 
 #[test]
 fn enqueue_returns_run_queue_full_when_capacity_is_exhausted() {
-    let mut core = KernelCore::<4, 6, 32, 4, 1>::new();
+    let mut core = KernelCore::<4, 6, 32, 4, 4, 1>::new();
     let owner = AgentId::new(9);
     let first_agent = AgentId::new(10);
     let second_agent = AgentId::new(11);

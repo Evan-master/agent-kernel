@@ -1,9 +1,9 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, KernelCore, KernelError, Operation, OperationSet, ResourceId,
-    ResourceKind, TaskId, TaskStatus,
+    AgentId, CapabilityId, IntentId, IntentKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 32, 6, 4>;
+type TestCore = KernelCore<4, 8, 32, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct RunningDelegatedTask {
@@ -29,6 +29,22 @@ fn grant_source_capability(
     .expect("source capability should fit")
 }
 
+fn declare_action_intent(
+    core: &mut TestCore,
+    owner: AgentId,
+    capability: CapabilityId,
+    resource: ResourceId,
+) -> IntentId {
+    core.declare_intent(
+        owner,
+        capability,
+        resource,
+        IntentKind::Act,
+        VerificationRequirement::Required,
+    )
+    .expect("intent should be declared")
+}
+
 fn running_delegated_task(
     core: &mut TestCore,
     owner: AgentId,
@@ -38,8 +54,9 @@ fn running_delegated_task(
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let source_capability = grant_source_capability(core, owner, resource);
+    let intent = declare_action_intent(core, owner, source_capability, resource);
     let task = core
-        .create_task(owner, source_capability, resource)
+        .create_task(owner, source_capability, intent)
         .expect("task should be created");
     let event = core
         .delegate_task(owner, source_capability, task, assignee)
@@ -132,16 +149,18 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let source_capability = grant_source_capability(&mut core, owner, resource);
+    let first_intent = declare_action_intent(&mut core, owner, source_capability, resource);
     let first = core
-        .create_task(owner, source_capability, resource)
+        .create_task(owner, source_capability, first_intent)
         .expect("first task should be created");
     let first_capability = core
         .delegate_task(owner, source_capability, first, assignee)
         .expect("first task should delegate")
         .capability
         .expect("first delegation should derive capability");
+    let second_intent = declare_action_intent(&mut core, owner, source_capability, resource);
     let second = core
-        .create_task(owner, source_capability, resource)
+        .create_task(owner, source_capability, second_intent)
         .expect("second task should be created");
     let second_capability = core
         .delegate_task(owner, source_capability, second, assignee)

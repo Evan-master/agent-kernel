@@ -8,8 +8,9 @@
 mod scheduler;
 
 use agent_kernel_core::{
-    ActionId, AgentId, CapabilityId, CheckpointId, Event, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind, Task, TaskId,
+    ActionId, AgentId, CapabilityId, CheckpointId, Event, Intent, IntentId, IntentKind, KernelCore,
+    KernelError, Operation, OperationSet, ResourceId, ResourceKind, Task, TaskId,
+    VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -17,19 +18,21 @@ pub struct AgentKernel<
     const RESOURCES: usize,
     const CAPS: usize,
     const EVENTS: usize,
+    const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
 > {
-    pub(crate) core: KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>,
+    pub(crate) core: KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>,
 }
 
 impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
+    > AgentKernel<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub const fn new() -> Self {
         Self {
@@ -109,9 +112,21 @@ impl<
         &mut self,
         agent: AgentId,
         capability: CapabilityId,
-        resource: ResourceId,
+        intent: IntentId,
     ) -> Result<TaskId, KernelError> {
-        self.core.create_task(agent, capability, resource)
+        self.core.create_task(agent, capability, intent)
+    }
+
+    pub fn sys_declare_intent(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        kind: IntentKind,
+        verification: VerificationRequirement,
+    ) -> Result<IntentId, KernelError> {
+        self.core
+            .declare_intent(agent, capability, resource, kind, verification)
     }
 
     pub fn sys_delegate_task(
@@ -160,6 +175,10 @@ impl<
         self.core.events()
     }
 
+    pub fn intents(&self) -> &[Intent] {
+        self.core.intents()
+    }
+
     pub fn tasks(&self) -> &[Task] {
         self.core.tasks()
     }
@@ -169,9 +188,10 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > Default for AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
+    > Default for AgentKernel<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
 {
     fn default() -> Self {
         Self::new()

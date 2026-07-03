@@ -11,9 +11,10 @@ impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > AgentKernel<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
+    > AgentKernel<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub fn sys_enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         self.core.enqueue_task(agent, task)

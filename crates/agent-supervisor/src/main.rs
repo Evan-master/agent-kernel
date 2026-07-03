@@ -6,11 +6,12 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, Event, EventKind, Operation, OperationSet, ResourceKind,
+    ActionId, AgentId, CheckpointId, Event, EventKind, IntentKind, Operation, OperationSet,
+    ResourceKind, VerificationRequirement,
 };
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 24, 8, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 32, 8, 8, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
@@ -47,8 +48,17 @@ fn main() {
     kernel
         .sys_rollback(agent, owner_capability, checkpoint, workspace)
         .expect("agent should request rollback");
+    let intent = kernel
+        .sys_declare_intent(
+            agent,
+            owner_capability,
+            workspace,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("agent should declare action intent");
     let task = kernel
-        .sys_create_task(agent, owner_capability, workspace)
+        .sys_create_task(agent, owner_capability, intent)
         .expect("agent should create task");
     kernel
         .sys_delegate_task(agent, owner_capability, task, target_agent)
@@ -90,6 +100,7 @@ fn format_event(event: &Event) -> String {
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
         EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),
+        EventKind::IntentDeclared => format_intent_event(event),
         EventKind::Observation => {
             format!(
                 "event[{}] observation agent={} resource={}",
@@ -150,6 +161,20 @@ fn format_event(event: &Event) -> String {
         EventKind::TaskDispatched => format_task_event(event, "task_dispatched"),
         EventKind::TaskYielded => format_task_event(event, "task_yielded"),
     }
+}
+
+fn format_intent_event(event: &Event) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let intent = event.intent.map(|intent| intent.raw()).unwrap_or_default();
+
+    format!(
+        "event[{}] intent_declared agent={} resource={} intent={}",
+        event.sequence, agent, resource, intent
+    )
 }
 
 fn format_task_event(event: &Event, label: &str) -> String {

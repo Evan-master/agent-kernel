@@ -1,8 +1,25 @@
 use agent_kernel_core::{
-    AgentId, EventKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskStatus,
+    AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore, KernelError, Operation,
+    OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4, 4>;
+type TestCore = KernelCore<4, 4, 24, 4, 4, 4>;
+
+fn declare_action_intent(
+    core: &mut TestCore,
+    agent: AgentId,
+    capability: CapabilityId,
+    resource: ResourceId,
+) -> IntentId {
+    core.declare_intent(
+        agent,
+        capability,
+        resource,
+        IntentKind::Act,
+        VerificationRequirement::Required,
+    )
+    .expect("intent should be declared")
+}
 
 #[test]
 fn create_task_requires_action_capability() {
@@ -11,16 +28,22 @@ fn create_task_requires_action_capability() {
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
-    let capability = core
+    let observe_capability = core
         .grant_capability(agent, resource, OperationSet::only(Operation::Observe))
-        .expect("capability should fit");
+        .expect("observe capability should fit");
+    let action_capability = core
+        .grant_capability(agent, resource, OperationSet::only(Operation::Act))
+        .expect("action capability should fit");
+    let intent = declare_action_intent(&mut core, agent, action_capability, resource);
 
-    let result = core.create_task(agent, capability, resource);
+    let result = core.create_task(agent, observe_capability, intent);
 
     assert_eq!(result, Err(KernelError::OperationDenied));
     assert_eq!(core.tasks().len(), 0);
-    assert_eq!(core.events().len(), 1);
+    assert_eq!(core.events().len(), 3);
     assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[1].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[2].kind, EventKind::IntentDeclared);
 }
 
 #[test]
@@ -34,8 +57,9 @@ fn delegate_task_requires_delegate_capability_without_events() {
     let create_capability = core
         .grant_capability(owner, resource, OperationSet::only(Operation::Act))
         .expect("create capability should fit");
+    let intent = declare_action_intent(&mut core, owner, create_capability, resource);
     let task = core
-        .create_task(owner, create_capability, resource)
+        .create_task(owner, create_capability, intent)
         .expect("task should be created");
     let events_after_create = core.events().len();
 
@@ -70,8 +94,9 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
             OperationSet::only(Operation::Observe),
         )
         .expect("capability should fit");
+    let intent = declare_action_intent(&mut core, owner, owner_capability, resource);
     let task = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     let events_after_create = core.events().len();
 
@@ -93,7 +118,7 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
 
 #[test]
 fn task_store_capacity_returns_task_store_full() {
-    let mut core = KernelCore::<4, 4, 8, 1, 1>::new();
+    let mut core = KernelCore::<4, 4, 8, 1, 1, 1>::new();
     let agent = AgentId::new(16);
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
@@ -101,10 +126,19 @@ fn task_store_capacity_returns_task_store_full() {
     let capability = core
         .grant_capability(agent, resource, OperationSet::only(Operation::Act))
         .expect("capability should fit");
+    let intent = core
+        .declare_intent(
+            agent,
+            capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should be declared");
 
-    core.create_task(agent, capability, resource)
+    core.create_task(agent, capability, intent)
         .expect("first task should fit");
-    let result = core.create_task(agent, capability, resource);
+    let result = core.create_task(agent, capability, intent);
 
     assert_eq!(result, Err(KernelError::TaskStoreFull));
     assert_eq!(core.tasks().len(), 1);
@@ -120,8 +154,9 @@ fn cancel_task_requires_rollback_capability_without_events() {
     let capability = core
         .grant_capability(owner, resource, OperationSet::only(Operation::Act))
         .expect("capability should fit");
+    let intent = declare_action_intent(&mut core, owner, capability, resource);
     let task = core
-        .create_task(owner, capability, resource)
+        .create_task(owner, capability, intent)
         .expect("task should be created");
     let events_after_create = core.events().len();
 
@@ -150,8 +185,9 @@ fn cancel_task_marks_task_cancelled_and_terminal() {
                 .with(Operation::Rollback),
         )
         .expect("capability should fit");
+    let intent = declare_action_intent(&mut core, owner, capability, resource);
     let task = core
-        .create_task(owner, capability, resource)
+        .create_task(owner, capability, intent)
         .expect("task should be created");
 
     let event = core
@@ -187,8 +223,9 @@ fn verified_task_rejects_further_transitions_without_events() {
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
+    let intent = declare_action_intent(&mut core, owner, owner_capability, resource);
     let task = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");

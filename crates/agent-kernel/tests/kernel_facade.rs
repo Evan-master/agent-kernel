@@ -1,10 +1,28 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, EventKind, KernelError, Operation, OperationSet, ResourceKind,
-    RunQueueEntry, TaskId, TaskStatus,
+    ActionId, AgentId, CapabilityId, CheckpointId, EventKind, IntentId, IntentKind, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<4, 6, 32, 6, 4>;
+type TestKernel = AgentKernel<4, 6, 64, 8, 8, 4>;
+
+fn declare_action_intent(
+    kernel: &mut TestKernel,
+    agent: AgentId,
+    capability: CapabilityId,
+    resource: ResourceId,
+) -> IntentId {
+    kernel
+        .sys_declare_intent(
+            agent,
+            capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should be declared")
+}
 
 #[test]
 fn kernel_starts_with_empty_event_log() {
@@ -120,8 +138,9 @@ fn delegate_syscall_records_task_delegation() {
                 .with(Operation::Delegate),
         )
         .expect("capability should fit");
+    let intent = declare_action_intent(&mut kernel, agent, capability, resource);
     let task = kernel
-        .sys_create_task(agent, capability, resource)
+        .sys_create_task(agent, capability, intent)
         .expect("task should be created");
 
     let event = kernel
@@ -153,8 +172,9 @@ fn task_syscalls_record_full_task_lifecycle() {
                 .with(Operation::Verify),
         )
         .expect("owner capability should fit");
+    let intent = declare_action_intent(&mut kernel, owner, owner_capability, resource);
     let task = kernel
-        .sys_create_task(owner, owner_capability, resource)
+        .sys_create_task(owner, owner_capability, intent)
         .expect("task should be created");
     assert_eq!(task, TaskId::new(1));
     kernel
@@ -181,14 +201,18 @@ fn task_syscalls_record_full_task_lifecycle() {
 
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Verified);
     assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(kernel.events()[1].kind, EventKind::TaskCreated);
-    assert_eq!(kernel.events()[2].kind, EventKind::CapabilityDerived);
-    assert_eq!(kernel.events()[3].kind, EventKind::DelegationRequested);
-    assert_eq!(kernel.events()[4].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[5].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[6].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[7].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[8].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[1].kind, EventKind::IntentDeclared);
+    assert_eq!(kernel.events()[2].kind, EventKind::TaskCreated);
+    assert_eq!(kernel.events()[3].kind, EventKind::CapabilityDerived);
+    assert_eq!(kernel.events()[4].kind, EventKind::DelegationRequested);
+    assert_eq!(kernel.events()[5].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[6].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[7].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[8].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[9].kind, EventKind::TaskVerified);
+    for event in &kernel.events()[2..=9] {
+        assert_eq!(event.intent, Some(intent));
+    }
 }
 
 #[test]
@@ -207,8 +231,9 @@ fn cancel_task_syscall_records_cancelled_task() {
                 .with(Operation::Rollback),
         )
         .expect("capability should fit");
+    let intent = declare_action_intent(&mut kernel, owner, capability, resource);
     let task = kernel
-        .sys_create_task(owner, capability, resource)
+        .sys_create_task(owner, capability, intent)
         .expect("task should be created");
 
     let event = kernel
@@ -237,11 +262,13 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
                 .with(Operation::Delegate),
         )
         .expect("owner capability should fit");
+    let first_intent = declare_action_intent(&mut kernel, owner, owner_capability, resource);
     let first = kernel
-        .sys_create_task(owner, owner_capability, resource)
+        .sys_create_task(owner, owner_capability, first_intent)
         .expect("first task should be created");
+    let second_intent = declare_action_intent(&mut kernel, owner, owner_capability, resource);
     let second = kernel
-        .sys_create_task(owner, owner_capability, resource)
+        .sys_create_task(owner, owner_capability, second_intent)
         .expect("second task should be created");
     kernel
         .sys_delegate_task(owner, owner_capability, first, first_agent)
@@ -311,8 +338,9 @@ fn completing_task_before_dispatch_is_rejected_by_facade() {
                 .with(Operation::Delegate),
         )
         .expect("owner capability should fit");
+    let intent = declare_action_intent(&mut kernel, owner, owner_capability, resource);
     let task = kernel
-        .sys_create_task(owner, owner_capability, resource)
+        .sys_create_task(owner, owner_capability, intent)
         .expect("task should be created");
     kernel
         .sys_delegate_task(owner, owner_capability, task, assignee)

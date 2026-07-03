@@ -5,17 +5,18 @@
 //! point at an existing resource.
 
 use crate::{
-    AgentId, Capability, CapabilityId, Event, EventKind, KernelCore, KernelError, OperationSet,
-    ResourceId, TaskId,
+    AgentId, Capability, CapabilityId, Event, EventKind, IntentId, KernelCore, KernelError,
+    OperationSet, ResourceId, TaskId, VerificationRequirement,
 };
 
 impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub fn grant_capability(
         &mut self,
@@ -52,6 +53,7 @@ impl<
             operations,
             None,
             None,
+            None,
         )?;
         Ok(id)
     }
@@ -66,6 +68,7 @@ impl<
     ) -> Result<CapabilityId, KernelError> {
         self.find_resource(resource)?;
         let parent_capability = self.find_capability(parent)?;
+        let task_record = self.find_task(task)?;
 
         let slot = self
             .capabilities
@@ -93,6 +96,7 @@ impl<
             Some(parent),
             operations,
             Some(task),
+            Some(task_record.intent),
             Some(agent),
         )?;
         Ok(id)
@@ -112,6 +116,7 @@ impl<
             cap.operations,
             cap.task,
             None,
+            None,
         )?;
         Ok(())
     }
@@ -125,6 +130,7 @@ impl<
         source_capability: Option<CapabilityId>,
         operations: OperationSet,
         task: Option<TaskId>,
+        intent: Option<IntentId>,
         target_agent: Option<AgentId>,
     ) -> Result<Event, KernelError> {
         self.record(Event {
@@ -134,9 +140,12 @@ impl<
             resource: Some(resource),
             capability: Some(capability),
             source_capability,
+            intent,
+            intent_kind: None,
             action: None,
             operation: None,
             operations,
+            verification: VerificationRequirement::Optional,
             checkpoint: None,
             task,
             target_agent,

@@ -1,9 +1,9 @@
 use agent_kernel_core::{
-    ActionId, AgentId, CapabilityId, EventKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceId, ResourceKind, TaskId, TaskStatus,
+    ActionId, AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<4, 8, 32, 6, 4>;
+type TestCore = KernelCore<4, 8, 32, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct DelegatedTask {
@@ -11,6 +11,22 @@ struct DelegatedTask {
     resource: ResourceId,
     owner_capability: CapabilityId,
     delegated_capability: CapabilityId,
+}
+
+fn declare_action_intent(
+    core: &mut TestCore,
+    owner: AgentId,
+    capability: CapabilityId,
+    resource: ResourceId,
+) -> IntentId {
+    core.declare_intent(
+        owner,
+        capability,
+        resource,
+        IntentKind::Act,
+        VerificationRequirement::Required,
+    )
+    .expect("intent should be declared")
 }
 
 fn create_delegated_task(core: &mut TestCore, owner: AgentId, assignee: AgentId) -> DelegatedTask {
@@ -28,8 +44,9 @@ fn create_delegated_task(core: &mut TestCore, owner: AgentId, assignee: AgentId)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
+    let intent = declare_action_intent(core, owner, owner_capability, resource);
     let task = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     let event = core
         .delegate_task(owner, owner_capability, task, assignee)
@@ -131,8 +148,9 @@ fn derived_capability_cannot_complete_a_different_task() {
                 .with(Operation::Verify),
         )
         .expect("owner capability should fit");
+    let first_intent = declare_action_intent(&mut core, owner, owner_capability, resource);
     let first = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, first_intent)
         .expect("first task should be created");
     let first_event = core
         .delegate_task(owner, owner_capability, first, assignee)
@@ -140,8 +158,9 @@ fn derived_capability_cannot_complete_a_different_task() {
     let first_capability = first_event
         .capability
         .expect("first delegation should derive capability");
+    let second_intent = declare_action_intent(&mut core, owner, owner_capability, resource);
     let second = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, second_intent)
         .expect("second task should be created");
     core.delegate_task(owner, owner_capability, second, assignee)
         .expect("second task should delegate");
@@ -169,8 +188,9 @@ fn delegate_requires_source_act_authority_for_derived_capability() {
     let delegate_only_capability = core
         .grant_capability(owner, resource, OperationSet::only(Operation::Delegate))
         .expect("delegate capability should fit");
+    let intent = declare_action_intent(&mut core, owner, create_capability, resource);
     let task = core
-        .create_task(owner, create_capability, resource)
+        .create_task(owner, create_capability, intent)
         .expect("task should be created");
     let events_after_create = core.events().len();
 
@@ -184,7 +204,7 @@ fn delegate_requires_source_act_authority_for_derived_capability() {
 
 #[test]
 fn delegate_returns_capability_store_full_without_state_changes() {
-    let mut core = KernelCore::<2, 1, 8, 2, 2>::new();
+    let mut core = KernelCore::<2, 1, 8, 1, 2, 2>::new();
     let owner = AgentId::new(11);
     let assignee = AgentId::new(12);
     let resource = core
@@ -199,8 +219,17 @@ fn delegate_returns_capability_store_full_without_state_changes() {
                 .with(Operation::Delegate),
         )
         .expect("owner capability should fit");
+    let intent = core
+        .declare_intent(
+            owner,
+            owner_capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should be declared");
     let task = core
-        .create_task(owner, owner_capability, resource)
+        .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     let events_after_create = core.events().len();
 

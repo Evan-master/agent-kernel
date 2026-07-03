@@ -2,7 +2,7 @@ use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
 };
 
-type TestCore = KernelCore<4, 4, 16, 4, 4>;
+type TestCore = KernelCore<4, 4, 16, 0, 4, 4>;
 
 #[test]
 fn observes_resource_when_capability_allows_observe() {

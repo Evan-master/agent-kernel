@@ -5,36 +5,47 @@
 //! recording. It performs no allocation or host I/O.
 
 use crate::{
-    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceId, Task, TaskId, TaskStatus,
+    AgentId, CapabilityId, Event, EventKind, IntentId, KernelCore, KernelError, Operation,
+    OperationSet, Task, TaskId, TaskStatus,
 };
 
 impl<
         const RESOURCES: usize,
         const CAPS: usize,
         const EVENTS: usize,
+        const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
-    > KernelCore<RESOURCES, CAPS, EVENTS, TASKS, RUN_QUEUE>
+    > KernelCore<RESOURCES, CAPS, EVENTS, INTENTS, TASKS, RUN_QUEUE>
 {
     pub fn create_task(
         &mut self,
         agent: AgentId,
         capability: CapabilityId,
-        resource: ResourceId,
+        intent: IntentId,
     ) -> Result<TaskId, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Act)?;
+        let intent_record = self.find_intent(intent)?;
+        if intent_record.owner != agent {
+            return Err(KernelError::IntentAgentMismatch);
+        }
+        self.ensure_authorized(
+            agent,
+            capability,
+            intent_record.resource,
+            intent_record.kind.required_operation(),
+        )?;
         if self.task_len >= TASKS {
             return Err(KernelError::TaskStoreFull);
         }
-        self.ensure_task_event_capacity()?;
+        self.ensure_event_slots(1)?;
 
         let task = TaskId::new(self.next_task);
         self.next_task += 1;
         self.tasks[self.task_len] = Task {
             id: task,
+            intent,
             owner: agent,
-            resource,
+            resource: intent_record.resource,
             assignee: None,
             delegated_capability: None,
             status: TaskStatus::Created,
@@ -83,7 +94,7 @@ impl<
             return Err(KernelError::TaskAgentMismatch);
         }
         ensure_status(current.status, &[TaskStatus::Delegated])?;
-        self.ensure_task_event_capacity()?;
+        self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Accepted;
         self.record_task_event(EventKind::TaskAccepted, agent, None, task, None)
@@ -101,7 +112,7 @@ impl<
         if current.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
         }
-        self.ensure_task_event_capacity()?;
+        self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Completed;
         self.record_task_event(
@@ -122,7 +133,7 @@ impl<
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Verify)?;
         ensure_status(current.status, &[TaskStatus::Completed])?;
-        self.ensure_task_event_capacity()?;
+        self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Verified;
         self.record_task_event(EventKind::TaskVerified, agent, Some(capability), task, None)
@@ -146,7 +157,7 @@ impl<
                 TaskStatus::Completed,
             ],
         )?;
-        self.ensure_task_event_capacity()?;
+        self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Cancelled;
         self.record_task_event(
@@ -176,45 +187,11 @@ impl<
             .find(|task| task.id == id)
             .ok_or(KernelError::TaskNotFound)
     }
-
-    fn record_task_event(
-        &mut self,
-        kind: EventKind,
-        agent: AgentId,
-        capability: Option<CapabilityId>,
-        task: TaskId,
-        target_agent: Option<AgentId>,
-    ) -> Result<Event, KernelError> {
-        let task_record = self.find_task(task)?;
-        self.record(Event {
-            sequence: self.next_sequence,
-            agent,
-            kind,
-            resource: Some(task_record.resource),
-            capability,
-            source_capability: None,
-            action: None,
-            operation: None,
-            operations: OperationSet::empty(),
-            checkpoint: None,
-            task: Some(task),
-            target_agent,
-        })
-    }
-
-    fn ensure_task_event_capacity(&self) -> Result<(), KernelError> {
-        if self.event_len >= EVENTS {
-            Err(KernelError::EventLogFull)
-        } else {
-            Ok(())
-        }
-    }
 }
 
 fn ensure_status(current: TaskStatus, allowed: &[TaskStatus]) -> Result<(), KernelError> {
-    if allowed.iter().any(|status| *status == current) {
-        Ok(())
-    } else {
-        Err(KernelError::TaskStatusMismatch)
-    }
+    allowed
+        .contains(&current)
+        .then_some(())
+        .ok_or(KernelError::TaskStatusMismatch)
 }
