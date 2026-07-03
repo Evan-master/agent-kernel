@@ -5,7 +5,7 @@ use agent_kernel_core::{
     RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<2, 4, 6, 64, 8, 8, 8, 8, 8, 4>;
+type TestKernel = AgentKernel<4, 4, 6, 64, 8, 8, 8, 8, 8, 4>;
 
 fn declare_action_intent(
     kernel: &mut TestKernel,
@@ -37,6 +37,9 @@ fn kernel_starts_with_empty_event_log() {
 fn observe_syscall_records_observation_event() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(42);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -51,12 +54,12 @@ fn observe_syscall_records_observation_event() {
     assert_eq!(event.kind, EventKind::Observation);
     assert_eq!(event.agent, agent);
     assert_eq!(event.resource, Some(resource));
-    assert_eq!(kernel.events().len(), 2);
-    assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(kernel.events()[1].kind, EventKind::Observation);
+    assert_eq!(kernel.events().len(), 3);
+    assert_eq!(kernel.events()[1].kind, EventKind::CapabilityGranted);
+    assert_eq!(kernel.events()[2].kind, EventKind::Observation);
     assert_eq!(kernel.observations().len(), 1);
     assert_eq!(
-        kernel.events()[1].observation,
+        kernel.events()[2].observation,
         Some(kernel.observations()[0].id)
     );
 }
@@ -66,6 +69,9 @@ fn checkpoint_and_rollback_syscalls_record_kernel_events() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(77);
     let checkpoint = CheckpointId::new(5);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -87,10 +93,10 @@ fn checkpoint_and_rollback_syscalls_record_kernel_events() {
         .expect("rollback event should fit");
 
     let events = kernel.events();
-    assert_eq!(events.len(), 3);
-    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(events[1].kind, EventKind::CheckpointCreated);
-    assert_eq!(events[2].kind, EventKind::RollbackRequested);
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[1].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[2].kind, EventKind::CheckpointCreated);
+    assert_eq!(events[3].kind, EventKind::RollbackRequested);
     assert_eq!(kernel.checkpoints().len(), 1);
     assert_eq!(kernel.checkpoints()[0].id, checkpoint);
     assert_eq!(
@@ -104,6 +110,9 @@ fn action_and_verify_syscalls_record_action_lifecycle() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(88);
     let action = ActionId::new(3);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -125,12 +134,12 @@ fn action_and_verify_syscalls_record_action_lifecycle() {
         .expect("verify should be authorized");
 
     let events = kernel.events();
-    assert_eq!(events.len(), 3);
-    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(events[1].kind, EventKind::ActionExecuted);
-    assert_eq!(events[2].kind, EventKind::VerificationRequested);
-    assert_eq!(events[1].action, Some(action));
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[1].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[2].kind, EventKind::ActionExecuted);
+    assert_eq!(events[3].kind, EventKind::VerificationRequested);
     assert_eq!(events[2].action, Some(action));
+    assert_eq!(events[3].action, Some(action));
     assert_eq!(kernel.actions().len(), 1);
     assert_eq!(
         kernel.actions()[0].status,
@@ -143,6 +152,12 @@ fn delegate_syscall_records_task_delegation() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(99);
     let target_agent = AgentId::new(100);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
+    kernel
+        .sys_register_agent(target_agent)
+        .expect("target agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -176,6 +191,12 @@ fn task_syscalls_record_full_task_lifecycle() {
     let mut kernel = TestKernel::new();
     let owner = AgentId::new(101);
     let assignee = AgentId::new(102);
+    kernel
+        .sys_register_agent(owner)
+        .expect("owner should register");
+    kernel
+        .sys_register_agent(assignee)
+        .expect("assignee should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -217,19 +238,19 @@ fn task_syscalls_record_full_task_lifecycle() {
         .expect("task should be verified");
 
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Verified);
-    assert_eq!(kernel.events()[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(kernel.events()[1].kind, EventKind::IntentDeclared);
-    assert_eq!(kernel.events()[2].kind, EventKind::TaskCreated);
-    assert_eq!(kernel.events()[3].kind, EventKind::IntentBound);
-    assert_eq!(kernel.events()[4].kind, EventKind::CapabilityDerived);
-    assert_eq!(kernel.events()[5].kind, EventKind::DelegationRequested);
-    assert_eq!(kernel.events()[6].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[7].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[8].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[9].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[10].kind, EventKind::TaskVerified);
-    assert_eq!(kernel.events()[11].kind, EventKind::IntentFulfilled);
-    for event in &kernel.events()[2..=11] {
+    assert_eq!(kernel.events()[2].kind, EventKind::CapabilityGranted);
+    assert_eq!(kernel.events()[3].kind, EventKind::IntentDeclared);
+    assert_eq!(kernel.events()[4].kind, EventKind::TaskCreated);
+    assert_eq!(kernel.events()[5].kind, EventKind::IntentBound);
+    assert_eq!(kernel.events()[6].kind, EventKind::CapabilityDerived);
+    assert_eq!(kernel.events()[7].kind, EventKind::DelegationRequested);
+    assert_eq!(kernel.events()[8].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[9].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[10].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[11].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[12].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[13].kind, EventKind::IntentFulfilled);
+    for event in &kernel.events()[4..=13] {
         assert_eq!(event.intent, Some(intent));
     }
 }
@@ -238,6 +259,9 @@ fn task_syscalls_record_full_task_lifecycle() {
 fn cancel_task_syscall_records_cancelled_task() {
     let mut kernel = TestKernel::new();
     let owner = AgentId::new(103);
+    kernel
+        .sys_register_agent(owner)
+        .expect("owner should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -269,6 +293,15 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
     let owner = AgentId::new(200);
     let first_agent = AgentId::new(201);
     let second_agent = AgentId::new(202);
+    kernel
+        .sys_register_agent(owner)
+        .expect("owner should register");
+    kernel
+        .sys_register_agent(first_agent)
+        .expect("first agent should register");
+    kernel
+        .sys_register_agent(second_agent)
+        .expect("second agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -345,6 +378,12 @@ fn completing_task_before_dispatch_is_rejected_by_facade() {
     let mut kernel = TestKernel::new();
     let owner = AgentId::new(203);
     let assignee = AgentId::new(204);
+    kernel
+        .sys_register_agent(owner)
+        .expect("owner should register");
+    kernel
+        .sys_register_agent(assignee)
+        .expect("assignee should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");

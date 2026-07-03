@@ -3,7 +3,7 @@ use agent_kernel_core::{
     ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
-type TestCore = KernelCore<2, 4, 6, 32, 4, 2, 2, 6, 6, 4>;
+type TestCore = KernelCore<4, 4, 6, 32, 4, 2, 2, 6, 6, 4>;
 
 #[derive(Copy, Clone)]
 struct AcceptedTask {
@@ -69,6 +69,13 @@ fn accepted_task_with_capabilities<
     owner: AgentId,
     assignee: AgentId,
 ) -> AcceptedTask {
+    if core.agents().iter().all(|agent| agent.id != owner) {
+        core.register_agent(owner).expect("owner should register");
+    }
+    if core.agents().iter().all(|agent| agent.id != assignee) {
+        core.register_agent(assignee)
+            .expect("assignee should register");
+    }
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -173,6 +180,7 @@ fn scheduler_rejects_invalid_queue_operations_without_state_changes() {
     let owner = AgentId::new(6);
     let assignee = AgentId::new(7);
     let wrong_agent = AgentId::new(8);
+    core.register_agent(owner).expect("owner should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -219,7 +227,7 @@ fn scheduler_rejects_invalid_queue_operations_without_state_changes() {
 
 #[test]
 fn enqueue_returns_run_queue_full_when_capacity_is_exhausted() {
-    let mut core = KernelCore::<2, 4, 6, 32, 4, 2, 2, 4, 4, 1>::new();
+    let mut core = KernelCore::<3, 4, 6, 32, 4, 2, 2, 4, 4, 1>::new();
     let owner = AgentId::new(9);
     let first_agent = AgentId::new(10);
     let second_agent = AgentId::new(11);

@@ -25,6 +25,7 @@ fn declare_action_intent(
 fn create_task_allocates_kernel_task_and_records_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(11);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -46,14 +47,14 @@ fn create_task_allocates_kernel_task_and_records_event() {
     assert_eq!(core.tasks()[0].assignee, None);
     assert_eq!(core.tasks()[0].delegated_capability, None);
     assert_eq!(core.tasks()[0].status, TaskStatus::Created);
-    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(core.events()[1].kind, EventKind::IntentDeclared);
-    assert_eq!(core.events()[2].kind, EventKind::TaskCreated);
-    assert_eq!(core.events()[2].task, Some(task));
-    assert_eq!(core.events()[2].intent, Some(intent));
-    assert_eq!(core.events()[3].kind, EventKind::IntentBound);
+    assert_eq!(core.events()[1].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[2].kind, EventKind::IntentDeclared);
+    assert_eq!(core.events()[3].kind, EventKind::TaskCreated);
     assert_eq!(core.events()[3].task, Some(task));
     assert_eq!(core.events()[3].intent, Some(intent));
+    assert_eq!(core.events()[4].kind, EventKind::IntentBound);
+    assert_eq!(core.events()[4].task, Some(task));
+    assert_eq!(core.events()[4].intent, Some(intent));
 }
 
 #[test]
@@ -61,6 +62,9 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
     let mut core = TestCore::new();
     let owner = AgentId::new(12);
     let assignee = AgentId::new(13);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -95,21 +99,21 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
 
     assert_eq!(core.tasks()[0].status, TaskStatus::Verified);
     assert_eq!(core.tasks()[0].assignee, Some(assignee));
-    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(core.events()[1].kind, EventKind::IntentDeclared);
-    assert_eq!(core.events()[2].kind, EventKind::TaskCreated);
-    assert_eq!(core.events()[3].kind, EventKind::IntentBound);
-    assert_eq!(core.events()[4].kind, EventKind::CapabilityDerived);
-    assert_eq!(core.events()[4].target_agent, Some(assignee));
-    assert_eq!(core.events()[5].kind, EventKind::DelegationRequested);
-    assert_eq!(core.events()[5].target_agent, Some(assignee));
-    assert_eq!(core.events()[6].kind, EventKind::TaskAccepted);
-    assert_eq!(core.events()[7].kind, EventKind::TaskQueued);
-    assert_eq!(core.events()[8].kind, EventKind::TaskDispatched);
-    assert_eq!(core.events()[9].kind, EventKind::TaskCompleted);
-    assert_eq!(core.events()[10].kind, EventKind::TaskVerified);
-    assert_eq!(core.events()[11].kind, EventKind::IntentFulfilled);
-    for event in &core.events()[2..=11] {
+    assert_eq!(core.events()[2].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[3].kind, EventKind::IntentDeclared);
+    assert_eq!(core.events()[4].kind, EventKind::TaskCreated);
+    assert_eq!(core.events()[5].kind, EventKind::IntentBound);
+    assert_eq!(core.events()[6].kind, EventKind::CapabilityDerived);
+    assert_eq!(core.events()[6].target_agent, Some(assignee));
+    assert_eq!(core.events()[7].kind, EventKind::DelegationRequested);
+    assert_eq!(core.events()[7].target_agent, Some(assignee));
+    assert_eq!(core.events()[8].kind, EventKind::TaskAccepted);
+    assert_eq!(core.events()[9].kind, EventKind::TaskQueued);
+    assert_eq!(core.events()[10].kind, EventKind::TaskDispatched);
+    assert_eq!(core.events()[11].kind, EventKind::TaskCompleted);
+    assert_eq!(core.events()[12].kind, EventKind::TaskVerified);
+    assert_eq!(core.events()[13].kind, EventKind::IntentFulfilled);
+    for event in &core.events()[4..=13] {
         assert_eq!(event.intent, Some(intent));
     }
 }

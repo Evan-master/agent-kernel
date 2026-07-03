@@ -7,6 +7,9 @@ type TestKernel = AgentKernel<2, 2, 2, 4, 1, 1, 1, 0, 1, 1>;
 fn sys_grant_records_capability_granted_event() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(1);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -19,10 +22,10 @@ fn sys_grant_records_capability_granted_event() {
         .expect("grant should fit");
 
     let events = kernel.events();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].kind, EventKind::CapabilityGranted);
-    assert_eq!(events[0].agent, agent);
-    assert_eq!(events[0].resource, Some(resource));
-    assert_eq!(events[0].capability, Some(capability));
-    assert_eq!(events[0].operations, operations);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].kind, EventKind::CapabilityGranted);
+    assert_eq!(events[1].agent, agent);
+    assert_eq!(events[1].resource, Some(resource));
+    assert_eq!(events[1].capability, Some(capability));
+    assert_eq!(events[1].operations, operations);
 }

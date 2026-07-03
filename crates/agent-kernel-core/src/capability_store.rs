@@ -2,7 +2,7 @@
 //!
 //! This module belongs to `agent-kernel-core`. It owns deterministic capability
 //! allocation and revocation while preserving the invariant that all grants
-//! point at an existing resource.
+//! point at a registered agent and an existing resource.
 
 use crate::{
     AgentId, Capability, CapabilityId, Event, EventKind, IntentId, KernelCore, KernelError,
@@ -40,6 +40,7 @@ impl<
         resource: ResourceId,
         operations: OperationSet,
     ) -> Result<CapabilityId, KernelError> {
+        self.find_agent(agent)?;
         self.find_resource(resource)?;
 
         let slot = self
@@ -82,6 +83,7 @@ impl<
         task: TaskId,
         parent: CapabilityId,
     ) -> Result<CapabilityId, KernelError> {
+        self.find_agent(agent)?;
         self.find_resource(resource)?;
         let parent_capability = self.find_capability(parent)?;
         let task_record = self.find_task(task)?;

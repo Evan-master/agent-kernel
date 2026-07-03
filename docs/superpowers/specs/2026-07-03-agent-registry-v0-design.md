@@ -20,11 +20,14 @@ V0 is intentionally narrow:
 - rejects event-log exhaustion before mutating state,
 - exposes read-only agent records through the facade,
 - makes boot and supervisor flows explicitly register their agents.
+- rejects root capability grants to unknown agents,
+- rejects task-scoped delegated capability derivation for unknown target agents.
 
-V0 does not yet enforce that every existing operation must be performed by a
-registered agent. That enforcement is a separate behavior-tightening step
-because it changes many old test setup assumptions and event offsets. This
-design creates the first-class kernel fact required for that follow-up.
+V0 still does not enforce that every existing syscall actor must be a registered
+agent. For example, invalid queue operations can still fail on task state rather
+than actor registration. The enforced boundary in this step is narrower:
+capability authority cannot be issued to an unknown agent, either through a root
+grant or through delegated task capability derivation.
 
 ## Core Model
 
@@ -55,6 +58,16 @@ KernelCore<AGENTS, RESOURCES, CAPS, EVENTS, ACTIONS, OBSERVATIONS, CHECKPOINTS, 
 
 Failed registration leaves agent records and events unchanged.
 
+`grant_capability(agent, resource, operations)` now first checks that `agent`
+exists in the registry, then checks the resource, capability capacity, and event
+capacity. `AgentNotFound` is returned without allocating a capability or
+recording an event.
+
+`delegate_task(agent, capability, task, target_agent)` still authorizes the
+delegating agent through the source capability, but the internal
+`derive_task_capability` step now requires `target_agent` to be registered
+before writing the derived capability or mutating the task delegation fields.
+
 ## Facade And Runtime
 
 `agent-kernel` adds:
@@ -74,7 +87,7 @@ creating resources and capabilities.
 
 - Agent suspension, retirement, or restart semantics.
 - Kernel-allocated agent ids.
-- Mandatory registered-agent authorization for all existing syscalls.
+- Mandatory registered-actor authorization for all existing syscalls.
 - Agent mailboxes, IPC, or scheduling priorities.
 - LLM prompts, model sessions, or remote inference in kernel space.
 
@@ -84,5 +97,8 @@ creating resources and capabilities.
 - duplicate registration returns `AgentAlreadyExists` without an event,
 - store full returns `AgentStoreFull` without an event,
 - event log full leaves the registry unchanged,
+- root grants to unregistered agents return `AgentNotFound` without an event,
+- task delegation to unregistered target agents returns `AgentNotFound` without
+  mutating task assignee or delegated capability fields,
 - facade exposes registered agents through `agents()`,
 - supervisor and QEMU boot still produce deterministic event output.

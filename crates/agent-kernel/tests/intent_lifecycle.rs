@@ -10,6 +10,9 @@ type TestKernel = AgentKernel<2, 4, 4, 16, 4, 4, 4, 4, 4, 4>;
 fn sys_declare_intent_records_and_exposes_intent() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(1);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -38,14 +41,17 @@ fn sys_declare_intent_records_and_exposes_intent() {
         kernel.intents()[0].verification,
         VerificationRequirement::Required
     );
-    assert_eq!(kernel.events()[1].kind, EventKind::IntentDeclared);
-    assert_eq!(kernel.events()[1].intent, Some(intent));
+    assert_eq!(kernel.events()[2].kind, EventKind::IntentDeclared);
+    assert_eq!(kernel.events()[2].intent, Some(intent));
 }
 
 #[test]
 fn sys_create_task_accepts_intent_id() {
     let mut kernel = TestKernel::new();
     let agent = AgentId::new(2);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -69,11 +75,11 @@ fn sys_create_task_accepts_intent_id() {
     assert_eq!(task, TaskId::new(1));
     assert_eq!(kernel.tasks()[0].intent, intent);
     assert_eq!(kernel.intents()[0].status, IntentStatus::Bound);
-    assert_eq!(kernel.events()[2].kind, EventKind::TaskCreated);
-    assert_eq!(kernel.events()[2].intent, Some(intent));
-    assert_eq!(kernel.events()[3].kind, EventKind::IntentBound);
+    assert_eq!(kernel.events()[3].kind, EventKind::TaskCreated);
     assert_eq!(kernel.events()[3].intent, Some(intent));
-    assert_eq!(kernel.events()[3].task, Some(task));
+    assert_eq!(kernel.events()[4].kind, EventKind::IntentBound);
+    assert_eq!(kernel.events()[4].intent, Some(intent));
+    assert_eq!(kernel.events()[4].task, Some(task));
 }
 
 #[test]
@@ -81,6 +87,12 @@ fn sys_verify_task_exposes_fulfilled_intent_status() {
     let mut kernel = TestKernel::new();
     let owner = AgentId::new(3);
     let assignee = AgentId::new(4);
+    kernel
+        .sys_register_agent(owner)
+        .expect("owner should register");
+    kernel
+        .sys_register_agent(assignee)
+        .expect("assignee should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -144,6 +156,9 @@ fn sys_verify_task_exposes_fulfilled_intent_status() {
 fn sys_cancel_task_exposes_cancelled_intent_status() {
     let mut kernel = TestKernel::new();
     let owner = AgentId::new(5);
+    kernel
+        .sys_register_agent(owner)
+        .expect("owner should register");
     let resource = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");

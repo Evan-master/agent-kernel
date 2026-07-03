@@ -145,6 +145,25 @@ git status --short --branch
 
 Expected: all commands pass, supervisor shows two `agent_registered` events, QEMU shows one `agent_registered` event, and status only contains intended files before commit.
 
+## Follow-Up: Registered-Agent Authority Tightening
+
+**Goal:** Use the registry as an authority boundary for issuing capabilities.
+
+- [x] Add red tests proving `grant_capability` rejects unregistered agents with
+  `AgentNotFound` and no event.
+- [x] Add red tests proving `delegate_task` rejects an unregistered target agent
+  before deriving a task capability or mutating task delegation fields.
+- [x] Check agent registration at the start of `grant_capability`.
+- [x] Check agent registration during internal task capability derivation.
+- [x] Migrate core and facade tests to explicitly register agents before grants
+  and delegation.
+- [x] Update design and README docs to state that new root or derived
+  capabilities can only be issued to registered agents.
+- [x] Verify `cargo test --workspace` with nightly `RUSTC`/`RUSTDOC` shims.
+
+Compatibility note: this does not yet require every syscall actor to be
+registered. It only prevents new authority from being issued to unknown agents.
+
 ## Self-Review
 
 Spec coverage: the plan covers first-class agent records, fixed capacity, duplicate and capacity errors, facade visibility, boot/supervisor registration, README updates, and verification.

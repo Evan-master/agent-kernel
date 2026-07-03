@@ -30,6 +30,9 @@ fn declare_action_intent(
 }
 
 fn create_delegated_task(core: &mut TestCore, owner: AgentId, assignee: AgentId) -> DelegatedTask {
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -135,6 +138,9 @@ fn derived_capability_cannot_complete_a_different_task() {
     let mut core = TestCore::new();
     let owner = AgentId::new(7);
     let assignee = AgentId::new(8);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -179,6 +185,9 @@ fn delegate_requires_source_act_authority_for_derived_capability() {
     let mut core = TestCore::new();
     let owner = AgentId::new(9);
     let assignee = AgentId::new(10);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -207,6 +216,9 @@ fn delegate_returns_capability_store_full_without_state_changes() {
     let mut core = KernelCore::<2, 2, 1, 8, 4, 2, 2, 1, 2, 2>::new();
     let owner = AgentId::new(11);
     let assignee = AgentId::new(12);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");

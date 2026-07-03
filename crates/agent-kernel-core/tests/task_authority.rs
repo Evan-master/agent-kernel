@@ -25,6 +25,7 @@ fn declare_action_intent(
 fn create_task_requires_action_capability() {
     let mut core = TestCore::new();
     let agent = AgentId::new(17);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -40,10 +41,10 @@ fn create_task_requires_action_capability() {
 
     assert_eq!(result, Err(KernelError::OperationDenied));
     assert_eq!(core.tasks().len(), 0);
-    assert_eq!(core.events().len(), 3);
-    assert_eq!(core.events()[0].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events().len(), 4);
     assert_eq!(core.events()[1].kind, EventKind::CapabilityGranted);
-    assert_eq!(core.events()[2].kind, EventKind::IntentDeclared);
+    assert_eq!(core.events()[2].kind, EventKind::CapabilityGranted);
+    assert_eq!(core.events()[3].kind, EventKind::IntentDeclared);
 }
 
 #[test]
@@ -51,6 +52,9 @@ fn delegate_task_requires_delegate_capability_without_events() {
     let mut core = TestCore::new();
     let owner = AgentId::new(18);
     let assignee = AgentId::new(19);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -75,6 +79,9 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
     let mut core = TestCore::new();
     let owner = AgentId::new(14);
     let wrong_agent = AgentId::new(15);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(wrong_agent)
+        .expect("wrong agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -120,6 +127,7 @@ fn task_operations_reject_invalid_authority_and_status_without_events() {
 fn task_store_capacity_returns_task_store_full() {
     let mut core = KernelCore::<2, 4, 4, 8, 2, 2, 2, 2, 1, 1>::new();
     let agent = AgentId::new(16);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -157,6 +165,7 @@ fn task_store_capacity_returns_task_store_full() {
 fn cancel_task_requires_rollback_capability_without_events() {
     let mut core = TestCore::new();
     let owner = AgentId::new(20);
+    core.register_agent(owner).expect("owner should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -181,6 +190,9 @@ fn cancel_task_marks_task_cancelled_and_terminal() {
     let mut core = TestCore::new();
     let owner = AgentId::new(21);
     let assignee = AgentId::new(22);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -226,6 +238,9 @@ fn verified_task_rejects_further_transitions_without_events() {
     let mut core = TestCore::new();
     let owner = AgentId::new(23);
     let assignee = AgentId::new(24);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");

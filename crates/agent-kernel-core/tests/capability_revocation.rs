@@ -50,6 +50,9 @@ fn running_delegated_task(
     owner: AgentId,
     assignee: AgentId,
 ) -> RunningDelegatedTask {
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -145,6 +148,9 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
     let mut core = TestCore::new();
     let owner = AgentId::new(7);
     let assignee = AgentId::new(8);
+    core.register_agent(owner).expect("owner should register");
+    core.register_agent(assignee)
+        .expect("assignee should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");

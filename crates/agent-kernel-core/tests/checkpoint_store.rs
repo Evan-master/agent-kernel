@@ -9,6 +9,7 @@ type TestCore = KernelCore<2, 4, 4, 16, 2, 2, 4, 0, 0, 0>;
 fn checkpoint_records_checkpoint_and_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(1);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -46,6 +47,7 @@ fn checkpoint_records_checkpoint_and_event() {
 fn checkpoint_rejects_duplicate_without_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(2);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -69,6 +71,7 @@ fn checkpoint_rejects_duplicate_without_event() {
 fn checkpoint_requires_checkpoint_operation_without_mutation() {
     let mut core = TestCore::new();
     let agent = AgentId::new(3);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -90,6 +93,7 @@ fn checkpoint_requires_checkpoint_operation_without_mutation() {
 fn checkpoint_store_full_leaves_events_unchanged() {
     let mut core = KernelCore::<2, 1, 1, 4, 1, 1, 0, 0, 0, 0>::new();
     let agent = AgentId::new(4);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -109,20 +113,22 @@ fn checkpoint_store_full_leaves_events_unchanged() {
 
 #[test]
 fn checkpoint_event_log_full_leaves_checkpoints_unchanged() {
-    let mut core = KernelCore::<2, 1, 1, 1, 1, 1, 1, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 1, 0, 0, 0>::new();
     let agent = AgentId::new(5);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let capability = core
         .grant_capability(agent, resource, OperationSet::only(Operation::Checkpoint))
         .expect("grant should consume only event slot");
-    let grant_event = core.events()[0];
+    let events_after_grant = core.events().len();
+    let grant_event = core.events()[events_after_grant - 1];
 
     let result = core.checkpoint(agent, capability, CheckpointId::new(11), resource);
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert!(core.checkpoints().is_empty());
-    assert_eq!(core.events().len(), 1);
-    assert_eq!(core.events()[0], grant_event);
+    assert_eq!(core.events().len(), events_after_grant);
+    assert_eq!(core.events()[events_after_grant - 1], grant_event);
 }

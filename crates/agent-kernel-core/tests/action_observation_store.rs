@@ -9,6 +9,7 @@ type TestCore = KernelCore<2, 4, 4, 16, 4, 4, 2, 0, 0, 0>;
 fn observe_records_observation_and_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(1);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -55,6 +56,7 @@ fn observe_records_observation_and_event() {
 fn observe_store_full_leaves_events_unchanged() {
     let mut core = KernelCore::<2, 1, 1, 4, 1, 0, 2, 0, 0, 0>::new();
     let agent = AgentId::new(2);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -74,28 +76,31 @@ fn observe_store_full_leaves_events_unchanged() {
 
 #[test]
 fn observe_event_log_full_leaves_observations_unchanged() {
-    let mut core = KernelCore::<2, 1, 1, 1, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(3);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let capability = core
         .grant_capability(agent, resource, OperationSet::only(Operation::Observe))
         .expect("grant should consume only event slot");
-    let grant_event = core.events()[0];
+    let events_after_grant = core.events().len();
+    let grant_event = core.events()[events_after_grant - 1];
 
     let result = core.observe(agent, capability, resource);
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert!(core.observations().is_empty());
-    assert_eq!(core.events().len(), 1);
-    assert_eq!(core.events()[0], grant_event);
+    assert_eq!(core.events().len(), events_after_grant);
+    assert_eq!(core.events()[events_after_grant - 1], grant_event);
 }
 
 #[test]
 fn act_records_action_and_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(4);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -135,6 +140,7 @@ fn act_records_action_and_event() {
 fn act_rejects_duplicate_action_without_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(5);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -145,7 +151,7 @@ fn act_rejects_duplicate_action_without_event() {
     core.act(agent, capability, action, resource)
         .expect("first action should record");
     let events_after_first = core.events().len();
-    let grant_event = core.events()[0];
+    let grant_event = core.events()[events_after_first - 2];
     let action_event = core.events()[events_after_first - 1];
 
     let result = core.act(agent, capability, action, resource);
@@ -154,7 +160,7 @@ fn act_rejects_duplicate_action_without_event() {
     assert_eq!(core.actions().len(), 1);
     assert_eq!(core.actions()[0].status, ActionStatus::Executed);
     assert_eq!(core.events().len(), events_after_first);
-    assert_eq!(core.events()[0], grant_event);
+    assert_eq!(core.events()[events_after_first - 2], grant_event);
     assert_eq!(core.events()[events_after_first - 1], action_event);
 }
 
@@ -162,6 +168,7 @@ fn act_rejects_duplicate_action_without_event() {
 fn act_store_full_leaves_events_unchanged() {
     let mut core = KernelCore::<2, 1, 1, 4, 0, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(6);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -181,28 +188,31 @@ fn act_store_full_leaves_events_unchanged() {
 
 #[test]
 fn act_event_log_full_leaves_actions_unchanged() {
-    let mut core = KernelCore::<2, 1, 1, 1, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(7);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let capability = core
         .grant_capability(agent, resource, OperationSet::only(Operation::Act))
         .expect("grant should consume only event slot");
-    let grant_event = core.events()[0];
+    let events_after_grant = core.events().len();
+    let grant_event = core.events()[events_after_grant - 1];
 
     let result = core.act(agent, capability, ActionId::new(12), resource);
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert!(core.actions().is_empty());
-    assert_eq!(core.events().len(), 1);
-    assert_eq!(core.events()[0], grant_event);
+    assert_eq!(core.events().len(), events_after_grant);
+    assert_eq!(core.events()[events_after_grant - 1], grant_event);
 }
 
 #[test]
 fn verify_existing_action_updates_status_and_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(8);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -248,6 +258,7 @@ fn verify_existing_action_updates_status_and_event() {
 fn verify_missing_action_leaves_events_unchanged() {
     let mut core = TestCore::new();
     let agent = AgentId::new(9);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -269,6 +280,7 @@ fn verify_missing_action_leaves_events_unchanged() {
 fn verify_rejects_action_resource_mismatch_without_status_change() {
     let mut core = KernelCore::<2, 2, 2, 8, 2, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(10);
+    core.register_agent(agent).expect("agent should register");
     let first_resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("first resource should fit");
@@ -289,8 +301,8 @@ fn verify_rejects_action_resource_mismatch_without_status_change() {
     core.act(agent, act_capability, action, first_resource)
         .expect("action should record");
     let events_after_action = core.events().len();
-    let first_grant_event = core.events()[0];
-    let second_grant_event = core.events()[1];
+    let first_grant_event = core.events()[1];
+    let second_grant_event = core.events()[2];
     let action_event = core.events()[events_after_action - 1];
     let actions_after_action = core.actions().len();
     let action_id_before = core.actions()[0].id;
@@ -309,8 +321,8 @@ fn verify_rejects_action_resource_mismatch_without_status_change() {
     assert_eq!(core.actions()[0].capability, action_capability_before);
     assert_eq!(core.actions()[0].status, action_status_before);
     assert_eq!(core.events().len(), events_after_action);
-    assert_eq!(core.events()[0], first_grant_event);
-    assert_eq!(core.events()[1], second_grant_event);
+    assert_eq!(core.events()[1], first_grant_event);
+    assert_eq!(core.events()[2], second_grant_event);
     assert_eq!(core.events()[events_after_action - 1], action_event);
 }
 
@@ -318,6 +330,7 @@ fn verify_rejects_action_resource_mismatch_without_status_change() {
 fn verify_rejects_repeated_verification_without_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(11);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -336,8 +349,8 @@ fn verify_rejects_repeated_verification_without_event() {
     core.verify(agent, capability, action, resource)
         .expect("first verification should record");
     let events_after_verify = core.events().len();
-    let grant_event = core.events()[0];
-    let action_event = core.events()[1];
+    let grant_event = core.events()[events_after_verify - 3];
+    let action_event = core.events()[events_after_verify - 2];
     let verify_event = core.events()[events_after_verify - 1];
     let actions_after_verify = core.actions().len();
     let action_id_before = core.actions()[0].id;
@@ -356,15 +369,16 @@ fn verify_rejects_repeated_verification_without_event() {
     assert_eq!(core.actions()[0].capability, action_capability_before);
     assert_eq!(core.actions()[0].status, action_status_before);
     assert_eq!(core.events().len(), events_after_verify);
-    assert_eq!(core.events()[0], grant_event);
-    assert_eq!(core.events()[1], action_event);
+    assert_eq!(core.events()[events_after_verify - 3], grant_event);
+    assert_eq!(core.events()[events_after_verify - 2], action_event);
     assert_eq!(core.events()[events_after_verify - 1], verify_event);
 }
 
 #[test]
 fn verify_event_log_full_leaves_action_status_executed() {
-    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 2, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 3, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(12);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -381,7 +395,7 @@ fn verify_event_log_full_leaves_action_status_executed() {
     core.act(agent, capability, action, resource)
         .expect("act should consume second event");
     let events_after_action = core.events().len();
-    let grant_event = core.events()[0];
+    let grant_event = core.events()[events_after_action - 2];
     let action_event = core.events()[events_after_action - 1];
     let actions_after_action = core.actions().len();
     let action_id_before = core.actions()[0].id;
@@ -400,6 +414,6 @@ fn verify_event_log_full_leaves_action_status_executed() {
     assert_eq!(core.actions()[0].capability, action_capability_before);
     assert_eq!(core.actions()[0].status, action_status_before);
     assert_eq!(core.events().len(), events_after_action);
-    assert_eq!(core.events()[0], grant_event);
+    assert_eq!(core.events()[events_after_action - 2], grant_event);
     assert_eq!(core.events()[events_after_action - 1], action_event);
 }

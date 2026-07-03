@@ -9,6 +9,7 @@ type TestCore = KernelCore<2, 4, 4, 16, 2, 2, 4, 0, 0, 0>;
 fn rollback_existing_checkpoint_updates_status_and_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(6);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -48,6 +49,7 @@ fn rollback_existing_checkpoint_updates_status_and_event() {
 fn rollback_requires_rollback_operation_without_status_change() {
     let mut core = TestCore::new();
     let agent = AgentId::new(7);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -71,6 +73,7 @@ fn rollback_requires_rollback_operation_without_status_change() {
 fn rollback_missing_checkpoint_leaves_events_unchanged() {
     let mut core = TestCore::new();
     let agent = AgentId::new(8);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -92,6 +95,7 @@ fn rollback_missing_checkpoint_leaves_events_unchanged() {
 fn rollback_rejects_checkpoint_resource_mismatch_without_status_change() {
     let mut core = KernelCore::<2, 2, 2, 8, 1, 1, 2, 0, 0, 0>::new();
     let agent = AgentId::new(9);
+    core.register_agent(agent).expect("agent should register");
     let first_resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("first resource should fit");
@@ -130,6 +134,7 @@ fn rollback_rejects_checkpoint_resource_mismatch_without_status_change() {
 fn rollback_rejects_repeated_request_without_event() {
     let mut core = TestCore::new();
     let agent = AgentId::new(10);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -162,8 +167,9 @@ fn rollback_rejects_repeated_request_without_event() {
 
 #[test]
 fn rollback_event_log_full_leaves_checkpoint_status_created() {
-    let mut core = KernelCore::<2, 1, 1, 2, 1, 1, 1, 0, 0, 0>::new();
+    let mut core = KernelCore::<2, 1, 1, 3, 1, 1, 1, 0, 0, 0>::new();
     let agent = AgentId::new(11);
+    core.register_agent(agent).expect("agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
