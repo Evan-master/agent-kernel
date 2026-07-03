@@ -19,15 +19,17 @@ V0 is intentionally narrow:
 - rejects capacity exhaustion before mutating state,
 - rejects event-log exhaustion before mutating state,
 - exposes read-only agent records through the facade,
-- makes boot and supervisor flows explicitly register their agents.
+- makes boot and supervisor flows explicitly register their agents,
 - rejects root capability grants to unknown agents,
-- rejects task-scoped delegated capability derivation for unknown target agents.
+- rejects task-scoped delegated capability derivation for unknown target agents,
+- rejects unknown syscall actors before authorization, state, queue, or capacity
+  checks.
 
-V0 still does not enforce that every existing syscall actor must be a registered
-agent. For example, invalid queue operations can still fail on task state rather
-than actor registration. The enforced boundary in this step is narrower:
-capability authority cannot be issued to an unknown agent, either through a root
-grant or through delegated task capability derivation.
+V0 treats the registry as the first authority boundary for all kernel operations
+that act on behalf of an `AgentId`. If the actor is unknown, the operation
+returns `AgentNotFound` without mutating state or recording an event. Once the
+actor is registered, existing authorization, task-state, queue-state, and
+capacity errors retain their usual behavior.
 
 ## Core Model
 
@@ -68,6 +70,15 @@ delegating agent through the source capability, but the internal
 `derive_task_capability` step now requires `target_agent` to be registered
 before writing the derived capability or mutating the task delegation fields.
 
+Actor-taking entrypoints perform a registration check before their existing
+validation path:
+
+- capability-backed operations check the actor before resource and capability
+  lookup,
+- task lifecycle operations check the actor before task lookup or status
+  validation,
+- scheduler operations check the actor before queue state validation.
+
 ## Facade And Runtime
 
 `agent-kernel` adds:
@@ -87,7 +98,6 @@ creating resources and capabilities.
 
 - Agent suspension, retirement, or restart semantics.
 - Kernel-allocated agent ids.
-- Mandatory registered-actor authorization for all existing syscalls.
 - Agent mailboxes, IPC, or scheduling priorities.
 - LLM prompts, model sessions, or remote inference in kernel space.
 
@@ -100,5 +110,9 @@ creating resources and capabilities.
 - root grants to unregistered agents return `AgentNotFound` without an event,
 - task delegation to unregistered target agents returns `AgentNotFound` without
   mutating task assignee or delegated capability fields,
+- capability-backed operations by unregistered actors return `AgentNotFound`
+  before capability mismatch errors,
+- task accept and scheduler dispatch by unregistered actors return
+  `AgentNotFound` without task, queue, or event mutation,
 - facade exposes registered agents through `agents()`,
 - supervisor and QEMU boot still produce deterministic event output.

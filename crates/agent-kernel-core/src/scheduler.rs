@@ -35,6 +35,7 @@ impl<
     >
 {
     pub fn enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let task_record = self.find_runnable_task(agent, task)?;
         self.ensure_not_queued(task)?;
         self.ensure_run_queue_capacity()?;
@@ -46,6 +47,7 @@ impl<
     }
 
     pub fn dispatch_next(&mut self, agent: AgentId) -> Result<TaskId, KernelError> {
+        self.find_agent(agent)?;
         if self.run_queue_len == 0 {
             return Err(KernelError::RunQueueEmpty);
         }
@@ -69,6 +71,7 @@ impl<
     }
 
     pub fn yield_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let task_record = self.find_task(task)?;
         if task_record.status != TaskStatus::Running || task_record.assignee != Some(agent) {
             return Err(KernelError::TaskNotRunnable);

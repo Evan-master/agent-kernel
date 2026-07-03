@@ -127,3 +127,120 @@ fn delegate_task_rejects_unregistered_target_agent_without_mutation() {
     assert_eq!(core.tasks()[0].assignee, None);
     assert_eq!(core.tasks()[0].delegated_capability, None);
 }
+
+#[test]
+fn observe_rejects_unregistered_actor_before_capability_mismatch_without_event() {
+    let mut core = KernelCore::<1, 1, 1, 4, 0, 1, 0, 0, 0, 0>::new();
+    let owner = AgentId::new(8);
+    let intruder = AgentId::new(9);
+    core.register_agent(owner)
+        .expect("owner registration should fit");
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(owner, resource, OperationSet::only(Operation::Observe))
+        .expect("owner capability should fit");
+    let events_after_grant = core.events().len();
+
+    let result = core.observe(intruder, capability, resource);
+
+    assert_eq!(result, Err(KernelError::AgentNotFound));
+    assert!(core.observations().is_empty());
+    assert_eq!(core.events().len(), events_after_grant);
+}
+
+#[test]
+fn accept_task_rejects_unregistered_actor_without_mutation() {
+    let mut core = KernelCore::<2, 1, 2, 8, 1, 1, 1, 1, 1, 1>::new();
+    let owner = AgentId::new(10);
+    let assignee = AgentId::new(11);
+    let intruder = AgentId::new(12);
+    core.register_agent(owner)
+        .expect("owner registration should fit");
+    core.register_agent(assignee)
+        .expect("assignee registration should fit");
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(
+            owner,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Delegate),
+        )
+        .expect("owner capability should fit");
+    let intent = core
+        .declare_intent(
+            owner,
+            capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should fit");
+    let task = core
+        .create_task(owner, capability, intent)
+        .expect("task should fit");
+    core.delegate_task(owner, capability, task, assignee)
+        .expect("task should delegate");
+    let events_after_delegation = core.events().len();
+
+    let result = core.accept_task(intruder, task);
+
+    assert_eq!(result, Err(KernelError::AgentNotFound));
+    assert_eq!(core.tasks()[0].status, TaskStatus::Delegated);
+    assert_eq!(core.events().len(), events_after_delegation);
+}
+
+#[test]
+fn dispatch_next_rejects_unregistered_actor_without_mutation() {
+    let mut core = KernelCore::<2, 1, 2, 10, 1, 1, 1, 1, 1, 1>::new();
+    let owner = AgentId::new(13);
+    let runner = AgentId::new(14);
+    let intruder = AgentId::new(15);
+    core.register_agent(owner)
+        .expect("owner registration should fit");
+    core.register_agent(runner)
+        .expect("runner registration should fit");
+    let resource = core
+        .register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = core
+        .grant_capability(
+            owner,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Delegate),
+        )
+        .expect("owner capability should fit");
+    let intent = core
+        .declare_intent(
+            owner,
+            capability,
+            resource,
+            IntentKind::Act,
+            VerificationRequirement::Required,
+        )
+        .expect("intent should fit");
+    let task = core
+        .create_task(owner, capability, intent)
+        .expect("task should fit");
+    core.delegate_task(owner, capability, task, runner)
+        .expect("task should delegate");
+    core.accept_task(runner, task)
+        .expect("task should be accepted");
+    core.enqueue_task(runner, task)
+        .expect("task should be queued");
+    let events_after_enqueue = core.events().len();
+
+    let result = core.dispatch_next(intruder);
+
+    assert_eq!(result, Err(KernelError::AgentNotFound));
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.run_queue().len(), 1);
+    assert_eq!(core.events().len(), events_after_enqueue);
+}

@@ -181,6 +181,8 @@ fn scheduler_rejects_invalid_queue_operations_without_state_changes() {
     let assignee = AgentId::new(7);
     let wrong_agent = AgentId::new(8);
     core.register_agent(owner).expect("owner should register");
+    core.register_agent(wrong_agent)
+        .expect("wrong agent should register");
     let resource = core
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
@@ -251,12 +253,15 @@ fn enqueue_returns_run_queue_full_when_capacity_is_exhausted() {
 #[test]
 fn dispatch_from_empty_queue_returns_run_queue_empty() {
     let mut core = TestCore::new();
+    let agent = AgentId::new(12);
+    core.register_agent(agent).expect("agent should register");
+    let events_after_registration = core.events().len();
 
-    let result = core.dispatch_next(AgentId::new(12));
+    let result = core.dispatch_next(agent);
 
     assert_eq!(result, Err(KernelError::RunQueueEmpty));
     assert!(core.run_queue().is_empty());
-    assert!(core.events().is_empty());
+    assert_eq!(core.events().len(), events_after_registration);
 }
 
 #[test]

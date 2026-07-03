@@ -32,6 +32,7 @@ mod run_queue;
 mod scheduler;
 mod task;
 mod task_event;
+mod task_lookup;
 mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};

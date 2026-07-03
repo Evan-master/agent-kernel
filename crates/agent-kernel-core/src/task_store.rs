@@ -5,8 +5,9 @@
 //! recording. It performs no allocation or host I/O.
 
 use crate::{
-    intent_event::IntentTaskEventKind, AgentId, CapabilityId, Event, EventKind, IntentId,
-    IntentStatus, KernelCore, KernelError, Operation, OperationSet, Task, TaskId, TaskStatus,
+    intent_event::IntentTaskEventKind, task_lookup::ensure_status, AgentId, CapabilityId, Event,
+    EventKind, IntentId, IntentStatus, KernelCore, KernelError, Operation, OperationSet, Task,
+    TaskId, TaskStatus,
 };
 
 impl<
@@ -40,6 +41,7 @@ impl<
         capability: CapabilityId,
         intent: IntentId,
     ) -> Result<TaskId, KernelError> {
+        self.find_agent(agent)?;
         let intent_record = self.find_intent(intent)?;
         if intent_record.owner != agent {
             return Err(KernelError::IntentAgentMismatch);
@@ -83,10 +85,12 @@ impl<
         task: TaskId,
         target_agent: AgentId,
     ) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Delegate)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Act)?;
         ensure_status(current.status, &[TaskStatus::Created])?;
+        self.find_agent(target_agent)?;
         self.ensure_event_slots(2)?;
 
         let delegated_capability = self.derive_task_capability(
@@ -110,6 +114,7 @@ impl<
     }
 
     pub fn accept_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let current = self.find_task(task)?;
         if current.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
@@ -127,6 +132,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized_for_task(agent, capability, current.resource, Operation::Act, task)?;
         ensure_status(current.status, &[TaskStatus::Running])?;
@@ -151,6 +157,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Verify)?;
         ensure_status(current.status, &[TaskStatus::Completed])?;
@@ -171,6 +178,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
+        self.find_agent(agent)?;
         let current = self.find_task(task)?;
         self.ensure_authorized(agent, capability, current.resource, Operation::Rollback)?;
         ensure_status(
@@ -198,30 +206,4 @@ impl<
         self.record_intent_task_event(IntentTaskEventKind::Cancelled, agent, task)?;
         Ok(event)
     }
-
-    pub fn tasks(&self) -> &[Task] {
-        &self.tasks[..self.task_len]
-    }
-
-    pub(crate) fn find_task(&self, id: TaskId) -> Result<Task, KernelError> {
-        self.tasks()
-            .iter()
-            .find(|task| task.id == id)
-            .copied()
-            .ok_or(KernelError::TaskNotFound)
-    }
-
-    pub(crate) fn find_task_mut(&mut self, id: TaskId) -> Result<&mut Task, KernelError> {
-        self.tasks[..self.task_len]
-            .iter_mut()
-            .find(|task| task.id == id)
-            .ok_or(KernelError::TaskNotFound)
-    }
-}
-
-fn ensure_status(current: TaskStatus, allowed: &[TaskStatus]) -> Result<(), KernelError> {
-    allowed
-        .contains(&current)
-        .then_some(())
-        .ok_or(KernelError::TaskStatusMismatch)
 }

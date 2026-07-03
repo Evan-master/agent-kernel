@@ -47,15 +47,17 @@ verification, checkpoint creation, rollback requests, task creation, intent
 binding, task completion, task verification, intent fulfillment, and delegation
 are first-class kernel events, not external tooling. Agents and checkpoints are
 also queryable fixed-capacity kernel records, and new root or derived
-capabilities can only be issued to registered agents. Rollback moves the
-checkpoint into `RollbackRequested` status. Accepted tasks move through a
-fixed-capacity FIFO run queue and become `Running` before completion. `IntentId`
-and `TaskId` values are allocated by fixed-capacity kernel stores rather than
-invented by the supervisor. Delegation derives a task-scoped action capability
-for the assignee, so the supervisor does not grant broad resource authority to
-complete delegated work. Revoking the source capability that authorized
-delegation also invalidates the derived task-scoped capability before future
-task authorization succeeds.
+capabilities can only be issued to registered agents. Kernel operations that
+act on behalf of an `AgentId` reject unknown actors before authorization,
+state, queue, or capacity checks. Rollback moves the checkpoint into
+`RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO
+run queue and become `Running` before completion. `IntentId` and `TaskId`
+values are allocated by fixed-capacity kernel stores rather than invented by
+the supervisor. Delegation derives a task-scoped action capability for the
+assignee, so the supervisor does not grant broad resource authority to complete
+delegated work. Revoking the source capability that authorized delegation also
+invalidates the derived task-scoped capability before future task authorization
+succeeds.
 
 ## Boot Handoff
 

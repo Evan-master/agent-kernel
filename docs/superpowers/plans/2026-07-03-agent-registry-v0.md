@@ -161,8 +161,31 @@ Expected: all commands pass, supervisor shows two `agent_registered` events, QEM
   capabilities can only be issued to registered agents.
 - [x] Verify `cargo test --workspace` with nightly `RUSTC`/`RUSTDOC` shims.
 
-Compatibility note: this does not yet require every syscall actor to be
-registered. It only prevents new authority from being issued to unknown agents.
+Compatibility note: this step only prevented new authority from being issued to
+unknown agents. The follow-up below extends the same registry boundary to
+syscall actors.
+
+## Follow-Up: Registered-Actor Syscall Enforcement
+
+**Goal:** Require every kernel operation that acts on behalf of an `AgentId` to
+reject unknown actors before authorization, state, queue, or capacity checks.
+
+- [x] Add red tests proving a capability-backed operation by an unregistered
+  actor returns `AgentNotFound` before capability mismatch.
+- [x] Add red tests proving task accept by an unregistered actor returns
+  `AgentNotFound` without changing task state or events.
+- [x] Add red tests proving scheduler dispatch by an unregistered actor returns
+  `AgentNotFound` without changing task state, queue state, or events.
+- [x] Check actor registration in the shared authorization path before resource
+  and capability lookup.
+- [x] Check actor registration at task lifecycle entrypoints before task lookup
+  and task-status validation.
+- [x] Check actor registration at scheduler entrypoints before queue-state
+  validation.
+- [x] Migrate tests that intentionally cover mismatch or queue errors to
+  register their wrong actor first.
+- [x] Update design and README docs to describe registered-actor syscall
+  enforcement and error ordering.
 
 ## Self-Review
 
