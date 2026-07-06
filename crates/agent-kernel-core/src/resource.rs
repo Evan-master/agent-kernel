@@ -6,6 +6,12 @@
 use crate::ResourceId;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ResourceStatus {
+    Active,
+    Retired,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ResourceKind {
     Workspace,
     Memory,
@@ -21,4 +27,16 @@ pub struct Resource {
     pub id: ResourceId,
     pub kind: ResourceKind,
     pub parent: Option<ResourceId>,
+    pub status: ResourceStatus,
+}
+
+impl Resource {
+    pub(crate) const fn empty() -> Self {
+        Self {
+            id: ResourceId::new(0),
+            kind: ResourceKind::Workspace,
+            parent: None,
+            status: ResourceStatus::Retired,
+        }
+    }
 }

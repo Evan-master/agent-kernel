@@ -4,7 +4,9 @@
 //! capabilities. It is separated from the core state machine to keep public
 //! lifecycle methods easier to scan.
 
-use crate::{Capability, CapabilityId, KernelCore, KernelError, Resource, ResourceId};
+use crate::{
+    Capability, CapabilityId, KernelCore, KernelError, Resource, ResourceId, ResourceStatus,
+};
 
 impl<
         const AGENTS: usize,
@@ -46,11 +48,25 @@ impl<
     >
 {
     pub(crate) fn find_resource(&self, id: ResourceId) -> Result<Resource, KernelError> {
-        self.resources
+        let resource = self
+            .resources()
             .iter()
-            .flatten()
             .find(|resource| resource.id == id)
             .copied()
+            .ok_or(KernelError::ResourceNotFound)?;
+        if resource.status == ResourceStatus::Retired {
+            return Err(KernelError::ResourceRetired);
+        }
+        Ok(resource)
+    }
+
+    pub(crate) fn find_resource_mut(
+        &mut self,
+        id: ResourceId,
+    ) -> Result<&mut Resource, KernelError> {
+        self.resources[..self.resource_len]
+            .iter_mut()
+            .find(|resource| resource.id == id)
             .ok_or(KernelError::ResourceNotFound)
     }
 

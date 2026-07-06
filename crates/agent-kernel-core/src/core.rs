@@ -31,7 +31,7 @@ pub struct KernelCore<
     const WAITERS: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
-    pub(crate) resources: [Option<Resource>; RESOURCES],
+    pub(crate) resources: [Resource; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
     pub(crate) events: [Event; EVENTS],
@@ -48,6 +48,7 @@ pub struct KernelCore<
     pub(crate) fault_policies: [FaultPolicyRecord; FAULT_POLICIES],
     pub(crate) waiters: [WaiterRecord; WAITERS],
     pub(crate) agent_len: usize,
+    pub(crate) resource_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
     pub(crate) observation_len: usize,
@@ -119,7 +120,7 @@ impl<
     pub const fn new() -> Self {
         Self {
             agents: [AgentRecord::empty(); AGENTS],
-            resources: [None; RESOURCES],
+            resources: [Resource::empty(); RESOURCES],
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
             events: [Event::empty(); EVENTS],
@@ -136,6 +137,7 @@ impl<
             fault_policies: [FaultPolicyRecord::empty(); FAULT_POLICIES],
             waiters: [WaiterRecord::empty(); WAITERS],
             agent_len: 0,
+            resource_len: 0,
             event_len: 0,
             action_len: 0,
             observation_len: 0,

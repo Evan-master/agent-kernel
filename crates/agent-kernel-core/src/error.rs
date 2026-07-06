@@ -26,6 +26,7 @@ pub enum KernelError {
     AgentRetired,
     AgentStatusMismatch,
     ResourceNotFound,
+    ResourceRetired,
     CapabilityNotFound,
     ActionAlreadyExists,
     ActionNotFound,

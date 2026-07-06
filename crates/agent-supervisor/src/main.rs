@@ -18,7 +18,7 @@ use agent_kernel_core::{
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 52, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
     let handler_agent = AgentId::new(3);
@@ -247,6 +247,15 @@ fn main() {
             NamespaceObject::Task(task),
         )
         .expect("agent should rebind namespace entry to task");
+    let service = kernel
+        .sys_register_resource(ResourceKind::Service, Some(workspace))
+        .expect("service resource should fit in simulator kernel");
+    let service_capability = kernel
+        .sys_grant(agent, service, OperationSet::only(Operation::Rollback))
+        .expect("service rollback capability should fit in simulator kernel");
+    kernel
+        .sys_retire_resource(agent, service_capability, service)
+        .expect("agent should retire service resource");
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {

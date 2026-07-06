@@ -17,6 +17,7 @@ pub enum EventKind {
     AgentSuspended,
     AgentResumed,
     AgentRetired,
+    ResourceRetired,
     CapabilityGranted,
     CapabilityDerived,
     CapabilityRevoked,

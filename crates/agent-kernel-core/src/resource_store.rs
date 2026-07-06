@@ -1,10 +1,13 @@
-//! Fixed-capacity resource registration.
+//! Fixed-capacity resource lifecycle.
 //!
 //! This module belongs to `agent-kernel-core`. It owns deterministic resource
-//! allocation for the no_std core store. It performs no host I/O and validates
-//! parent resources before adding child resources.
+//! allocation and retirement for the no_std core store. It performs no host I/O
+//! and validates parent resources before adding child resources.
 
-use crate::{KernelCore, KernelError, Resource, ResourceId, ResourceKind};
+use crate::{
+    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, Operation, OperationSet,
+    Resource, ResourceId, ResourceKind, ResourceStatus, VerificationRequirement,
+};
 
 impl<
         const AGENTS: usize,
@@ -54,14 +57,78 @@ impl<
             self.find_resource(parent_id)?;
         }
 
-        let slot = self
-            .resources
-            .iter_mut()
-            .find(|resource| resource.is_none())
-            .ok_or(KernelError::ResourceStoreFull)?;
+        if self.resource_len >= RESOURCES {
+            return Err(KernelError::ResourceStoreFull);
+        }
+
         let id = ResourceId::new(self.next_resource);
         self.next_resource += 1;
-        *slot = Some(Resource { id, kind, parent });
+        self.resources[self.resource_len] = Resource {
+            id,
+            kind,
+            parent,
+            status: ResourceStatus::Active,
+        };
+        self.resource_len += 1;
         Ok(id)
+    }
+
+    pub fn retire_resource(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.ensure_agent_active(agent)?;
+        self.ensure_authorized(agent, capability, resource, Operation::Rollback)?;
+        self.ensure_event_slots(1)?;
+
+        self.find_resource_mut(resource)?.status = ResourceStatus::Retired;
+        self.record_resource_event(EventKind::ResourceRetired, agent, capability, resource)
+    }
+
+    pub fn resources(&self) -> &[Resource] {
+        &self.resources[..self.resource_len]
+    }
+
+    fn record_resource_event(
+        &mut self,
+        kind: EventKind,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.record(Event {
+            sequence: 0,
+            agent,
+            kind,
+            resource: Some(resource),
+            capability: Some(capability),
+            source_capability: None,
+            intent: None,
+            intent_kind: None,
+            action: None,
+            observation: None,
+            message: None,
+            memory_cell: None,
+            namespace_entry: None,
+            namespace_key: None,
+            namespace_object: None,
+            operation: None,
+            operations: OperationSet::empty(),
+            verification: VerificationRequirement::Optional,
+            checkpoint: None,
+            task: None,
+            task_ticks: None,
+            task_quantum: None,
+            fault: None,
+            fault_kind: None,
+            fault_detail: None,
+            fault_policy: None,
+            fault_policy_action: None,
+            waiter: None,
+            signal: None,
+            target_agent: None,
+        })
     }
 }

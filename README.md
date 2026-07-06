@@ -4,14 +4,14 @@ Agent Kernel is an early prototype for an agent-native operating system kernel.
 It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 
 The project starts from new OS primitives instead of POSIX compatibility:
-agents, resources, capabilities, typed intents, actions, observations,
+agents, resources, resource lifecycle, capabilities, typed intents, actions, observations,
 checkpoints, rollback, verification, tasks, delegation, native mailbox IPC,
 task wait signals, task fault traps, fault handlers, fault policies, memory
 cells, native object namespace entries, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, resource lifecycle, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -59,7 +59,8 @@ The v0 flow is deliberately small:
 35. Bind a memory cell into the workspace object namespace.
 36. Resolve that namespace entry through an observe capability.
 37. Rebind the namespace entry to the created task.
-38. Print the kernel event log from the supervisor.
+38. Register a temporary service resource and retire it through rollback authority.
+39. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent suspension, agent resume, agent retirement, capability grants, derived
@@ -70,12 +71,12 @@ expiry, task fault trapping, fault handler installation, fault policy
 installation, fault routing, fault policy application, task fault recovery,
 task waiting, signal emission, task wakeup, message send, message receive,
 message acknowledgement, memory cell creation, memory recall, memory remember,
-namespace bind, namespace resolve, and namespace rebind are first-class kernel
-events, not external tooling.
-Agents, checkpoints, waiters, fault records, fault handlers, fault policies,
-messages, memory cells, and namespace entries are also
-queryable fixed-capacity kernel
-records, and new root or derived capabilities can only be issued to active
+namespace bind, namespace resolve, namespace rebind, and resource retirement are
+first-class kernel events, not external tooling.
+Agents, resources, checkpoints, waiters, fault records, fault handlers, fault
+policies, messages, memory cells, and namespace entries are also queryable
+fixed-capacity kernel records, and new root or derived capabilities can only be
+issued to active
 registered agents. Kernel operations that act on behalf of an `AgentId` reject
 unknown, suspended, or retired actors before authorization, state, queue,
 mailbox, memory, or capacity checks. Rollback moves the checkpoint into
@@ -94,7 +95,9 @@ kernel object references instead of heap-allocated bytes or host transport
 handles. Memory cells store fixed-width typed words instead of files, byte
 buffers, or host persistence. Namespace entries bind compact keys to typed
 kernel object references inside workspace resources rather than parsing paths or
-delegating lookup to a host filesystem.
+delegating lookup to a host filesystem. Retired resources remain queryable for
+audit, but active-resource lookup rejects future grants, child resources, and
+old-capability operations against them.
 
 ## Boot Handoff
 
@@ -214,4 +217,6 @@ event[45] memory_cell_remembered agent=1 resource=2 memory_cell=1
 event[46] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
 event[47] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
 event[48] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
+event[49] capability_granted agent=1 resource=3 capability=4
+event[50] resource_retired agent=1 resource=3 capability=4
 ```

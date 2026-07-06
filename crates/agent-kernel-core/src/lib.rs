@@ -75,7 +75,7 @@ pub use message::{MessageKind, MessagePayload, MessageRecord, MessageStatus};
 pub use namespace::{NamespaceEntryRecord, NamespaceKey, NamespaceObject};
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
-pub use resource::{Resource, ResourceKind};
+pub use resource::{Resource, ResourceKind, ResourceStatus};
 pub use run_queue::RunQueueEntry;
 pub use signal::{SignalKey, SignalOutcome, WaiterRecord};
 pub use task::{Task, TaskStatus};

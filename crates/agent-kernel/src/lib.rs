@@ -9,13 +9,14 @@ mod fault;
 mod mailbox;
 mod memory;
 mod namespace;
+mod resource;
 mod scheduler;
 mod signal;
 
 use agent_kernel_core::{
     ActionId, ActionRecord, AgentId, AgentRecord, CapabilityId, CheckpointId, CheckpointRecord,
     Event, Intent, IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet,
-    ResourceId, ResourceKind, Task, TaskId, VerificationRequirement,
+    ResourceId, Task, TaskId, VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -118,14 +119,6 @@ impl<
 
     pub fn sys_retire_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
         self.core.retire_agent(agent)
-    }
-
-    pub fn sys_register_resource(
-        &mut self,
-        kind: ResourceKind,
-        parent: Option<ResourceId>,
-    ) -> Result<ResourceId, KernelError> {
-        self.core.register_resource(kind, parent)
     }
 
     pub fn sys_grant(
