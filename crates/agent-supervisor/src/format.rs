@@ -6,6 +6,10 @@
 
 use agent_kernel_core::{Event, EventKind};
 
+use crate::format_fault::{
+    format_fault_handler_event, format_fault_route_event, format_task_fault_event,
+};
+
 pub fn format_event(event: &Event) -> String {
     let agent = event.agent.raw();
     let resource = event
@@ -88,6 +92,10 @@ pub fn format_event(event: &Event) -> String {
         EventKind::TaskQuantumExpired => format_task_tick_event(event, "task_quantum_expired"),
         EventKind::TaskFaulted => format_task_fault_event(event, "task_faulted"),
         EventKind::TaskFaultRecovered => format_task_fault_event(event, "task_fault_recovered"),
+        EventKind::FaultHandlerInstalled => {
+            format_fault_handler_event(event, "fault_handler_installed")
+        }
+        EventKind::FaultRouted => format_fault_route_event(event, "fault_routed"),
         EventKind::MessageSent => format_message_event(event, "message_sent"),
         EventKind::MessageReceived => format_message_event(event, "message_received"),
         EventKind::MessageAcknowledged => format_message_event(event, "message_acknowledged"),
@@ -158,22 +166,6 @@ fn format_task_tick_event(event: &Event, label: &str) -> String {
     format!(
         "event[{}] {} agent={} resource={} task={} ticks={} quantum={}",
         event.sequence, label, agent, resource, task, ticks, quantum
-    )
-}
-
-fn format_task_fault_event(event: &Event, label: &str) -> String {
-    let agent = event.agent.raw();
-    let resource = event
-        .resource
-        .map(|resource| resource.raw())
-        .unwrap_or_default();
-    let task = event.task.map(|task| task.raw()).unwrap_or_default();
-    let fault = event.fault.map(|fault| fault.raw()).unwrap_or_default();
-    let detail = event.fault_detail.unwrap_or_default();
-
-    format!(
-        "event[{}] {} agent={} resource={} task={} fault={} detail={}",
-        event.sequence, label, agent, resource, task, fault, detail
     )
 }
 

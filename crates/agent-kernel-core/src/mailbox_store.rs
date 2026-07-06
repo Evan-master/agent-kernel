@@ -25,6 +25,7 @@ impl<
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
+        const FAULT_HANDLERS: usize,
     >
     KernelCore<
         AGENTS,
@@ -41,6 +42,7 @@ impl<
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
         FAULTS,
+        FAULT_HANDLERS,
     >
 {
     pub fn send_message(
@@ -52,22 +54,10 @@ impl<
     ) -> Result<MessageId, KernelError> {
         self.ensure_agent_active(sender)?;
         self.ensure_agent_active(recipient)?;
-        if self.message_len >= MESSAGES {
-            return Err(KernelError::MessageStoreFull);
-        }
+        self.ensure_message_capacity()?;
         self.ensure_event_slots(1)?;
 
-        let message = MessageId::new(self.next_message);
-        self.next_message += 1;
-        self.messages[self.message_len] = MessageRecord {
-            id: message,
-            sender,
-            recipient,
-            kind,
-            payload,
-            status: MessageStatus::Pending,
-        };
-        self.message_len += 1;
+        let message = self.append_message(sender, recipient, kind, payload);
         self.record_message_event(EventKind::MessageSent, sender, recipient, message)?;
         Ok(message)
     }
@@ -118,6 +108,35 @@ impl<
         &self.messages[..self.message_len]
     }
 
+    pub(crate) fn ensure_message_capacity(&self) -> Result<(), KernelError> {
+        if self.message_len >= MESSAGES {
+            Err(KernelError::MessageStoreFull)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn append_message(
+        &mut self,
+        sender: AgentId,
+        recipient: AgentId,
+        kind: MessageKind,
+        payload: MessagePayload,
+    ) -> MessageId {
+        let message = MessageId::new(self.next_message);
+        self.next_message += 1;
+        self.messages[self.message_len] = MessageRecord {
+            id: message,
+            sender,
+            recipient,
+            kind,
+            payload,
+            status: MessageStatus::Pending,
+        };
+        self.message_len += 1;
+        message
+    }
+
     fn oldest_pending_message_index(&self, recipient: AgentId) -> Option<usize> {
         let mut index = 0;
         while index < self.message_len {
@@ -150,7 +169,7 @@ impl<
         Err(KernelError::MessageNotFound)
     }
 
-    fn record_message_event(
+    pub(crate) fn record_message_event(
         &mut self,
         kind: EventKind,
         agent: AgentId,

@@ -5,9 +5,9 @@
 //! host I/O and keeps state deterministic for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, FaultRecord, Intent,
-    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
-    RunQueueEntry, Task,
+    ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, FaultHandlerRecord,
+    FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord,
+    Resource, RunQueueEntry, Task,
 };
 
 #[derive(Debug)]
@@ -26,6 +26,7 @@ pub struct KernelCore<
     const MEMORY_CELLS: usize = 0,
     const NAMESPACE_ENTRIES: usize = 0,
     const FAULTS: usize = 0,
+    const FAULT_HANDLERS: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) resources: [Option<Resource>; RESOURCES],
@@ -41,6 +42,7 @@ pub struct KernelCore<
     pub(crate) memory_cells: [MemoryCellRecord; MEMORY_CELLS],
     pub(crate) namespace_entries: [NamespaceEntryRecord; NAMESPACE_ENTRIES],
     pub(crate) faults: [FaultRecord; FAULTS],
+    pub(crate) fault_handlers: [FaultHandlerRecord; FAULT_HANDLERS],
     pub(crate) agent_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -53,6 +55,7 @@ pub struct KernelCore<
     pub(crate) memory_cell_len: usize,
     pub(crate) namespace_entry_len: usize,
     pub(crate) fault_len: usize,
+    pub(crate) fault_handler_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_observation: u64,
@@ -62,6 +65,7 @@ pub struct KernelCore<
     pub(crate) next_memory_cell: u64,
     pub(crate) next_namespace_entry: u64,
     pub(crate) next_fault: u64,
+    pub(crate) next_fault_handler: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -80,6 +84,7 @@ impl<
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
+        const FAULT_HANDLERS: usize,
     >
     KernelCore<
         AGENTS,
@@ -96,6 +101,7 @@ impl<
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
         FAULTS,
+        FAULT_HANDLERS,
     >
 {
     pub const fn new() -> Self {
@@ -114,6 +120,7 @@ impl<
             memory_cells: [MemoryCellRecord::empty(); MEMORY_CELLS],
             namespace_entries: [NamespaceEntryRecord::empty(); NAMESPACE_ENTRIES],
             faults: [FaultRecord::empty(); FAULTS],
+            fault_handlers: [FaultHandlerRecord::empty(); FAULT_HANDLERS],
             agent_len: 0,
             event_len: 0,
             action_len: 0,
@@ -126,6 +133,7 @@ impl<
             memory_cell_len: 0,
             namespace_entry_len: 0,
             fault_len: 0,
+            fault_handler_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_observation: 1,
@@ -135,6 +143,7 @@ impl<
             next_memory_cell: 1,
             next_namespace_entry: 1,
             next_fault: 1,
+            next_fault_handler: 1,
             next_sequence: 1,
         }
     }
@@ -159,6 +168,7 @@ impl<
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
+        const FAULT_HANDLERS: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -175,6 +185,7 @@ impl<
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
         FAULTS,
+        FAULT_HANDLERS,
     >
 {
     fn default() -> Self {

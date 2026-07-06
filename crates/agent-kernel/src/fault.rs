@@ -5,7 +5,8 @@
 //! inside `agent-kernel-core`.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, Event, FaultId, FaultKind, FaultRecord, KernelError, TaskId,
+    AgentId, CapabilityId, Event, FaultHandlerId, FaultHandlerRecord, FaultId, FaultKind,
+    FaultRecord, KernelError, MessageId, ResourceId, TaskId,
 };
 
 use crate::AgentKernel;
@@ -25,6 +26,7 @@ impl<
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
+        const FAULT_HANDLERS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -41,6 +43,7 @@ impl<
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
         FAULTS,
+        FAULT_HANDLERS,
     >
 {
     pub fn sys_fault_task(
@@ -62,7 +65,32 @@ impl<
         self.core.recover_faulted_task(agent, capability, task)
     }
 
+    pub fn sys_install_fault_handler(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        kind: FaultKind,
+        handler: AgentId,
+    ) -> Result<FaultHandlerId, KernelError> {
+        self.core
+            .install_fault_handler(agent, capability, resource, kind, handler)
+    }
+
+    pub fn sys_route_fault_to_handler(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        fault: FaultId,
+    ) -> Result<MessageId, KernelError> {
+        self.core.route_fault_to_handler(agent, capability, fault)
+    }
+
     pub fn faults(&self) -> &[FaultRecord] {
         self.core.faults()
+    }
+
+    pub fn fault_handlers(&self) -> &[FaultHandlerRecord] {
+        self.core.fault_handlers()
     }
 }

@@ -5,13 +5,14 @@
 //! store. It deliberately carries kernel object IDs instead of heap-allocated
 //! bytes or host transport handles.
 
-use crate::{ActionId, AgentId, CapabilityId, IntentId, MessageId, ResourceId, TaskId};
+use crate::{ActionId, AgentId, CapabilityId, FaultId, IntentId, MessageId, ResourceId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MessageKind {
     Notify,
     Request,
     Response,
+    Fault,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -28,6 +29,7 @@ pub struct MessagePayload {
     pub intent: Option<IntentId>,
     pub task: Option<TaskId>,
     pub action: Option<ActionId>,
+    pub fault: Option<FaultId>,
 }
 
 impl MessagePayload {
@@ -38,6 +40,7 @@ impl MessagePayload {
             intent: None,
             task: None,
             action: None,
+            fault: None,
         }
     }
 }

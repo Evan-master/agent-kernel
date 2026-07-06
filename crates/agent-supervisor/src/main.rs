@@ -5,6 +5,7 @@
 //! kernel internals directly.
 
 mod format;
+mod format_fault;
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
@@ -16,9 +17,10 @@ use agent_kernel_core::{
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
+    let handler_agent = AgentId::new(3);
 
     kernel
         .sys_register_agent(agent)
@@ -26,6 +28,9 @@ fn main() {
     kernel
         .sys_register_agent(target_agent)
         .expect("target agent should fit in simulator kernel");
+    kernel
+        .sys_register_agent(handler_agent)
+        .expect("handler agent should fit in simulator kernel");
     let workspace = kernel
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("workspace resource should fit in simulator kernel");
@@ -42,6 +47,15 @@ fn main() {
                 .with(Operation::Delegate),
         )
         .expect("agent capability should fit in simulator kernel");
+    kernel
+        .sys_install_fault_handler(
+            agent,
+            owner_capability,
+            workspace,
+            FaultKind::ExecutionTrap,
+            handler_agent,
+        )
+        .expect("agent should install workspace fault handler");
     let action = ActionId::new(1);
     let checkpoint = CheckpointId::new(1);
     kernel
@@ -97,9 +111,19 @@ fn main() {
         .sys_dispatch_next_with_quantum(target_agent, 2)
         .expect("target agent should redispatch expired task");
     assert_eq!(dispatched, task);
-    kernel
+    let fault = kernel
         .sys_fault_task(target_agent, task, FaultKind::ExecutionTrap, 7)
         .expect("target agent should fault running task");
+    let fault_message = kernel
+        .sys_route_fault_to_handler(agent, owner_capability, fault)
+        .expect("agent should route fault to handler");
+    let received_fault = kernel
+        .sys_receive_message(handler_agent)
+        .expect("handler should receive routed fault");
+    assert_eq!(received_fault, fault_message);
+    kernel
+        .sys_acknowledge_message(handler_agent, fault_message)
+        .expect("handler should acknowledge routed fault");
     kernel
         .sys_recover_faulted_task(agent, owner_capability, task)
         .expect("owner rollback capability should recover faulted task");
@@ -127,6 +151,7 @@ fn main() {
                 intent: Some(intent),
                 task: Some(task),
                 action: None,
+                fault: None,
             },
         )
         .expect("agent should send task notification");

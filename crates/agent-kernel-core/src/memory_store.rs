@@ -26,6 +26,7 @@ impl<
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
+        const FAULT_HANDLERS: usize,
     >
     KernelCore<
         AGENTS,
@@ -42,6 +43,7 @@ impl<
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
         FAULTS,
+        FAULT_HANDLERS,
     >
 {
     pub fn create_memory_cell(

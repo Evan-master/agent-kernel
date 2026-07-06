@@ -41,6 +41,8 @@ pub enum EventKind {
     TaskQuantumExpired,
     TaskFaulted,
     TaskFaultRecovered,
+    FaultHandlerInstalled,
+    FaultRouted,
     MessageSent,
     MessageReceived,
     MessageAcknowledged,

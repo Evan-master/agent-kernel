@@ -154,38 +154,44 @@ Expected supervisor output:
 Agent Kernel supervisor boot
 event[1] agent_registered agent=1 target_agent=1
 event[2] agent_registered agent=2 target_agent=2
-event[3] capability_granted agent=1 resource=1 capability=1
-event[4] observation agent=1 resource=1
-event[5] action agent=1 resource=1 action=1
-event[6] verification agent=1 resource=1 action=1
-event[7] checkpoint agent=1 resource=1 checkpoint=1
-event[8] rollback agent=1 resource=1 checkpoint=1
-event[9] intent_declared agent=1 resource=1 intent=1
-event[10] task_created agent=1 resource=1 task=1
-event[11] intent_bound agent=1 resource=1 intent=1
-event[12] capability_derived agent=1 resource=1 capability=2
-event[13] delegation agent=1 resource=1 task=1 target_agent=2
-event[14] task_accepted agent=2 resource=1 task=1
-event[15] task_queued agent=2 resource=1 task=1
-event[16] task_dispatched agent=2 resource=1 task=1
-event[17] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1
-event[18] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0
-event[19] task_dispatched agent=2 resource=1 task=1
-event[20] task_faulted agent=2 resource=1 task=1 fault=1 detail=7
-event[21] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7
-event[22] task_queued agent=2 resource=1 task=1
-event[23] task_dispatched agent=2 resource=1 task=1
-event[24] task_completed agent=2 resource=1 task=1
-event[25] task_verified agent=1 resource=1 task=1
-event[26] intent_fulfilled agent=1 resource=1 intent=1
-event[27] message_sent agent=1 target_agent=2 message=1
-event[28] message_received agent=2 target_agent=1 message=1
-event[29] message_acknowledged agent=2 target_agent=1 message=1
-event[30] capability_granted agent=1 resource=2 capability=3
-event[31] memory_cell_created agent=1 resource=2 memory_cell=1
-event[32] memory_cell_recalled agent=1 resource=2 memory_cell=1
-event[33] memory_cell_remembered agent=1 resource=2 memory_cell=1
-event[34] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
-event[35] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
-event[36] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
+event[3] agent_registered agent=3 target_agent=3
+event[4] capability_granted agent=1 resource=1 capability=1
+event[5] fault_handler_installed agent=1 resource=1 target_agent=3
+event[6] observation agent=1 resource=1
+event[7] action agent=1 resource=1 action=1
+event[8] verification agent=1 resource=1 action=1
+event[9] checkpoint agent=1 resource=1 checkpoint=1
+event[10] rollback agent=1 resource=1 checkpoint=1
+event[11] intent_declared agent=1 resource=1 intent=1
+event[12] task_created agent=1 resource=1 task=1
+event[13] intent_bound agent=1 resource=1 intent=1
+event[14] capability_derived agent=1 resource=1 capability=2
+event[15] delegation agent=1 resource=1 task=1 target_agent=2
+event[16] task_accepted agent=2 resource=1 task=1
+event[17] task_queued agent=2 resource=1 task=1
+event[18] task_dispatched agent=2 resource=1 task=1
+event[19] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1
+event[20] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0
+event[21] task_dispatched agent=2 resource=1 task=1
+event[22] task_faulted agent=2 resource=1 task=1 fault=1 detail=7
+event[23] message_sent agent=1 target_agent=3 message=1
+event[24] fault_routed agent=1 resource=1 task=1 fault=1 detail=7 target_agent=3 message=1
+event[25] message_received agent=3 target_agent=1 message=1
+event[26] message_acknowledged agent=3 target_agent=1 message=1
+event[27] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7
+event[28] task_queued agent=2 resource=1 task=1
+event[29] task_dispatched agent=2 resource=1 task=1
+event[30] task_completed agent=2 resource=1 task=1
+event[31] task_verified agent=1 resource=1 task=1
+event[32] intent_fulfilled agent=1 resource=1 intent=1
+event[33] message_sent agent=1 target_agent=2 message=2
+event[34] message_received agent=2 target_agent=1 message=2
+event[35] message_acknowledged agent=2 target_agent=1 message=2
+event[36] capability_granted agent=1 resource=2 capability=3
+event[37] memory_cell_created agent=1 resource=2 memory_cell=1
+event[38] memory_cell_recalled agent=1 resource=2 memory_cell=1
+event[39] memory_cell_remembered agent=1 resource=2 memory_cell=1
+event[40] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
+event[41] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
+event[42] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
 ```

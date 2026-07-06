@@ -113,6 +113,12 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::TaskFaultRecovered => {
                         serial_write_line("task_fault_recovered");
                     }
+                    EventKind::FaultHandlerInstalled => {
+                        serial_write_line("fault_handler_installed");
+                    }
+                    EventKind::FaultRouted => {
+                        serial_write_line("fault_routed");
+                    }
                     EventKind::MessageSent => {
                         serial_write_line("message_sent");
                     }
