@@ -38,6 +38,9 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::AgentRetired => {
                         serial_write_line("agent_retired");
                     }
+                    EventKind::ResourceCreated => {
+                        serial_write_line("resource_created");
+                    }
                     EventKind::ResourceRetired => {
                         serial_write_line("resource_retired");
                     }

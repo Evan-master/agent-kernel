@@ -1,12 +1,13 @@
-//! Fixed-capacity resource lifecycle.
+//! Owner-aware resource creation.
 //!
-//! This module belongs to `agent-kernel-core`. It owns deterministic resource
-//! allocation and retirement for the no_std core store. It performs no host I/O
-//! and validates parent resources before adding child resources.
+//! This module belongs to `agent-kernel-core`. It creates resources with an
+//! owning agent and an initial capability in one atomic fixed-capacity
+//! operation while preserving bootstrap-only unowned resource registration.
 
 use crate::{
-    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, Operation, OperationSet,
-    Resource, ResourceId, ResourceKind, ResourceStatus, VerificationRequirement,
+    AgentId, Capability, CapabilityId, Event, EventKind, KernelCore, KernelError, Operation,
+    OperationSet, Resource, ResourceCreateOutcome, ResourceId, ResourceKind, ResourceStatus,
+    VerificationRequirement,
 };
 
 impl<
@@ -48,61 +49,82 @@ impl<
         WAITERS,
     >
 {
-    pub fn register_resource(
+    pub fn create_resource(
         &mut self,
+        agent: AgentId,
         kind: ResourceKind,
-        parent: Option<ResourceId>,
-    ) -> Result<ResourceId, KernelError> {
-        if let Some(parent_id) = parent {
-            self.find_resource(parent_id)?;
-        }
-
+        parent: Option<(ResourceId, CapabilityId)>,
+        operations: OperationSet,
+    ) -> Result<ResourceCreateOutcome, KernelError> {
+        self.ensure_agent_active(agent)?;
+        let parent_id = if let Some((parent_id, parent_capability)) = parent {
+            self.ensure_authorized(agent, parent_capability, parent_id, Operation::Act)?;
+            Some(parent_id)
+        } else {
+            None
+        };
         if self.resource_len >= RESOURCES {
             return Err(KernelError::ResourceStoreFull);
         }
+        let capability_slot = self
+            .capabilities
+            .iter()
+            .position(|capability| capability.is_none())
+            .ok_or(KernelError::CapabilityStoreFull)?;
+        self.ensure_event_slots(2)?;
 
-        let id = ResourceId::new(self.next_resource);
+        let resource = ResourceId::new(self.next_resource);
         self.next_resource += 1;
         self.resources[self.resource_len] = Resource {
-            id,
+            id: resource,
             kind,
-            parent,
-            owner: None,
+            parent: parent_id,
+            owner: Some(agent),
             status: ResourceStatus::Active,
         };
         self.resource_len += 1;
-        Ok(id)
+
+        let capability = CapabilityId::new(self.next_capability);
+        self.next_capability += 1;
+        self.capabilities[capability_slot] = Some(Capability {
+            id: capability,
+            agent,
+            resource,
+            operations,
+            revoked: false,
+            task: None,
+            parent: None,
+        });
+
+        self.record_resource_created_event(agent, resource, capability, operations)?;
+        self.record_capability_event(
+            EventKind::CapabilityGranted,
+            agent,
+            resource,
+            capability,
+            None,
+            operations,
+            None,
+            None,
+            None,
+        )?;
+        Ok(ResourceCreateOutcome {
+            resource,
+            capability,
+        })
     }
 
-    pub fn retire_resource(
+    fn record_resource_created_event(
         &mut self,
         agent: AgentId,
-        capability: CapabilityId,
         resource: ResourceId,
-    ) -> Result<Event, KernelError> {
-        self.ensure_agent_active(agent)?;
-        self.ensure_authorized(agent, capability, resource, Operation::Rollback)?;
-        self.ensure_event_slots(1)?;
-
-        self.find_resource_mut(resource)?.status = ResourceStatus::Retired;
-        self.record_resource_event(EventKind::ResourceRetired, agent, capability, resource)
-    }
-
-    pub fn resources(&self) -> &[Resource] {
-        &self.resources[..self.resource_len]
-    }
-
-    fn record_resource_event(
-        &mut self,
-        kind: EventKind,
-        agent: AgentId,
         capability: CapabilityId,
-        resource: ResourceId,
+        operations: OperationSet,
     ) -> Result<Event, KernelError> {
         self.record(Event {
             sequence: 0,
             agent,
-            kind,
+            kind: EventKind::ResourceCreated,
             resource: Some(resource),
             capability: Some(capability),
             source_capability: None,
@@ -116,7 +138,7 @@ impl<
             namespace_key: None,
             namespace_object: None,
             operation: None,
-            operations: OperationSet::empty(),
+            operations,
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: None,

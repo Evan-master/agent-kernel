@@ -248,13 +248,15 @@ fn main() {
         )
         .expect("agent should rebind namespace entry to task");
     let service = kernel
-        .sys_register_resource(ResourceKind::Service, Some(workspace))
-        .expect("service resource should fit in simulator kernel");
-    let service_capability = kernel
-        .sys_grant(agent, service, OperationSet::only(Operation::Rollback))
-        .expect("service rollback capability should fit in simulator kernel");
+        .sys_create_resource(
+            agent,
+            ResourceKind::Service,
+            Some((workspace, owner_capability)),
+            OperationSet::only(Operation::Rollback),
+        )
+        .expect("owned service resource should fit in simulator kernel");
     kernel
-        .sys_retire_resource(agent, service_capability, service)
+        .sys_retire_resource(agent, service.capability, service.resource)
         .expect("agent should retire service resource");
     let target_observe_capability = kernel
         .sys_derive_capability(

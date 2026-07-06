@@ -5,7 +5,8 @@
 //! `agent-kernel-core`.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, Event, KernelError, Resource, ResourceId, ResourceKind,
+    AgentId, CapabilityId, Event, KernelError, OperationSet, Resource, ResourceCreateOutcome,
+    ResourceId, ResourceKind,
 };
 
 use crate::AgentKernel;
@@ -55,6 +56,16 @@ impl<
         parent: Option<ResourceId>,
     ) -> Result<ResourceId, KernelError> {
         self.core.register_resource(kind, parent)
+    }
+
+    pub fn sys_create_resource(
+        &mut self,
+        agent: AgentId,
+        kind: ResourceKind,
+        parent: Option<(ResourceId, CapabilityId)>,
+        operations: OperationSet,
+    ) -> Result<ResourceCreateOutcome, KernelError> {
+        self.core.create_resource(agent, kind, parent, operations)
     }
 
     pub fn sys_retire_resource(

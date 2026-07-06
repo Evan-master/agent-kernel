@@ -3,7 +3,7 @@
 //! This module owns resource identity, classification, and parent linkage. It
 //! does not perform lookup or authorization; `KernelCore` owns those stores.
 
-use crate::ResourceId;
+use crate::{AgentId, CapabilityId, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ResourceStatus {
@@ -27,7 +27,14 @@ pub struct Resource {
     pub id: ResourceId,
     pub kind: ResourceKind,
     pub parent: Option<ResourceId>,
+    pub owner: Option<AgentId>,
     pub status: ResourceStatus,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ResourceCreateOutcome {
+    pub resource: ResourceId,
+    pub capability: CapabilityId,
 }
 
 impl Resource {
@@ -36,6 +43,7 @@ impl Resource {
             id: ResourceId::new(0),
             kind: ResourceKind::Workspace,
             parent: None,
+            owner: None,
             status: ResourceStatus::Retired,
         }
     }

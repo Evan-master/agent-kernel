@@ -1,7 +1,4 @@
-//! Supervisor event formatting.
-//!
-//! This module belongs to the host-side `agent-supervisor` crate. It translates
-//! kernel events into deterministic text output for simulator tests.
+//! Host-side formatting for deterministic simulator event output.
 
 use agent_kernel_core::{Event, EventKind};
 
@@ -23,6 +20,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),
+        EventKind::ResourceCreated => format_capability_event(event, "resource_created"),
         EventKind::ResourceRetired => format_capability_event(event, "resource_retired"),
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
