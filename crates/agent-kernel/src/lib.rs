@@ -6,6 +6,7 @@
 //! reaching into core state directly.
 
 mod mailbox;
+mod memory;
 mod scheduler;
 
 use agent_kernel_core::{
@@ -27,6 +28,7 @@ pub struct AgentKernel<
     const TASKS: usize,
     const RUN_QUEUE: usize,
     const MESSAGES: usize = 0,
+    const MEMORY_CELLS: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -40,6 +42,7 @@ pub struct AgentKernel<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >,
 }
 
@@ -55,6 +58,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -68,6 +72,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub const fn new() -> Self {
@@ -263,6 +268,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -276,6 +282,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     fn default() -> Self {

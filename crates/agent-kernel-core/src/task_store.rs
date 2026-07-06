@@ -22,6 +22,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     KernelCore<
         AGENTS,
@@ -35,6 +36,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub fn create_task(

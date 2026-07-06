@@ -5,8 +5,8 @@
 //! host I/O and keeps state deterministic for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, Intent, MessageRecord,
-    ObservationRecord, Resource, RunQueueEntry, Task,
+    ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, Intent, MemoryCellRecord,
+    MessageRecord, ObservationRecord, Resource, RunQueueEntry, Task,
 };
 
 #[derive(Debug)]
@@ -22,6 +22,7 @@ pub struct KernelCore<
     const TASKS: usize,
     const RUN_QUEUE: usize,
     const MESSAGES: usize = 0,
+    const MEMORY_CELLS: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) resources: [Option<Resource>; RESOURCES],
@@ -34,6 +35,7 @@ pub struct KernelCore<
     pub(crate) tasks: [Task; TASKS],
     pub(crate) run_queue: [RunQueueEntry; RUN_QUEUE],
     pub(crate) messages: [MessageRecord; MESSAGES],
+    pub(crate) memory_cells: [MemoryCellRecord; MEMORY_CELLS],
     pub(crate) agent_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -43,12 +45,14 @@ pub struct KernelCore<
     pub(crate) task_len: usize,
     pub(crate) run_queue_len: usize,
     pub(crate) message_len: usize,
+    pub(crate) memory_cell_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_observation: u64,
     pub(crate) next_intent: u64,
     pub(crate) next_task: u64,
     pub(crate) next_message: u64,
+    pub(crate) next_memory_cell: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -64,6 +68,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     KernelCore<
         AGENTS,
@@ -77,6 +82,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub const fn new() -> Self {
@@ -92,6 +98,7 @@ impl<
             tasks: [Task::empty(); TASKS],
             run_queue: [RunQueueEntry::empty(); RUN_QUEUE],
             messages: [MessageRecord::empty(); MESSAGES],
+            memory_cells: [MemoryCellRecord::empty(); MEMORY_CELLS],
             agent_len: 0,
             event_len: 0,
             action_len: 0,
@@ -101,12 +108,14 @@ impl<
             task_len: 0,
             run_queue_len: 0,
             message_len: 0,
+            memory_cell_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_observation: 1,
             next_intent: 1,
             next_task: 1,
             next_message: 1,
+            next_memory_cell: 1,
             next_sequence: 1,
         }
     }
@@ -128,6 +137,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -141,6 +151,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     fn default() -> Self {

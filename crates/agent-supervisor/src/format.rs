@@ -87,6 +87,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::MessageSent => format_message_event(event, "message_sent"),
         EventKind::MessageReceived => format_message_event(event, "message_received"),
         EventKind::MessageAcknowledged => format_message_event(event, "message_acknowledged"),
+        EventKind::MemoryCellCreated => format_memory_event(event, "memory_cell_created"),
+        EventKind::MemoryCellRecalled => format_memory_event(event, "memory_cell_recalled"),
+        EventKind::MemoryCellRemembered => format_memory_event(event, "memory_cell_remembered"),
     }
 }
 
@@ -145,6 +148,23 @@ fn format_message_event(event: &Event, label: &str) -> String {
     format!(
         "event[{}] {} agent={} target_agent={} message={}",
         event.sequence, label, agent, target_agent, message
+    )
+}
+
+fn format_memory_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let memory_cell = event
+        .memory_cell
+        .map(|memory_cell| memory_cell.raw())
+        .unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} memory_cell={}",
+        event.sequence, label, agent, resource, memory_cell
     )
 }
 

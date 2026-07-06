@@ -19,6 +19,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -32,6 +33,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub fn sys_enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {

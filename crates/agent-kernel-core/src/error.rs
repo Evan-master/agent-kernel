@@ -14,6 +14,7 @@ pub enum KernelError {
     ObservationStoreFull,
     CheckpointStoreFull,
     MessageStoreFull,
+    MemoryCellStoreFull,
     AgentAlreadyExists,
     AgentNotFound,
     AgentSuspended,
@@ -50,4 +51,6 @@ pub enum KernelError {
     MessageAgentMismatch,
     MessageStatusMismatch,
     MailboxEmpty,
+    MemoryCellNotFound,
+    ResourceKindMismatch,
 }

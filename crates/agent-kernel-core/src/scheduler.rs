@@ -21,6 +21,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     KernelCore<
         AGENTS,
@@ -34,6 +35,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub fn enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
@@ -144,6 +146,7 @@ impl<
             action: None,
             observation: None,
             message: None,
+            memory_cell: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

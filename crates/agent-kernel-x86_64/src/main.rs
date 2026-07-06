@@ -110,6 +110,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::MessageAcknowledged => {
                         serial_write_line("message_acknowledged");
                     }
+                    EventKind::MemoryCellCreated => {
+                        serial_write_line("memory_cell_created");
+                    }
+                    EventKind::MemoryCellRecalled => {
+                        serial_write_line("memory_cell_recalled");
+                    }
+                    EventKind::MemoryCellRemembered => {
+                        serial_write_line("memory_cell_remembered");
+                    }
                 }
             }
             serial_write_line("SUPERVISOR_HANDOFF_READY");

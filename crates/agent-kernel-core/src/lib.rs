@@ -24,6 +24,8 @@ mod intent_event;
 mod intent_store;
 mod lookup;
 mod mailbox_store;
+mod memory;
+mod memory_store;
 mod message;
 mod observation;
 mod observation_store;
@@ -45,10 +47,11 @@ pub use core::KernelCore;
 pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use id::{
-    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, MessageId, ObservationId, ResourceId,
-    TaskId,
+    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, MemoryCellId, MessageId,
+    ObservationId, ResourceId, TaskId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
+pub use memory::{MemoryCellRecord, MemoryValue};
 pub use message::{MessageKind, MessagePayload, MessageRecord, MessageStatus};
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};

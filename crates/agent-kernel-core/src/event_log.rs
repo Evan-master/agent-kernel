@@ -17,6 +17,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     KernelCore<
         AGENTS,
@@ -30,6 +31,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub(crate) fn ensure_event_slots(&self, needed: usize) -> Result<(), KernelError> {

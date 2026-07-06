@@ -5,8 +5,8 @@
 //! requests, delegation, and scheduler decisions.
 
 use crate::{
-    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, IntentKind, MessageId, ObservationId,
-    Operation, OperationSet, ResourceId, TaskId, VerificationRequirement,
+    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, IntentKind, MemoryCellId, MessageId,
+    ObservationId, Operation, OperationSet, ResourceId, TaskId, VerificationRequirement,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -39,6 +39,9 @@ pub enum EventKind {
     MessageSent,
     MessageReceived,
     MessageAcknowledged,
+    MemoryCellCreated,
+    MemoryCellRecalled,
+    MemoryCellRemembered,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -54,6 +57,7 @@ pub struct Event {
     pub action: Option<ActionId>,
     pub observation: Option<ObservationId>,
     pub message: Option<MessageId>,
+    pub memory_cell: Option<MemoryCellId>,
     pub operation: Option<Operation>,
     pub operations: OperationSet,
     pub verification: VerificationRequirement,
@@ -76,6 +80,7 @@ impl Event {
             action: None,
             observation: None,
             message: None,
+            memory_cell: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

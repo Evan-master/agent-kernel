@@ -5,12 +5,12 @@ It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 
 The project starts from new OS primitives instead of POSIX compatibility:
 agents, resources, capabilities, typed intents, actions, observations,
-checkpoints, rollback, verification, tasks, delegation, native mailbox IPC, and
-event logs.
+checkpoints, rollback, verification, tasks, delegation, native mailbox IPC,
+memory cells, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, memory cells, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -42,28 +42,34 @@ The v0 flow is deliberately small:
 19. Mark the intent fulfilled after task verification.
 20. Send a native kernel message from the owner agent to the target agent.
 21. Let the target agent receive and acknowledge that message.
-22. Print the kernel event log from the supervisor.
+22. Create a native memory cell under a memory resource.
+23. Recall and remember memory cell state through explicit capabilities.
+24. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent suspension, agent resume, agent retirement, capability grants, derived
 task capabilities, typed intent declarations, action, verification, checkpoint
 creation, rollback requests, task creation, intent binding, task completion,
 task verification, intent fulfillment, delegation, message send, message
-receive, and message acknowledgement are first-class kernel events, not external
-tooling. Agents, checkpoints, and messages are also queryable fixed-capacity
-kernel records, and new root or derived capabilities can only be issued to
-active registered agents. Kernel operations that act on behalf of an `AgentId`
-reject unknown, suspended, or retired actors before authorization, state, queue,
-mailbox, or capacity checks. Rollback moves the checkpoint into
+receive, message acknowledgement, memory cell creation, memory recall, and
+memory remember are first-class kernel events, not external tooling. Agents,
+checkpoints, messages, and memory cells are also queryable fixed-capacity kernel
+records, and new root or derived capabilities can only be issued to active
+registered agents. Kernel operations that act on behalf of an `AgentId` reject
+unknown, suspended, or retired actors before authorization, state, queue,
+mailbox, memory, or capacity checks. Rollback moves the checkpoint into
 `RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO
 run queue and become `Running` before completion. `IntentId`, `TaskId`, and
 `MessageId` values are allocated by fixed-capacity kernel stores rather than
-invented by the supervisor. Delegation derives a task-scoped action capability
-for the assignee, so the supervisor does not grant broad resource authority to
-complete delegated work. Revoking the source capability that authorized
-delegation also invalidates the derived task-scoped capability before future
-task authorization succeeds. Mailbox IPC stores typed kernel object references
-instead of heap-allocated bytes or host transport handles.
+invented by the supervisor. `MemoryCellId` values are also kernel-allocated, and
+memory recall writes an audit event before returning a value. Delegation derives
+a task-scoped action capability for the assignee, so the supervisor does not
+grant broad resource authority to complete delegated work. Revoking the source
+capability that authorized delegation also invalidates the derived task-scoped
+capability before future task authorization succeeds. Mailbox IPC stores typed
+kernel object references instead of heap-allocated bytes or host transport
+handles. Memory cells store fixed-width typed words instead of files, byte
+buffers, or host persistence.
 
 ## Boot Handoff
 
@@ -157,4 +163,8 @@ event[19] intent_fulfilled agent=1 resource=1 intent=1
 event[20] message_sent agent=1 target_agent=2 message=1
 event[21] message_received agent=2 target_agent=1 message=1
 event[22] message_acknowledged agent=2 target_agent=1 message=1
+event[23] capability_granted agent=1 resource=2 capability=3
+event[24] memory_cell_created agent=1 resource=2 memory_cell=1
+event[25] memory_cell_recalled agent=1 resource=2 memory_cell=1
+event[26] memory_cell_remembered agent=1 resource=2 memory_cell=1
 ```

@@ -20,6 +20,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     KernelCore<
         AGENTS,
@@ -33,6 +34,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub fn checkpoint(
@@ -72,6 +74,7 @@ impl<
             action: None,
             observation: None,
             message: None,
+            memory_cell: None,
             operation: Some(Operation::Checkpoint),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
@@ -113,6 +116,7 @@ impl<
             action: None,
             observation: None,
             message: None,
+            memory_cell: None,
             operation: Some(Operation::Rollback),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

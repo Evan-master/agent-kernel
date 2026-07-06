@@ -20,6 +20,7 @@ impl<
         const TASKS: usize,
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
+        const MEMORY_CELLS: usize,
     >
     KernelCore<
         AGENTS,
@@ -33,6 +34,7 @@ impl<
         TASKS,
         RUN_QUEUE,
         MESSAGES,
+        MEMORY_CELLS,
     >
 {
     pub fn observe(
@@ -69,6 +71,7 @@ impl<
             action: None,
             observation: Some(observation),
             message: None,
+            memory_cell: None,
             operation: Some(Operation::Observe),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

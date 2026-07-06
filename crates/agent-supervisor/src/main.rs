@@ -8,14 +8,14 @@ mod format;
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, IntentKind, MessageKind, MessagePayload, Operation,
-    OperationSet, ResourceKind, VerificationRequirement,
+    ActionId, AgentId, CheckpointId, IntentKind, MemoryValue, MessageKind, MessagePayload,
+    Operation, OperationSet, ResourceKind, VerificationRequirement,
 };
 
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 40, 8, 8, 8, 8, 8, 8, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
@@ -113,6 +113,38 @@ fn main() {
     kernel
         .sys_acknowledge_message(target_agent, message)
         .expect("target agent should acknowledge task notification");
+    let memory = kernel
+        .sys_register_resource(ResourceKind::Memory, None)
+        .expect("memory resource should fit in simulator kernel");
+    let memory_capability = kernel
+        .sys_grant(
+            agent,
+            memory,
+            OperationSet::empty()
+                .with(Operation::Observe)
+                .with(Operation::Act),
+        )
+        .expect("memory capability should fit in simulator kernel");
+    let memory_cell = kernel
+        .sys_create_memory_cell(
+            agent,
+            memory_capability,
+            memory,
+            MemoryValue::new([1, 2, 3, 4]),
+        )
+        .expect("memory cell should fit in simulator kernel");
+    let recalled = kernel
+        .sys_recall_memory_cell(agent, memory_capability, memory_cell)
+        .expect("agent should recall memory cell");
+    assert_eq!(recalled, MemoryValue::new([1, 2, 3, 4]));
+    kernel
+        .sys_remember_memory_cell(
+            agent,
+            memory_capability,
+            memory_cell,
+            MemoryValue::new([4, 3, 2, 1]),
+        )
+        .expect("agent should remember new memory cell value");
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {

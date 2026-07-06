@@ -32,4 +32,8 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[20] message_sent agent=1 target_agent=2 message=1"));
     assert!(stdout.contains("event[21] message_received agent=2 target_agent=1 message=1"));
     assert!(stdout.contains("event[22] message_acknowledged agent=2 target_agent=1 message=1"));
+    assert!(stdout.contains("event[23] capability_granted agent=1 resource=2 capability=3"));
+    assert!(stdout.contains("event[24] memory_cell_created agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[25] memory_cell_recalled agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[26] memory_cell_remembered agent=1 resource=2 memory_cell=1"));
 }
