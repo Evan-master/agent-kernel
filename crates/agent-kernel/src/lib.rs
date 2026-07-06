@@ -5,6 +5,7 @@
 //! deterministic methods that a user-space supervisor can call without
 //! reaching into core state directly.
 
+mod agent;
 mod capability;
 mod fault;
 mod mailbox;
@@ -15,9 +16,9 @@ mod scheduler;
 mod signal;
 
 use agent_kernel_core::{
-    ActionId, ActionRecord, AgentId, AgentRecord, CapabilityId, CheckpointId, CheckpointRecord,
-    Event, Intent, IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, ResourceId,
-    Task, TaskId, VerificationRequirement,
+    ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, CheckpointRecord, Event, Intent,
+    IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, ResourceId, Task, TaskId,
+    VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -104,22 +105,6 @@ impl<
         Self {
             core: KernelCore::new(),
         }
-    }
-
-    pub fn sys_register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        self.core.register_agent(agent)
-    }
-
-    pub fn sys_suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        self.core.suspend_agent(agent)
-    }
-
-    pub fn sys_resume_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        self.core.resume_agent(agent)
-    }
-
-    pub fn sys_retire_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        self.core.retire_agent(agent)
     }
 
     pub fn sys_observe(
@@ -237,10 +222,6 @@ impl<
 
     pub fn events(&self) -> &[Event] {
         self.core.events()
-    }
-
-    pub fn agents(&self) -> &[AgentRecord] {
-        self.core.agents()
     }
 
     pub fn actions(&self) -> &[ActionRecord] {

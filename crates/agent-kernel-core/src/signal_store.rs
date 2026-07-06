@@ -85,6 +85,7 @@ impl<
         };
         self.waiter_len += 1;
         self.find_task_mut(task)?.status = TaskStatus::Waiting;
+        self.set_execution_context_waiting(agent, task)?;
         self.record_wait_signal_event(
             EventKind::TaskWaiting,
             agent,
@@ -144,6 +145,7 @@ impl<
         )?;
         self.waiters[waiter_index].active = false;
         self.find_task_mut(waiter.task)?.status = TaskStatus::Accepted;
+        self.set_execution_context_idle(waiter.agent)?;
         self.run_queue[self.run_queue_len] = RunQueueEntry {
             task: waiter.task,
             agent: waiter.agent,

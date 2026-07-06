@@ -148,6 +148,7 @@ impl<
             FaultPolicyAction::RecoverTask => {
                 self.ensure_event_slots(2)?;
                 self.find_task_mut(fault_record.task)?.status = TaskStatus::Accepted;
+                self.clear_execution_context_for_task(fault_record.task);
                 self.record_fault_event(
                     EventKind::TaskFaultRecovered,
                     agent,

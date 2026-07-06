@@ -180,6 +180,8 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
         .expect("first task should enqueue");
     core.dispatch_next(assignee)
         .expect("first task should dispatch");
+    core.complete_task(assignee, first_capability, first)
+        .expect("first task should complete before second dispatch");
     core.accept_task(assignee, second)
         .expect("second task should accept");
     core.enqueue_task(assignee, second)
@@ -199,7 +201,7 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
         core.complete_task(assignee, second_capability, second),
         Err(KernelError::CapabilityRevoked)
     );
-    assert_eq!(core.tasks()[0].status, TaskStatus::Running);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Completed);
     assert_eq!(core.tasks()[1].status, TaskStatus::Running);
     assert_eq!(core.events().len(), events_before);
 }

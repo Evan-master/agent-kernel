@@ -5,9 +5,9 @@
 //! host I/O and keeps state deterministic for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, FaultHandlerRecord,
-    FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord,
-    ObservationRecord, Resource, RunQueueEntry, Task, WaiterRecord,
+    ActionRecord, AgentExecutionContext, AgentRecord, Capability, CheckpointRecord, Event,
+    FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord,
+    NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -31,6 +31,7 @@ pub struct KernelCore<
     const WAITERS: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
+    pub(crate) execution_contexts: [AgentExecutionContext; AGENTS],
     pub(crate) resources: [Resource; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
@@ -120,6 +121,7 @@ impl<
     pub const fn new() -> Self {
         Self {
             agents: [AgentRecord::empty(); AGENTS],
+            execution_contexts: [AgentExecutionContext::empty(); AGENTS],
             resources: [Resource::empty(); RESOURCES],
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],

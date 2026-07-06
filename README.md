@@ -8,11 +8,11 @@ agents, owned resources, resource lifecycle, capabilities, capability
 attenuation, typed intents, actions, observations, checkpoints, rollback,
 verification, tasks, delegation, native mailbox IPC, task wait signals, task
 fault traps, fault handlers, fault policies, memory cells, native object
-namespace entries, and event logs.
+namespace entries, agent execution contexts, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -23,7 +23,7 @@ namespace entries, and event logs.
 
 The v0 flow is deliberately small:
 
-1. Register the owner, target, and fault handler agents.
+1. Register the owner, target, and fault handler agents with idle execution contexts.
 2. Register a workspace resource.
 3. Grant the owner agent a capability for observe, act, verify, checkpoint, rollback, and delegation.
 4. Install a resource-scoped task fault handler and fault policy.
@@ -84,7 +84,10 @@ fixed-capacity kernel records, and new root or derived capabilities can only be
 issued to active registered agents. Kernel operations that act on behalf of an
 `AgentId` reject
 unknown, suspended, or retired actors before authorization, state, queue,
-mailbox, memory, or capacity checks. Rollback moves the checkpoint into
+mailbox, memory, or capacity checks. Each registered agent has a fixed-capacity
+execution context that tracks whether the agent is idle, running a task,
+waiting on a signal, or faulted on a task. Dispatch refuses to run a second task
+for an agent whose context is already busy. Rollback moves the checkpoint into
 `RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO
 run queue, become `Running` with an explicit quantum, accumulate deterministic
 ticks, return to the queue when their quantum expires, and can enter `Waiting`

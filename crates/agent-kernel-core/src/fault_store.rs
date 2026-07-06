@@ -81,6 +81,7 @@ impl<
         task_ref.status = TaskStatus::Faulted;
         task_ref.quantum_remaining = 0;
         task_ref.last_fault = Some(fault);
+        self.set_execution_context_faulted(agent, task)?;
         self.record_fault_event(
             EventKind::TaskFaulted,
             agent,
@@ -112,6 +113,7 @@ impl<
         self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Accepted;
+        self.clear_execution_context_for_task(task);
         self.record_fault_event(
             EventKind::TaskFaultRecovered,
             agent,

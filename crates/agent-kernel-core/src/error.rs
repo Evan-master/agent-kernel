@@ -54,6 +54,7 @@ pub enum KernelError {
     RunQueueEmpty,
     TaskNotRunnable,
     TaskAlreadyQueued,
+    ExecutionContextBusy,
     FaultHandlerAlreadyExists,
     FaultHandlerNotFound,
     FaultPolicyAlreadyExists,

@@ -77,6 +77,9 @@ impl<
             task_ref.status = TaskStatus::Accepted;
             self.run_queue[self.run_queue_len] = RunQueueEntry { task, agent };
             self.run_queue_len += 1;
+            self.set_execution_context_idle(agent)?;
+        } else {
+            self.set_execution_context_running(agent, task, new_ticks, remaining)?;
         }
 
         self.record_scheduler_event(

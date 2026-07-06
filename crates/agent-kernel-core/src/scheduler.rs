@@ -1,8 +1,4 @@
-//! Fixed-capacity FIFO task scheduler.
-//!
-//! This module belongs to `agent-kernel-core`. It owns FIFO enqueue, dispatch,
-//! and yield behavior for accepted or running tasks. Deterministic tick
-//! accounting lives in `scheduler_tick`.
+//! Fixed-capacity FIFO task scheduler; tick accounting lives in `scheduler_tick`.
 
 use crate::{
     AgentId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId, RunQueueEntry,
@@ -88,6 +84,7 @@ impl<
         if entry.agent != agent {
             return Err(KernelError::TaskNotRunnable);
         }
+        self.ensure_execution_context_idle(agent)?;
         let task_record = self.find_runnable_task(agent, entry.task)?;
         self.ensure_scheduler_event_capacity()?;
 
@@ -95,6 +92,7 @@ impl<
         let task = self.find_task_mut(entry.task)?;
         task.status = TaskStatus::Running;
         task.quantum_remaining = quantum;
+        self.set_execution_context_running(agent, entry.task, task_record.run_ticks, quantum)?;
         self.record_scheduler_event(
             EventKind::TaskDispatched,
             agent,
@@ -117,6 +115,7 @@ impl<
         self.ensure_scheduler_event_capacity()?;
 
         self.find_task_mut(task)?.status = TaskStatus::Accepted;
+        self.set_execution_context_idle(agent)?;
         self.run_queue[self.run_queue_len] = RunQueueEntry { task, agent };
         self.run_queue_len += 1;
         self.record_scheduler_event(
@@ -142,27 +141,21 @@ impl<
     }
 
     pub(crate) fn ensure_not_queued(&self, task: TaskId) -> Result<(), KernelError> {
-        if self.run_queue().iter().any(|entry| entry.task == task) {
-            Err(KernelError::TaskAlreadyQueued)
-        } else {
-            Ok(())
-        }
+        (!self.run_queue().iter().any(|entry| entry.task == task))
+            .then_some(())
+            .ok_or(KernelError::TaskAlreadyQueued)
     }
 
     pub(crate) fn ensure_run_queue_capacity(&self) -> Result<(), KernelError> {
-        if self.run_queue_len >= RUN_QUEUE {
-            Err(KernelError::RunQueueFull)
-        } else {
-            Ok(())
-        }
+        (self.run_queue_len < RUN_QUEUE)
+            .then_some(())
+            .ok_or(KernelError::RunQueueFull)
     }
 
     pub(crate) fn ensure_scheduler_event_capacity(&self) -> Result<(), KernelError> {
-        if self.event_len >= EVENTS {
-            Err(KernelError::EventLogFull)
-        } else {
-            Ok(())
-        }
+        (self.event_len < EVENTS)
+            .then_some(())
+            .ok_or(KernelError::EventLogFull)
     }
 
     pub(crate) fn record_scheduler_event(

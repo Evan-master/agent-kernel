@@ -8,6 +8,8 @@
 mod action;
 mod action_store;
 mod agent;
+mod agent_execution;
+mod agent_execution_store;
 mod agent_store;
 mod authorization;
 mod capability;
@@ -52,12 +54,14 @@ mod signal;
 mod signal_event;
 mod signal_store;
 mod task;
+mod task_completion;
 mod task_event;
 mod task_lookup;
 mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};
 pub use agent::{AgentRecord, AgentStatus};
+pub use agent_execution::{AgentExecutionContext, AgentExecutionState};
 pub use capability::Capability;
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;

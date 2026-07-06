@@ -6,8 +6,8 @@
 //! the registry and the event log.
 
 use crate::{
-    AgentId, AgentRecord, AgentStatus, Event, EventKind, KernelCore, KernelError, OperationSet,
-    VerificationRequirement,
+    AgentExecutionContext, AgentId, AgentRecord, AgentStatus, Event, EventKind, KernelCore,
+    KernelError, OperationSet, VerificationRequirement,
 };
 
 impl<
@@ -58,10 +58,12 @@ impl<
         }
         self.ensure_event_slots(1)?;
 
-        self.agents[self.agent_len] = AgentRecord {
+        let index = self.agent_len;
+        self.agents[index] = AgentRecord {
             id: agent,
             status: AgentStatus::Active,
         };
+        self.execution_contexts[index] = AgentExecutionContext::idle(agent);
         self.agent_len += 1;
 
         self.record(Event {
