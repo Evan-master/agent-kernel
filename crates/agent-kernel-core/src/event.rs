@@ -6,7 +6,8 @@
 
 use crate::{
     ActionId, AgentId, CapabilityId, CheckpointId, IntentId, IntentKind, MemoryCellId, MessageId,
-    ObservationId, Operation, OperationSet, ResourceId, TaskId, VerificationRequirement,
+    NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation, OperationSet,
+    ResourceId, TaskId, VerificationRequirement,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -42,6 +43,9 @@ pub enum EventKind {
     MemoryCellCreated,
     MemoryCellRecalled,
     MemoryCellRemembered,
+    NamespaceEntryBound,
+    NamespaceEntryResolved,
+    NamespaceEntryRebound,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -58,6 +62,9 @@ pub struct Event {
     pub observation: Option<ObservationId>,
     pub message: Option<MessageId>,
     pub memory_cell: Option<MemoryCellId>,
+    pub namespace_entry: Option<NamespaceEntryId>,
+    pub namespace_key: Option<NamespaceKey>,
+    pub namespace_object: Option<NamespaceObject>,
     pub operation: Option<Operation>,
     pub operations: OperationSet,
     pub verification: VerificationRequirement,
@@ -81,6 +88,9 @@ impl Event {
             observation: None,
             message: None,
             memory_cell: None,
+            namespace_entry: None,
+            namespace_key: None,
+            namespace_object: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

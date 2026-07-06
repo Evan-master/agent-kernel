@@ -6,11 +6,11 @@ It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 The project starts from new OS primitives instead of POSIX compatibility:
 agents, resources, capabilities, typed intents, actions, observations,
 checkpoints, rollback, verification, tasks, delegation, native mailbox IPC,
-memory cells, and event logs.
+memory cells, native object namespace entries, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, memory cells, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, memory cells, object namespace entries, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -44,7 +44,10 @@ The v0 flow is deliberately small:
 21. Let the target agent receive and acknowledge that message.
 22. Create a native memory cell under a memory resource.
 23. Recall and remember memory cell state through explicit capabilities.
-24. Print the kernel event log from the supervisor.
+24. Bind a memory cell into the workspace object namespace.
+25. Resolve that namespace entry through an observe capability.
+26. Rebind the namespace entry to the created task.
+27. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent suspension, agent resume, agent retirement, capability grants, derived
@@ -52,8 +55,9 @@ task capabilities, typed intent declarations, action, verification, checkpoint
 creation, rollback requests, task creation, intent binding, task completion,
 task verification, intent fulfillment, delegation, message send, message
 receive, message acknowledgement, memory cell creation, memory recall, and
-memory remember are first-class kernel events, not external tooling. Agents,
-checkpoints, messages, and memory cells are also queryable fixed-capacity kernel
+memory remember, namespace bind, namespace resolve, and namespace rebind are
+first-class kernel events, not external tooling. Agents, checkpoints, messages,
+memory cells, and namespace entries are also queryable fixed-capacity kernel
 records, and new root or derived capabilities can only be issued to active
 registered agents. Kernel operations that act on behalf of an `AgentId` reject
 unknown, suspended, or retired actors before authorization, state, queue,
@@ -69,7 +73,9 @@ capability that authorized delegation also invalidates the derived task-scoped
 capability before future task authorization succeeds. Mailbox IPC stores typed
 kernel object references instead of heap-allocated bytes or host transport
 handles. Memory cells store fixed-width typed words instead of files, byte
-buffers, or host persistence.
+buffers, or host persistence. Namespace entries bind compact keys to typed
+kernel object references inside workspace resources rather than parsing paths or
+delegating lookup to a host filesystem.
 
 ## Boot Handoff
 
@@ -167,4 +173,7 @@ event[23] capability_granted agent=1 resource=2 capability=3
 event[24] memory_cell_created agent=1 resource=2 memory_cell=1
 event[25] memory_cell_recalled agent=1 resource=2 memory_cell=1
 event[26] memory_cell_remembered agent=1 resource=2 memory_cell=1
+event[27] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
+event[28] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
+event[29] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
 ```

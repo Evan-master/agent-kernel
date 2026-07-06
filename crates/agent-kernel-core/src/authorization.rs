@@ -21,6 +21,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -35,6 +36,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub(crate) fn ensure_authorized(

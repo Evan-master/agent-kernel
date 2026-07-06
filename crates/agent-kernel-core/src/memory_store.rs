@@ -24,6 +24,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -38,6 +39,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub fn create_memory_cell(
@@ -136,7 +138,10 @@ impl<
         }
     }
 
-    fn find_memory_cell(&self, id: MemoryCellId) -> Result<MemoryCellRecord, KernelError> {
+    pub(crate) fn find_memory_cell(
+        &self,
+        id: MemoryCellId,
+    ) -> Result<MemoryCellRecord, KernelError> {
         for cell in self.memory_cells() {
             if cell.id == id {
                 return Ok(*cell);
@@ -181,6 +186,9 @@ impl<
             observation: None,
             message: None,
             memory_cell: Some(cell),
+            namespace_entry: None,
+            namespace_key: None,
+            namespace_object: None,
             operation: Some(operation),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

@@ -9,13 +9,13 @@ mod format;
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, IntentKind, MemoryValue, MessageKind, MessagePayload,
-    Operation, OperationSet, ResourceKind, VerificationRequirement,
+    NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceKind, VerificationRequirement,
 };
 
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
@@ -145,6 +145,28 @@ fn main() {
             MemoryValue::new([4, 3, 2, 1]),
         )
         .expect("agent should remember new memory cell value");
+    let namespace_key = NamespaceKey::new(1);
+    let namespace_entry = kernel
+        .sys_bind_namespace_entry(
+            agent,
+            owner_capability,
+            workspace,
+            namespace_key,
+            NamespaceObject::MemoryCell(memory_cell),
+        )
+        .expect("agent should bind memory cell in workspace namespace");
+    let resolved = kernel
+        .sys_resolve_namespace_entry(agent, owner_capability, workspace, namespace_key)
+        .expect("agent should resolve workspace namespace entry");
+    assert_eq!(resolved, NamespaceObject::MemoryCell(memory_cell));
+    kernel
+        .sys_rebind_namespace_entry(
+            agent,
+            owner_capability,
+            namespace_entry,
+            NamespaceObject::Task(task),
+        )
+        .expect("agent should rebind namespace entry to task");
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {

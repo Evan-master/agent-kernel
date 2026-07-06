@@ -21,6 +21,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -35,6 +36,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub fn observe(
@@ -72,6 +74,9 @@ impl<
             observation: Some(observation),
             message: None,
             memory_cell: None,
+            namespace_entry: None,
+            namespace_key: None,
+            namespace_object: None,
             operation: Some(Operation::Observe),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

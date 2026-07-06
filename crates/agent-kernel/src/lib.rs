@@ -7,6 +7,7 @@
 
 mod mailbox;
 mod memory;
+mod namespace;
 mod scheduler;
 
 use agent_kernel_core::{
@@ -29,6 +30,7 @@ pub struct AgentKernel<
     const RUN_QUEUE: usize,
     const MESSAGES: usize = 0,
     const MEMORY_CELLS: usize = 0,
+    const NAMESPACE_ENTRIES: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -43,6 +45,7 @@ pub struct AgentKernel<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >,
 }
 
@@ -59,6 +62,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     AgentKernel<
         AGENTS,
@@ -73,6 +77,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub const fn new() -> Self {
@@ -269,6 +274,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -283,6 +289,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     fn default() -> Self {

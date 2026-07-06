@@ -22,6 +22,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -36,6 +37,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub(crate) fn record_task_event(
@@ -60,6 +62,9 @@ impl<
             observation: None,
             message: None,
             memory_cell: None,
+            namespace_entry: None,
+            namespace_key: None,
+            namespace_object: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

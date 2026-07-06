@@ -36,4 +36,10 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[24] memory_cell_created agent=1 resource=2 memory_cell=1"));
     assert!(stdout.contains("event[25] memory_cell_recalled agent=1 resource=2 memory_cell=1"));
     assert!(stdout.contains("event[26] memory_cell_remembered agent=1 resource=2 memory_cell=1"));
+    assert!(stdout
+        .contains("event[27] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1"));
+    assert!(stdout
+        .contains("event[28] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1"));
+    assert!(stdout
+        .contains("event[29] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1"));
 }

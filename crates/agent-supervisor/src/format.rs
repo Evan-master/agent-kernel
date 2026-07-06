@@ -90,6 +90,13 @@ pub fn format_event(event: &Event) -> String {
         EventKind::MemoryCellCreated => format_memory_event(event, "memory_cell_created"),
         EventKind::MemoryCellRecalled => format_memory_event(event, "memory_cell_recalled"),
         EventKind::MemoryCellRemembered => format_memory_event(event, "memory_cell_remembered"),
+        EventKind::NamespaceEntryBound => format_namespace_event(event, "namespace_entry_bound"),
+        EventKind::NamespaceEntryResolved => {
+            format_namespace_event(event, "namespace_entry_resolved")
+        }
+        EventKind::NamespaceEntryRebound => {
+            format_namespace_event(event, "namespace_entry_rebound")
+        }
     }
 }
 
@@ -165,6 +172,24 @@ fn format_memory_event(event: &Event, label: &str) -> String {
     format!(
         "event[{}] {} agent={} resource={} memory_cell={}",
         event.sequence, label, agent, resource, memory_cell
+    )
+}
+
+fn format_namespace_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let namespace_entry = event
+        .namespace_entry
+        .map(|entry| entry.raw())
+        .unwrap_or_default();
+    let key = event.namespace_key.map(|key| key.raw()).unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} namespace_entry={} key={}",
+        event.sequence, label, agent, resource, namespace_entry, key
     )
 }
 

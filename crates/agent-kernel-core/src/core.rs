@@ -6,7 +6,7 @@
 
 use crate::{
     ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, Intent, MemoryCellRecord,
-    MessageRecord, ObservationRecord, Resource, RunQueueEntry, Task,
+    MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, Task,
 };
 
 #[derive(Debug)]
@@ -23,6 +23,7 @@ pub struct KernelCore<
     const RUN_QUEUE: usize,
     const MESSAGES: usize = 0,
     const MEMORY_CELLS: usize = 0,
+    const NAMESPACE_ENTRIES: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) resources: [Option<Resource>; RESOURCES],
@@ -36,6 +37,7 @@ pub struct KernelCore<
     pub(crate) run_queue: [RunQueueEntry; RUN_QUEUE],
     pub(crate) messages: [MessageRecord; MESSAGES],
     pub(crate) memory_cells: [MemoryCellRecord; MEMORY_CELLS],
+    pub(crate) namespace_entries: [NamespaceEntryRecord; NAMESPACE_ENTRIES],
     pub(crate) agent_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -46,6 +48,7 @@ pub struct KernelCore<
     pub(crate) run_queue_len: usize,
     pub(crate) message_len: usize,
     pub(crate) memory_cell_len: usize,
+    pub(crate) namespace_entry_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_observation: u64,
@@ -53,6 +56,7 @@ pub struct KernelCore<
     pub(crate) next_task: u64,
     pub(crate) next_message: u64,
     pub(crate) next_memory_cell: u64,
+    pub(crate) next_namespace_entry: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -69,6 +73,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -83,6 +88,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub const fn new() -> Self {
@@ -99,6 +105,7 @@ impl<
             run_queue: [RunQueueEntry::empty(); RUN_QUEUE],
             messages: [MessageRecord::empty(); MESSAGES],
             memory_cells: [MemoryCellRecord::empty(); MEMORY_CELLS],
+            namespace_entries: [NamespaceEntryRecord::empty(); NAMESPACE_ENTRIES],
             agent_len: 0,
             event_len: 0,
             action_len: 0,
@@ -109,6 +116,7 @@ impl<
             run_queue_len: 0,
             message_len: 0,
             memory_cell_len: 0,
+            namespace_entry_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_observation: 1,
@@ -116,6 +124,7 @@ impl<
             next_task: 1,
             next_message: 1,
             next_memory_cell: 1,
+            next_namespace_entry: 1,
             next_sequence: 1,
         }
     }
@@ -138,6 +147,7 @@ impl<
         const RUN_QUEUE: usize,
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
+        const NAMESPACE_ENTRIES: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -152,6 +162,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
+        NAMESPACE_ENTRIES,
     >
 {
     fn default() -> Self {

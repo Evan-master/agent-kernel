@@ -119,6 +119,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::MemoryCellRemembered => {
                         serial_write_line("memory_cell_remembered");
                     }
+                    EventKind::NamespaceEntryBound => {
+                        serial_write_line("namespace_entry_bound");
+                    }
+                    EventKind::NamespaceEntryResolved => {
+                        serial_write_line("namespace_entry_resolved");
+                    }
+                    EventKind::NamespaceEntryRebound => {
+                        serial_write_line("namespace_entry_rebound");
+                    }
                 }
             }
             serial_write_line("SUPERVISOR_HANDOFF_READY");
