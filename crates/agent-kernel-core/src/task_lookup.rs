@@ -17,6 +17,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -29,6 +30,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub fn tasks(&self) -> &[Task] {

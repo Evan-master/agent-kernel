@@ -29,4 +29,7 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[17] task_completed agent=2 resource=1 task=1"));
     assert!(stdout.contains("event[18] task_verified agent=1 resource=1 task=1"));
     assert!(stdout.contains("event[19] intent_fulfilled agent=1 resource=1 intent=1"));
+    assert!(stdout.contains("event[20] message_sent agent=1 target_agent=2 message=1"));
+    assert!(stdout.contains("event[21] message_received agent=2 target_agent=1 message=1"));
+    assert!(stdout.contains("event[22] message_acknowledged agent=2 target_agent=1 message=1"));
 }

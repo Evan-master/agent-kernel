@@ -5,6 +5,7 @@
 //! deterministic methods that a user-space supervisor can call without
 //! reaching into core state directly.
 
+mod mailbox;
 mod scheduler;
 
 use agent_kernel_core::{
@@ -25,6 +26,7 @@ pub struct AgentKernel<
     const INTENTS: usize,
     const TASKS: usize,
     const RUN_QUEUE: usize,
+    const MESSAGES: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -37,6 +39,7 @@ pub struct AgentKernel<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >,
 }
 
@@ -51,6 +54,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     AgentKernel<
         AGENTS,
@@ -63,6 +67,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub const fn new() -> Self {
@@ -257,6 +262,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -269,6 +275,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     fn default() -> Self {

@@ -19,6 +19,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -31,6 +32,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub fn observe(
@@ -66,6 +68,7 @@ impl<
             intent_kind: None,
             action: None,
             observation: Some(observation),
+            message: None,
             operation: Some(Operation::Observe),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

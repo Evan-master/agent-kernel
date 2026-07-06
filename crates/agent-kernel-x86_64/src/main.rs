@@ -101,6 +101,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::TaskYielded => {
                         serial_write_line("task_yielded");
                     }
+                    EventKind::MessageSent => {
+                        serial_write_line("message_sent");
+                    }
+                    EventKind::MessageReceived => {
+                        serial_write_line("message_received");
+                    }
+                    EventKind::MessageAcknowledged => {
+                        serial_write_line("message_acknowledged");
+                    }
                 }
             }
             serial_write_line("SUPERVISOR_HANDOFF_READY");

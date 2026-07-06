@@ -21,6 +21,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -33,6 +34,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub fn register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
@@ -61,6 +63,7 @@ impl<
             intent_kind: None,
             action: None,
             observation: None,
+            message: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
@@ -156,6 +159,7 @@ impl<
             intent_kind: None,
             action: None,
             observation: None,
+            message: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

@@ -19,6 +19,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -31,6 +32,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub fn checkpoint(
@@ -69,6 +71,7 @@ impl<
             intent_kind: None,
             action: None,
             observation: None,
+            message: None,
             operation: Some(Operation::Checkpoint),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
@@ -109,6 +112,7 @@ impl<
             intent_kind: None,
             action: None,
             observation: None,
+            message: None,
             operation: Some(Operation::Rollback),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

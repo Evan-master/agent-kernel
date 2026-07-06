@@ -20,6 +20,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -32,6 +33,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub(crate) fn record_task_event(
@@ -54,6 +56,7 @@ impl<
             intent_kind: None,
             action: None,
             observation: None,
+            message: None,
             operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

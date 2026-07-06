@@ -19,6 +19,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -31,6 +32,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub fn act(
@@ -69,6 +71,7 @@ impl<
             intent_kind: None,
             action: Some(action),
             observation: None,
+            message: None,
             operation: Some(Operation::Act),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
@@ -109,6 +112,7 @@ impl<
             intent_kind: None,
             action: Some(action),
             observation: None,
+            message: None,
             operation: Some(Operation::Verify),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,

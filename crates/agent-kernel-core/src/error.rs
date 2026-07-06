@@ -13,6 +13,7 @@ pub enum KernelError {
     ActionStoreFull,
     ObservationStoreFull,
     CheckpointStoreFull,
+    MessageStoreFull,
     AgentAlreadyExists,
     AgentNotFound,
     AgentSuspended,
@@ -45,4 +46,8 @@ pub enum KernelError {
     RunQueueEmpty,
     TaskNotRunnable,
     TaskAlreadyQueued,
+    MessageNotFound,
+    MessageAgentMismatch,
+    MessageStatusMismatch,
+    MailboxEmpty,
 }

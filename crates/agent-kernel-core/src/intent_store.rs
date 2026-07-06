@@ -20,6 +20,7 @@ impl<
         const INTENTS: usize,
         const TASKS: usize,
         const RUN_QUEUE: usize,
+        const MESSAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -32,6 +33,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
+        MESSAGES,
     >
 {
     pub fn declare_intent(
@@ -125,6 +127,7 @@ impl<
             intent_kind: Some(kind),
             action: None,
             observation: None,
+            message: None,
             operation: Some(kind.required_operation()),
             operations: OperationSet::empty(),
             verification,
