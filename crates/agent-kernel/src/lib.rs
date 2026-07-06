@@ -10,6 +10,7 @@ mod mailbox;
 mod memory;
 mod namespace;
 mod scheduler;
+mod signal;
 
 use agent_kernel_core::{
     ActionId, ActionRecord, AgentId, AgentRecord, CapabilityId, CheckpointId, CheckpointRecord,
@@ -35,6 +36,7 @@ pub struct AgentKernel<
     const FAULTS: usize = 0,
     const FAULT_HANDLERS: usize = 0,
     const FAULT_POLICIES: usize = 0,
+    const WAITERS: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -53,6 +55,7 @@ pub struct AgentKernel<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >,
 }
 
@@ -73,6 +76,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -91,6 +95,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     pub const fn new() -> Self {
@@ -291,6 +296,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -309,6 +315,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     fn default() -> Self {

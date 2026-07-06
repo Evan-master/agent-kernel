@@ -1,12 +1,12 @@
-//! Memory cell syscall facade.
+//! Wait signal syscall facade.
 //!
-//! This module belongs to `agent-kernel`. It exposes native remember/recall
-//! state operations as syscall-style methods while keeping fixed-capacity cell
-//! mutation inside `agent-kernel-core`.
+//! This module belongs to `agent-kernel`. It exposes task wait and signal
+//! emission operations as boundary methods while keeping waiter storage and run
+//! queue wakeup mutation inside `agent-kernel-core`.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, Event, KernelError, MemoryCellId, MemoryCellRecord, MemoryValue,
-    ResourceId,
+    AgentId, CapabilityId, KernelError, ResourceId, SignalKey, SignalOutcome, TaskId, WaiterId,
+    WaiterRecord,
 };
 
 use crate::AgentKernel;
@@ -50,38 +50,29 @@ impl<
         WAITERS,
     >
 {
-    pub fn sys_create_memory_cell(
+    pub fn sys_wait_task(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        resource: ResourceId,
+        signal: SignalKey,
+    ) -> Result<WaiterId, KernelError> {
+        self.core
+            .wait_task(agent, capability, task, resource, signal)
+    }
+
+    pub fn sys_emit_signal(
         &mut self,
         agent: AgentId,
         capability: CapabilityId,
         resource: ResourceId,
-        value: MemoryValue,
-    ) -> Result<MemoryCellId, KernelError> {
-        self.core
-            .create_memory_cell(agent, capability, resource, value)
+        signal: SignalKey,
+    ) -> Result<SignalOutcome, KernelError> {
+        self.core.emit_signal(agent, capability, resource, signal)
     }
 
-    pub fn sys_recall_memory_cell(
-        &mut self,
-        agent: AgentId,
-        capability: CapabilityId,
-        cell: MemoryCellId,
-    ) -> Result<MemoryValue, KernelError> {
-        self.core.recall_memory_cell(agent, capability, cell)
-    }
-
-    pub fn sys_remember_memory_cell(
-        &mut self,
-        agent: AgentId,
-        capability: CapabilityId,
-        cell: MemoryCellId,
-        value: MemoryValue,
-    ) -> Result<Event, KernelError> {
-        self.core
-            .remember_memory_cell(agent, capability, cell, value)
-    }
-
-    pub fn memory_cells(&self) -> &[MemoryCellRecord] {
-        self.core.memory_cells()
+    pub fn waiters(&self) -> &[WaiterRecord] {
+        self.core.waiters()
     }
 }

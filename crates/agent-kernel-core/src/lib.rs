@@ -46,6 +46,9 @@ mod resource_store;
 mod run_queue;
 mod scheduler;
 mod scheduler_tick;
+mod signal;
+mod signal_event;
+mod signal_store;
 mod task;
 mod task_event;
 mod task_lookup;
@@ -64,6 +67,7 @@ pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord}
 pub use id::{
     ActionId, AgentId, CapabilityId, CheckpointId, FaultHandlerId, FaultId, FaultPolicyId,
     IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, TaskId,
+    WaiterId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};
@@ -73,4 +77,5 @@ pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceKind};
 pub use run_queue::RunQueueEntry;
+pub use signal::{SignalKey, SignalOutcome, WaiterRecord};
 pub use task::{Task, TaskStatus};

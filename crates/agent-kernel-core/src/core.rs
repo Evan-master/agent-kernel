@@ -7,7 +7,7 @@
 use crate::{
     ActionRecord, AgentRecord, Capability, CheckpointRecord, Event, FaultHandlerRecord,
     FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord,
-    ObservationRecord, Resource, RunQueueEntry, Task,
+    ObservationRecord, Resource, RunQueueEntry, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -28,6 +28,7 @@ pub struct KernelCore<
     const FAULTS: usize = 0,
     const FAULT_HANDLERS: usize = 0,
     const FAULT_POLICIES: usize = 0,
+    const WAITERS: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) resources: [Option<Resource>; RESOURCES],
@@ -45,6 +46,7 @@ pub struct KernelCore<
     pub(crate) faults: [FaultRecord; FAULTS],
     pub(crate) fault_handlers: [FaultHandlerRecord; FAULT_HANDLERS],
     pub(crate) fault_policies: [FaultPolicyRecord; FAULT_POLICIES],
+    pub(crate) waiters: [WaiterRecord; WAITERS],
     pub(crate) agent_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -59,6 +61,7 @@ pub struct KernelCore<
     pub(crate) fault_len: usize,
     pub(crate) fault_handler_len: usize,
     pub(crate) fault_policy_len: usize,
+    pub(crate) waiter_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_observation: u64,
@@ -70,6 +73,7 @@ pub struct KernelCore<
     pub(crate) next_fault: u64,
     pub(crate) next_fault_handler: u64,
     pub(crate) next_fault_policy: u64,
+    pub(crate) next_waiter: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -90,6 +94,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     >
     KernelCore<
         AGENTS,
@@ -108,6 +113,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     pub const fn new() -> Self {
@@ -128,6 +134,7 @@ impl<
             faults: [FaultRecord::empty(); FAULTS],
             fault_handlers: [FaultHandlerRecord::empty(); FAULT_HANDLERS],
             fault_policies: [FaultPolicyRecord::empty(); FAULT_POLICIES],
+            waiters: [WaiterRecord::empty(); WAITERS],
             agent_len: 0,
             event_len: 0,
             action_len: 0,
@@ -142,6 +149,7 @@ impl<
             fault_len: 0,
             fault_handler_len: 0,
             fault_policy_len: 0,
+            waiter_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_observation: 1,
@@ -153,6 +161,7 @@ impl<
             next_fault: 1,
             next_fault_handler: 1,
             next_fault_policy: 1,
+            next_waiter: 1,
             next_sequence: 1,
         }
     }
@@ -179,6 +188,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -197,6 +207,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     fn default() -> Self {

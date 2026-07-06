@@ -6,18 +6,19 @@
 
 mod format;
 mod format_fault;
+mod format_signal;
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentId, CheckpointId, FaultKind, FaultPolicyAction, IntentKind, MemoryValue,
     MessageKind, MessagePayload, NamespaceKey, NamespaceObject, Operation, OperationSet,
-    ResourceKind, VerificationRequirement,
+    ResourceKind, SignalKey, VerificationRequirement,
 };
 
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
     let handler_agent = AgentId::new(3);
@@ -145,6 +146,24 @@ fn main() {
     let dispatched = kernel
         .sys_dispatch_next_with_quantum(target_agent, 2)
         .expect("target agent should redispatch recovered task");
+    assert_eq!(dispatched, task);
+    let wait_signal = SignalKey::new(1);
+    kernel
+        .sys_wait_task(
+            target_agent,
+            assignee_capability,
+            task,
+            workspace,
+            wait_signal,
+        )
+        .expect("target agent should wait on workspace signal");
+    let signal_outcome = kernel
+        .sys_emit_signal(agent, owner_capability, workspace, wait_signal)
+        .expect("owner agent should emit workspace signal");
+    assert_eq!(signal_outcome.woken_task, Some(task));
+    let dispatched = kernel
+        .sys_dispatch_next_with_quantum(target_agent, 2)
+        .expect("target agent should redispatch woken task");
     assert_eq!(dispatched, task);
     kernel
         .sys_complete_task(target_agent, assignee_capability, task)

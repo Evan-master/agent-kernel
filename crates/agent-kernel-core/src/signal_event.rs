@@ -1,11 +1,12 @@
-//! Fixed-capacity kernel observation store behavior.
+//! Wait signal event builders.
 //!
-//! This module records authorized observations without allocation and emits the
-//! corresponding replayable event through the kernel event log.
+//! This module belongs to `agent-kernel-core`. It keeps wait, signal, and wake
+//! event construction separate from signal state transitions while preserving
+//! fixed-field no_std event records.
 
 use crate::{
-    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, ObservationId,
-    ObservationRecord, Operation, OperationSet, ResourceId, VerificationRequirement,
+    AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId,
+    SignalKey, TaskId, VerificationRequirement, WaiterId,
 };
 
 impl<
@@ -47,49 +48,43 @@ impl<
         WAITERS,
     >
 {
-    pub fn observe(
+    pub(crate) fn record_wait_signal_event(
         &mut self,
+        kind: EventKind,
         agent: AgentId,
         capability: CapabilityId,
         resource: ResourceId,
+        task: Option<TaskId>,
+        waiter: Option<WaiterId>,
+        signal: SignalKey,
+        target_agent: Option<AgentId>,
     ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Observe)?;
-        if self.observation_len >= OBSERVATIONS {
-            return Err(KernelError::ObservationStoreFull);
-        }
-        self.ensure_event_slots(1)?;
-
-        let observation = ObservationId::new(self.next_observation);
-        self.next_observation += 1;
-        self.observations[self.observation_len] = ObservationRecord {
-            id: observation,
-            agent,
-            resource,
-            capability,
+        let intent = match task {
+            Some(task) => Some(self.find_task(task)?.intent),
+            None => None,
         };
-        self.observation_len += 1;
 
         self.record(Event {
             sequence: 0,
             agent,
-            kind: EventKind::Observation,
+            kind,
             resource: Some(resource),
             capability: Some(capability),
             source_capability: None,
-            intent: None,
+            intent,
             intent_kind: None,
             action: None,
-            observation: Some(observation),
+            observation: None,
             message: None,
             memory_cell: None,
             namespace_entry: None,
             namespace_key: None,
             namespace_object: None,
-            operation: Some(Operation::Observe),
+            operation: None,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
             checkpoint: None,
-            task: None,
+            task,
             task_ticks: None,
             task_quantum: None,
             fault: None,
@@ -97,13 +92,9 @@ impl<
             fault_detail: None,
             fault_policy: None,
             fault_policy_action: None,
-            waiter: None,
-            signal: None,
-            target_agent: None,
+            waiter,
+            signal: Some(signal),
+            target_agent,
         })
-    }
-
-    pub fn observations(&self) -> &[ObservationRecord] {
-        &self.observations[..self.observation_len]
     }
 }

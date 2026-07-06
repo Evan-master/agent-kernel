@@ -27,6 +27,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     >
     KernelCore<
         AGENTS,
@@ -45,6 +46,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     pub fn register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
@@ -90,6 +92,8 @@ impl<
             fault_detail: None,
             fault_policy: None,
             fault_policy_action: None,
+            waiter: None,
+            signal: None,
             target_agent: Some(agent),
         })
     }
@@ -197,6 +201,8 @@ impl<
             fault_detail: None,
             fault_policy: None,
             fault_policy_action: None,
+            waiter: None,
+            signal: None,
             target_agent: Some(agent),
         })
     }

@@ -10,6 +10,7 @@ use crate::format_fault::{
     format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
     format_fault_route_event, format_task_fault_event,
 };
+use crate::format_signal::{format_signal_event, format_task_signal_event};
 
 pub fn format_event(event: &Event) -> String {
     let agent = event.agent.raw();
@@ -91,8 +92,11 @@ pub fn format_event(event: &Event) -> String {
         EventKind::TaskYielded => format_task_event(event, "task_yielded"),
         EventKind::TaskTicked => format_task_tick_event(event, "task_ticked"),
         EventKind::TaskQuantumExpired => format_task_tick_event(event, "task_quantum_expired"),
+        EventKind::TaskWaiting => format_task_signal_event(event, "task_waiting"),
+        EventKind::TaskWoken => format_signal_event(event, "task_woken"),
         EventKind::TaskFaulted => format_task_fault_event(event, "task_faulted"),
         EventKind::TaskFaultRecovered => format_task_fault_event(event, "task_fault_recovered"),
+        EventKind::SignalEmitted => format_signal_event(event, "signal_emitted"),
         EventKind::FaultHandlerInstalled => {
             format_fault_handler_event(event, "fault_handler_installed")
         }

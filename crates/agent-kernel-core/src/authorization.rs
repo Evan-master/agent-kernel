@@ -25,6 +25,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     >
     KernelCore<
         AGENTS,
@@ -43,6 +44,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     pub(crate) fn ensure_authorized(

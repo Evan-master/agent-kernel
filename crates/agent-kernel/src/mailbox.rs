@@ -27,6 +27,7 @@ impl<
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
+        const WAITERS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -45,6 +46,7 @@ impl<
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
+        WAITERS,
     >
 {
     pub fn sys_send_message(

@@ -7,8 +7,8 @@
 use crate::{
     ActionId, AgentId, CapabilityId, CheckpointId, FaultId, FaultKind, FaultPolicyAction,
     FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId, NamespaceEntryId, NamespaceKey,
-    NamespaceObject, ObservationId, Operation, OperationSet, ResourceId, TaskId,
-    VerificationRequirement,
+    NamespaceObject, ObservationId, Operation, OperationSet, ResourceId, SignalKey, TaskId,
+    VerificationRequirement, WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -40,8 +40,11 @@ pub enum EventKind {
     TaskYielded,
     TaskTicked,
     TaskQuantumExpired,
+    TaskWaiting,
+    TaskWoken,
     TaskFaulted,
     TaskFaultRecovered,
+    SignalEmitted,
     FaultHandlerInstalled,
     FaultRouted,
     FaultPolicyInstalled,
@@ -86,6 +89,8 @@ pub struct Event {
     pub fault_detail: Option<u64>,
     pub fault_policy: Option<FaultPolicyId>,
     pub fault_policy_action: Option<FaultPolicyAction>,
+    pub waiter: Option<WaiterId>,
+    pub signal: Option<SignalKey>,
     pub target_agent: Option<AgentId>,
 }
 
@@ -119,6 +124,8 @@ impl Event {
             fault_detail: None,
             fault_policy: None,
             fault_policy_action: None,
+            waiter: None,
+            signal: None,
             target_agent: None,
         }
     }

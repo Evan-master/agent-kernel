@@ -6,12 +6,12 @@ It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 The project starts from new OS primitives instead of POSIX compatibility:
 agents, resources, capabilities, typed intents, actions, observations,
 checkpoints, rollback, verification, tasks, delegation, native mailbox IPC,
-task fault traps, fault handlers, fault policies, memory cells, native object
-namespace entries, and event logs.
+task wait signals, task fault traps, fault handlers, fault policies, memory
+cells, native object namespace entries, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, resource, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -46,17 +46,20 @@ The v0 flow is deliberately small:
 22. Apply the installed fault policy to route the fault to the handler.
 23. Let the handler receive and acknowledge the fault message.
 24. Recover, requeue, and redispatch the faulted task.
-25. Let the assignee complete the running task.
-26. Request verification for the completed task.
-27. Mark the intent fulfilled after task verification.
-28. Send a native kernel message from the owner agent to the target agent.
-29. Let the target agent receive and acknowledge that message.
-30. Create a native memory cell under a memory resource.
-31. Recall and remember memory cell state through explicit capabilities.
-32. Bind a memory cell into the workspace object namespace.
-33. Resolve that namespace entry through an observe capability.
-34. Rebind the namespace entry to the created task.
-35. Print the kernel event log from the supervisor.
+25. Let the assignee wait on a typed workspace signal.
+26. Emit the signal and wake the waiting task back into the run queue.
+27. Redispatch the woken task.
+28. Let the assignee complete the running task.
+29. Request verification for the completed task.
+30. Mark the intent fulfilled after task verification.
+31. Send a native kernel message from the owner agent to the target agent.
+32. Let the target agent receive and acknowledge that message.
+33. Create a native memory cell under a memory resource.
+34. Recall and remember memory cell state through explicit capabilities.
+35. Bind a memory cell into the workspace object namespace.
+36. Resolve that namespace entry through an observe capability.
+37. Rebind the namespace entry to the created task.
+38. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent suspension, agent resume, agent retirement, capability grants, derived
@@ -65,11 +68,12 @@ creation, rollback requests, task creation, intent binding, task completion,
 task verification, intent fulfillment, delegation, scheduler ticks, quantum
 expiry, task fault trapping, fault handler installation, fault policy
 installation, fault routing, fault policy application, task fault recovery,
-message send, message receive, message acknowledgement, memory cell creation,
-memory recall, memory remember, namespace bind, namespace resolve, and
-namespace rebind are first-class kernel events, not external tooling.
-Agents, checkpoints, fault records, fault handlers, fault policies, messages,
-memory cells, and namespace entries are also
+task waiting, signal emission, task wakeup, message send, message receive,
+message acknowledgement, memory cell creation, memory recall, memory remember,
+namespace bind, namespace resolve, and namespace rebind are first-class kernel
+events, not external tooling.
+Agents, checkpoints, waiters, fault records, fault handlers, fault policies,
+messages, memory cells, and namespace entries are also
 queryable fixed-capacity kernel
 records, and new root or derived capabilities can only be issued to active
 registered agents. Kernel operations that act on behalf of an `AgentId` reject
@@ -77,9 +81,10 @@ unknown, suspended, or retired actors before authorization, state, queue,
 mailbox, memory, or capacity checks. Rollback moves the checkpoint into
 `RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO
 run queue, become `Running` with an explicit quantum, accumulate deterministic
-ticks, and return to the queue when their quantum expires. `IntentId`, `TaskId`, and
-`MessageId` values are allocated by fixed-capacity kernel stores rather than
-invented by the supervisor. `MemoryCellId` values are also kernel-allocated, and
+ticks, return to the queue when their quantum expires, and can enter `Waiting`
+until an authorized signal emission wakes them back into the run queue.
+`IntentId`, `TaskId`, and `MessageId` values are allocated by fixed-capacity kernel stores rather than
+invented by the supervisor. `WaiterId` and `MemoryCellId` values are also kernel-allocated, and
 memory recall writes an audit event before returning a value. Delegation derives
 a task-scoped action capability for the assignee, so the supervisor does not
 grant broad resource authority to complete delegated work. Revoking the source
@@ -192,17 +197,21 @@ event[28] message_acknowledged agent=3 target_agent=1 message=1
 event[29] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7
 event[30] task_queued agent=2 resource=1 task=1
 event[31] task_dispatched agent=2 resource=1 task=1
-event[32] task_completed agent=2 resource=1 task=1
-event[33] task_verified agent=1 resource=1 task=1
-event[34] intent_fulfilled agent=1 resource=1 intent=1
-event[35] message_sent agent=1 target_agent=2 message=2
-event[36] message_received agent=2 target_agent=1 message=2
-event[37] message_acknowledged agent=2 target_agent=1 message=2
-event[38] capability_granted agent=1 resource=2 capability=3
-event[39] memory_cell_created agent=1 resource=2 memory_cell=1
-event[40] memory_cell_recalled agent=1 resource=2 memory_cell=1
-event[41] memory_cell_remembered agent=1 resource=2 memory_cell=1
-event[42] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
-event[43] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
-event[44] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
+event[32] task_waiting agent=2 resource=1 task=1 waiter=1 signal=1
+event[33] signal_emitted agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2
+event[34] task_woken agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2
+event[35] task_dispatched agent=2 resource=1 task=1
+event[36] task_completed agent=2 resource=1 task=1
+event[37] task_verified agent=1 resource=1 task=1
+event[38] intent_fulfilled agent=1 resource=1 intent=1
+event[39] message_sent agent=1 target_agent=2 message=2
+event[40] message_received agent=2 target_agent=1 message=2
+event[41] message_acknowledged agent=2 target_agent=1 message=2
+event[42] capability_granted agent=1 resource=2 capability=3
+event[43] memory_cell_created agent=1 resource=2 memory_cell=1
+event[44] memory_cell_recalled agent=1 resource=2 memory_cell=1
+event[45] memory_cell_remembered agent=1 resource=2 memory_cell=1
+event[46] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
+event[47] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
+event[48] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
 ```

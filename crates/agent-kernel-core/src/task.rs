@@ -12,6 +12,7 @@ pub enum TaskStatus {
     Delegated,
     Accepted,
     Running,
+    Waiting,
     Faulted,
     Completed,
     Verified,
