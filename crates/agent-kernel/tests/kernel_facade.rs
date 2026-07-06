@@ -1,8 +1,9 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, ActionStatus, AgentEntryKind, AgentId, CapabilityId, CheckpointId, CheckpointStatus,
-    EventKind, IntentId, IntentKind, KernelError, Operation, OperationSet, ResourceId,
-    ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
+    ActionId, ActionStatus, AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind,
+    CapabilityId, CheckpointId, CheckpointStatus, EventKind, IntentId, IntentKind, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<4, 4, 6, 64, 8, 8, 8, 8, 8, 4>;
@@ -221,8 +222,25 @@ fn task_syscalls_record_full_task_lifecycle() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive assignee capability");
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     kernel
-        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            assignee,
+            assignee_capability,
+            task,
+            image,
+            AgentEntryKind::Worker,
+        )
         .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)
@@ -247,14 +265,19 @@ fn task_syscalls_record_full_task_lifecycle() {
     assert_eq!(kernel.events()[5].kind, EventKind::IntentBound);
     assert_eq!(kernel.events()[6].kind, EventKind::CapabilityDerived);
     assert_eq!(kernel.events()[7].kind, EventKind::DelegationRequested);
-    assert_eq!(kernel.events()[8].kind, EventKind::AgentLaunched);
-    assert_eq!(kernel.events()[9].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[10].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[11].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[12].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[13].kind, EventKind::TaskVerified);
-    assert_eq!(kernel.events()[14].kind, EventKind::IntentFulfilled);
-    for event in &kernel.events()[4..=14] {
+    assert_eq!(kernel.events()[8].kind, EventKind::AgentImageRegistered);
+    assert_eq!(kernel.events()[8].agent_image, Some(image));
+    assert_eq!(kernel.events()[9].kind, EventKind::AgentLaunched);
+    assert_eq!(kernel.events()[10].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[11].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[12].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[13].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[14].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[15].kind, EventKind::IntentFulfilled);
+    for event in &kernel.events()[4..=7] {
+        assert_eq!(event.intent, Some(intent));
+    }
+    for event in &kernel.events()[9..=15] {
         assert_eq!(event.intent, Some(intent));
     }
 }
@@ -338,14 +361,43 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
     let second_capability = kernel.tasks()[1]
         .delegated_capability
         .expect("second delegation should derive capability");
+    let first_image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([2; 32]),
+            1,
+            1,
+        )
+        .expect("first worker image should register");
+    let second_image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([3; 32]),
+            1,
+            1,
+        )
+        .expect("second worker image should register");
     kernel
-        .sys_launch_task_agent(first_agent, first_capability, first, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            first_agent,
+            first_capability,
+            first,
+            first_image,
+            AgentEntryKind::Worker,
+        )
         .expect("first agent should launch for task");
     kernel
         .sys_launch_task_agent(
             second_agent,
             second_capability,
             second,
+            second_image,
             AgentEntryKind::Worker,
         )
         .expect("second agent should launch for task");

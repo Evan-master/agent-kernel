@@ -1,9 +1,10 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, EventKind, IntentKind, IntentStatus, KernelCore,
-    Operation, OperationSet, ResourceId, ResourceKind, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, EventKind, IntentKind,
+    IntentStatus, KernelCore, Operation, OperationSet, ResourceId, ResourceKind,
+    VerificationRequirement,
 };
 
-type TestCore = KernelCore<2, 4, 8, 16, 2, 2, 2, 4, 4, 4>;
+type TestCore = KernelCore<2, 4, 8, 16, 2, 2, 2, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 2>;
 
 fn prepare_agent(core: &mut TestCore) -> (AgentId, CapabilityId, ResourceId) {
     let agent = AgentId::new(1);
@@ -18,16 +19,32 @@ fn prepare_agent(core: &mut TestCore) -> (AgentId, CapabilityId, ResourceId) {
     (agent, capability, resource)
 }
 
+fn digest(byte: u8) -> AgentImageDigest {
+    AgentImageDigest::new([byte; 32])
+}
+
 #[test]
 fn launch_agent_records_entry_and_event() {
     let mut core = TestCore::new();
     let (agent, capability, resource) = prepare_agent(&mut core);
+    let image = core
+        .register_agent_image(
+            agent,
+            capability,
+            resource,
+            AgentImageKind::Supervisor,
+            digest(1),
+            1,
+            1,
+        )
+        .expect("image should register");
 
     let event = core
         .launch_agent(
             agent,
             capability,
             resource,
+            image,
             AgentEntryKind::Supervisor,
             None,
         )
@@ -38,14 +55,16 @@ fn launch_agent_records_entry_and_event() {
     assert_eq!(event.resource, Some(resource));
     assert_eq!(event.capability, Some(capability));
     assert_eq!(event.intent, None);
+    assert_eq!(event.agent_image, Some(image));
     assert_eq!(event.target_agent, Some(agent));
-    assert_eq!(core.events()[2], event);
+    assert_eq!(core.events()[3], event);
 
     assert_eq!(core.agent_entries().len(), 1);
     let entry = core.agent_entry(agent).expect("agent entry should exist");
     assert_eq!(entry.agent, agent);
     assert_eq!(entry.resource, resource);
     assert_eq!(entry.capability, capability);
+    assert_eq!(entry.image, image);
     assert_eq!(entry.kind, AgentEntryKind::Supervisor);
     assert_eq!(entry.intent, None);
 }
@@ -54,6 +73,17 @@ fn launch_agent_records_entry_and_event() {
 fn launch_agent_accepts_declared_action_intent() {
     let mut core = TestCore::new();
     let (agent, capability, resource) = prepare_agent(&mut core);
+    let image = core
+        .register_agent_image(
+            agent,
+            capability,
+            resource,
+            AgentImageKind::Worker,
+            digest(2),
+            1,
+            1,
+        )
+        .expect("image should register");
     let intent = core
         .declare_intent(
             agent,
@@ -69,6 +99,7 @@ fn launch_agent_accepts_declared_action_intent() {
             agent,
             capability,
             resource,
+            image,
             AgentEntryKind::Worker,
             Some(intent),
         )

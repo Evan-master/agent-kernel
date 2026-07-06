@@ -6,8 +6,8 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentEntryKind, AgentId, CapabilityId, KernelError, Operation, OperationSet,
-    ResourceId, ResourceKind,
+    ActionId, AgentEntryKind, AgentId, AgentImageDigest, AgentImageId, AgentImageKind,
+    CapabilityId, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -57,6 +57,7 @@ pub struct BootReport {
     pub bootstrap_agent: AgentId,
     pub bootstrap_resource: ResourceId,
     pub bootstrap_capability: CapabilityId,
+    pub bootstrap_image: AgentImageId,
     pub boot_action: ActionId,
 }
 
@@ -125,10 +126,20 @@ impl<
                 .with(Operation::Act)
                 .with(Operation::Verify),
         )?;
+        let image = kernel.sys_register_agent_image(
+            config.bootstrap_agent,
+            capability,
+            resource,
+            AgentImageKind::Bootstrap,
+            AgentImageDigest::new([0; 32]),
+            1,
+            1,
+        )?;
         kernel.sys_launch_agent(
             config.bootstrap_agent,
             capability,
             resource,
+            image,
             AgentEntryKind::Bootstrap,
             None,
         )?;
@@ -158,6 +169,7 @@ impl<
                 bootstrap_agent: config.bootstrap_agent,
                 bootstrap_resource: resource,
                 bootstrap_capability: capability,
+                bootstrap_image: image,
                 boot_action: config.boot_action,
             },
         })

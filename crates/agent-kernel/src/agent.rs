@@ -5,8 +5,9 @@
 //! callers mutate `agent-kernel-core` stores directly.
 
 use agent_kernel_core::{
-    AgentEntryKind, AgentEntryRecord, AgentExecutionContext, AgentId, AgentRecord, CapabilityId,
-    Event, IntentId, KernelError, ResourceId, TaskId,
+    AgentEntryKind, AgentEntryRecord, AgentExecutionContext, AgentId, AgentImageDigest,
+    AgentImageId, AgentImageKind, AgentImageRecord, AgentRecord, CapabilityId, Event, IntentId,
+    KernelError, ResourceId, TaskId,
 };
 
 use crate::AgentKernel;
@@ -29,6 +30,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     AgentKernel<
         AGENTS,
@@ -48,10 +50,41 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub fn sys_register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
         self.core.register_agent(agent)
+    }
+
+    pub fn sys_register_agent_image(
+        &mut self,
+        owner: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        kind: AgentImageKind,
+        digest: AgentImageDigest,
+        abi_version: u16,
+        entry_version: u16,
+    ) -> Result<AgentImageId, KernelError> {
+        self.core.register_agent_image(
+            owner,
+            capability,
+            resource,
+            kind,
+            digest,
+            abi_version,
+            entry_version,
+        )
+    }
+
+    pub fn sys_retire_agent_image(
+        &mut self,
+        owner: AgentId,
+        capability: CapabilityId,
+        image: AgentImageId,
+    ) -> Result<Event, KernelError> {
+        self.core.retire_agent_image(owner, capability, image)
     }
 
     pub fn sys_launch_agent(
@@ -59,11 +92,12 @@ impl<
         agent: AgentId,
         capability: CapabilityId,
         resource: ResourceId,
+        image: AgentImageId,
         kind: AgentEntryKind,
         intent: Option<IntentId>,
     ) -> Result<Event, KernelError> {
         self.core
-            .launch_agent(agent, capability, resource, kind, intent)
+            .launch_agent(agent, capability, resource, image, kind, intent)
     }
 
     pub fn sys_launch_task_agent(
@@ -71,9 +105,11 @@ impl<
         agent: AgentId,
         capability: CapabilityId,
         task: TaskId,
+        image: AgentImageId,
         kind: AgentEntryKind,
     ) -> Result<Event, KernelError> {
-        self.core.launch_task_agent(agent, capability, task, kind)
+        self.core
+            .launch_task_agent(agent, capability, task, image, kind)
     }
 
     pub fn sys_suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
@@ -96,8 +132,16 @@ impl<
         self.core.agent_entries()
     }
 
+    pub fn agent_images(&self) -> &[AgentImageRecord] {
+        self.core.agent_images()
+    }
+
     pub fn agent_entry(&self, agent: AgentId) -> Result<AgentEntryRecord, KernelError> {
         self.core.agent_entry(agent)
+    }
+
+    pub fn agent_image(&self, image: AgentImageId) -> Result<AgentImageRecord, KernelError> {
+        self.core.agent_image(image)
     }
 
     pub fn execution_contexts(&self) -> &[AgentExecutionContext] {

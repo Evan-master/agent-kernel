@@ -1,7 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultKind, FaultPolicyAction, FaultPolicyId,
-    IntentKind, KernelCore, MessageId, MessageKind, Operation, OperationSet, ResourceId,
-    ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, EventKind, FaultKind,
+    FaultPolicyAction, FaultPolicyId, IntentKind, KernelCore, MessageId, MessageKind, Operation,
+    OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type InstallCore = KernelCore<1, 1, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1>;
@@ -142,8 +142,25 @@ fn create_running_task<
         .expect("task should delegate")
         .capability
         .expect("delegation should derive capability");
-    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        delegated_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)

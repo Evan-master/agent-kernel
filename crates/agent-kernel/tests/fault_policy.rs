@@ -1,8 +1,8 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, EventKind, FaultKind, FaultPolicyAction, FaultPolicyId, IntentKind,
-    MessageId, MessageKind, MessageStatus, Operation, OperationSet, ResourceKind, TaskStatus,
-    VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, FaultKind,
+    FaultPolicyAction, FaultPolicyId, IntentKind, MessageId, MessageKind, MessageStatus, Operation,
+    OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<3, 1, 3, 34, 0, 0, 0, 1, 1, 1, 2, 0, 0, 1, 1, 1>;
@@ -71,8 +71,25 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     kernel
-        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            assignee,
+            assignee_capability,
+            task,
+            image,
+            AgentEntryKind::Worker,
+        )
         .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)
@@ -121,8 +138,8 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
     assert_eq!(kernel.messages()[0].kind, MessageKind::Fault);
     assert_eq!(kernel.messages()[0].status, MessageStatus::Acknowledged);
     assert_eq!(kernel.messages()[0].payload.fault, Some(fault));
-    assert_eq!(kernel.events()[16].kind, EventKind::MessageSent);
-    assert_eq!(kernel.events()[17].kind, EventKind::FaultRouted);
-    assert_eq!(kernel.events()[18].kind, EventKind::FaultPolicyApplied);
+    assert_eq!(kernel.events()[17].kind, EventKind::MessageSent);
+    assert_eq!(kernel.events()[18].kind, EventKind::FaultRouted);
+    assert_eq!(kernel.events()[19].kind, EventKind::FaultPolicyApplied);
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Completed);
 }

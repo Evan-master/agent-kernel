@@ -1,7 +1,7 @@
 use agent_kernel_core::{
-    ActionId, AgentEntryKind, AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus,
-    VerificationRequirement,
+    ActionId, AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, EventKind,
+    IntentId, IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceId,
+    ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 8, 32, 4, 2, 2, 6, 6, 4>;
@@ -67,15 +67,39 @@ fn create_delegated_task(core: &mut TestCore, owner: AgentId, assignee: AgentId)
     }
 }
 
-fn dispatch_task(core: &mut TestCore, assignee: AgentId, task: TaskId) {
+fn dispatch_task(
+    core: &mut TestCore,
+    owner: AgentId,
+    owner_capability: CapabilityId,
+    resource: ResourceId,
+    assignee: AgentId,
+    task: TaskId,
+) {
     let delegated_capability = core
         .tasks()
         .iter()
         .find(|task_record| task_record.id == task)
         .and_then(|task_record| task_record.delegated_capability)
         .expect("task should have delegated capability");
-    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        delegated_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -113,7 +137,14 @@ fn derived_capability_completes_dispatched_task_without_manual_grant() {
     let owner = AgentId::new(3);
     let assignee = AgentId::new(4);
     let delegated = create_delegated_task(&mut core, owner, assignee);
-    dispatch_task(&mut core, assignee, delegated.task);
+    dispatch_task(
+        &mut core,
+        owner,
+        delegated.owner_capability,
+        delegated.resource,
+        assignee,
+        delegated.task,
+    );
 
     let event = core
         .complete_task(assignee, delegated.delegated_capability, delegated.task)
@@ -179,7 +210,14 @@ fn derived_capability_cannot_complete_a_different_task() {
         .expect("second task should be created");
     core.delegate_task(owner, owner_capability, second, assignee)
         .expect("second task should delegate");
-    dispatch_task(&mut core, assignee, second);
+    dispatch_task(
+        &mut core,
+        owner,
+        owner_capability,
+        resource,
+        assignee,
+        second,
+    );
     let events_before = core.events().len();
 
     let result = core.complete_task(assignee, first_capability, second);

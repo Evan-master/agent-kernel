@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, AgentStatus, CapabilityId, EventKind, IntentKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, AgentStatus, CapabilityId,
+    EventKind, IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind,
+    TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 1, 1, 8, 0, 0, 0, 0, 0, 0>;
@@ -234,8 +235,25 @@ fn dispatch_next_rejects_unregistered_actor_without_mutation() {
     let runner_capability = core.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
-    core.launch_task_agent(runner, runner_capability, task, AgentEntryKind::Worker)
-        .expect("runner should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        runner,
+        runner_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("runner should launch for delegated task");
     core.accept_task(runner, task)
         .expect("task should be accepted");
     core.enqueue_task(runner, task)

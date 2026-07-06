@@ -2,7 +2,9 @@
 
 use agent_kernel_core::{Event, EventKind};
 
-use crate::format_agent::{format_agent_event, format_agent_launch_event};
+use crate::format_agent::{
+    format_agent_event, format_agent_image_event, format_agent_launch_event,
+};
 use crate::format_fault::{
     format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
     format_fault_route_event, format_task_fault_event,
@@ -18,6 +20,10 @@ pub fn format_event(event: &Event) -> String {
 
     match event.kind {
         EventKind::AgentRegistered => format_agent_event(event, "agent_registered"),
+        EventKind::AgentImageRegistered => {
+            format_agent_image_event(event, "agent_image_registered")
+        }
+        EventKind::AgentImageRetired => format_agent_image_event(event, "agent_image_retired"),
         EventKind::AgentLaunched => format_agent_launch_event(event),
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),

@@ -36,7 +36,7 @@
 - Later modify: `crates/agent-kernel-core/src/error.rs`
 - Later modify: `crates/agent-kernel-core/src/lib.rs`
 
-- [ ] **Step 1: Write failing registration tests**
+- [x] **Step 1: Write failing registration tests**
 
 Create `crates/agent-kernel-core/tests/agent_image.rs`:
 
@@ -189,7 +189,7 @@ fn register_agent_image_store_full_leaves_event_log_unchanged() {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify red**
+- [x] **Step 2: Run the focused test and verify red**
 
 Run:
 
@@ -210,7 +210,7 @@ Expected: compile failure naming missing `AgentImageDigest`, `AgentImageKind`, `
 - Modify: `crates/agent-kernel-core/src/error.rs`
 - Modify: `crates/agent-kernel-core/src/lib.rs`
 
-- [ ] **Step 1: Add typed image id and model**
+- [x] **Step 1: Add typed image id and model**
 
 Add `AgentImageId` to `id.rs` with the same `new` and `raw` shape as other ids.
 
@@ -277,7 +277,7 @@ impl AgentImageRecord {
 }
 ```
 
-- [ ] **Step 2: Wire event, error, core store, and exports**
+- [x] **Step 2: Wire event, error, core store, and exports**
 
 Update `event.rs` by inserting `AgentImageDigest`, `AgentImageId`, and
 `AgentImageKind` into the current `use crate::{...}` import list.
@@ -346,7 +346,7 @@ pub use agent_image::{AgentImageDigest, AgentImageKind, AgentImageRecord, AgentI
 
 Also add `AgentImageId` to the current public `pub use id::{...};` list.
 
-- [ ] **Step 3: Implement image registration**
+- [x] **Step 3: Implement image registration**
 
 Create `agent_image_store.rs` with registration, lookup, and event recording:
 
@@ -473,7 +473,7 @@ impl<
 
 Use a private `record_agent_image_registered_event` helper that writes all image replay fields. Do not duplicate digest/version fields on non-registration events.
 
-- [ ] **Step 4: Verify registration green**
+- [x] **Step 4: Verify registration green**
 
 Run:
 
@@ -489,7 +489,7 @@ Expected: all tests in `agent_image.rs` pass.
 - Modify: `crates/agent-kernel-core/tests/agent_image.rs`
 - Modify: `crates/agent-kernel-core/src/agent_image_store.rs`
 
-- [ ] **Step 1: Add retirement red tests**
+- [x] **Step 1: Add retirement red tests**
 
 Append to `agent_image.rs`:
 
@@ -540,7 +540,7 @@ fn retire_agent_image_requires_owner_and_rollback_without_mutation() {
 }
 ```
 
-- [ ] **Step 2: Run retirement tests and verify red**
+- [x] **Step 2: Run retirement tests and verify red**
 
 Run:
 
@@ -550,7 +550,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: compile failure or method-not-found failure for `retire_agent_image`.
 
-- [ ] **Step 3: Implement retirement**
+- [x] **Step 3: Implement retirement**
 
 In `agent_image_store.rs`, add mutable lookup and retirement:
 
@@ -578,7 +578,7 @@ pub fn retire_agent_image(
 
 The retirement event sets `agent_image` and `agent_image_kind`; digest and version fields stay `None`.
 
-- [ ] **Step 4: Verify retirement green**
+- [x] **Step 4: Verify retirement green**
 
 Run:
 
@@ -597,7 +597,7 @@ Expected: all image registration and retirement tests pass.
 - Modify: `crates/agent-kernel-core/tests/agent_launch_errors.rs`
 - Modify: launch callers under `crates/agent-kernel-core/tests/`
 
-- [ ] **Step 1: Add launch image red tests**
+- [x] **Step 1: Add launch image red tests**
 
 In `crates/agent-kernel-core/tests/agent_launch.rs`, import `AgentImageDigest` and `AgentImageKind`. Add helper:
 
@@ -652,7 +652,7 @@ assert_eq!(result, Err(KernelError::AgentImageResourceMismatch));
 assert_eq!(result, Err(KernelError::AgentImageKindMismatch));
 ```
 
-- [ ] **Step 2: Run launch tests and verify red**
+- [x] **Step 2: Run launch tests and verify red**
 
 Run:
 
@@ -662,7 +662,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: compile failures because `launch_agent` does not accept `AgentImageId` and `AgentEntryRecord` has no `image`.
 
-- [ ] **Step 3: Implement launch image binding**
+- [x] **Step 3: Implement launch image binding**
 
 Update `AgentEntryRecord`:
 
@@ -730,7 +730,7 @@ pub(crate) fn ensure_launch_image(
 
 Use direct kind mapping in a small private helper.
 
-- [ ] **Step 4: Migrate core launch callers**
+- [x] **Step 4: Migrate core launch callers**
 
 For each `launch_agent` or `launch_task_agent` call found by:
 
@@ -740,7 +740,7 @@ rg -n "launch_agent\\(|launch_task_agent\\(" crates/agent-kernel-core/tests -g '
 
 register a matching image immediately before launch using the same agent, resource, and capability. For task-scoped launches, use `AgentImageKind::Worker` and the task resource.
 
-- [ ] **Step 5: Verify core launch green**
+- [x] **Step 5: Verify core launch green**
 
 Run:
 
@@ -759,7 +759,7 @@ Expected: all core tests pass.
 - Modify: `crates/agent-kernel/tests/kernel_facade.rs`
 - Modify: launch callers under `crates/agent-kernel/tests/`
 
-- [ ] **Step 1: Write facade red tests**
+- [x] **Step 1: Write facade red tests**
 
 In `crates/agent-kernel/tests/agent_launch.rs`, register an image through the facade:
 
@@ -782,7 +782,7 @@ assert_eq!(event.agent_image, Some(image));
 assert_eq!(kernel.agent_image(image).expect("image should be queryable").digest, AgentImageDigest::new([11; 32]));
 ```
 
-- [ ] **Step 2: Run facade tests and verify red**
+- [x] **Step 2: Run facade tests and verify red**
 
 Run:
 
@@ -792,7 +792,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: compile failure for missing facade image syscalls and launch signatures.
 
-- [ ] **Step 3: Implement facade wrappers and generic propagation**
+- [x] **Step 3: Implement facade wrappers and generic propagation**
 
 Append `const AGENT_IMAGES: usize = 0` after `WAITERS` in `AgentKernel`, pass it through to `KernelCore`, and update all facade impl generic headers.
 
@@ -832,7 +832,7 @@ pub fn agent_image(&self, image: AgentImageId) -> Result<AgentImageRecord, Kerne
 
 Update `sys_launch_agent` and `sys_launch_task_agent` to accept `AgentImageId`.
 
-- [ ] **Step 4: Migrate facade launch callers**
+- [x] **Step 4: Migrate facade launch callers**
 
 For each facade launch call found by:
 
@@ -842,7 +842,7 @@ rg -n "sys_launch_agent\\(|sys_launch_task_agent\\(" crates/agent-kernel/tests c
 
 register a matching image and pass the image id into the launch call.
 
-- [ ] **Step 5: Verify facade green**
+- [x] **Step 5: Verify facade green**
 
 Run:
 
@@ -865,7 +865,7 @@ Expected: all facade tests pass.
 - Modify: `crates/agent-kernel-x86_64/src/main.rs`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add supervisor image registration output**
+- [x] **Step 1: Add supervisor image registration output**
 
 In supervisor `main.rs`, import `AgentImageDigest` and `AgentImageKind`. After the owner capability grant, register:
 
@@ -901,7 +901,7 @@ let worker_image = kernel
 
 Pass `supervisor_image` and `worker_image` to launch calls.
 
-- [ ] **Step 2: Render image events and launch image ids**
+- [x] **Step 2: Render image events and launch image ids**
 
 Add `EventKind::AgentImageRegistered` and `EventKind::AgentImageRetired` to `format.rs`. Add a formatter that renders:
 
@@ -922,7 +922,7 @@ and task-scoped launch renders:
 event[N] agent_launched agent=A resource=R capability=C image=I task=T
 ```
 
-- [ ] **Step 3: Update boot flow**
+- [x] **Step 3: Update boot flow**
 
 In `agent-kernel-boot/src/lib.rs`, add `bootstrap_image: AgentImageId` to `BootReport`. Register a bootstrap image with digest `[0; 32]`, ABI version `1`, entry version `1`, and kind `AgentImageKind::Bootstrap` before launching the bootstrap agent. Pass that image into `sys_launch_agent`.
 
@@ -939,7 +939,7 @@ assert_eq!(events[5].kind, EventKind::ActionExecuted);
 assert_eq!(events[6].kind, EventKind::VerificationRequested);
 ```
 
-- [ ] **Step 4: Update x86 serial labels**
+- [x] **Step 4: Update x86 serial labels**
 
 In `agent-kernel-x86_64/src/main.rs`, add match arms:
 
@@ -952,7 +952,7 @@ EventKind::AgentImageRetired => {
 }
 ```
 
-- [ ] **Step 5: Update README traces**
+- [x] **Step 5: Update README traces**
 
 Update README current scope and behavior text to include agent images. Update boot trace to include:
 
@@ -975,7 +975,7 @@ event[19] agent_image_registered agent=2 resource=1 capability=2 image=2 kind=wo
 event[20] agent_launched agent=2 resource=1 capability=2 image=2 task=1
 ```
 
-- [ ] **Step 6: Verify supervisor and boot green**
+- [x] **Step 6: Verify supervisor and boot green**
 
 Run:
 
@@ -991,7 +991,7 @@ Expected: supervisor and boot tests pass with image registration events in the o
 - Modify checked plan status in `docs/superpowers/plans/2026-07-06-agent-image-v0.md`
 - Commit all implementation files
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -1001,7 +1001,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: no formatting diff.
 
-- [ ] **Step 2: Run full workspace tests**
+- [x] **Step 2: Run full workspace tests**
 
 Run:
 
@@ -1011,7 +1011,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: all workspace tests pass.
 
-- [ ] **Step 3: Run supervisor**
+- [x] **Step 3: Run supervisor**
 
 Run:
 
@@ -1021,7 +1021,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: output includes `agent_image_registered` before both launch events and each `agent_launched` line includes `image=`.
 
-- [ ] **Step 4: Run QEMU boot**
+- [x] **Step 4: Run QEMU boot**
 
 Run:
 
@@ -1031,7 +1031,7 @@ PATH="$HOME/.cargo/bin:$PATH" RUSTC="$(rustup which rustc --toolchain nightly)" 
 
 Expected: serial output includes `AGENT_KERNEL_QEMU_BOOT_OK`, `event[3] agent_image_registered`, `event[4] agent_launched`, and `SUPERVISOR_HANDOFF_READY`.
 
-- [ ] **Step 5: no_std and file-size checks**
+- [x] **Step 5: no_std and file-size checks**
 
 Run:
 
@@ -1042,7 +1042,7 @@ find crates/agent-kernel-core/src crates/agent-kernel/src crates/agent-superviso
 
 Expected: no forbidden no_std symbols in no_std crates. New files remain under hard limits: core modules under 400 lines, facade modules under 320 lines, supervisor modules under 450 lines, tests under 500 lines.
 
-- [ ] **Step 6: Commit and push**
+- [x] **Step 6: Commit and push**
 
 Run:
 

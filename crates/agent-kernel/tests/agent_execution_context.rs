@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentExecutionState, AgentId, IntentKind, Operation, OperationSet,
-    ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentExecutionState, AgentId, AgentImageDigest, AgentImageKind, IntentKind,
+    Operation, OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<2, 1, 4, 24, 0, 0, 0, 2, 2, 2>;
@@ -47,8 +47,25 @@ fn execution_contexts_expose_dispatch_and_completion_state() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     kernel
-        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            assignee,
+            assignee_capability,
+            task,
+            image,
+            AgentEntryKind::Worker,
+        )
         .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)

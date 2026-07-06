@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind, SignalKey, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId,
+    IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
+    SignalKey, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<3, 4, 16, 96, 0, 0, 0, 6, 6, 6, 0, 0, 0, 1, 0, 0, 1>;
@@ -71,6 +72,19 @@ fn create_delegated_task(
     task
 }
 
+fn register_worker_image(core: &mut TestCore, prepared: &PreparedTask) -> AgentImageId {
+    core.register_agent_image(
+        prepared.owner,
+        prepared.owner_capability,
+        prepared.resource,
+        AgentImageKind::Worker,
+        AgentImageDigest::new([1; 32]),
+        1,
+        1,
+    )
+    .expect("worker image should register")
+}
+
 #[test]
 fn enqueue_rejects_unlaunched_assignee_without_queue_or_event() {
     let mut core = TestCore::new();
@@ -98,10 +112,12 @@ fn task_scoped_entry_rejects_another_task_without_queue_or_event() {
         prepared.resource,
         prepared.owner_capability,
     );
+    let image = register_worker_image(&mut core, &prepared);
     core.launch_task_agent(
         prepared.worker,
         prepared.worker_capability,
         prepared.task,
+        image,
         AgentEntryKind::Worker,
     )
     .expect("worker should launch for first task");
@@ -120,10 +136,12 @@ fn task_scoped_entry_rejects_another_task_without_queue_or_event() {
 fn revoked_launch_capability_blocks_running_task_ticks() {
     let mut core = TestCore::new();
     let prepared = prepare_worker_task(&mut core);
+    let image = register_worker_image(&mut core, &prepared);
     core.launch_task_agent(
         prepared.worker,
         prepared.worker_capability,
         prepared.task,
+        image,
         AgentEntryKind::Worker,
     )
     .expect("worker should launch");
@@ -150,10 +168,12 @@ fn signal_wakeup_rejects_revoked_waiter_launch_authority_without_requeue() {
     let mut core = TestCore::new();
     let prepared = prepare_worker_task(&mut core);
     let signal = SignalKey::new(1);
+    let image = register_worker_image(&mut core, &prepared);
     core.launch_task_agent(
         prepared.worker,
         prepared.worker_capability,
         prepared.task,
+        image,
         AgentEntryKind::Worker,
     )
     .expect("worker should launch");

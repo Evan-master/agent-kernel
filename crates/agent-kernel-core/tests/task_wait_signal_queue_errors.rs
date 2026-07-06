@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, IntentKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceKind, SignalKey, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceKind, SignalKey, TaskStatus, VerificationRequirement,
 };
 
 #[test]
@@ -26,10 +26,22 @@ fn emit_signal_run_queue_full_leaves_waiter_waiting() {
     let assignee_runtime_capability = core
         .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
         .expect("assignee runtime capability should fit");
+    let image = core
+        .register_agent_image(
+            assignee,
+            assignee_runtime_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     core.launch_agent(
         assignee,
         assignee_runtime_capability,
         resource,
+        image,
         AgentEntryKind::Worker,
         None,
     )

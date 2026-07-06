@@ -40,6 +40,7 @@ pub struct AgentKernel<
     const FAULT_HANDLERS: usize = 0,
     const FAULT_POLICIES: usize = 0,
     const WAITERS: usize = 0,
+    const AGENT_IMAGES: usize = AGENTS,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -59,6 +60,7 @@ pub struct AgentKernel<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >,
 }
 
@@ -80,6 +82,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     AgentKernel<
         AGENTS,
@@ -99,6 +102,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub const fn new() -> Self {
@@ -263,6 +267,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -282,6 +287,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     fn default() -> Self {

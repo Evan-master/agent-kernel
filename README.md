@@ -6,14 +6,14 @@ It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 The project starts from new OS primitives instead of POSIX compatibility:
 agents, owned resources, resource lifecycle, capabilities, capability
 attenuation, agent launch entries, runtime admission, typed intents, actions, observations,
-checkpoints, rollback, verification, tasks, delegation, native mailbox IPC,
-task wait signals, task fault traps, fault handlers, fault policies, memory
-cells, native object namespace entries, agent execution contexts, and event
-logs.
+agent executable image identity records, checkpoints, rollback, verification,
+tasks, delegation, native mailbox IPC, task wait signals, task fault traps,
+fault handlers, fault policies, memory cells, native object namespace entries,
+agent execution contexts, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -27,7 +27,7 @@ The v0 flow is deliberately small:
 1. Register the owner, target, and fault handler agents with idle execution contexts.
 2. Register a workspace resource.
 3. Grant the owner agent a capability for observe, act, verify, checkpoint, rollback, and delegation.
-4. Launch the owner agent into a resource-scoped supervisor entry.
+4. Register a supervisor executable image and launch the owner agent into a resource-scoped supervisor entry.
 5. Install a resource-scoped task fault handler and fault policy.
 6. Record the launch, capability grant, and fault automation setup in the kernel event log.
 7. Observe the resource and store an observation record.
@@ -40,7 +40,7 @@ The v0 flow is deliberately small:
 14. Bind the intent to the task.
 15. Delegate the task to another agent.
 16. Record the derived task-scoped capability in the kernel event log.
-17. Launch the assignee into a task-scoped worker entry using that derived capability.
+17. Register a worker executable image and launch the assignee into a task-scoped worker entry using that derived capability.
 18. Let the assignee accept the task.
 19. Enqueue the accepted task and dispatch it into `Running` state with a deterministic quantum.
 20. Advance the running task by one explicit scheduler tick.
@@ -70,8 +70,9 @@ The v0 flow is deliberately small:
 44. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
-agent launch, agent suspension, agent resume, agent retirement, owned resource
-creation, capability grants, derived root capabilities, derived task capabilities, typed
+agent launch, agent image registration, agent image retirement, agent
+suspension, agent resume, agent retirement, owned resource creation,
+capability grants, derived root capabilities, derived task capabilities, typed
 intent declarations, action, verification, checkpoint creation, rollback
 requests, task creation, intent binding, task completion, task verification,
 intent fulfillment, delegation, scheduler ticks, quantum expiry, task fault
@@ -81,17 +82,20 @@ task wakeup, message send, message receive,
 message acknowledgement, memory cell creation, memory recall, memory remember,
 namespace bind, namespace resolve, namespace rebind, and resource retirement are
 first-class kernel events, not external tooling.
-Agents, launch entries, resources, checkpoints, waiters, fault records, fault
+Agents, agent images, launch entries, resources, checkpoints, waiters, fault records, fault
 handlers, fault policies, messages, memory cells, and namespace entries are also
 queryable fixed-capacity kernel records, and new root or derived capabilities
 can only be issued to active registered agents. Kernel operations that act on
 behalf of an `AgentId` reject unknown, suspended, or retired actors before authorization, state, queue,
 mailbox, memory, or capacity checks. Each registered agent has a fixed-capacity
 execution context that tracks whether the agent is idle, running a task,
-waiting on a signal, or faulted on a task. Resource-scoped launch entries bind
-an active agent to a resource, `Act` capability, entry kind, and optional
-declared action intent. Task-scoped launch entries bind a worker to one
-delegated task and its derived task capability. Runtime mutation paths require
+waiting on a signal, or faulted on a task. Agent images store kernel-owned
+executable identity metadata: digest, kind, ABI version, entry version, owner,
+resource, and active/retired status. Resource-scoped launch entries bind an
+active agent to a resource, `Act` capability, active Agent Image, entry kind,
+and optional declared action intent. Task-scoped launch entries bind a worker
+to one delegated task, its derived task capability, and an active worker Agent
+Image. Runtime mutation paths require
 an admitted launch entry before queue, dispatch, tick, yield, wait, fault,
 completion, or signal wakeup state can change. Dispatch refuses to run a second
 task for an agent whose context is already busy. Rollback moves the checkpoint into
@@ -130,9 +134,10 @@ remains available for system-seeded resources and leaves `owner: None`.
 3. Register the bootstrap agent.
 4. Register a bootstrap resource.
 5. Grant observe/act/verify capability to the bootstrap agent.
-6. Launch the bootstrap agent into a bootstrap entry.
-7. Record observation, action, and verification events.
-8. Mark the kernel ready for supervisor handoff.
+6. Register a bootstrap executable image.
+7. Launch the bootstrap agent into a bootstrap entry.
+8. Record observation, action, and verification events.
+9. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -179,10 +184,11 @@ Expected QEMU serial output:
 AGENT_KERNEL_QEMU_BOOT_OK
 event[1] agent_registered
 event[2] capability_granted
-event[3] agent_launched
-event[4] observation
-event[5] action
-event[6] verification
+event[3] agent_image_registered
+event[4] agent_launched
+event[5] observation
+event[6] action
+event[7] verification
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -197,55 +203,57 @@ event[1] agent_registered agent=1 target_agent=1
 event[2] agent_registered agent=2 target_agent=2
 event[3] agent_registered agent=3 target_agent=3
 event[4] capability_granted agent=1 resource=1 capability=1
-event[5] agent_launched agent=1 resource=1 capability=1
-event[6] fault_handler_installed agent=1 resource=1 target_agent=3
-event[7] fault_policy_installed agent=1 resource=1 policy=1 action=route_to_handler
-event[8] observation agent=1 resource=1
-event[9] action agent=1 resource=1 action=1
-event[10] verification agent=1 resource=1 action=1
-event[11] checkpoint agent=1 resource=1 checkpoint=1
-event[12] rollback agent=1 resource=1 checkpoint=1
-event[13] intent_declared agent=1 resource=1 intent=1
-event[14] task_created agent=1 resource=1 task=1
-event[15] intent_bound agent=1 resource=1 intent=1
-event[16] capability_derived agent=1 resource=1 capability=2
-event[17] delegation agent=1 resource=1 task=1 target_agent=2
-event[18] agent_launched agent=2 resource=1 capability=2 task=1
-event[19] task_accepted agent=2 resource=1 task=1
-event[20] task_queued agent=2 resource=1 task=1
-event[21] task_dispatched agent=2 resource=1 task=1
-event[22] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1
-event[23] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0
-event[24] task_dispatched agent=2 resource=1 task=1
-event[25] task_faulted agent=2 resource=1 task=1 fault=1 detail=7
-event[26] message_sent agent=1 target_agent=3 message=1
-event[27] fault_routed agent=1 resource=1 task=1 fault=1 detail=7 target_agent=3 message=1
-event[28] fault_policy_applied agent=1 resource=1 task=1 fault=1 detail=7 policy=1 action=route_to_handler message=1
-event[29] message_received agent=3 target_agent=1 message=1
-event[30] message_acknowledged agent=3 target_agent=1 message=1
-event[31] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7
-event[32] task_queued agent=2 resource=1 task=1
-event[33] task_dispatched agent=2 resource=1 task=1
-event[34] task_waiting agent=2 resource=1 task=1 waiter=1 signal=1
-event[35] signal_emitted agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2
-event[36] task_woken agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2
-event[37] task_dispatched agent=2 resource=1 task=1
-event[38] task_completed agent=2 resource=1 task=1
-event[39] task_verified agent=1 resource=1 task=1
-event[40] intent_fulfilled agent=1 resource=1 intent=1
-event[41] message_sent agent=1 target_agent=2 message=2
-event[42] message_received agent=2 target_agent=1 message=2
-event[43] message_acknowledged agent=2 target_agent=1 message=2
-event[44] capability_granted agent=1 resource=2 capability=3
-event[45] memory_cell_created agent=1 resource=2 memory_cell=1
-event[46] memory_cell_recalled agent=1 resource=2 memory_cell=1
-event[47] memory_cell_remembered agent=1 resource=2 memory_cell=1
-event[48] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
-event[49] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
-event[50] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
-event[51] resource_created agent=1 resource=3 capability=4
-event[52] capability_granted agent=1 resource=3 capability=4
-event[53] resource_retired agent=1 resource=3 capability=4
-event[54] capability_derived agent=1 resource=1 capability=5
-event[55] observation agent=2 resource=1
+event[5] agent_image_registered agent=1 resource=1 capability=1 image=1 kind=supervisor
+event[6] agent_launched agent=1 resource=1 capability=1 image=1
+event[7] fault_handler_installed agent=1 resource=1 target_agent=3
+event[8] fault_policy_installed agent=1 resource=1 policy=1 action=route_to_handler
+event[9] observation agent=1 resource=1
+event[10] action agent=1 resource=1 action=1
+event[11] verification agent=1 resource=1 action=1
+event[12] checkpoint agent=1 resource=1 checkpoint=1
+event[13] rollback agent=1 resource=1 checkpoint=1
+event[14] intent_declared agent=1 resource=1 intent=1
+event[15] task_created agent=1 resource=1 task=1
+event[16] intent_bound agent=1 resource=1 intent=1
+event[17] capability_derived agent=1 resource=1 capability=2
+event[18] delegation agent=1 resource=1 task=1 target_agent=2
+event[19] agent_image_registered agent=1 resource=1 capability=1 image=2 kind=worker
+event[20] agent_launched agent=2 resource=1 capability=2 image=2 task=1
+event[21] task_accepted agent=2 resource=1 task=1
+event[22] task_queued agent=2 resource=1 task=1
+event[23] task_dispatched agent=2 resource=1 task=1
+event[24] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1
+event[25] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0
+event[26] task_dispatched agent=2 resource=1 task=1
+event[27] task_faulted agent=2 resource=1 task=1 fault=1 detail=7
+event[28] message_sent agent=1 target_agent=3 message=1
+event[29] fault_routed agent=1 resource=1 task=1 fault=1 detail=7 target_agent=3 message=1
+event[30] fault_policy_applied agent=1 resource=1 task=1 fault=1 detail=7 policy=1 action=route_to_handler message=1
+event[31] message_received agent=3 target_agent=1 message=1
+event[32] message_acknowledged agent=3 target_agent=1 message=1
+event[33] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7
+event[34] task_queued agent=2 resource=1 task=1
+event[35] task_dispatched agent=2 resource=1 task=1
+event[36] task_waiting agent=2 resource=1 task=1 waiter=1 signal=1
+event[37] signal_emitted agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2
+event[38] task_woken agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2
+event[39] task_dispatched agent=2 resource=1 task=1
+event[40] task_completed agent=2 resource=1 task=1
+event[41] task_verified agent=1 resource=1 task=1
+event[42] intent_fulfilled agent=1 resource=1 intent=1
+event[43] message_sent agent=1 target_agent=2 message=2
+event[44] message_received agent=2 target_agent=1 message=2
+event[45] message_acknowledged agent=2 target_agent=1 message=2
+event[46] capability_granted agent=1 resource=2 capability=3
+event[47] memory_cell_created agent=1 resource=2 memory_cell=1
+event[48] memory_cell_recalled agent=1 resource=2 memory_cell=1
+event[49] memory_cell_remembered agent=1 resource=2 memory_cell=1
+event[50] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
+event[51] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
+event[52] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
+event[53] resource_created agent=1 resource=3 capability=4
+event[54] capability_granted agent=1 resource=3 capability=4
+event[55] resource_retired agent=1 resource=3 capability=4
+event[56] capability_derived agent=1 resource=1 capability=5
+event[57] observation agent=2 resource=1
 ```

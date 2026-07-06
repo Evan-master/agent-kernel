@@ -1,7 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultKind, FaultPolicyAction, IntentKind,
-    KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
-    VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, EventKind, FaultKind,
+    FaultPolicyAction, IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind,
+    TaskId, TaskStatus, VerificationRequirement,
 };
 
 #[derive(Copy, Clone)]
@@ -150,8 +150,25 @@ fn create_running_task<
         .expect("task should delegate")
         .capability
         .expect("delegation should derive capability");
-    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        delegated_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should accept");
     core.enqueue_task(assignee, task)
@@ -225,13 +242,13 @@ fn apply_route_policy_event_log_full_leaves_state_unchanged() {
     );
     assert!(core.messages().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 16);
+    assert_eq!(core.events().len(), 17);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }
 
 #[test]
 fn apply_recover_policy_event_log_full_leaves_task_faulted() {
-    let mut core = KernelCore::<2, 1, 2, 14, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 15, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1>::new();
     let prepared = prepare_recover_fault(&mut core);
     let fault = core
         .fault_task(
@@ -247,6 +264,6 @@ fn apply_recover_policy_event_log_full_leaves_task_faulted() {
         Err(KernelError::EventLogFull)
     );
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 14);
+    assert_eq!(core.events().len(), 15);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }

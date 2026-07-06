@@ -11,9 +11,9 @@ mod format_fault;
 mod format_signal;
 
 use agent_kernel_core::{
-    ActionId, AgentEntryKind, AgentId, CheckpointId, FaultKind, FaultPolicyAction, IntentKind,
-    MessageKind, MessagePayload, Operation, OperationSet, ResourceKind, SignalKey,
-    VerificationRequirement,
+    ActionId, AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CheckpointId, FaultKind,
+    FaultPolicyAction, IntentKind, MessageKind, MessagePayload, Operation, OperationSet,
+    ResourceKind, SignalKey, VerificationRequirement,
 };
 
 use crate::flow_resources::{drive_resource_flow, ResourceFlowContext, SupervisorKernel};
@@ -50,11 +50,23 @@ fn main() {
                 .with(Operation::Delegate),
         )
         .expect("agent capability should fit in simulator kernel");
+    let supervisor_image = kernel
+        .sys_register_agent_image(
+            agent,
+            owner_capability,
+            workspace,
+            AgentImageKind::Supervisor,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("supervisor image should register");
     kernel
         .sys_launch_agent(
             agent,
             owner_capability,
             workspace,
+            supervisor_image,
             AgentEntryKind::Supervisor,
             None,
         )
@@ -112,11 +124,23 @@ fn main() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive target agent capability");
+    let worker_image = kernel
+        .sys_register_agent_image(
+            agent,
+            owner_capability,
+            workspace,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([2; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     kernel
         .sys_launch_task_agent(
             target_agent,
             assignee_capability,
             task,
+            worker_image,
             AgentEntryKind::Worker,
         )
         .expect("target agent should launch into delegated task entry");

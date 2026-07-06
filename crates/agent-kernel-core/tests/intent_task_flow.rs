@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, EventKind, IntentId, IntentKind, IntentStatus, KernelCore,
-    KernelError, Operation, OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, IntentId, IntentKind,
+    IntentStatus, KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 8, 64, 2, 2, 2, 4, 6, 4>;
@@ -121,15 +122,33 @@ fn complete_task_flow<
 ) -> agent_kernel_core::CapabilityId {
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should delegate");
-    let assignee_capability = core
+    let task_record = core
         .tasks()
         .iter()
         .find(|record| record.id == task)
-        .expect("delegated task should be stored")
+        .expect("delegated task should be stored");
+    let assignee_capability = task_record
         .delegated_capability
         .expect("delegation should derive capability");
-    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            owner_capability,
+            task_record.resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        assignee_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -201,7 +220,7 @@ fn cancel_task_cancels_bound_intent_and_records_event() {
 
 #[test]
 fn verify_task_requires_two_event_slots_without_mutation() {
-    let mut core = KernelCore::<2, 1, 4, 13, 2, 2, 2, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 4, 14, 2, 2, 2, 1, 1, 1>::new();
     let owner = AgentId::new(13);
     let assignee = AgentId::new(14);
     let (owner_capability, resource) = grant_owner_capability(&mut core, owner);
@@ -212,14 +231,14 @@ fn verify_task_requires_two_event_slots_without_mutation() {
         .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     complete_task_flow(&mut core, owner, owner_capability, task, assignee);
-    assert_eq!(core.events().len(), 13);
+    assert_eq!(core.events().len(), 14);
 
     let result = core.verify_task(owner, owner_capability, task);
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert_eq!(core.tasks()[0].status, TaskStatus::Completed);
     assert_eq!(core.intents()[0].status, IntentStatus::Bound);
-    assert_eq!(core.events().len(), 13);
+    assert_eq!(core.events().len(), 14);
 }
 
 #[test]
@@ -278,8 +297,11 @@ fn task_lifecycle_events_carry_task_intent() {
         .expect("task should verify");
 
     for event in &core.events()[3..=14] {
+        if event.kind == EventKind::AgentImageRegistered {
+            continue;
+        }
         assert_eq!(event.intent, Some(intent));
     }
     assert_eq!(core.events()[5].kind, EventKind::IntentBound);
-    assert_eq!(core.events()[14].kind, EventKind::IntentFulfilled);
+    assert_eq!(core.events()[15].kind, EventKind::IntentFulfilled);
 }

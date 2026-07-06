@@ -11,7 +11,7 @@ use agent_kernel_core::{
     ResourceId, ResourceKind, TaskId,
 };
 
-pub type SupervisorKernel = AgentKernel<8, 8, 8, 56, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>;
+pub type SupervisorKernel = AgentKernel<8, 8, 8, 64, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>;
 
 pub struct ResourceFlowContext {
     pub agent: AgentId,

@@ -3,9 +3,9 @@
 //! Owns deterministic no_std stores for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentRecord, Capability,
-    CheckpointRecord, Event, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
-    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
+    ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord, AgentRecord,
+    Capability, CheckpointRecord, Event, FaultHandlerRecord, FaultPolicyRecord, FaultRecord,
+    Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
     RunQueueEntry, Task, WaiterRecord,
 };
 
@@ -28,10 +28,12 @@ pub struct KernelCore<
     const FAULT_HANDLERS: usize = 0,
     const FAULT_POLICIES: usize = 0,
     const WAITERS: usize = 0,
+    const AGENT_IMAGES: usize = AGENTS,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) execution_contexts: [AgentExecutionContext; AGENTS],
     pub(crate) agent_entries: [AgentEntryRecord; AGENTS],
+    pub(crate) agent_images: [AgentImageRecord; AGENT_IMAGES],
     pub(crate) resources: [Resource; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
@@ -50,6 +52,7 @@ pub struct KernelCore<
     pub(crate) waiters: [WaiterRecord; WAITERS],
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
+    pub(crate) agent_image_len: usize,
     pub(crate) resource_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -77,6 +80,7 @@ pub struct KernelCore<
     pub(crate) next_fault_handler: u64,
     pub(crate) next_fault_policy: u64,
     pub(crate) next_waiter: u64,
+    pub(crate) next_agent_image: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -98,6 +102,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -117,6 +122,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub const fn new() -> Self {
@@ -124,6 +130,7 @@ impl<
             agents: [AgentRecord::empty(); AGENTS],
             execution_contexts: [AgentExecutionContext::empty(); AGENTS],
             agent_entries: [AgentEntryRecord::empty(); AGENTS],
+            agent_images: [AgentImageRecord::empty(); AGENT_IMAGES],
             resources: [Resource::empty(); RESOURCES],
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
@@ -142,6 +149,7 @@ impl<
             waiters: [WaiterRecord::empty(); WAITERS],
             agent_len: 0,
             agent_entry_len: 0,
+            agent_image_len: 0,
             resource_len: 0,
             event_len: 0,
             action_len: 0,
@@ -169,6 +177,7 @@ impl<
             next_fault_handler: 1,
             next_fault_policy: 1,
             next_waiter: 1,
+            next_agent_image: 1,
             next_sequence: 1,
         }
     }
@@ -192,6 +201,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -211,6 +221,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     fn default() -> Self {

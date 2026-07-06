@@ -26,6 +26,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -45,6 +46,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub fn checkpoint(
@@ -103,6 +105,11 @@ impl<
             waiter: None,
             signal: None,
             target_agent: None,
+            agent_image: None,
+            agent_image_kind: None,
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
         })
     }
 
@@ -157,6 +164,11 @@ impl<
             waiter: None,
             signal: None,
             target_agent: None,
+            agent_image: None,
+            agent_image_kind: None,
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
         })
     }
 

@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentExecutionState, AgentId, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentExecutionState, AgentId, AgentImageDigest, AgentImageKind, IntentKind,
+    KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<3, 3, 8, 48, 0, 0, 0, 8, 8, 8>;
@@ -32,10 +33,22 @@ fn prepare_two_accepted_tasks(
     let assignee_capability = core
         .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
         .expect("assignee root capability should fit");
+    let image = core
+        .register_agent_image(
+            assignee,
+            assignee_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     core.launch_agent(
         assignee,
         assignee_capability,
         resource,
+        image,
         AgentEntryKind::Worker,
         None,
     )

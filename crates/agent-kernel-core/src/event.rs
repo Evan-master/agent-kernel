@@ -5,15 +5,17 @@
 //! requests, delegation, and scheduler decisions.
 
 use crate::{
-    ActionId, AgentId, CapabilityId, CheckpointId, FaultId, FaultKind, FaultPolicyAction,
-    FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId, NamespaceEntryId, NamespaceKey,
-    NamespaceObject, ObservationId, Operation, OperationSet, ResourceId, SignalKey, TaskId,
-    VerificationRequirement, WaiterId,
+    ActionId, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId, CheckpointId,
+    FaultId, FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind, MemoryCellId,
+    MessageId, NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation,
+    OperationSet, ResourceId, SignalKey, TaskId, VerificationRequirement, WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EventKind {
     AgentRegistered,
+    AgentImageRegistered,
+    AgentImageRetired,
     AgentLaunched,
     AgentSuspended,
     AgentResumed,
@@ -95,6 +97,11 @@ pub struct Event {
     pub waiter: Option<WaiterId>,
     pub signal: Option<SignalKey>,
     pub target_agent: Option<AgentId>,
+    pub agent_image: Option<AgentImageId>,
+    pub agent_image_kind: Option<AgentImageKind>,
+    pub agent_image_digest: Option<AgentImageDigest>,
+    pub agent_image_abi_version: Option<u16>,
+    pub agent_image_entry_version: Option<u16>,
 }
 
 impl Event {
@@ -130,6 +137,11 @@ impl Event {
             waiter: None,
             signal: None,
             target_agent: None,
+            agent_image: None,
+            agent_image_kind: None,
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
         }
     }
 }

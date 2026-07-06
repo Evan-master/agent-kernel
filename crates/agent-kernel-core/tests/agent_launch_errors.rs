@@ -1,9 +1,10 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId,
+    IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
+    VerificationRequirement,
 };
 
-type TestCore = KernelCore<2, 4, 8, 32, 2, 2, 2, 4, 4, 4>;
+type TestCore = KernelCore<2, 4, 8, 32, 2, 2, 2, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4>;
 
 fn register_with_capability(
     core: &mut TestCore,
@@ -20,6 +21,21 @@ fn register_with_capability(
     (capability, resource)
 }
 
+fn digest(byte: u8) -> AgentImageDigest {
+    AgentImageDigest::new([byte; 32])
+}
+
+fn register_image(
+    core: &mut TestCore,
+    agent: AgentId,
+    capability: CapabilityId,
+    resource: ResourceId,
+    kind: AgentImageKind,
+) -> AgentImageId {
+    core.register_agent_image(agent, capability, resource, kind, digest(10), 1, 1)
+        .expect("image should register")
+}
+
 #[test]
 fn launch_rejects_unknown_agent_without_event() {
     let mut core = TestCore::new();
@@ -27,6 +43,7 @@ fn launch_rejects_unknown_agent_without_event() {
         AgentId::new(7),
         CapabilityId::new(1),
         ResourceId::new(1),
+        AgentImageId::new(1),
         AgentEntryKind::Worker,
         None,
     );
@@ -48,6 +65,7 @@ fn launch_requires_act_authority_without_partial_entry() {
         agent,
         capability,
         resource,
+        AgentImageId::new(1),
         AgentEntryKind::Supervisor,
         None,
     );
@@ -63,10 +81,18 @@ fn launch_rejects_duplicate_entry_without_second_event() {
     let agent = AgentId::new(1);
     let (capability, resource) =
         register_with_capability(&mut core, agent, OperationSet::only(Operation::Act));
+    let image = register_image(
+        &mut core,
+        agent,
+        capability,
+        resource,
+        AgentImageKind::Supervisor,
+    );
     core.launch_agent(
         agent,
         capability,
         resource,
+        image,
         AgentEntryKind::Supervisor,
         None,
     )
@@ -77,6 +103,7 @@ fn launch_rejects_duplicate_entry_without_second_event() {
         agent,
         capability,
         resource,
+        image,
         AgentEntryKind::Supervisor,
         None,
     );
@@ -113,6 +140,7 @@ fn launch_rejects_intent_from_another_agent() {
         owner,
         owner_capability,
         resource,
+        AgentImageId::new(1),
         AgentEntryKind::Worker,
         Some(intent),
     );
@@ -149,6 +177,7 @@ fn launch_rejects_intent_for_another_resource() {
         agent,
         capability,
         resource,
+        AgentImageId::new(1),
         AgentEntryKind::Worker,
         Some(intent),
     );
@@ -184,6 +213,7 @@ fn launch_rejects_non_action_intent() {
         agent,
         capability,
         resource,
+        AgentImageId::new(1),
         AgentEntryKind::Worker,
         Some(intent),
     );
@@ -216,6 +246,7 @@ fn launch_rejects_bound_intent() {
         agent,
         capability,
         resource,
+        AgentImageId::new(1),
         AgentEntryKind::Worker,
         Some(intent),
     );
@@ -227,7 +258,7 @@ fn launch_rejects_bound_intent() {
 
 #[test]
 fn launch_event_log_full_leaves_no_entry() {
-    let mut core = KernelCore::<1, 1, 1, 2, 0, 0, 0, 0, 0, 0>::new();
+    let mut core = KernelCore::<1, 1, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1>::new();
     let agent = AgentId::new(1);
     core.register_agent(agent).expect("agent should register");
     let resource = core
@@ -236,10 +267,114 @@ fn launch_event_log_full_leaves_no_entry() {
     let capability = core
         .grant_capability(agent, resource, OperationSet::only(Operation::Act))
         .expect("capability should fit");
+    let image = core
+        .register_agent_image(
+            agent,
+            capability,
+            resource,
+            AgentImageKind::Bootstrap,
+            digest(11),
+            1,
+            1,
+        )
+        .expect("image should register");
 
-    let result = core.launch_agent(agent, capability, resource, AgentEntryKind::Bootstrap, None);
+    let result = core.launch_agent(
+        agent,
+        capability,
+        resource,
+        image,
+        AgentEntryKind::Bootstrap,
+        None,
+    );
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert!(core.agent_entries().is_empty());
-    assert_eq!(core.events().len(), 2);
+    assert_eq!(core.events().len(), 3);
+}
+
+#[test]
+fn launch_rejects_unknown_image_without_entry_or_event() {
+    let mut core = TestCore::new();
+    let agent = AgentId::new(1);
+    let (capability, resource) =
+        register_with_capability(&mut core, agent, OperationSet::only(Operation::Act));
+    let events_before = core.events().len();
+
+    let result = core.launch_agent(
+        agent,
+        capability,
+        resource,
+        AgentImageId::new(99),
+        AgentEntryKind::Worker,
+        None,
+    );
+
+    assert_eq!(result, Err(KernelError::AgentImageNotFound));
+    assert!(core.agent_entries().is_empty());
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn launch_rejects_image_resource_mismatch_without_entry_or_event() {
+    let mut core = TestCore::new();
+    let agent = AgentId::new(1);
+    let (capability, resource) =
+        register_with_capability(&mut core, agent, OperationSet::only(Operation::Act));
+    let other_resource = core
+        .register_resource(ResourceKind::Memory, None)
+        .expect("other resource should fit");
+    let other_capability = core
+        .grant_capability(agent, other_resource, OperationSet::only(Operation::Act))
+        .expect("other capability should fit");
+    let image = register_image(
+        &mut core,
+        agent,
+        other_capability,
+        other_resource,
+        AgentImageKind::Worker,
+    );
+    let events_before = core.events().len();
+
+    let result = core.launch_agent(
+        agent,
+        capability,
+        resource,
+        image,
+        AgentEntryKind::Worker,
+        None,
+    );
+
+    assert_eq!(result, Err(KernelError::AgentImageResourceMismatch));
+    assert!(core.agent_entries().is_empty());
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn launch_rejects_image_kind_mismatch_without_entry_or_event() {
+    let mut core = TestCore::new();
+    let agent = AgentId::new(1);
+    let (capability, resource) =
+        register_with_capability(&mut core, agent, OperationSet::only(Operation::Act));
+    let image = register_image(
+        &mut core,
+        agent,
+        capability,
+        resource,
+        AgentImageKind::Supervisor,
+    );
+    let events_before = core.events().len();
+
+    let result = core.launch_agent(
+        agent,
+        capability,
+        resource,
+        image,
+        AgentEntryKind::Worker,
+        None,
+    );
+
+    assert_eq!(result, Err(KernelError::AgentImageKindMismatch));
+    assert!(core.agent_entries().is_empty());
+    assert_eq!(core.events().len(), events_before);
 }

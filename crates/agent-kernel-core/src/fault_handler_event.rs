@@ -27,6 +27,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -46,6 +47,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub(crate) fn record_fault_handler_event(
@@ -88,6 +90,11 @@ impl<
             waiter: None,
             signal: None,
             target_agent: Some(handler),
+            agent_image: None,
+            agent_image_kind: None,
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
         })
     }
 
@@ -130,6 +137,11 @@ impl<
             waiter: None,
             signal: None,
             target_agent: Some(handler),
+            agent_image: None,
+            agent_image_kind: None,
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
         })
     }
 }

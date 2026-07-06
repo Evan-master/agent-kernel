@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, IntentId, IntentKind, KernelCore, KernelError,
-    Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, IntentId, IntentKind,
+    KernelCore, KernelError, Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 8, 32, 2, 2, 2, 6, 6, 4>;
@@ -68,8 +69,25 @@ fn running_delegated_task(
         .capability
         .expect("delegation should expose derived capability");
 
-    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            source_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        delegated_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -178,10 +196,22 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
     let assignee_capability = core
         .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
         .expect("assignee root capability should fit");
+    let image = core
+        .register_agent_image(
+            assignee,
+            assignee_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([2; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     core.launch_agent(
         assignee,
         assignee_capability,
         resource,
+        image,
         AgentEntryKind::Worker,
         None,
     )

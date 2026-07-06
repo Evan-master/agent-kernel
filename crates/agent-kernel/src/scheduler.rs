@@ -25,6 +25,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     AgentKernel<
         AGENTS,
@@ -44,6 +45,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub fn sys_enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {

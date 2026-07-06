@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, IntentKind, Operation, OperationSet, ResourceKind,
-    VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, IntentKind, Operation, OperationSet,
+    ResourceKind, VerificationRequirement,
 };
 
 #[test]
@@ -45,9 +45,26 @@ fn facade_task_scoped_launch_admits_delegated_worker() {
     let worker_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive worker capability");
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
 
     kernel
-        .sys_launch_task_agent(worker, worker_capability, task, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            worker,
+            worker_capability,
+            task,
+            image,
+            AgentEntryKind::Worker,
+        )
         .expect("worker should launch for task");
     kernel
         .sys_accept_task(worker, task)

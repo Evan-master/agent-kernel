@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, EventKind, IntentId, IntentKind, KernelCore, Operation, OperationSet,
-    ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, IntentId, IntentKind,
+    KernelCore, Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 4, 16, 2, 2, 2, 4, 4, 4>;
@@ -87,8 +88,25 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
     let assignee_capability = core.tasks()[0]
         .delegated_capability
         .expect("delegation should derive assignee capability");
-    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        assignee_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -109,16 +127,21 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
     assert_eq!(core.events()[6].target_agent, Some(assignee));
     assert_eq!(core.events()[7].kind, EventKind::DelegationRequested);
     assert_eq!(core.events()[7].target_agent, Some(assignee));
-    assert_eq!(core.events()[8].kind, EventKind::AgentLaunched);
-    assert_eq!(core.events()[8].target_agent, Some(assignee));
-    assert_eq!(core.events()[8].task, Some(task));
-    assert_eq!(core.events()[9].kind, EventKind::TaskAccepted);
-    assert_eq!(core.events()[10].kind, EventKind::TaskQueued);
-    assert_eq!(core.events()[11].kind, EventKind::TaskDispatched);
-    assert_eq!(core.events()[12].kind, EventKind::TaskCompleted);
-    assert_eq!(core.events()[13].kind, EventKind::TaskVerified);
-    assert_eq!(core.events()[14].kind, EventKind::IntentFulfilled);
-    for event in &core.events()[4..=14] {
+    assert_eq!(core.events()[8].kind, EventKind::AgentImageRegistered);
+    assert_eq!(core.events()[8].agent_image, Some(image));
+    assert_eq!(core.events()[9].kind, EventKind::AgentLaunched);
+    assert_eq!(core.events()[9].target_agent, Some(assignee));
+    assert_eq!(core.events()[9].task, Some(task));
+    assert_eq!(core.events()[10].kind, EventKind::TaskAccepted);
+    assert_eq!(core.events()[11].kind, EventKind::TaskQueued);
+    assert_eq!(core.events()[12].kind, EventKind::TaskDispatched);
+    assert_eq!(core.events()[13].kind, EventKind::TaskCompleted);
+    assert_eq!(core.events()[14].kind, EventKind::TaskVerified);
+    assert_eq!(core.events()[15].kind, EventKind::IntentFulfilled);
+    for event in &core.events()[4..=7] {
+        assert_eq!(event.intent, Some(intent));
+    }
+    for event in &core.events()[9..=15] {
         assert_eq!(event.intent, Some(intent));
     }
 }

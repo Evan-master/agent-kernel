@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, EventKind, IntentKind, Operation, OperationSet, ResourceKind,
-    SignalKey, TaskStatus, VerificationRequirement, WaiterId,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, IntentKind, Operation,
+    OperationSet, ResourceKind, SignalKey, TaskStatus, VerificationRequirement, WaiterId,
 };
 
 type TestKernel = AgentKernel<2, 1, 2, 20, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1>;
@@ -47,8 +47,25 @@ fn signal_syscalls_wait_wake_redispatch_and_complete_task() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     kernel
-        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            assignee,
+            assignee_capability,
+            task,
+            image,
+            AgentEntryKind::Worker,
+        )
         .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)
@@ -81,7 +98,7 @@ fn signal_syscalls_wait_wake_redispatch_and_complete_task() {
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Completed);
     assert_eq!(kernel.waiters()[0].id, waiter);
     assert!(!kernel.waiters()[0].active);
-    assert_eq!(kernel.events()[12].kind, EventKind::TaskWaiting);
-    assert_eq!(kernel.events()[13].kind, EventKind::SignalEmitted);
-    assert_eq!(kernel.events()[14].kind, EventKind::TaskWoken);
+    assert_eq!(kernel.events()[13].kind, EventKind::TaskWaiting);
+    assert_eq!(kernel.events()[14].kind, EventKind::SignalEmitted);
+    assert_eq!(kernel.events()[15].kind, EventKind::TaskWoken);
 }

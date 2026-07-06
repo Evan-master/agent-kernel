@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, EventKind, IntentKind, Operation, OperationSet, ResourceKind,
-    RunQueueEntry, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, IntentKind, Operation,
+    OperationSet, ResourceKind, RunQueueEntry, TaskStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<2, 1, 2, 20, 0, 0, 0, 1, 1, 1>;
@@ -47,8 +47,25 @@ fn scheduler_quantum_syscalls_dispatch_tick_and_requeue() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
     kernel
-        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .sys_launch_task_agent(
+            assignee,
+            assignee_capability,
+            task,
+            image,
+            AgentEntryKind::Worker,
+        )
         .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)

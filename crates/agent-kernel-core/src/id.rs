@@ -17,6 +17,19 @@ impl AgentId {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentImageId(u64);
+
+impl AgentImageId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ResourceId(u64);
 
 impl ResourceId {

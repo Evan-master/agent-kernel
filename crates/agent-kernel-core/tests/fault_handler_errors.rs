@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultKind, IntentKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, EventKind, FaultKind,
+    IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
     VerificationRequirement,
 };
 
@@ -64,8 +64,25 @@ fn prepare_fault<const EVENTS: usize, const MESSAGES: usize, const FAULT_HANDLER
         .expect("task should be delegated")
         .capability
         .expect("delegation should derive capability");
-    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
-        .expect("assignee should launch for delegated task");
+    let image = core
+        .register_agent_image(
+            owner,
+            owner_capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.launch_task_agent(
+        assignee,
+        delegated_capability,
+        task,
+        image,
+        AgentEntryKind::Worker,
+    )
+    .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -221,7 +238,7 @@ fn route_fault_message_store_full_leaves_state_unchanged() {
 
 #[test]
 fn route_fault_event_log_full_leaves_state_unchanged() {
-    let mut core = KernelCore::<3, 1, 3, 15, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1>::new();
+    let mut core = KernelCore::<3, 1, 3, 16, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1>::new();
     let prepared = prepare_fault(&mut core, true);
     let fault = core
         .fault_task(
@@ -238,6 +255,6 @@ fn route_fault_event_log_full_leaves_state_unchanged() {
     );
     assert!(core.messages().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 15);
+    assert_eq!(core.events().len(), 16);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }

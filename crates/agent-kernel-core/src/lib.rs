@@ -12,6 +12,9 @@ mod agent_admission;
 mod agent_entry;
 mod agent_execution;
 mod agent_execution_store;
+mod agent_image;
+mod agent_image_event;
+mod agent_image_store;
 mod agent_launch;
 mod agent_store;
 mod authorization;
@@ -66,6 +69,7 @@ pub use action::{ActionRecord, ActionStatus};
 pub use agent::{AgentRecord, AgentStatus};
 pub use agent_entry::{AgentEntryKind, AgentEntryRecord};
 pub use agent_execution::{AgentExecutionContext, AgentExecutionState};
+pub use agent_image::{AgentImageDigest, AgentImageKind, AgentImageRecord, AgentImageStatus};
 pub use capability::Capability;
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
@@ -75,9 +79,9 @@ pub use fault::{FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
 pub use id::{
-    ActionId, AgentId, CapabilityId, CheckpointId, FaultHandlerId, FaultId, FaultPolicyId,
-    IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, TaskId,
-    WaiterId,
+    ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, FaultHandlerId, FaultId,
+    FaultPolicyId, IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId,
+    TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};

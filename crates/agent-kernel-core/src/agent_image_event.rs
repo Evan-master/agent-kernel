@@ -1,11 +1,12 @@
-//! Fixed-capacity kernel action store behavior.
+//! Agent Image event recording helpers.
 //!
-//! This module records authorized actions, tracks verification requests, and
-//! emits replayable events without allocation.
+//! This core-layer module keeps replay event construction separate from the
+//! fixed-capacity Agent Image store. It records image provenance fields without
+//! owning image lookup or launch validation.
 
 use crate::{
-    ActionId, ActionRecord, ActionStatus, AgentId, CapabilityId, Event, EventKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceId, VerificationRequirement,
+    AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId, Event, EventKind,
+    KernelCore, KernelError, Operation, OperationSet, ResourceId, VerificationRequirement,
 };
 
 impl<
@@ -49,41 +50,27 @@ impl<
         AGENT_IMAGES,
     >
 {
-    pub fn act(
+    pub(crate) fn record_agent_image_registered_event(
         &mut self,
-        agent: AgentId,
+        owner: AgentId,
         capability: CapabilityId,
-        action: ActionId,
         resource: ResourceId,
+        image: AgentImageId,
+        kind: AgentImageKind,
+        digest: AgentImageDigest,
+        abi_version: u16,
+        entry_version: u16,
     ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Act)?;
-        if self.find_action(action).is_ok() {
-            return Err(KernelError::ActionAlreadyExists);
-        }
-        if self.action_len >= ACTIONS {
-            return Err(KernelError::ActionStoreFull);
-        }
-        self.ensure_event_slots(1)?;
-
-        self.actions[self.action_len] = ActionRecord {
-            id: action,
-            agent,
-            resource,
-            capability,
-            status: ActionStatus::Executed,
-        };
-        self.action_len += 1;
-
         self.record(Event {
             sequence: 0,
-            agent,
-            kind: EventKind::ActionExecuted,
+            agent: owner,
+            kind: EventKind::AgentImageRegistered,
             resource: Some(resource),
             capability: Some(capability),
             source_capability: None,
             intent: None,
             intent_kind: None,
-            action: Some(action),
+            action: None,
             observation: None,
             message: None,
             memory_cell: None,
@@ -104,52 +91,40 @@ impl<
             fault_policy_action: None,
             waiter: None,
             signal: None,
-            target_agent: None,
-            agent_image: None,
-            agent_image_kind: None,
-            agent_image_digest: None,
-            agent_image_abi_version: None,
-            agent_image_entry_version: None,
+            target_agent: Some(owner),
+            agent_image: Some(image),
+            agent_image_kind: Some(kind),
+            agent_image_digest: Some(digest),
+            agent_image_abi_version: Some(abi_version),
+            agent_image_entry_version: Some(entry_version),
         })
     }
 
-    pub fn verify(
+    pub(crate) fn record_agent_image_retired_event(
         &mut self,
-        agent: AgentId,
+        owner: AgentId,
         capability: CapabilityId,
-        action: ActionId,
         resource: ResourceId,
+        image: AgentImageId,
+        kind: AgentImageKind,
     ) -> Result<Event, KernelError> {
-        self.ensure_authorized(agent, capability, resource, Operation::Verify)?;
-
-        let record = self.find_action(action)?;
-        if record.resource != resource {
-            return Err(KernelError::ActionResourceMismatch);
-        }
-        if record.status != ActionStatus::Executed {
-            return Err(KernelError::ActionStatusMismatch);
-        }
-        self.ensure_event_slots(1)?;
-
-        self.find_action_mut(action)?.status = ActionStatus::VerificationRequested;
-
         self.record(Event {
             sequence: 0,
-            agent,
-            kind: EventKind::VerificationRequested,
+            agent: owner,
+            kind: EventKind::AgentImageRetired,
             resource: Some(resource),
             capability: Some(capability),
             source_capability: None,
             intent: None,
             intent_kind: None,
-            action: Some(action),
+            action: None,
             observation: None,
             message: None,
             memory_cell: None,
             namespace_entry: None,
             namespace_key: None,
             namespace_object: None,
-            operation: Some(Operation::Verify),
+            operation: Some(Operation::Rollback),
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
             checkpoint: None,
@@ -163,39 +138,12 @@ impl<
             fault_policy_action: None,
             waiter: None,
             signal: None,
-            target_agent: None,
-            agent_image: None,
-            agent_image_kind: None,
+            target_agent: Some(owner),
+            agent_image: Some(image),
+            agent_image_kind: Some(kind),
             agent_image_digest: None,
             agent_image_abi_version: None,
             agent_image_entry_version: None,
         })
-    }
-
-    pub fn actions(&self) -> &[ActionRecord] {
-        &self.actions[..self.action_len]
-    }
-
-    pub(crate) fn find_action(&self, id: ActionId) -> Result<ActionRecord, KernelError> {
-        for action in self.actions() {
-            if action.id == id {
-                return Ok(*action);
-            }
-        }
-
-        Err(KernelError::ActionNotFound)
-    }
-
-    pub(crate) fn find_action_mut(
-        &mut self,
-        id: ActionId,
-    ) -> Result<&mut ActionRecord, KernelError> {
-        for action in &mut self.actions[..self.action_len] {
-            if action.id == id {
-                return Ok(action);
-            }
-        }
-
-        Err(KernelError::ActionNotFound)
     }
 }

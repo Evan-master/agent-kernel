@@ -4,9 +4,9 @@
 //! to a resource, capability, and optional declared action intent.
 
 use crate::{
-    AgentEntryKind, AgentEntryRecord, AgentId, CapabilityId, Event, EventKind, IntentId,
-    IntentKind, IntentStatus, KernelCore, KernelError, Operation, OperationSet, ResourceId, TaskId,
-    TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentEntryRecord, AgentId, AgentImageId, CapabilityId, Event, EventKind,
+    IntentId, IntentKind, IntentStatus, KernelCore, KernelError, Operation, OperationSet,
+    ResourceId, TaskId, TaskStatus, VerificationRequirement,
 };
 
 impl<
@@ -27,6 +27,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
+        const AGENT_IMAGES: usize,
     >
     KernelCore<
         AGENTS,
@@ -46,6 +47,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         WAITERS,
+        AGENT_IMAGES,
     >
 {
     pub fn launch_agent(
@@ -53,6 +55,7 @@ impl<
         agent: AgentId,
         capability: CapabilityId,
         resource: ResourceId,
+        image: AgentImageId,
         kind: AgentEntryKind,
         intent: Option<IntentId>,
     ) -> Result<Event, KernelError> {
@@ -64,6 +67,7 @@ impl<
         if let Some(intent_id) = intent {
             self.ensure_launch_intent(agent, resource, intent_id)?;
         }
+        self.ensure_launch_image(image, resource, kind)?;
         if self.agent_entry_len >= AGENTS {
             return Err(KernelError::AgentEntryStoreFull);
         }
@@ -73,12 +77,13 @@ impl<
             agent,
             resource,
             capability,
+            image,
             kind,
             intent,
             task: None,
         };
         self.agent_entry_len += 1;
-        self.record_agent_launch_event(agent, capability, resource, intent, None)
+        self.record_agent_launch_event(agent, capability, resource, image, intent, None)
     }
 
     pub fn launch_task_agent(
@@ -86,6 +91,7 @@ impl<
         agent: AgentId,
         capability: CapabilityId,
         task: TaskId,
+        image: AgentImageId,
         kind: AgentEntryKind,
     ) -> Result<Event, KernelError> {
         self.ensure_agent_active(agent)?;
@@ -107,6 +113,7 @@ impl<
             Operation::Act,
             task,
         )?;
+        self.ensure_launch_image(image, task_record.resource, kind)?;
         if self.agent_entry_len >= AGENTS {
             return Err(KernelError::AgentEntryStoreFull);
         }
@@ -116,6 +123,7 @@ impl<
             agent,
             resource: task_record.resource,
             capability,
+            image,
             kind,
             intent: Some(task_record.intent),
             task: Some(task),
@@ -125,6 +133,7 @@ impl<
             agent,
             capability,
             task_record.resource,
+            image,
             Some(task_record.intent),
             Some(task),
         )
@@ -174,6 +183,7 @@ impl<
         agent: AgentId,
         capability: CapabilityId,
         resource: ResourceId,
+        image: AgentImageId,
         intent: Option<IntentId>,
         task: Option<TaskId>,
     ) -> Result<Event, KernelError> {
@@ -208,6 +218,11 @@ impl<
             waiter: None,
             signal: None,
             target_agent: Some(agent),
+            agent_image: Some(image),
+            agent_image_kind: None,
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
         })
     }
 }
