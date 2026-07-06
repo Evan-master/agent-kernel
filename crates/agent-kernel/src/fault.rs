@@ -6,7 +6,8 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, Event, FaultHandlerId, FaultHandlerRecord, FaultId, FaultKind,
-    FaultRecord, KernelError, MessageId, ResourceId, TaskId,
+    FaultPolicyAction, FaultPolicyId, FaultPolicyOutcome, FaultPolicyRecord, FaultRecord,
+    KernelError, MessageId, ResourceId, TaskId,
 };
 
 use crate::AgentKernel;
@@ -27,6 +28,7 @@ impl<
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
+        const FAULT_POLICIES: usize,
     >
     AgentKernel<
         AGENTS,
@@ -44,6 +46,7 @@ impl<
         NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
+        FAULT_POLICIES,
     >
 {
     pub fn sys_fault_task(
@@ -86,11 +89,36 @@ impl<
         self.core.route_fault_to_handler(agent, capability, fault)
     }
 
+    pub fn sys_install_fault_policy(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        kind: FaultKind,
+        action: FaultPolicyAction,
+    ) -> Result<FaultPolicyId, KernelError> {
+        self.core
+            .install_fault_policy(agent, capability, resource, kind, action)
+    }
+
+    pub fn sys_apply_fault_policy(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        fault: FaultId,
+    ) -> Result<FaultPolicyOutcome, KernelError> {
+        self.core.apply_fault_policy(agent, capability, fault)
+    }
+
     pub fn faults(&self) -> &[FaultRecord] {
         self.core.faults()
     }
 
     pub fn fault_handlers(&self) -> &[FaultHandlerRecord] {
         self.core.fault_handlers()
+    }
+
+    pub fn fault_policies(&self) -> &[FaultPolicyRecord] {
+        self.core.fault_policies()
     }
 }

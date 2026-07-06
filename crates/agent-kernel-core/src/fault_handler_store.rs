@@ -27,6 +27,7 @@ impl<
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
+        const FAULT_POLICIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -44,6 +45,7 @@ impl<
         NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
+        FAULT_POLICIES,
     >
 {
     pub fn install_fault_handler(
@@ -139,7 +141,7 @@ impl<
             .ok_or(KernelError::TaskStatusMismatch)
     }
 
-    fn find_fault_handler(
+    pub(crate) fn find_fault_handler(
         &self,
         resource: ResourceId,
         kind: FaultKind,

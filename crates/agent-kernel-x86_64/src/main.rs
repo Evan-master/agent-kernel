@@ -119,6 +119,12 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::FaultRouted => {
                         serial_write_line("fault_routed");
                     }
+                    EventKind::FaultPolicyInstalled => {
+                        serial_write_line("fault_policy_installed");
+                    }
+                    EventKind::FaultPolicyApplied => {
+                        serial_write_line("fault_policy_applied");
+                    }
                     EventKind::MessageSent => {
                         serial_write_line("message_sent");
                     }

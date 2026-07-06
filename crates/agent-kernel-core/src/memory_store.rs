@@ -27,6 +27,7 @@ impl<
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
+        const FAULT_POLICIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -44,6 +45,7 @@ impl<
         NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
+        FAULT_POLICIES,
     >
 {
     pub fn create_memory_cell(
@@ -203,6 +205,8 @@ impl<
             fault: None,
             fault_kind: None,
             fault_detail: None,
+            fault_policy: None,
+            fault_policy_action: None,
             target_agent: None,
         })
     }

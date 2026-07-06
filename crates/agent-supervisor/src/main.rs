@@ -9,15 +9,15 @@ mod format_fault;
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, FaultKind, IntentKind, MemoryValue, MessageKind,
-    MessagePayload, NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceKind,
-    VerificationRequirement,
+    ActionId, AgentId, CheckpointId, FaultKind, FaultPolicyAction, IntentKind, MemoryValue,
+    MessageKind, MessagePayload, NamespaceKey, NamespaceObject, Operation, OperationSet,
+    ResourceKind, VerificationRequirement,
 };
 
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
     let handler_agent = AgentId::new(3);
@@ -56,6 +56,15 @@ fn main() {
             handler_agent,
         )
         .expect("agent should install workspace fault handler");
+    kernel
+        .sys_install_fault_policy(
+            agent,
+            owner_capability,
+            workspace,
+            FaultKind::ExecutionTrap,
+            FaultPolicyAction::RouteToHandler,
+        )
+        .expect("agent should install workspace fault policy");
     let action = ActionId::new(1);
     let checkpoint = CheckpointId::new(1);
     kernel
@@ -114,9 +123,12 @@ fn main() {
     let fault = kernel
         .sys_fault_task(target_agent, task, FaultKind::ExecutionTrap, 7)
         .expect("target agent should fault running task");
-    let fault_message = kernel
-        .sys_route_fault_to_handler(agent, owner_capability, fault)
-        .expect("agent should route fault to handler");
+    let fault_policy_outcome = kernel
+        .sys_apply_fault_policy(agent, owner_capability, fault)
+        .expect("agent should apply fault policy");
+    let fault_message = fault_policy_outcome
+        .message
+        .expect("route policy should produce fault message");
     let received_fault = kernel
         .sys_receive_message(handler_agent)
         .expect("handler should receive routed fault");

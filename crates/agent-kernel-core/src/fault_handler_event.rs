@@ -25,6 +25,7 @@ impl<
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
+        const FAULT_POLICIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -42,6 +43,7 @@ impl<
         NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
+        FAULT_POLICIES,
     >
 {
     pub(crate) fn record_fault_handler_event(
@@ -79,6 +81,8 @@ impl<
             fault: None,
             fault_kind: Some(fault_kind),
             fault_detail: None,
+            fault_policy: None,
+            fault_policy_action: None,
             target_agent: Some(handler),
         })
     }
@@ -117,6 +121,8 @@ impl<
             fault: Some(fault_record.id),
             fault_kind: Some(fault_record.kind),
             fault_detail: Some(fault_record.detail),
+            fault_policy: None,
+            fault_policy_action: None,
             target_agent: Some(handler),
         })
     }

@@ -25,6 +25,7 @@ impl<
         const NAMESPACE_ENTRIES: usize,
         const FAULTS: usize,
         const FAULT_HANDLERS: usize,
+        const FAULT_POLICIES: usize,
     >
     KernelCore<
         AGENTS,
@@ -42,6 +43,7 @@ impl<
         NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
+        FAULT_POLICIES,
     >
 {
     pub fn fault_task(
@@ -131,7 +133,7 @@ impl<
             .ok_or(KernelError::TaskStatusMismatch)
     }
 
-    fn record_fault_event(
+    pub(crate) fn record_fault_event(
         &mut self,
         kind: EventKind,
         agent: AgentId,
@@ -168,6 +170,8 @@ impl<
             fault: Some(fault),
             fault_kind: Some(fault_kind),
             fault_detail: Some(fault_detail),
+            fault_policy: None,
+            fault_policy_action: None,
             target_agent: None,
         })
     }

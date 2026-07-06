@@ -22,6 +22,9 @@ mod fault;
 mod fault_handler;
 mod fault_handler_event;
 mod fault_handler_store;
+mod fault_policy;
+mod fault_policy_event;
+mod fault_policy_store;
 mod fault_store;
 mod id;
 mod intent;
@@ -57,9 +60,10 @@ pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use fault::{FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
+pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
 pub use id::{
-    ActionId, AgentId, CapabilityId, CheckpointId, FaultHandlerId, FaultId, IntentId, MemoryCellId,
-    MessageId, NamespaceEntryId, ObservationId, ResourceId, TaskId,
+    ActionId, AgentId, CapabilityId, CheckpointId, FaultHandlerId, FaultId, FaultPolicyId,
+    IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, TaskId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};

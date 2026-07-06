@@ -7,7 +7,8 @@
 use agent_kernel_core::{Event, EventKind};
 
 use crate::format_fault::{
-    format_fault_handler_event, format_fault_route_event, format_task_fault_event,
+    format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
+    format_fault_route_event, format_task_fault_event,
 };
 
 pub fn format_event(event: &Event) -> String {
@@ -96,6 +97,12 @@ pub fn format_event(event: &Event) -> String {
             format_fault_handler_event(event, "fault_handler_installed")
         }
         EventKind::FaultRouted => format_fault_route_event(event, "fault_routed"),
+        EventKind::FaultPolicyInstalled => {
+            format_fault_policy_install_event(event, "fault_policy_installed")
+        }
+        EventKind::FaultPolicyApplied => {
+            format_fault_policy_apply_event(event, "fault_policy_applied")
+        }
         EventKind::MessageSent => format_message_event(event, "message_sent"),
         EventKind::MessageReceived => format_message_event(event, "message_received"),
         EventKind::MessageAcknowledged => format_message_event(event, "message_acknowledged"),
