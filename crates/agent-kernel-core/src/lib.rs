@@ -18,6 +18,8 @@ mod core;
 mod error;
 mod event;
 mod event_log;
+mod fault;
+mod fault_store;
 mod id;
 mod intent;
 mod intent_event;
@@ -50,8 +52,9 @@ pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
 pub use error::KernelError;
 pub use event::{Event, EventKind};
+pub use fault::{FaultKind, FaultRecord};
 pub use id::{
-    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, MemoryCellId, MessageId,
+    ActionId, AgentId, CapabilityId, CheckpointId, FaultId, IntentId, MemoryCellId, MessageId,
     NamespaceEntryId, ObservationId, ResourceId, TaskId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};

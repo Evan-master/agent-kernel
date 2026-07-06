@@ -107,6 +107,12 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::TaskQuantumExpired => {
                         serial_write_line("task_quantum_expired");
                     }
+                    EventKind::TaskFaulted => {
+                        serial_write_line("task_faulted");
+                    }
+                    EventKind::TaskFaultRecovered => {
+                        serial_write_line("task_fault_recovered");
+                    }
                     EventKind::MessageSent => {
                         serial_write_line("message_sent");
                     }

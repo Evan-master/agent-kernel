@@ -5,9 +5,9 @@
 //! requests, delegation, and scheduler decisions.
 
 use crate::{
-    ActionId, AgentId, CapabilityId, CheckpointId, IntentId, IntentKind, MemoryCellId, MessageId,
-    NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation, OperationSet,
-    ResourceId, TaskId, VerificationRequirement,
+    ActionId, AgentId, CapabilityId, CheckpointId, FaultId, FaultKind, IntentId, IntentKind,
+    MemoryCellId, MessageId, NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId,
+    Operation, OperationSet, ResourceId, TaskId, VerificationRequirement,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -39,6 +39,8 @@ pub enum EventKind {
     TaskYielded,
     TaskTicked,
     TaskQuantumExpired,
+    TaskFaulted,
+    TaskFaultRecovered,
     MessageSent,
     MessageReceived,
     MessageAcknowledged,
@@ -74,6 +76,9 @@ pub struct Event {
     pub task: Option<TaskId>,
     pub task_ticks: Option<u64>,
     pub task_quantum: Option<u64>,
+    pub fault: Option<FaultId>,
+    pub fault_kind: Option<FaultKind>,
+    pub fault_detail: Option<u64>,
     pub target_agent: Option<AgentId>,
 }
 
@@ -102,6 +107,9 @@ impl Event {
             task: None,
             task_ticks: None,
             task_quantum: None,
+            fault: None,
+            fault_kind: None,
+            fault_detail: None,
             target_agent: None,
         }
     }

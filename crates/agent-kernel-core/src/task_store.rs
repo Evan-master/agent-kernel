@@ -24,6 +24,7 @@ impl<
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
+        const FAULTS: usize,
     >
     KernelCore<
         AGENTS,
@@ -39,6 +40,7 @@ impl<
         MESSAGES,
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
+        FAULTS,
     >
 {
     pub fn create_task(
@@ -78,6 +80,7 @@ impl<
             status: TaskStatus::Created,
             run_ticks: 0,
             quantum_remaining: 0,
+            last_fault: None,
         };
         self.task_len += 1;
         self.record_task_event(EventKind::TaskCreated, agent, Some(capability), task, None)?;

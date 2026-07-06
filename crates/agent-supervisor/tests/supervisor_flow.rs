@@ -30,20 +30,25 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout
         .contains("event[18] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0"));
     assert!(stdout.contains("event[19] task_dispatched agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[20] task_completed agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[21] task_verified agent=1 resource=1 task=1"));
-    assert!(stdout.contains("event[22] intent_fulfilled agent=1 resource=1 intent=1"));
-    assert!(stdout.contains("event[23] message_sent agent=1 target_agent=2 message=1"));
-    assert!(stdout.contains("event[24] message_received agent=2 target_agent=1 message=1"));
-    assert!(stdout.contains("event[25] message_acknowledged agent=2 target_agent=1 message=1"));
-    assert!(stdout.contains("event[26] capability_granted agent=1 resource=2 capability=3"));
-    assert!(stdout.contains("event[27] memory_cell_created agent=1 resource=2 memory_cell=1"));
-    assert!(stdout.contains("event[28] memory_cell_recalled agent=1 resource=2 memory_cell=1"));
-    assert!(stdout.contains("event[29] memory_cell_remembered agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[20] task_faulted agent=2 resource=1 task=1 fault=1 detail=7"));
     assert!(stdout
-        .contains("event[30] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1"));
+        .contains("event[21] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7"));
+    assert!(stdout.contains("event[22] task_queued agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[23] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[24] task_completed agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[25] task_verified agent=1 resource=1 task=1"));
+    assert!(stdout.contains("event[26] intent_fulfilled agent=1 resource=1 intent=1"));
+    assert!(stdout.contains("event[27] message_sent agent=1 target_agent=2 message=1"));
+    assert!(stdout.contains("event[28] message_received agent=2 target_agent=1 message=1"));
+    assert!(stdout.contains("event[29] message_acknowledged agent=2 target_agent=1 message=1"));
+    assert!(stdout.contains("event[30] capability_granted agent=1 resource=2 capability=3"));
+    assert!(stdout.contains("event[31] memory_cell_created agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[32] memory_cell_recalled agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[33] memory_cell_remembered agent=1 resource=2 memory_cell=1"));
     assert!(stdout
-        .contains("event[31] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1"));
+        .contains("event[34] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1"));
     assert!(stdout
-        .contains("event[32] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1"));
+        .contains("event[35] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1"));
+    assert!(stdout
+        .contains("event[36] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1"));
 }

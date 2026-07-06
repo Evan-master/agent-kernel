@@ -13,6 +13,7 @@ pub enum KernelError {
     ActionStoreFull,
     ObservationStoreFull,
     CheckpointStoreFull,
+    FaultStoreFull,
     MessageStoreFull,
     MemoryCellStoreFull,
     NamespaceEntryStoreFull,

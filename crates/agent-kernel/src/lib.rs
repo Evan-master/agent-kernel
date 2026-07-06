@@ -5,6 +5,7 @@
 //! deterministic methods that a user-space supervisor can call without
 //! reaching into core state directly.
 
+mod fault;
 mod mailbox;
 mod memory;
 mod namespace;
@@ -31,6 +32,7 @@ pub struct AgentKernel<
     const MESSAGES: usize = 0,
     const MEMORY_CELLS: usize = 0,
     const NAMESPACE_ENTRIES: usize = 0,
+    const FAULTS: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -46,6 +48,7 @@ pub struct AgentKernel<
         MESSAGES,
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
+        FAULTS,
     >,
 }
 
@@ -63,6 +66,7 @@ impl<
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
+        const FAULTS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -78,6 +82,7 @@ impl<
         MESSAGES,
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
+        FAULTS,
     >
 {
     pub const fn new() -> Self {
@@ -275,6 +280,7 @@ impl<
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
+        const FAULTS: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -290,6 +296,7 @@ impl<
         MESSAGES,
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
+        FAULTS,
     >
 {
     fn default() -> Self {

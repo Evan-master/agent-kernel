@@ -171,17 +171,21 @@ event[16] task_dispatched agent=2 resource=1 task=1
 event[17] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1
 event[18] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0
 event[19] task_dispatched agent=2 resource=1 task=1
-event[20] task_completed agent=2 resource=1 task=1
-event[21] task_verified agent=1 resource=1 task=1
-event[22] intent_fulfilled agent=1 resource=1 intent=1
-event[23] message_sent agent=1 target_agent=2 message=1
-event[24] message_received agent=2 target_agent=1 message=1
-event[25] message_acknowledged agent=2 target_agent=1 message=1
-event[26] capability_granted agent=1 resource=2 capability=3
-event[27] memory_cell_created agent=1 resource=2 memory_cell=1
-event[28] memory_cell_recalled agent=1 resource=2 memory_cell=1
-event[29] memory_cell_remembered agent=1 resource=2 memory_cell=1
-event[30] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
-event[31] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
-event[32] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
+event[20] task_faulted agent=2 resource=1 task=1 fault=1 detail=7
+event[21] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7
+event[22] task_queued agent=2 resource=1 task=1
+event[23] task_dispatched agent=2 resource=1 task=1
+event[24] task_completed agent=2 resource=1 task=1
+event[25] task_verified agent=1 resource=1 task=1
+event[26] intent_fulfilled agent=1 resource=1 intent=1
+event[27] message_sent agent=1 target_agent=2 message=1
+event[28] message_received agent=2 target_agent=1 message=1
+event[29] message_acknowledged agent=2 target_agent=1 message=1
+event[30] capability_granted agent=1 resource=2 capability=3
+event[31] memory_cell_created agent=1 resource=2 memory_cell=1
+event[32] memory_cell_recalled agent=1 resource=2 memory_cell=1
+event[33] memory_cell_remembered agent=1 resource=2 memory_cell=1
+event[34] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
+event[35] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
+event[36] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
 ```

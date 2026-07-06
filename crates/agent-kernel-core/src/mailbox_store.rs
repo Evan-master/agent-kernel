@@ -24,6 +24,7 @@ impl<
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
+        const FAULTS: usize,
     >
     KernelCore<
         AGENTS,
@@ -39,6 +40,7 @@ impl<
         MESSAGES,
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
+        FAULTS,
     >
 {
     pub fn send_message(
@@ -178,6 +180,9 @@ impl<
             task: None,
             task_ticks: None,
             task_quantum: None,
+            fault: None,
+            fault_kind: None,
+            fault_detail: None,
             target_agent: Some(target_agent),
         })
     }

@@ -8,14 +8,15 @@ mod format;
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, IntentKind, MemoryValue, MessageKind, MessagePayload,
-    NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceKind, VerificationRequirement,
+    ActionId, AgentId, CheckpointId, FaultKind, IntentKind, MemoryValue, MessageKind,
+    MessagePayload, NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceKind,
+    VerificationRequirement,
 };
 
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 48, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
 
@@ -95,6 +96,19 @@ fn main() {
     let dispatched = kernel
         .sys_dispatch_next_with_quantum(target_agent, 2)
         .expect("target agent should redispatch expired task");
+    assert_eq!(dispatched, task);
+    kernel
+        .sys_fault_task(target_agent, task, FaultKind::ExecutionTrap, 7)
+        .expect("target agent should fault running task");
+    kernel
+        .sys_recover_faulted_task(agent, owner_capability, task)
+        .expect("owner rollback capability should recover faulted task");
+    kernel
+        .sys_enqueue_task(target_agent, task)
+        .expect("target agent should requeue recovered task");
+    let dispatched = kernel
+        .sys_dispatch_next_with_quantum(target_agent, 2)
+        .expect("target agent should redispatch recovered task");
     assert_eq!(dispatched, task);
     kernel
         .sys_complete_task(target_agent, assignee_capability, task)

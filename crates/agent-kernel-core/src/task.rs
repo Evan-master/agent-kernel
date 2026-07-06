@@ -4,7 +4,7 @@
 //! for the fixed-capacity no_std task store. It has no host dependencies and no
 //! allocation.
 
-use crate::{AgentId, CapabilityId, IntentId, ResourceId, TaskId};
+use crate::{AgentId, CapabilityId, FaultId, IntentId, ResourceId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TaskStatus {
@@ -12,6 +12,7 @@ pub enum TaskStatus {
     Delegated,
     Accepted,
     Running,
+    Faulted,
     Completed,
     Verified,
     Cancelled,
@@ -28,6 +29,7 @@ pub struct Task {
     pub status: TaskStatus,
     pub run_ticks: u64,
     pub quantum_remaining: u64,
+    pub last_fault: Option<FaultId>,
 }
 
 impl Task {
@@ -42,6 +44,7 @@ impl Task {
             status: TaskStatus::Cancelled,
             run_ticks: 0,
             quantum_remaining: 0,
+            last_fault: None,
         }
     }
 }

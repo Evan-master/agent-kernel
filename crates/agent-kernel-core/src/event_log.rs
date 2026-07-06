@@ -19,6 +19,7 @@ impl<
         const MESSAGES: usize,
         const MEMORY_CELLS: usize,
         const NAMESPACE_ENTRIES: usize,
+        const FAULTS: usize,
     >
     KernelCore<
         AGENTS,
@@ -34,6 +35,7 @@ impl<
         MESSAGES,
         MEMORY_CELLS,
         NAMESPACE_ENTRIES,
+        FAULTS,
     >
 {
     pub(crate) fn ensure_event_slots(&self, needed: usize) -> Result<(), KernelError> {
