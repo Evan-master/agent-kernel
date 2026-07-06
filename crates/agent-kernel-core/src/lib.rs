@@ -8,8 +8,10 @@
 mod action;
 mod action_store;
 mod agent;
+mod agent_entry;
 mod agent_execution;
 mod agent_execution_store;
+mod agent_launch;
 mod agent_store;
 mod authorization;
 mod capability;
@@ -61,6 +63,7 @@ mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};
 pub use agent::{AgentRecord, AgentStatus};
+pub use agent_entry::{AgentEntryKind, AgentEntryRecord};
 pub use agent_execution::{AgentExecutionContext, AgentExecutionState};
 pub use capability::Capability;
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};

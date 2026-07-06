@@ -25,9 +25,10 @@ for expected in \
   "AGENT_KERNEL_QEMU_BOOT_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
-  "event[3] observation" \
-  "event[4] action" \
-  "event[5] verification" \
+  "event[3] agent_launched" \
+  "event[4] observation" \
+  "event[5] action" \
+  "event[6] verification" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then

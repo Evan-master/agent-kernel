@@ -1,13 +1,12 @@
 //! Fixed-capacity Agent Kernel core state machine.
 //!
-//! This module owns resource registration, capability grants, authorization,
-//! event recording, checkpoint creation, and rollback requests. It performs no
-//! host I/O and keeps state deterministic for replay and supervisor inspection.
+//! Owns deterministic no_std stores for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, AgentExecutionContext, AgentRecord, Capability, CheckpointRecord, Event,
-    FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord,
-    NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, Task, WaiterRecord,
+    ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentRecord, Capability,
+    CheckpointRecord, Event, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
+    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
+    RunQueueEntry, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -32,6 +31,7 @@ pub struct KernelCore<
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) execution_contexts: [AgentExecutionContext; AGENTS],
+    pub(crate) agent_entries: [AgentEntryRecord; AGENTS],
     pub(crate) resources: [Resource; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
@@ -49,6 +49,7 @@ pub struct KernelCore<
     pub(crate) fault_policies: [FaultPolicyRecord; FAULT_POLICIES],
     pub(crate) waiters: [WaiterRecord; WAITERS],
     pub(crate) agent_len: usize,
+    pub(crate) agent_entry_len: usize,
     pub(crate) resource_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -122,6 +123,7 @@ impl<
         Self {
             agents: [AgentRecord::empty(); AGENTS],
             execution_contexts: [AgentExecutionContext::empty(); AGENTS],
+            agent_entries: [AgentEntryRecord::empty(); AGENTS],
             resources: [Resource::empty(); RESOURCES],
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
@@ -139,6 +141,7 @@ impl<
             fault_policies: [FaultPolicyRecord::empty(); FAULT_POLICIES],
             waiters: [WaiterRecord::empty(); WAITERS],
             agent_len: 0,
+            agent_entry_len: 0,
             resource_len: 0,
             event_len: 0,
             action_len: 0,
@@ -168,10 +171,6 @@ impl<
             next_waiter: 1,
             next_sequence: 1,
         }
-    }
-
-    pub fn events(&self) -> &[Event] {
-        &self.events[..self.event_len]
     }
 }
 

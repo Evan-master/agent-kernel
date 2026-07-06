@@ -14,6 +14,7 @@ use crate::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EventKind {
     AgentRegistered,
+    AgentLaunched,
     AgentSuspended,
     AgentResumed,
     AgentRetired,

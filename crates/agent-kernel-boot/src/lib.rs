@@ -6,7 +6,8 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CapabilityId, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
+    ActionId, AgentEntryKind, AgentId, CapabilityId, KernelError, Operation, OperationSet,
+    ResourceId, ResourceKind,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -123,6 +124,13 @@ impl<
                 .with(Operation::Observe)
                 .with(Operation::Act)
                 .with(Operation::Verify),
+        )?;
+        kernel.sys_launch_agent(
+            config.bootstrap_agent,
+            capability,
+            resource,
+            AgentEntryKind::Bootstrap,
+            None,
         )?;
 
         kernel.sys_observe(config.bootstrap_agent, capability, resource)?;

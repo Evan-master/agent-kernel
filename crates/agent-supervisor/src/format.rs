@@ -17,6 +17,7 @@ pub fn format_event(event: &Event) -> String {
 
     match event.kind {
         EventKind::AgentRegistered => format_agent_event(event, "agent_registered"),
+        EventKind::AgentLaunched => format_capability_event(event, "agent_launched"),
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),

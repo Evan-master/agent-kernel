@@ -10,9 +10,9 @@ mod format_signal;
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, AgentId, CheckpointId, FaultKind, FaultPolicyAction, IntentKind, MemoryValue,
-    MessageKind, MessagePayload, NamespaceKey, NamespaceObject, Operation, OperationSet,
-    ResourceKind, SignalKey, VerificationRequirement,
+    ActionId, AgentEntryKind, AgentId, CheckpointId, FaultKind, FaultPolicyAction, IntentKind,
+    MemoryValue, MessageKind, MessagePayload, NamespaceKey, NamespaceObject, Operation,
+    OperationSet, ResourceKind, SignalKey, VerificationRequirement,
 };
 
 use crate::format::format_event;
@@ -48,6 +48,15 @@ fn main() {
                 .with(Operation::Delegate),
         )
         .expect("agent capability should fit in simulator kernel");
+    kernel
+        .sys_launch_agent(
+            agent,
+            owner_capability,
+            workspace,
+            AgentEntryKind::Supervisor,
+            None,
+        )
+        .expect("owner agent should launch into workspace entry");
     kernel
         .sys_install_fault_handler(
             agent,

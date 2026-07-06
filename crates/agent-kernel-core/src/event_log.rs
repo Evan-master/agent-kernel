@@ -44,6 +44,10 @@ impl<
         WAITERS,
     >
 {
+    pub fn events(&self) -> &[Event] {
+        &self.events[..self.event_len]
+    }
+
     pub(crate) fn ensure_event_slots(&self, needed: usize) -> Result<(), KernelError> {
         if EVENTS.saturating_sub(self.event_len) < needed {
             Err(KernelError::EventLogFull)

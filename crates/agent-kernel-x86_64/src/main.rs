@@ -29,6 +29,9 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::AgentRegistered => {
                         serial_write_line("agent_registered");
                     }
+                    EventKind::AgentLaunched => {
+                        serial_write_line("agent_launched");
+                    }
                     EventKind::AgentSuspended => {
                         serial_write_line("agent_suspended");
                     }

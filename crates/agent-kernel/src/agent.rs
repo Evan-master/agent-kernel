@@ -4,7 +4,10 @@
 //! lifecycle, and read-only execution context inspection without letting
 //! callers mutate `agent-kernel-core` stores directly.
 
-use agent_kernel_core::{AgentExecutionContext, AgentId, AgentRecord, Event, KernelError};
+use agent_kernel_core::{
+    AgentEntryKind, AgentEntryRecord, AgentExecutionContext, AgentId, AgentRecord, CapabilityId,
+    Event, IntentId, KernelError, ResourceId,
+};
 
 use crate::AgentKernel;
 
@@ -51,6 +54,18 @@ impl<
         self.core.register_agent(agent)
     }
 
+    pub fn sys_launch_agent(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        kind: AgentEntryKind,
+        intent: Option<IntentId>,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .launch_agent(agent, capability, resource, kind, intent)
+    }
+
     pub fn sys_suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
         self.core.suspend_agent(agent)
     }
@@ -65,6 +80,14 @@ impl<
 
     pub fn agents(&self) -> &[AgentRecord] {
         self.core.agents()
+    }
+
+    pub fn agent_entries(&self) -> &[AgentEntryRecord] {
+        self.core.agent_entries()
+    }
+
+    pub fn agent_entry(&self, agent: AgentId) -> Result<AgentEntryRecord, KernelError> {
+        self.core.agent_entry(agent)
     }
 
     pub fn execution_contexts(&self) -> &[AgentExecutionContext] {
