@@ -46,6 +46,18 @@ impl<
         self.core.dispatch_next(agent)
     }
 
+    pub fn sys_dispatch_next_with_quantum(
+        &mut self,
+        agent: AgentId,
+        quantum: u64,
+    ) -> Result<TaskId, KernelError> {
+        self.core.dispatch_next_with_quantum(agent, quantum)
+    }
+
+    pub fn sys_tick_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
+        self.core.tick_task(agent, task)
+    }
+
     pub fn sys_yield_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         self.core.yield_task(agent, task)
     }

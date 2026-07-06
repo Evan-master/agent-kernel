@@ -37,6 +37,7 @@ mod resource;
 mod resource_store;
 mod run_queue;
 mod scheduler;
+mod scheduler_tick;
 mod task;
 mod task_event;
 mod task_lookup;

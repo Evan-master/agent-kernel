@@ -36,34 +36,39 @@ The v0 flow is deliberately small:
 13. Delegate the task to another agent.
 14. Record the derived task-scoped capability in the kernel event log.
 15. Let the assignee accept the task.
-16. Enqueue the accepted task and dispatch it into `Running` state through the kernel run queue.
-17. Let the assignee complete the running task.
-18. Request verification for the completed task.
-19. Mark the intent fulfilled after task verification.
-20. Send a native kernel message from the owner agent to the target agent.
-21. Let the target agent receive and acknowledge that message.
-22. Create a native memory cell under a memory resource.
-23. Recall and remember memory cell state through explicit capabilities.
-24. Bind a memory cell into the workspace object namespace.
-25. Resolve that namespace entry through an observe capability.
-26. Rebind the namespace entry to the created task.
-27. Print the kernel event log from the supervisor.
+16. Enqueue the accepted task and dispatch it into `Running` state with a deterministic quantum.
+17. Advance the running task by one explicit scheduler tick.
+18. Advance it again so the quantum expires and the task is requeued.
+19. Redispatch the accepted task from the run queue.
+20. Let the assignee complete the running task.
+21. Request verification for the completed task.
+22. Mark the intent fulfilled after task verification.
+23. Send a native kernel message from the owner agent to the target agent.
+24. Let the target agent receive and acknowledge that message.
+25. Create a native memory cell under a memory resource.
+26. Recall and remember memory cell state through explicit capabilities.
+27. Bind a memory cell into the workspace object namespace.
+28. Resolve that namespace entry through an observe capability.
+29. Rebind the namespace entry to the created task.
+30. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent suspension, agent resume, agent retirement, capability grants, derived
 task capabilities, typed intent declarations, action, verification, checkpoint
 creation, rollback requests, task creation, intent binding, task completion,
-task verification, intent fulfillment, delegation, message send, message
-receive, message acknowledgement, memory cell creation, memory recall, and
-memory remember, namespace bind, namespace resolve, and namespace rebind are
-first-class kernel events, not external tooling. Agents, checkpoints, messages,
-memory cells, and namespace entries are also queryable fixed-capacity kernel
+task verification, intent fulfillment, delegation, scheduler ticks, quantum
+expiry, message send, message receive, message acknowledgement, memory cell
+creation, memory recall, memory remember, namespace bind, namespace resolve,
+and namespace rebind are first-class kernel events, not external tooling.
+Agents, checkpoints, messages, memory cells, and namespace entries are also
+queryable fixed-capacity kernel
 records, and new root or derived capabilities can only be issued to active
 registered agents. Kernel operations that act on behalf of an `AgentId` reject
 unknown, suspended, or retired actors before authorization, state, queue,
 mailbox, memory, or capacity checks. Rollback moves the checkpoint into
 `RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO
-run queue and become `Running` before completion. `IntentId`, `TaskId`, and
+run queue, become `Running` with an explicit quantum, accumulate deterministic
+ticks, and return to the queue when their quantum expires. `IntentId`, `TaskId`, and
 `MessageId` values are allocated by fixed-capacity kernel stores rather than
 invented by the supervisor. `MemoryCellId` values are also kernel-allocated, and
 memory recall writes an audit event before returning a value. Delegation derives
@@ -163,17 +168,20 @@ event[13] delegation agent=1 resource=1 task=1 target_agent=2
 event[14] task_accepted agent=2 resource=1 task=1
 event[15] task_queued agent=2 resource=1 task=1
 event[16] task_dispatched agent=2 resource=1 task=1
-event[17] task_completed agent=2 resource=1 task=1
-event[18] task_verified agent=1 resource=1 task=1
-event[19] intent_fulfilled agent=1 resource=1 intent=1
-event[20] message_sent agent=1 target_agent=2 message=1
-event[21] message_received agent=2 target_agent=1 message=1
-event[22] message_acknowledged agent=2 target_agent=1 message=1
-event[23] capability_granted agent=1 resource=2 capability=3
-event[24] memory_cell_created agent=1 resource=2 memory_cell=1
-event[25] memory_cell_recalled agent=1 resource=2 memory_cell=1
-event[26] memory_cell_remembered agent=1 resource=2 memory_cell=1
-event[27] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
-event[28] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
-event[29] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
+event[17] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1
+event[18] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0
+event[19] task_dispatched agent=2 resource=1 task=1
+event[20] task_completed agent=2 resource=1 task=1
+event[21] task_verified agent=1 resource=1 task=1
+event[22] intent_fulfilled agent=1 resource=1 intent=1
+event[23] message_sent agent=1 target_agent=2 message=1
+event[24] message_received agent=2 target_agent=1 message=1
+event[25] message_acknowledged agent=2 target_agent=1 message=1
+event[26] capability_granted agent=1 resource=2 capability=3
+event[27] memory_cell_created agent=1 resource=2 memory_cell=1
+event[28] memory_cell_recalled agent=1 resource=2 memory_cell=1
+event[29] memory_cell_remembered agent=1 resource=2 memory_cell=1
+event[30] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1
+event[31] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
+event[32] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
 ```

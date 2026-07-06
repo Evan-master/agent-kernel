@@ -1,8 +1,8 @@
 //! Fixed-capacity FIFO task scheduler.
 //!
-//! This module belongs to `agent-kernel-core`. It owns enqueue, dispatch, and
-//! yield behavior for accepted tasks. It performs deterministic queue mutation,
-//! records scheduler events, and does not grant resource authority.
+//! This module belongs to `agent-kernel-core`. It owns FIFO enqueue, dispatch,
+//! and yield behavior for accepted or running tasks. Deterministic tick
+//! accounting lives in `scheduler_tick`.
 
 use crate::{
     AgentId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId, RunQueueEntry,
@@ -49,10 +49,28 @@ impl<
 
         self.run_queue[self.run_queue_len] = RunQueueEntry { task, agent };
         self.run_queue_len += 1;
-        self.record_scheduler_event(EventKind::TaskQueued, agent, task, task_record.resource)
+        self.record_scheduler_event(
+            EventKind::TaskQueued,
+            agent,
+            task,
+            task_record.resource,
+            None,
+            None,
+        )
     }
 
     pub fn dispatch_next(&mut self, agent: AgentId) -> Result<TaskId, KernelError> {
+        self.dispatch_next_with_quantum(agent, 1)
+    }
+
+    pub fn dispatch_next_with_quantum(
+        &mut self,
+        agent: AgentId,
+        quantum: u64,
+    ) -> Result<TaskId, KernelError> {
+        if quantum == 0 {
+            return Err(KernelError::TaskQuantumInvalid);
+        }
         self.ensure_agent_active(agent)?;
         if self.run_queue_len == 0 {
             return Err(KernelError::RunQueueEmpty);
@@ -66,12 +84,16 @@ impl<
         self.ensure_scheduler_event_capacity()?;
 
         self.shift_run_queue_left();
-        self.find_task_mut(entry.task)?.status = TaskStatus::Running;
+        let task = self.find_task_mut(entry.task)?;
+        task.status = TaskStatus::Running;
+        task.quantum_remaining = quantum;
         self.record_scheduler_event(
             EventKind::TaskDispatched,
             agent,
             entry.task,
             task_record.resource,
+            None,
+            Some(quantum),
         )?;
         Ok(entry.task)
     }
@@ -89,7 +111,14 @@ impl<
         self.find_task_mut(task)?.status = TaskStatus::Accepted;
         self.run_queue[self.run_queue_len] = RunQueueEntry { task, agent };
         self.run_queue_len += 1;
-        self.record_scheduler_event(EventKind::TaskYielded, agent, task, task_record.resource)
+        self.record_scheduler_event(
+            EventKind::TaskYielded,
+            agent,
+            task,
+            task_record.resource,
+            None,
+            None,
+        )
     }
 
     pub fn run_queue(&self) -> &[RunQueueEntry] {
@@ -104,7 +133,7 @@ impl<
         Ok(task_record)
     }
 
-    fn ensure_not_queued(&self, task: TaskId) -> Result<(), KernelError> {
+    pub(crate) fn ensure_not_queued(&self, task: TaskId) -> Result<(), KernelError> {
         if self.run_queue().iter().any(|entry| entry.task == task) {
             Err(KernelError::TaskAlreadyQueued)
         } else {
@@ -112,7 +141,7 @@ impl<
         }
     }
 
-    fn ensure_run_queue_capacity(&self) -> Result<(), KernelError> {
+    pub(crate) fn ensure_run_queue_capacity(&self) -> Result<(), KernelError> {
         if self.run_queue_len >= RUN_QUEUE {
             Err(KernelError::RunQueueFull)
         } else {
@@ -120,7 +149,7 @@ impl<
         }
     }
 
-    fn ensure_scheduler_event_capacity(&self) -> Result<(), KernelError> {
+    pub(crate) fn ensure_scheduler_event_capacity(&self) -> Result<(), KernelError> {
         if self.event_len >= EVENTS {
             Err(KernelError::EventLogFull)
         } else {
@@ -128,12 +157,14 @@ impl<
         }
     }
 
-    fn record_scheduler_event(
+    pub(crate) fn record_scheduler_event(
         &mut self,
         kind: EventKind,
         agent: AgentId,
         task: TaskId,
         resource: ResourceId,
+        task_ticks: Option<u64>,
+        task_quantum: Option<u64>,
     ) -> Result<Event, KernelError> {
         let task_record = self.find_task(task)?;
         self.record(Event {
@@ -157,6 +188,8 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: Some(task),
+            task_ticks,
+            task_quantum,
             target_agent: None,
         })
     }

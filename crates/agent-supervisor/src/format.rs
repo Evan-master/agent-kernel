@@ -84,6 +84,8 @@ pub fn format_event(event: &Event) -> String {
         EventKind::TaskQueued => format_task_event(event, "task_queued"),
         EventKind::TaskDispatched => format_task_event(event, "task_dispatched"),
         EventKind::TaskYielded => format_task_event(event, "task_yielded"),
+        EventKind::TaskTicked => format_task_tick_event(event, "task_ticked"),
+        EventKind::TaskQuantumExpired => format_task_tick_event(event, "task_quantum_expired"),
         EventKind::MessageSent => format_message_event(event, "message_sent"),
         EventKind::MessageReceived => format_message_event(event, "message_received"),
         EventKind::MessageAcknowledged => format_message_event(event, "message_acknowledged"),
@@ -138,6 +140,22 @@ fn format_task_event(event: &Event, label: &str) -> String {
     format!(
         "event[{}] {} agent={} resource={} task={}",
         event.sequence, label, agent, resource, task
+    )
+}
+
+fn format_task_tick_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let task = event.task.map(|task| task.raw()).unwrap_or_default();
+    let ticks = event.task_ticks.unwrap_or_default();
+    let quantum = event.task_quantum.unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} task={} ticks={} quantum={}",
+        event.sequence, label, agent, resource, task, ticks, quantum
     )
 }
 

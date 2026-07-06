@@ -37,6 +37,8 @@ pub enum EventKind {
     TaskQueued,
     TaskDispatched,
     TaskYielded,
+    TaskTicked,
+    TaskQuantumExpired,
     MessageSent,
     MessageReceived,
     MessageAcknowledged,
@@ -70,6 +72,8 @@ pub struct Event {
     pub verification: VerificationRequirement,
     pub checkpoint: Option<CheckpointId>,
     pub task: Option<TaskId>,
+    pub task_ticks: Option<u64>,
+    pub task_quantum: Option<u64>,
     pub target_agent: Option<AgentId>,
 }
 
@@ -96,6 +100,8 @@ impl Event {
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: None,
+            task_ticks: None,
+            task_quantum: None,
             target_agent: None,
         }
     }

@@ -101,6 +101,12 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::TaskYielded => {
                         serial_write_line("task_yielded");
                     }
+                    EventKind::TaskTicked => {
+                        serial_write_line("task_ticked");
+                    }
+                    EventKind::TaskQuantumExpired => {
+                        serial_write_line("task_quantum_expired");
+                    }
                     EventKind::MessageSent => {
                         serial_write_line("message_sent");
                     }

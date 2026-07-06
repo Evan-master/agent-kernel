@@ -76,6 +76,8 @@ impl<
             assignee: None,
             delegated_capability: None,
             status: TaskStatus::Created,
+            run_ticks: 0,
+            quantum_remaining: 0,
         };
         self.task_len += 1;
         self.record_task_event(EventKind::TaskCreated, agent, Some(capability), task, None)?;

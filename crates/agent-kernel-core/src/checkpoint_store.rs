@@ -85,6 +85,8 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: Some(checkpoint),
             task: None,
+            task_ticks: None,
+            task_quantum: None,
             target_agent: None,
         })
     }
@@ -130,6 +132,8 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: Some(checkpoint),
             task: None,
+            task_ticks: None,
+            task_quantum: None,
             target_agent: None,
         })
     }

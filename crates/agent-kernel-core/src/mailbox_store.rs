@@ -176,6 +176,8 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: None,
+            task_ticks: None,
+            task_quantum: None,
             target_agent: Some(target_agent),
         })
     }

@@ -83,6 +83,8 @@ impl<
             verification: intent_record.verification,
             checkpoint: None,
             task: Some(task),
+            task_ticks: None,
+            task_quantum: None,
             target_agent: None,
         })
     }

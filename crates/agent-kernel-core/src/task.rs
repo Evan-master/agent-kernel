@@ -26,6 +26,8 @@ pub struct Task {
     pub assignee: Option<AgentId>,
     pub delegated_capability: Option<CapabilityId>,
     pub status: TaskStatus,
+    pub run_ticks: u64,
+    pub quantum_remaining: u64,
 }
 
 impl Task {
@@ -38,6 +40,8 @@ impl Task {
             assignee: None,
             delegated_capability: None,
             status: TaskStatus::Cancelled,
+            run_ticks: 0,
+            quantum_remaining: 0,
         }
     }
 }

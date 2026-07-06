@@ -83,8 +83,18 @@ fn main() {
         .sys_enqueue_task(target_agent, task)
         .expect("target agent should enqueue accepted task");
     let dispatched = kernel
-        .sys_dispatch_next(target_agent)
-        .expect("target agent should dispatch next task");
+        .sys_dispatch_next_with_quantum(target_agent, 2)
+        .expect("target agent should dispatch next task with quantum");
+    assert_eq!(dispatched, task);
+    kernel
+        .sys_tick_task(target_agent, task)
+        .expect("target agent should advance task by one tick");
+    kernel
+        .sys_tick_task(target_agent, task)
+        .expect("target agent should expire task quantum");
+    let dispatched = kernel
+        .sys_dispatch_next_with_quantum(target_agent, 2)
+        .expect("target agent should redispatch expired task");
     assert_eq!(dispatched, task);
     kernel
         .sys_complete_task(target_agent, assignee_capability, task)
