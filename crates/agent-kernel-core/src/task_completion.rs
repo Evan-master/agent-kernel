@@ -60,6 +60,7 @@ impl<
         if current.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
         }
+        self.ensure_agent_admitted_for_task(agent, task)?;
         self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Completed;

@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, FaultKind, FaultPolicyAction, IntentKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultKind, FaultPolicyAction, IntentKind,
+    KernelCore, KernelError, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
     VerificationRequirement,
 };
 
@@ -145,8 +145,13 @@ fn create_running_task<
     let task = core
         .create_task(owner, capability, intent)
         .expect("task should create");
-    core.delegate_task(owner, capability, task, assignee)
-        .expect("task should delegate");
+    let delegated_capability = core
+        .delegate_task(owner, capability, task, assignee)
+        .expect("task should delegate")
+        .capability
+        .expect("delegation should derive capability");
+    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should accept");
     core.enqueue_task(assignee, task)
@@ -220,7 +225,7 @@ fn apply_route_policy_event_log_full_leaves_state_unchanged() {
     );
     assert!(core.messages().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 15);
+    assert_eq!(core.events().len(), 16);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }
 
@@ -242,6 +247,6 @@ fn apply_recover_policy_event_log_full_leaves_task_faulted() {
         Err(KernelError::EventLogFull)
     );
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 13);
+    assert_eq!(core.events().len(), 14);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }

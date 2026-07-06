@@ -1,8 +1,8 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    ActionId, ActionStatus, AgentId, CapabilityId, CheckpointId, CheckpointStatus, EventKind,
-    IntentId, IntentKind, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
-    RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
+    ActionId, ActionStatus, AgentEntryKind, AgentId, CapabilityId, CheckpointId, CheckpointStatus,
+    EventKind, IntentId, IntentKind, KernelError, Operation, OperationSet, ResourceId,
+    ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<4, 4, 6, 64, 8, 8, 8, 8, 8, 4>;
@@ -222,6 +222,9 @@ fn task_syscalls_record_full_task_lifecycle() {
         .delegated_capability
         .expect("delegation should derive assignee capability");
     kernel
+        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
+    kernel
         .sys_accept_task(assignee, task)
         .expect("task should be accepted");
     kernel
@@ -244,13 +247,14 @@ fn task_syscalls_record_full_task_lifecycle() {
     assert_eq!(kernel.events()[5].kind, EventKind::IntentBound);
     assert_eq!(kernel.events()[6].kind, EventKind::CapabilityDerived);
     assert_eq!(kernel.events()[7].kind, EventKind::DelegationRequested);
-    assert_eq!(kernel.events()[8].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[9].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[10].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[11].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[12].kind, EventKind::TaskVerified);
-    assert_eq!(kernel.events()[13].kind, EventKind::IntentFulfilled);
-    for event in &kernel.events()[4..=13] {
+    assert_eq!(kernel.events()[8].kind, EventKind::AgentLaunched);
+    assert_eq!(kernel.events()[9].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[10].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[11].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[12].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[13].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[14].kind, EventKind::IntentFulfilled);
+    for event in &kernel.events()[4..=14] {
         assert_eq!(event.intent, Some(intent));
     }
 }
@@ -325,9 +329,26 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
     kernel
         .sys_delegate_task(owner, owner_capability, first, first_agent)
         .expect("first task should delegate");
+    let first_capability = kernel.tasks()[0]
+        .delegated_capability
+        .expect("first delegation should derive capability");
     kernel
         .sys_delegate_task(owner, owner_capability, second, second_agent)
         .expect("second task should delegate");
+    let second_capability = kernel.tasks()[1]
+        .delegated_capability
+        .expect("second delegation should derive capability");
+    kernel
+        .sys_launch_task_agent(first_agent, first_capability, first, AgentEntryKind::Worker)
+        .expect("first agent should launch for task");
+    kernel
+        .sys_launch_task_agent(
+            second_agent,
+            second_capability,
+            second,
+            AgentEntryKind::Worker,
+        )
+        .expect("second agent should launch for task");
     kernel
         .sys_accept_task(first_agent, first)
         .expect("first task should accept");

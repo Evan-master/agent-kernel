@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, FaultId, FaultKind, IntentKind, KernelCore, Operation,
-    OperationSet, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultId, FaultKind, IntentKind, KernelCore,
+    Operation, OperationSet, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 1, 2, 24, 0, 0, 0, 1, 1, 1, 0, 0, 0, 2>;
@@ -42,6 +42,11 @@ fn running_task(core: &mut TestCore, owner: AgentId, assignee: AgentId) -> Runni
         .expect("task should be created");
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = core.tasks()[0]
+        .delegated_capability
+        .expect("delegation should derive assignee capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)

@@ -4,21 +4,23 @@
 //! through syscall-style methods and prints the event sequence without mutating
 //! kernel internals directly.
 
+mod flow_resources;
 mod format;
+mod format_agent;
 mod format_fault;
 mod format_signal;
 
-use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentEntryKind, AgentId, CheckpointId, FaultKind, FaultPolicyAction, IntentKind,
-    MemoryValue, MessageKind, MessagePayload, NamespaceKey, NamespaceObject, Operation,
-    OperationSet, ResourceKind, SignalKey, VerificationRequirement,
+    MessageKind, MessagePayload, Operation, OperationSet, ResourceKind, SignalKey,
+    VerificationRequirement,
 };
 
+use crate::flow_resources::{drive_resource_flow, ResourceFlowContext, SupervisorKernel};
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 56, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>::new();
+    let mut kernel = SupervisorKernel::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
     let handler_agent = AgentId::new(3);
@@ -111,6 +113,14 @@ fn main() {
         .delegated_capability
         .expect("delegation should derive target agent capability");
     kernel
+        .sys_launch_task_agent(
+            target_agent,
+            assignee_capability,
+            task,
+            AgentEntryKind::Worker,
+        )
+        .expect("target agent should launch into delegated task entry");
+    kernel
         .sys_accept_task(target_agent, task)
         .expect("target agent should accept task");
     kernel
@@ -202,82 +212,17 @@ fn main() {
     kernel
         .sys_acknowledge_message(target_agent, message)
         .expect("target agent should acknowledge task notification");
-    let memory = kernel
-        .sys_register_resource(ResourceKind::Memory, None)
-        .expect("memory resource should fit in simulator kernel");
-    let memory_capability = kernel
-        .sys_grant(
+
+    drive_resource_flow(
+        &mut kernel,
+        ResourceFlowContext {
             agent,
-            memory,
-            OperationSet::empty()
-                .with(Operation::Observe)
-                .with(Operation::Act),
-        )
-        .expect("memory capability should fit in simulator kernel");
-    let memory_cell = kernel
-        .sys_create_memory_cell(
-            agent,
-            memory_capability,
-            memory,
-            MemoryValue::new([1, 2, 3, 4]),
-        )
-        .expect("memory cell should fit in simulator kernel");
-    let recalled = kernel
-        .sys_recall_memory_cell(agent, memory_capability, memory_cell)
-        .expect("agent should recall memory cell");
-    assert_eq!(recalled, MemoryValue::new([1, 2, 3, 4]));
-    kernel
-        .sys_remember_memory_cell(
-            agent,
-            memory_capability,
-            memory_cell,
-            MemoryValue::new([4, 3, 2, 1]),
-        )
-        .expect("agent should remember new memory cell value");
-    let namespace_key = NamespaceKey::new(1);
-    let namespace_entry = kernel
-        .sys_bind_namespace_entry(
-            agent,
+            target_agent,
             owner_capability,
             workspace,
-            namespace_key,
-            NamespaceObject::MemoryCell(memory_cell),
-        )
-        .expect("agent should bind memory cell in workspace namespace");
-    let resolved = kernel
-        .sys_resolve_namespace_entry(agent, owner_capability, workspace, namespace_key)
-        .expect("agent should resolve workspace namespace entry");
-    assert_eq!(resolved, NamespaceObject::MemoryCell(memory_cell));
-    kernel
-        .sys_rebind_namespace_entry(
-            agent,
-            owner_capability,
-            namespace_entry,
-            NamespaceObject::Task(task),
-        )
-        .expect("agent should rebind namespace entry to task");
-    let service = kernel
-        .sys_create_resource(
-            agent,
-            ResourceKind::Service,
-            Some((workspace, owner_capability)),
-            OperationSet::only(Operation::Rollback),
-        )
-        .expect("owned service resource should fit in simulator kernel");
-    kernel
-        .sys_retire_resource(agent, service.capability, service.resource)
-        .expect("agent should retire service resource");
-    let target_observe_capability = kernel
-        .sys_derive_capability(
-            agent,
-            owner_capability,
-            target_agent,
-            OperationSet::only(Operation::Observe),
-        )
-        .expect("owner should derive observe authority to target agent");
-    kernel
-        .sys_observe(target_agent, target_observe_capability, workspace)
-        .expect("target agent should observe through derived capability");
+            task,
+        },
+    );
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {

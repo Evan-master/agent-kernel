@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, IntentId, IntentKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, IntentId, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 8, 32, 2, 2, 2, 6, 6, 4>;
@@ -68,6 +68,8 @@ fn running_delegated_task(
         .capability
         .expect("delegation should expose derived capability");
 
+    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -173,6 +175,17 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
         .expect("second task should delegate")
         .capability
         .expect("second delegation should derive capability");
+    let assignee_capability = core
+        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
+        .expect("assignee root capability should fit");
+    core.launch_agent(
+        assignee,
+        assignee_capability,
+        resource,
+        AgentEntryKind::Worker,
+        None,
+    )
+    .expect("assignee should launch for workspace tasks");
 
     core.accept_task(assignee, first)
         .expect("first task should accept");

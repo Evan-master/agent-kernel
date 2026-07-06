@@ -8,6 +8,7 @@
 mod action;
 mod action_store;
 mod agent;
+mod agent_admission;
 mod agent_entry;
 mod agent_execution;
 mod agent_execution_store;

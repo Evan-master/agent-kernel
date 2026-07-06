@@ -3,7 +3,7 @@
 //! This module defines the fixed-width record that represents an active agent
 //! being admitted into a resource-scoped runtime entry.
 
-use crate::{AgentId, CapabilityId, IntentId, ResourceId};
+use crate::{AgentId, CapabilityId, IntentId, ResourceId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentEntryKind {
@@ -19,6 +19,7 @@ pub struct AgentEntryRecord {
     pub capability: CapabilityId,
     pub kind: AgentEntryKind,
     pub intent: Option<IntentId>,
+    pub task: Option<TaskId>,
 }
 
 impl AgentEntryRecord {
@@ -29,6 +30,7 @@ impl AgentEntryRecord {
             capability: CapabilityId::new(0),
             kind: AgentEntryKind::Worker,
             intent: None,
+            task: None,
         }
     }
 }

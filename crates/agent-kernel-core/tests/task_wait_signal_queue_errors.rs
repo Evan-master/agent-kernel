@@ -1,11 +1,11 @@
 use agent_kernel_core::{
-    AgentId, IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind, SignalKey,
-    TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, IntentKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceKind, SignalKey, TaskStatus, VerificationRequirement,
 };
 
 #[test]
 fn emit_signal_run_queue_full_leaves_waiter_waiting() {
-    let mut core = KernelCore::<2, 1, 3, 30, 0, 0, 0, 2, 2, 1, 0, 0, 0, 0, 0, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 4, 30, 0, 0, 0, 2, 2, 1, 0, 0, 0, 0, 0, 0, 1>::new();
     let owner = AgentId::new(1);
     let assignee = AgentId::new(2);
     core.register_agent(owner).expect("owner should register");
@@ -23,6 +23,17 @@ fn emit_signal_run_queue_full_leaves_waiter_waiting() {
                 .with(Operation::Delegate),
         )
         .expect("owner capability should fit");
+    let assignee_runtime_capability = core
+        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
+        .expect("assignee runtime capability should fit");
+    core.launch_agent(
+        assignee,
+        assignee_runtime_capability,
+        resource,
+        AgentEntryKind::Worker,
+        None,
+    )
+    .expect("assignee should launch for resource");
 
     let first_intent = core
         .declare_intent(

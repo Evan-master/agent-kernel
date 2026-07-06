@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    ActionId, AgentId, AgentStatus, EventKind, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
+    ActionId, AgentEntryKind, AgentId, AgentStatus, EventKind, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 1, 2, 16, 1, 1, 1, 1, 1, 1>;
@@ -169,6 +169,8 @@ fn suspended_parent_agent_invalidates_delegated_task_authority() {
     let assignee_capability = core.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should accept");
     core.enqueue_task(assignee, task)

@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    ActionId, AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore, KernelError,
-    Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    ActionId, AgentEntryKind, AgentId, CapabilityId, EventKind, IntentId, IntentKind, KernelCore,
+    KernelError, Operation, OperationSet, ResourceId, ResourceKind, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 8, 32, 4, 2, 2, 6, 6, 4>;
@@ -67,6 +68,14 @@ fn create_delegated_task(core: &mut TestCore, owner: AgentId, assignee: AgentId)
 }
 
 fn dispatch_task(core: &mut TestCore, assignee: AgentId, task: TaskId) {
+    let delegated_capability = core
+        .tasks()
+        .iter()
+        .find(|task_record| task_record.id == task)
+        .and_then(|task_record| task_record.delegated_capability)
+        .expect("task should have delegated capability");
+    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)

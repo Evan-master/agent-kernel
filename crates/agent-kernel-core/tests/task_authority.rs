@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, IntentId, IntentKind, IntentStatus, KernelCore, KernelError,
-    Operation, OperationSet, ResourceId, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, IntentId, IntentKind, IntentStatus,
+    KernelCore, KernelError, Operation, OperationSet, ResourceId, ResourceKind, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 4, 24, 2, 2, 2, 4, 4, 4>;
@@ -264,6 +265,8 @@ fn verified_task_rejects_further_transitions_without_events() {
     let assignee_capability = core.tasks()[0]
         .delegated_capability
         .expect("delegation should derive assignee capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)

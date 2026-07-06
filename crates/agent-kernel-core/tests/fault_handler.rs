@@ -1,7 +1,7 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, FaultHandlerId, FaultKind, IntentKind, KernelCore, MessageId,
-    MessageKind, MessageStatus, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
-    VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultHandlerId, FaultKind, IntentKind,
+    KernelCore, MessageId, MessageKind, MessageStatus, Operation, OperationSet, ResourceId,
+    ResourceKind, TaskId, VerificationRequirement,
 };
 
 type HandlerCore = KernelCore<2, 1, 1, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1>;
@@ -75,8 +75,13 @@ fn running_fault(core: &mut RouteCore) -> RunningFault {
     let task = core
         .create_task(owner, owner_capability, intent)
         .expect("task should be created");
-    core.delegate_task(owner, owner_capability, task, assignee)
-        .expect("task should be delegated");
+    let delegated_capability = core
+        .delegate_task(owner, owner_capability, task, assignee)
+        .expect("task should be delegated")
+        .capability
+        .expect("delegation should derive capability");
+    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)

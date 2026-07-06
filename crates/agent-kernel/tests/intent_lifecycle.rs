@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, EventKind, IntentId, IntentKind, IntentStatus, Operation, OperationSet, ResourceKind,
-    TaskId, VerificationRequirement,
+    AgentEntryKind, AgentId, EventKind, IntentId, IntentKind, IntentStatus, Operation,
+    OperationSet, ResourceKind, TaskId, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<2, 4, 4, 16, 4, 4, 4, 4, 4, 4>;
@@ -124,6 +124,9 @@ fn sys_verify_task_exposes_fulfilled_intent_status() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive capability");
+    kernel
+        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)
         .expect("task should accept");

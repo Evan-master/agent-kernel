@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, IntentKind, KernelCore, Operation, OperationSet, ResourceId,
-    ResourceKind, SignalKey, TaskId, TaskStatus, VerificationRequirement, WaiterId,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, IntentKind, KernelCore, Operation,
+    OperationSet, ResourceId, ResourceKind, SignalKey, TaskId, TaskStatus, VerificationRequirement,
+    WaiterId,
 };
 
 type SignalCore<const EVENTS: usize, const RUN_QUEUE: usize, const WAITERS: usize> =
@@ -53,6 +54,8 @@ fn running_task<const EVENTS: usize, const RUN_QUEUE: usize, const WAITERS: usiz
     let assignee_capability = core.tasks()[0]
         .delegated_capability
         .expect("delegation should derive task capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should accept");
     core.enqueue_task(assignee, task)

@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, EventKind, IntentKind, KernelCore, Operation, OperationSet, ResourceKind,
-    RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, EventKind, IntentKind, KernelCore, Operation, OperationSet,
+    ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<4, 4, 8, 48, 0, 0, 0, 6, 6, 4>;
@@ -44,6 +44,14 @@ fn accepted_task(core: &mut TestCore, owner: AgentId, assignee: AgentId) -> Acce
         .expect("task should be created");
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = core
+        .tasks()
+        .iter()
+        .find(|task_record| task_record.id == task)
+        .and_then(|task_record| task_record.delegated_capability)
+        .expect("delegation should derive assignee capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
 

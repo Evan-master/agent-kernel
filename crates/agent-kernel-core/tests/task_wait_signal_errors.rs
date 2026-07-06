@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, IntentKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceId, ResourceKind, SignalKey, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind, SignalKey, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 type SignalCore<
@@ -63,6 +64,8 @@ fn prepared_task<
     let assignee_capability = core.tasks()[0]
         .delegated_capability
         .expect("delegation should derive task capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should accept");
     if dispatch {
@@ -159,7 +162,7 @@ fn emit_signal_requires_act_authority_without_mutation() {
 
 #[test]
 fn emit_signal_event_log_full_leaves_waiter_waiting() {
-    let mut core = SignalCore::<12, 1, 1>::new();
+    let mut core = SignalCore::<13, 1, 1>::new();
     let prepared = prepared_task(&mut core, true);
     core.wait_task(
         prepared.assignee,

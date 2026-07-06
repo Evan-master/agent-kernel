@@ -68,6 +68,7 @@ impl<
         if task_record.assignee != Some(agent) {
             return Err(KernelError::TaskAgentMismatch);
         }
+        self.ensure_agent_admitted_for_task(agent, task)?;
         if self.waiter_len >= WAITERS {
             return Err(KernelError::WaiterStoreFull);
         }
@@ -130,6 +131,7 @@ impl<
         };
 
         let waiter = self.waiters[waiter_index];
+        self.ensure_agent_admitted_for_task(waiter.agent, waiter.task)?;
         self.ensure_run_queue_capacity()?;
         self.ensure_event_slots(2)?;
 

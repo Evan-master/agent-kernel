@@ -6,7 +6,7 @@
 
 use agent_kernel_core::{
     AgentEntryKind, AgentEntryRecord, AgentExecutionContext, AgentId, AgentRecord, CapabilityId,
-    Event, IntentId, KernelError, ResourceId,
+    Event, IntentId, KernelError, ResourceId, TaskId,
 };
 
 use crate::AgentKernel;
@@ -64,6 +64,16 @@ impl<
     ) -> Result<Event, KernelError> {
         self.core
             .launch_agent(agent, capability, resource, kind, intent)
+    }
+
+    pub fn sys_launch_task_agent(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        kind: AgentEntryKind,
+    ) -> Result<Event, KernelError> {
+        self.core.launch_task_agent(agent, capability, task, kind)
     }
 
     pub fn sys_suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {

@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, AgentStatus, CapabilityId, EventKind, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentStatus, CapabilityId, EventKind, IntentKind, KernelCore,
+    KernelError, Operation, OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 1, 1, 8, 0, 0, 0, 0, 0, 0>;
@@ -197,7 +197,7 @@ fn accept_task_rejects_unregistered_actor_without_mutation() {
 
 #[test]
 fn dispatch_next_rejects_unregistered_actor_without_mutation() {
-    let mut core = KernelCore::<2, 1, 2, 10, 1, 1, 1, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 12, 1, 1, 1, 1, 1, 1>::new();
     let owner = AgentId::new(13);
     let runner = AgentId::new(14);
     let intruder = AgentId::new(15);
@@ -231,6 +231,11 @@ fn dispatch_next_rejects_unregistered_actor_without_mutation() {
         .expect("task should fit");
     core.delegate_task(owner, capability, task, runner)
         .expect("task should delegate");
+    let runner_capability = core.tasks()[0]
+        .delegated_capability
+        .expect("delegation should derive capability");
+    core.launch_task_agent(runner, runner_capability, task, AgentEntryKind::Worker)
+        .expect("runner should launch for delegated task");
     core.accept_task(runner, task)
         .expect("task should be accepted");
     core.enqueue_task(runner, task)

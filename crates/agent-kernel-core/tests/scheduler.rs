@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, IntentKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceKind, RunQueueEntry, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 type TestCore = KernelCore<4, 4, 6, 32, 4, 2, 2, 6, 6, 4>;
@@ -108,6 +109,8 @@ fn accepted_task_with_capabilities<
     let assignee_capability = delegation
         .capability
         .expect("delegation should derive assignee capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     AcceptedTask {

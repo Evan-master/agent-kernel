@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, FaultKind, IntentKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, FaultKind, IntentKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
 };
 
 #[derive(Copy, Clone)]
@@ -68,6 +68,14 @@ fn accepted_task<
         .expect("task should be created");
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = core
+        .tasks()
+        .iter()
+        .find(|task_record| task_record.id == task)
+        .and_then(|task_record| task_record.delegated_capability)
+        .expect("delegation should derive assignee capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
 
@@ -170,7 +178,7 @@ fn fault_store_full_leaves_running_task_unchanged() {
 
 #[test]
 fn fault_event_log_full_leaves_running_task_unchanged() {
-    let mut core = KernelCore::<2, 1, 2, 11, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 12, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
     let owner = AgentId::new(8);
     let assignee = AgentId::new(9);
     let prepared = running_task(&mut core, owner, assignee);
@@ -182,7 +190,7 @@ fn fault_event_log_full_leaves_running_task_unchanged() {
     assert!(core.faults().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Running);
     assert_eq!(core.tasks()[0].last_fault, None);
-    assert_eq!(core.events().len(), 11);
+    assert_eq!(core.events().len(), 12);
 }
 
 #[test]
@@ -214,7 +222,7 @@ fn recover_requires_rollback_authority_without_mutation() {
 
 #[test]
 fn recover_event_log_full_leaves_task_faulted() {
-    let mut core = KernelCore::<2, 1, 2, 12, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 13, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
     let owner = AgentId::new(12);
     let assignee = AgentId::new(13);
     let prepared = running_task(&mut core, owner, assignee);
@@ -228,5 +236,5 @@ fn recover_event_log_full_leaves_task_faulted() {
     );
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
     assert_eq!(core.tasks()[0].last_fault, Some(fault));
-    assert_eq!(core.events().len(), 12);
+    assert_eq!(core.events().len(), 13);
 }

@@ -1,6 +1,7 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventKind, FaultKind, IntentKind, KernelCore, KernelError, Operation,
-    OperationSet, ResourceKind, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, CapabilityId, EventKind, FaultKind, IntentKind, KernelCore,
+    KernelError, Operation, OperationSet, ResourceKind, TaskId, TaskStatus,
+    VerificationRequirement,
 };
 
 #[derive(Copy, Clone)]
@@ -58,8 +59,13 @@ fn prepare_fault<const EVENTS: usize, const MESSAGES: usize, const FAULT_HANDLER
     let task = core
         .create_task(owner, owner_capability, intent)
         .expect("task should be created");
-    core.delegate_task(owner, owner_capability, task, assignee)
-        .expect("task should be delegated");
+    let delegated_capability = core
+        .delegate_task(owner, owner_capability, task, assignee)
+        .expect("task should be delegated")
+        .capability
+        .expect("delegation should derive capability");
+    core.launch_task_agent(assignee, delegated_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -232,6 +238,6 @@ fn route_fault_event_log_full_leaves_state_unchanged() {
     );
     assert!(core.messages().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 14);
+    assert_eq!(core.events().len(), 15);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }

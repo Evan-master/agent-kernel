@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, EventKind, FaultKind, FaultPolicyAction, FaultPolicyId, IntentKind, MessageId,
-    MessageKind, MessageStatus, Operation, OperationSet, ResourceKind, TaskStatus,
+    AgentEntryKind, AgentId, EventKind, FaultKind, FaultPolicyAction, FaultPolicyId, IntentKind,
+    MessageId, MessageKind, MessageStatus, Operation, OperationSet, ResourceKind, TaskStatus,
     VerificationRequirement,
 };
 
@@ -72,6 +72,9 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
         .delegated_capability
         .expect("delegation should derive capability");
     kernel
+        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
+    kernel
         .sys_accept_task(assignee, task)
         .expect("task should accept");
     kernel
@@ -118,8 +121,8 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
     assert_eq!(kernel.messages()[0].kind, MessageKind::Fault);
     assert_eq!(kernel.messages()[0].status, MessageStatus::Acknowledged);
     assert_eq!(kernel.messages()[0].payload.fault, Some(fault));
-    assert_eq!(kernel.events()[15].kind, EventKind::MessageSent);
-    assert_eq!(kernel.events()[16].kind, EventKind::FaultRouted);
-    assert_eq!(kernel.events()[17].kind, EventKind::FaultPolicyApplied);
+    assert_eq!(kernel.events()[16].kind, EventKind::MessageSent);
+    assert_eq!(kernel.events()[17].kind, EventKind::FaultRouted);
+    assert_eq!(kernel.events()[18].kind, EventKind::FaultPolicyApplied);
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Completed);
 }

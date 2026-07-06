@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, EventKind, FaultId, FaultKind, IntentKind, Operation, OperationSet, ResourceKind,
-    TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, EventKind, FaultId, FaultKind, IntentKind, Operation, OperationSet,
+    ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<2, 1, 2, 24, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>;
@@ -48,6 +48,9 @@ fn task_fault_syscalls_fault_recover_and_allow_completion() {
     let assignee_capability = kernel.tasks()[0]
         .delegated_capability
         .expect("delegation should derive task capability");
+    kernel
+        .sys_launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     kernel
         .sys_accept_task(assignee, task)
         .expect("task should be accepted");

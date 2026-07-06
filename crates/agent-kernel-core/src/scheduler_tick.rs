@@ -53,6 +53,7 @@ impl<
         if task_record.status != TaskStatus::Running || task_record.assignee != Some(agent) {
             return Err(KernelError::TaskNotRunnable);
         }
+        self.ensure_agent_admitted_for_task(agent, task)?;
         if task_record.quantum_remaining == 0 {
             return Err(KernelError::TaskQuantumInvalid);
         }

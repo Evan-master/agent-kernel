@@ -25,6 +25,8 @@ pub enum KernelError {
     AgentNotFound,
     AgentEntryNotFound,
     AgentAlreadyLaunched,
+    AgentNotLaunched,
+    AgentEntryScopeMismatch,
     AgentSuspended,
     AgentRetired,
     AgentStatusMismatch,

@@ -2,6 +2,7 @@
 
 use agent_kernel_core::{Event, EventKind};
 
+use crate::format_agent::{format_agent_event, format_agent_launch_event};
 use crate::format_fault::{
     format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
     format_fault_route_event, format_task_fault_event,
@@ -17,7 +18,7 @@ pub fn format_event(event: &Event) -> String {
 
     match event.kind {
         EventKind::AgentRegistered => format_agent_event(event, "agent_registered"),
-        EventKind::AgentLaunched => format_capability_event(event, "agent_launched"),
+        EventKind::AgentLaunched => format_agent_launch_event(event),
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),
@@ -120,19 +121,6 @@ pub fn format_event(event: &Event) -> String {
             format_namespace_event(event, "namespace_entry_rebound")
         }
     }
-}
-
-fn format_agent_event(event: &Event, label: &str) -> String {
-    let agent = event.agent.raw();
-    let target_agent = event
-        .target_agent
-        .map(|agent| agent.raw())
-        .unwrap_or_default();
-
-    format!(
-        "event[{}] {} agent={} target_agent={}",
-        event.sequence, label, agent, target_agent
-    )
 }
 
 fn format_intent_event(event: &Event, label: &str) -> String {

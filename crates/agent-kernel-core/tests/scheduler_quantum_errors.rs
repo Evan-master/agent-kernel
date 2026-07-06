@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceKind,
-    RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, IntentKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceKind, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 
 #[derive(Copy, Clone)]
@@ -54,6 +54,14 @@ fn accepted_task<
         .expect("task should be created");
     core.delegate_task(owner, owner_capability, task, assignee)
         .expect("task should be delegated");
+    let assignee_capability = core
+        .tasks()
+        .iter()
+        .find(|task_record| task_record.id == task)
+        .and_then(|task_record| task_record.delegated_capability)
+        .expect("delegation should derive assignee capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
 
@@ -124,7 +132,7 @@ fn tick_rejects_wrong_agent_without_mutation() {
 
 #[test]
 fn tick_event_log_full_leaves_running_task_unchanged() {
-    let mut core = KernelCore::<2, 1, 2, 11, 0, 0, 0, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 12, 0, 0, 0, 1, 1, 1>::new();
     let owner = AgentId::new(8);
     let assignee = AgentId::new(9);
     let accepted = accepted_task(&mut core, owner, assignee);
@@ -140,7 +148,7 @@ fn tick_event_log_full_leaves_running_task_unchanged() {
     assert_eq!(core.tasks()[0].status, TaskStatus::Running);
     assert_eq!(core.tasks()[0].run_ticks, 0);
     assert_eq!(core.tasks()[0].quantum_remaining, 2);
-    assert_eq!(core.events().len(), 11);
+    assert_eq!(core.events().len(), 12);
 }
 
 #[test]

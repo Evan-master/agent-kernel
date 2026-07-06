@@ -47,6 +47,7 @@ impl<
     pub fn enqueue_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         self.ensure_agent_active(agent)?;
         let task_record = self.find_runnable_task(agent, task)?;
+        self.ensure_agent_admitted_for_task(agent, task)?;
         self.ensure_not_queued(task)?;
         self.ensure_run_queue_capacity()?;
         self.ensure_scheduler_event_capacity()?;
@@ -86,6 +87,7 @@ impl<
         }
         self.ensure_execution_context_idle(agent)?;
         let task_record = self.find_runnable_task(agent, entry.task)?;
+        self.ensure_agent_admitted_for_task(agent, entry.task)?;
         self.ensure_scheduler_event_capacity()?;
 
         self.shift_run_queue_left();
@@ -110,6 +112,7 @@ impl<
         if task_record.status != TaskStatus::Running || task_record.assignee != Some(agent) {
             return Err(KernelError::TaskNotRunnable);
         }
+        self.ensure_agent_admitted_for_task(agent, task)?;
         self.ensure_not_queued(task)?;
         self.ensure_run_queue_capacity()?;
         self.ensure_scheduler_event_capacity()?;

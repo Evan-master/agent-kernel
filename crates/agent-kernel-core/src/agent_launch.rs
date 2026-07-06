@@ -5,8 +5,8 @@
 
 use crate::{
     AgentEntryKind, AgentEntryRecord, AgentId, CapabilityId, Event, EventKind, IntentId,
-    IntentKind, IntentStatus, KernelCore, KernelError, Operation, OperationSet, ResourceId,
-    VerificationRequirement,
+    IntentKind, IntentStatus, KernelCore, KernelError, Operation, OperationSet, ResourceId, TaskId,
+    TaskStatus, VerificationRequirement,
 };
 
 impl<
@@ -75,9 +75,59 @@ impl<
             capability,
             kind,
             intent,
+            task: None,
         };
         self.agent_entry_len += 1;
-        self.record_agent_launch_event(agent, capability, resource, intent)
+        self.record_agent_launch_event(agent, capability, resource, intent, None)
+    }
+
+    pub fn launch_task_agent(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        kind: AgentEntryKind,
+    ) -> Result<Event, KernelError> {
+        self.ensure_agent_active(agent)?;
+        if self.find_agent_entry(agent).is_ok() {
+            return Err(KernelError::AgentAlreadyLaunched);
+        }
+        let task_record = self.find_task(task)?;
+        if task_record.assignee != Some(agent) {
+            return Err(KernelError::TaskAgentMismatch);
+        }
+        match task_record.status {
+            TaskStatus::Delegated | TaskStatus::Accepted => {}
+            _ => return Err(KernelError::TaskStatusMismatch),
+        }
+        self.ensure_authorized_for_task(
+            agent,
+            capability,
+            task_record.resource,
+            Operation::Act,
+            task,
+        )?;
+        if self.agent_entry_len >= AGENTS {
+            return Err(KernelError::AgentEntryStoreFull);
+        }
+        self.ensure_event_slots(1)?;
+
+        self.agent_entries[self.agent_entry_len] = AgentEntryRecord {
+            agent,
+            resource: task_record.resource,
+            capability,
+            kind,
+            intent: Some(task_record.intent),
+            task: Some(task),
+        };
+        self.agent_entry_len += 1;
+        self.record_agent_launch_event(
+            agent,
+            capability,
+            task_record.resource,
+            Some(task_record.intent),
+            Some(task),
+        )
     }
 
     pub fn agent_entries(&self) -> &[AgentEntryRecord] {
@@ -88,7 +138,7 @@ impl<
         self.find_agent_entry(agent)
     }
 
-    fn find_agent_entry(&self, agent: AgentId) -> Result<AgentEntryRecord, KernelError> {
+    pub(crate) fn find_agent_entry(&self, agent: AgentId) -> Result<AgentEntryRecord, KernelError> {
         self.agent_entries()
             .iter()
             .find(|entry| entry.agent == agent)
@@ -125,6 +175,7 @@ impl<
         capability: CapabilityId,
         resource: ResourceId,
         intent: Option<IntentId>,
+        task: Option<TaskId>,
     ) -> Result<Event, KernelError> {
         self.record(Event {
             sequence: 0,
@@ -146,7 +197,7 @@ impl<
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
             checkpoint: None,
-            task: None,
+            task,
             task_ticks: None,
             task_quantum: None,
             fault: None,

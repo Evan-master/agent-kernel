@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, EventKind, IntentId, IntentKind, IntentStatus, KernelCore, KernelError, Operation,
-    OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, EventKind, IntentId, IntentKind, IntentStatus, KernelCore,
+    KernelError, Operation, OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<2, 4, 8, 64, 2, 2, 2, 4, 6, 4>;
@@ -128,6 +128,8 @@ fn complete_task_flow<
         .expect("delegated task should be stored")
         .delegated_capability
         .expect("delegation should derive capability");
+    core.launch_task_agent(assignee, assignee_capability, task, AgentEntryKind::Worker)
+        .expect("assignee should launch for delegated task");
     core.accept_task(assignee, task)
         .expect("task should be accepted");
     core.enqueue_task(assignee, task)
@@ -199,7 +201,7 @@ fn cancel_task_cancels_bound_intent_and_records_event() {
 
 #[test]
 fn verify_task_requires_two_event_slots_without_mutation() {
-    let mut core = KernelCore::<2, 1, 4, 12, 2, 2, 2, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 4, 13, 2, 2, 2, 1, 1, 1>::new();
     let owner = AgentId::new(13);
     let assignee = AgentId::new(14);
     let (owner_capability, resource) = grant_owner_capability(&mut core, owner);
@@ -210,14 +212,14 @@ fn verify_task_requires_two_event_slots_without_mutation() {
         .create_task(owner, owner_capability, intent)
         .expect("task should be created");
     complete_task_flow(&mut core, owner, owner_capability, task, assignee);
-    assert_eq!(core.events().len(), 12);
+    assert_eq!(core.events().len(), 13);
 
     let result = core.verify_task(owner, owner_capability, task);
 
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert_eq!(core.tasks()[0].status, TaskStatus::Completed);
     assert_eq!(core.intents()[0].status, IntentStatus::Bound);
-    assert_eq!(core.events().len(), 12);
+    assert_eq!(core.events().len(), 13);
 }
 
 #[test]
@@ -275,9 +277,9 @@ fn task_lifecycle_events_carry_task_intent() {
     core.verify_task(owner, owner_capability, task)
         .expect("task should verify");
 
-    for event in &core.events()[3..=13] {
+    for event in &core.events()[3..=14] {
         assert_eq!(event.intent, Some(intent));
     }
     assert_eq!(core.events()[5].kind, EventKind::IntentBound);
-    assert_eq!(core.events()[13].kind, EventKind::IntentFulfilled);
+    assert_eq!(core.events()[14].kind, EventKind::IntentFulfilled);
 }

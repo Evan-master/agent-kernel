@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentExecutionState, AgentId, IntentKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceKind, TaskStatus, VerificationRequirement,
+    AgentEntryKind, AgentExecutionState, AgentId, IntentKind, KernelCore, KernelError, Operation,
+    OperationSet, ResourceKind, TaskStatus, VerificationRequirement,
 };
 
 type TestCore = KernelCore<3, 3, 8, 48, 0, 0, 0, 8, 8, 8>;
@@ -29,6 +29,17 @@ fn prepare_two_accepted_tasks(
                 .with(Operation::Delegate),
         )
         .expect("capability should fit");
+    let assignee_capability = core
+        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
+        .expect("assignee root capability should fit");
+    core.launch_agent(
+        assignee,
+        assignee_capability,
+        resource,
+        AgentEntryKind::Worker,
+        None,
+    )
+    .expect("assignee should launch for workspace tasks");
 
     let first_intent = core
         .declare_intent(
