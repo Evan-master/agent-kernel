@@ -45,4 +45,8 @@ impl OperationSet {
     pub const fn allows(self, operation: Operation) -> bool {
         self.0 & operation.bit() != 0
     }
+
+    pub const fn is_subset_of(self, other: Self) -> bool {
+        self.0 & !other.0 == 0
+    }
 }

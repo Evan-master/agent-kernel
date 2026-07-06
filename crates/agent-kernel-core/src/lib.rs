@@ -11,6 +11,7 @@ mod agent;
 mod agent_store;
 mod authorization;
 mod capability;
+mod capability_derivation;
 mod capability_store;
 mod checkpoint;
 mod checkpoint_store;

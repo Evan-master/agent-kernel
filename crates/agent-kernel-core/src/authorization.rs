@@ -105,7 +105,10 @@ impl<
         Ok(cap)
     }
 
-    fn ensure_capability_chain_active(&self, capability: Capability) -> Result<(), KernelError> {
+    pub(crate) fn ensure_capability_chain_active(
+        &self,
+        capability: Capability,
+    ) -> Result<(), KernelError> {
         let mut current = capability;
 
         for _ in 0..CAPS {

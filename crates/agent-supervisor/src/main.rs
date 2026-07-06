@@ -18,7 +18,7 @@ use agent_kernel_core::{
 use crate::format::format_event;
 
 fn main() {
-    let mut kernel = AgentKernel::<8, 8, 8, 52, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>::new();
+    let mut kernel = AgentKernel::<8, 8, 8, 56, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>::new();
     let agent = AgentId::new(1);
     let target_agent = AgentId::new(2);
     let handler_agent = AgentId::new(3);
@@ -256,6 +256,17 @@ fn main() {
     kernel
         .sys_retire_resource(agent, service_capability, service)
         .expect("agent should retire service resource");
+    let target_observe_capability = kernel
+        .sys_derive_capability(
+            agent,
+            owner_capability,
+            target_agent,
+            OperationSet::only(Operation::Observe),
+        )
+        .expect("owner should derive observe authority to target agent");
+    kernel
+        .sys_observe(target_agent, target_observe_capability, workspace)
+        .expect("target agent should observe through derived capability");
 
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {

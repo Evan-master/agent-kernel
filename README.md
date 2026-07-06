@@ -4,14 +4,15 @@ Agent Kernel is an early prototype for an agent-native operating system kernel.
 It is not a Linux wrapper, shell agent, or POSIX-first compatibility layer.
 
 The project starts from new OS primitives instead of POSIX compatibility:
-agents, resources, resource lifecycle, capabilities, typed intents, actions, observations,
-checkpoints, rollback, verification, tasks, delegation, native mailbox IPC,
-task wait signals, task fault traps, fault handlers, fault policies, memory
-cells, native object namespace entries, and event logs.
+agents, resources, resource lifecycle, capabilities, capability attenuation,
+typed intents, actions, observations, checkpoints, rollback, verification,
+tasks, delegation, native mailbox IPC, task wait signals, task fault traps,
+fault handlers, fault policies, memory cells, native object namespace entries,
+and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, resource lifecycle, capability, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -60,24 +61,27 @@ The v0 flow is deliberately small:
 36. Resolve that namespace entry through an observe capability.
 37. Rebind the namespace entry to the created task.
 38. Register a temporary service resource and retire it through rollback authority.
-39. Print the kernel event log from the supervisor.
+39. Derive an observe-only capability from the owner to the target agent.
+40. Let the target agent observe the workspace through that derived capability.
+41. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent suspension, agent resume, agent retirement, capability grants, derived
-task capabilities, typed intent declarations, action, verification, checkpoint
-creation, rollback requests, task creation, intent binding, task completion,
-task verification, intent fulfillment, delegation, scheduler ticks, quantum
-expiry, task fault trapping, fault handler installation, fault policy
-installation, fault routing, fault policy application, task fault recovery,
-task waiting, signal emission, task wakeup, message send, message receive,
+root capabilities, derived task capabilities, typed intent declarations, action,
+verification, checkpoint creation, rollback requests, task creation, intent
+binding, task completion, task verification, intent fulfillment, delegation,
+scheduler ticks, quantum expiry, task fault trapping, fault handler
+installation, fault policy installation, fault routing, fault policy
+application, task fault recovery, task waiting, signal emission, task wakeup,
+message send, message receive,
 message acknowledgement, memory cell creation, memory recall, memory remember,
 namespace bind, namespace resolve, namespace rebind, and resource retirement are
 first-class kernel events, not external tooling.
 Agents, resources, checkpoints, waiters, fault records, fault handlers, fault
 policies, messages, memory cells, and namespace entries are also queryable
 fixed-capacity kernel records, and new root or derived capabilities can only be
-issued to active
-registered agents. Kernel operations that act on behalf of an `AgentId` reject
+issued to active registered agents. Kernel operations that act on behalf of an
+`AgentId` reject
 unknown, suspended, or retired actors before authorization, state, queue,
 mailbox, memory, or capacity checks. Rollback moves the checkpoint into
 `RollbackRequested` status. Accepted tasks move through a fixed-capacity FIFO
@@ -98,6 +102,10 @@ kernel object references inside workspace resources rather than parsing paths or
 delegating lookup to a host filesystem. Retired resources remain queryable for
 audit, but active-resource lookup rejects future grants, child resources, and
 old-capability operations against them.
+General capability derivation lets an agent attenuate its own authority for
+another active agent; the derived capability cannot exceed the source
+operations, cannot be created from task-scoped authority, and becomes unusable
+when the source capability is revoked.
 
 ## Boot Handoff
 
@@ -219,4 +227,6 @@ event[47] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1
 event[48] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1
 event[49] capability_granted agent=1 resource=3 capability=4
 event[50] resource_retired agent=1 resource=3 capability=4
+event[51] capability_derived agent=1 resource=1 capability=5
+event[52] observation agent=2 resource=1
 ```

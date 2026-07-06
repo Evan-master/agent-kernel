@@ -5,6 +5,7 @@
 //! deterministic methods that a user-space supervisor can call without
 //! reaching into core state directly.
 
+mod capability;
 mod fault;
 mod mailbox;
 mod memory;
@@ -15,8 +16,8 @@ mod signal;
 
 use agent_kernel_core::{
     ActionId, ActionRecord, AgentId, AgentRecord, CapabilityId, CheckpointId, CheckpointRecord,
-    Event, Intent, IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, OperationSet,
-    ResourceId, Task, TaskId, VerificationRequirement,
+    Event, Intent, IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, ResourceId,
+    Task, TaskId, VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -119,15 +120,6 @@ impl<
 
     pub fn sys_retire_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
         self.core.retire_agent(agent)
-    }
-
-    pub fn sys_grant(
-        &mut self,
-        agent: AgentId,
-        resource: ResourceId,
-        operations: OperationSet,
-    ) -> Result<CapabilityId, KernelError> {
-        self.core.grant_capability(agent, resource, operations)
     }
 
     pub fn sys_observe(

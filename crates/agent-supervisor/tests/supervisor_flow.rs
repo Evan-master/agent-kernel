@@ -73,4 +73,6 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
         .contains("event[48] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1"));
     assert!(stdout.contains("event[49] capability_granted agent=1 resource=3 capability=4"));
     assert!(stdout.contains("event[50] resource_retired agent=1 resource=3 capability=4"));
+    assert!(stdout.contains("event[51] capability_derived agent=1 resource=1 capability=5"));
+    assert!(stdout.contains("event[52] observation agent=2 resource=1"));
 }

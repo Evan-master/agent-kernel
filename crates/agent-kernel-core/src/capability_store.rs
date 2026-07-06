@@ -89,51 +89,6 @@ impl<
         Ok(id)
     }
 
-    pub(crate) fn derive_task_capability(
-        &mut self,
-        agent: AgentId,
-        resource: ResourceId,
-        operations: OperationSet,
-        task: TaskId,
-        parent: CapabilityId,
-    ) -> Result<CapabilityId, KernelError> {
-        self.ensure_agent_active(agent)?;
-        self.find_resource(resource)?;
-        let parent_capability = self.find_capability(parent)?;
-        let task_record = self.find_task(task)?;
-
-        let slot = self
-            .capabilities
-            .iter()
-            .position(|capability| capability.is_none())
-            .ok_or(KernelError::CapabilityStoreFull)?;
-        self.ensure_event_slots(1)?;
-
-        let id = CapabilityId::new(self.next_capability);
-        self.next_capability += 1;
-        self.capabilities[slot] = Some(Capability {
-            id,
-            agent,
-            resource,
-            operations,
-            revoked: false,
-            task: Some(task),
-            parent: Some(parent),
-        });
-        self.record_capability_event(
-            EventKind::CapabilityDerived,
-            parent_capability.agent,
-            resource,
-            id,
-            Some(parent),
-            operations,
-            Some(task),
-            Some(task_record.intent),
-            Some(agent),
-        )?;
-        Ok(id)
-    }
-
     pub fn revoke_capability(&mut self, capability: CapabilityId) -> Result<(), KernelError> {
         let cap = self.find_capability(capability)?;
         self.ensure_event_slots(1)?;
@@ -153,7 +108,7 @@ impl<
         Ok(())
     }
 
-    fn record_capability_event(
+    pub(crate) fn record_capability_event(
         &mut self,
         kind: EventKind,
         agent: AgentId,
