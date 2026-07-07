@@ -136,10 +136,11 @@ remains available for system-seeded resources and leaves `owner: None`.
 3. Register the bootstrap agent.
 4. Register a bootstrap resource.
 5. Grant observe/act/verify capability to the bootstrap agent.
-6. Register a bootstrap executable image.
-7. Launch the bootstrap agent into a bootstrap entry.
-8. Record observation, action, and verification events.
-9. Mark the kernel ready for supervisor handoff.
+6. Register a bootstrap executable image as pending.
+7. Verify that bootstrap image, moving it from pending to verified.
+8. Launch the bootstrap agent into a bootstrap entry that references the verified image.
+9. Record observation, action, and verification events.
+10. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 

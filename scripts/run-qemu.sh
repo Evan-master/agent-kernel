@@ -26,10 +26,11 @@ for expected in \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \
-  "event[4] agent_launched" \
-  "event[5] observation" \
-  "event[6] action" \
-  "event[7] verification" \
+  "event[4] agent_image_verified" \
+  "event[5] agent_launched" \
+  "event[6] observation" \
+  "event[7] action" \
+  "event[8] verification" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then

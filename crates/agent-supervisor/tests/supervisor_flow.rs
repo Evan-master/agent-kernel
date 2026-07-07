@@ -17,73 +17,79 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains(
         "event[5] agent_image_registered agent=1 resource=1 capability=1 image=1 kind=supervisor"
     ));
-    assert!(stdout.contains("event[6] agent_launched agent=1 resource=1 capability=1 image=1"));
-    assert!(stdout.contains("event[7] fault_handler_installed agent=1 resource=1 target_agent=3"));
     assert!(stdout.contains(
-        "event[8] fault_policy_installed agent=1 resource=1 policy=1 action=route_to_handler"
+        "event[6] agent_image_verified agent=1 resource=1 capability=1 image=1 kind=supervisor"
     ));
-    assert!(stdout.contains("event[9] observation agent=1 resource=1"));
-    assert!(stdout.contains("event[10] action agent=1 resource=1 action=1"));
-    assert!(stdout.contains("event[11] verification agent=1 resource=1 action=1"));
-    assert!(stdout.contains("event[12] checkpoint agent=1 resource=1 checkpoint=1"));
-    assert!(stdout.contains("event[13] rollback agent=1 resource=1 checkpoint=1"));
-    assert!(stdout.contains("event[14] intent_declared agent=1 resource=1 intent=1"));
-    assert!(stdout.contains("event[15] task_created agent=1 resource=1 task=1"));
-    assert!(stdout.contains("event[16] intent_bound agent=1 resource=1 intent=1"));
-    assert!(stdout.contains("event[17] capability_derived agent=1 resource=1 capability=2"));
-    assert!(stdout.contains("event[18] delegation agent=1 resource=1 task=1 target_agent=2"));
+    assert!(stdout.contains("event[7] agent_launched agent=1 resource=1 capability=1 image=1"));
+    assert!(stdout.contains("event[8] fault_handler_installed agent=1 resource=1 target_agent=3"));
     assert!(stdout.contains(
-        "event[19] agent_image_registered agent=1 resource=1 capability=1 image=2 kind=worker"
+        "event[9] fault_policy_installed agent=1 resource=1 policy=1 action=route_to_handler"
+    ));
+    assert!(stdout.contains("event[10] observation agent=1 resource=1"));
+    assert!(stdout.contains("event[11] action agent=1 resource=1 action=1"));
+    assert!(stdout.contains("event[12] verification agent=1 resource=1 action=1"));
+    assert!(stdout.contains("event[13] checkpoint agent=1 resource=1 checkpoint=1"));
+    assert!(stdout.contains("event[14] rollback agent=1 resource=1 checkpoint=1"));
+    assert!(stdout.contains("event[15] intent_declared agent=1 resource=1 intent=1"));
+    assert!(stdout.contains("event[16] task_created agent=1 resource=1 task=1"));
+    assert!(stdout.contains("event[17] intent_bound agent=1 resource=1 intent=1"));
+    assert!(stdout.contains("event[18] capability_derived agent=1 resource=1 capability=2"));
+    assert!(stdout.contains("event[19] delegation agent=1 resource=1 task=1 target_agent=2"));
+    assert!(stdout.contains(
+        "event[20] agent_image_registered agent=1 resource=1 capability=1 image=2 kind=worker"
+    ));
+    assert!(stdout.contains(
+        "event[21] agent_image_verified agent=1 resource=1 capability=1 image=2 kind=worker"
     ));
     assert!(
-        stdout.contains("event[20] agent_launched agent=2 resource=1 capability=2 image=2 task=1")
+        stdout.contains("event[22] agent_launched agent=2 resource=1 capability=2 image=2 task=1")
     );
-    assert!(stdout.contains("event[21] task_accepted agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[22] task_queued agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[23] task_dispatched agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[24] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1"));
+    assert!(stdout.contains("event[23] task_accepted agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[24] task_queued agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[25] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[26] task_ticked agent=2 resource=1 task=1 ticks=1 quantum=1"));
     assert!(stdout
-        .contains("event[25] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0"));
-    assert!(stdout.contains("event[26] task_dispatched agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[27] task_faulted agent=2 resource=1 task=1 fault=1 detail=7"));
-    assert!(stdout.contains("event[28] message_sent agent=1 target_agent=3 message=1"));
+        .contains("event[27] task_quantum_expired agent=2 resource=1 task=1 ticks=2 quantum=0"));
+    assert!(stdout.contains("event[28] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[29] task_faulted agent=2 resource=1 task=1 fault=1 detail=7"));
+    assert!(stdout.contains("event[30] message_sent agent=1 target_agent=3 message=1"));
     assert!(stdout
-        .contains("event[29] fault_routed agent=1 resource=1 task=1 fault=1 detail=7 target_agent=3 message=1"));
+        .contains("event[31] fault_routed agent=1 resource=1 task=1 fault=1 detail=7 target_agent=3 message=1"));
     assert!(stdout
-        .contains("event[30] fault_policy_applied agent=1 resource=1 task=1 fault=1 detail=7 policy=1 action=route_to_handler message=1"));
-    assert!(stdout.contains("event[31] message_received agent=3 target_agent=1 message=1"));
-    assert!(stdout.contains("event[32] message_acknowledged agent=3 target_agent=1 message=1"));
+        .contains("event[32] fault_policy_applied agent=1 resource=1 task=1 fault=1 detail=7 policy=1 action=route_to_handler message=1"));
+    assert!(stdout.contains("event[33] message_received agent=3 target_agent=1 message=1"));
+    assert!(stdout.contains("event[34] message_acknowledged agent=3 target_agent=1 message=1"));
     assert!(stdout
-        .contains("event[33] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7"));
-    assert!(stdout.contains("event[34] task_queued agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[35] task_dispatched agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[36] task_waiting agent=2 resource=1 task=1 waiter=1 signal=1"));
+        .contains("event[35] task_fault_recovered agent=1 resource=1 task=1 fault=1 detail=7"));
+    assert!(stdout.contains("event[36] task_queued agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[37] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[38] task_waiting agent=2 resource=1 task=1 waiter=1 signal=1"));
     assert!(stdout.contains(
-        "event[37] signal_emitted agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2"
+        "event[39] signal_emitted agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2"
     ));
     assert!(stdout.contains(
-        "event[38] task_woken agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2"
+        "event[40] task_woken agent=1 resource=1 task=1 waiter=1 signal=1 target_agent=2"
     ));
-    assert!(stdout.contains("event[39] task_dispatched agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[40] task_completed agent=2 resource=1 task=1"));
-    assert!(stdout.contains("event[41] task_verified agent=1 resource=1 task=1"));
-    assert!(stdout.contains("event[42] intent_fulfilled agent=1 resource=1 intent=1"));
-    assert!(stdout.contains("event[43] message_sent agent=1 target_agent=2 message=2"));
-    assert!(stdout.contains("event[44] message_received agent=2 target_agent=1 message=2"));
-    assert!(stdout.contains("event[45] message_acknowledged agent=2 target_agent=1 message=2"));
-    assert!(stdout.contains("event[46] capability_granted agent=1 resource=2 capability=3"));
-    assert!(stdout.contains("event[47] memory_cell_created agent=1 resource=2 memory_cell=1"));
-    assert!(stdout.contains("event[48] memory_cell_recalled agent=1 resource=2 memory_cell=1"));
-    assert!(stdout.contains("event[49] memory_cell_remembered agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[41] task_dispatched agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[42] task_completed agent=2 resource=1 task=1"));
+    assert!(stdout.contains("event[43] task_verified agent=1 resource=1 task=1"));
+    assert!(stdout.contains("event[44] intent_fulfilled agent=1 resource=1 intent=1"));
+    assert!(stdout.contains("event[45] message_sent agent=1 target_agent=2 message=2"));
+    assert!(stdout.contains("event[46] message_received agent=2 target_agent=1 message=2"));
+    assert!(stdout.contains("event[47] message_acknowledged agent=2 target_agent=1 message=2"));
+    assert!(stdout.contains("event[48] capability_granted agent=1 resource=2 capability=3"));
+    assert!(stdout.contains("event[49] memory_cell_created agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[50] memory_cell_recalled agent=1 resource=2 memory_cell=1"));
+    assert!(stdout.contains("event[51] memory_cell_remembered agent=1 resource=2 memory_cell=1"));
     assert!(stdout
-        .contains("event[50] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1"));
+        .contains("event[52] namespace_entry_bound agent=1 resource=1 namespace_entry=1 key=1"));
     assert!(stdout
-        .contains("event[51] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1"));
+        .contains("event[53] namespace_entry_resolved agent=1 resource=1 namespace_entry=1 key=1"));
     assert!(stdout
-        .contains("event[52] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1"));
-    assert!(stdout.contains("event[53] resource_created agent=1 resource=3 capability=4"));
-    assert!(stdout.contains("event[54] capability_granted agent=1 resource=3 capability=4"));
-    assert!(stdout.contains("event[55] resource_retired agent=1 resource=3 capability=4"));
-    assert!(stdout.contains("event[56] capability_derived agent=1 resource=1 capability=5"));
-    assert!(stdout.contains("event[57] observation agent=2 resource=1"));
+        .contains("event[54] namespace_entry_rebound agent=1 resource=1 namespace_entry=1 key=1"));
+    assert!(stdout.contains("event[55] resource_created agent=1 resource=3 capability=4"));
+    assert!(stdout.contains("event[56] capability_granted agent=1 resource=3 capability=4"));
+    assert!(stdout.contains("event[57] resource_retired agent=1 resource=3 capability=4"));
+    assert!(stdout.contains("event[58] capability_derived agent=1 resource=1 capability=5"));
+    assert!(stdout.contains("event[59] observation agent=2 resource=1"));
 }
