@@ -135,6 +135,7 @@ impl<
             1,
             1,
         )?;
+        kernel.sys_verify_agent_image(config.bootstrap_agent, capability, image)?;
         kernel.sys_launch_agent(
             config.bootstrap_agent,
             capability,

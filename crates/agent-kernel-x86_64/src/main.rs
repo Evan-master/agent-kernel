@@ -32,6 +32,9 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::AgentImageRegistered => {
                         serial_write_line("agent_image_registered");
                     }
+                    EventKind::AgentImageVerified => {
+                        serial_write_line("agent_image_verified");
+                    }
                     EventKind::AgentImageRetired => {
                         serial_write_line("agent_image_retired");
                     }

@@ -23,6 +23,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentImageRegistered => {
             format_agent_image_event(event, "agent_image_registered")
         }
+        EventKind::AgentImageVerified => format_agent_image_event(event, "agent_image_verified"),
         EventKind::AgentImageRetired => format_agent_image_event(event, "agent_image_retired"),
         EventKind::AgentLaunched => format_agent_launch_event(event),
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),

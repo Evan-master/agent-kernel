@@ -62,6 +62,9 @@ fn main() {
         )
         .expect("supervisor image should register");
     kernel
+        .sys_verify_agent_image(agent, owner_capability, supervisor_image)
+        .expect("supervisor image should verify");
+    kernel
         .sys_launch_agent(
             agent,
             owner_capability,
@@ -135,6 +138,9 @@ fn main() {
             1,
         )
         .expect("worker image should register");
+    kernel
+        .sys_verify_agent_image(agent, owner_capability, worker_image)
+        .expect("worker image should verify");
     kernel
         .sys_launch_task_agent(
             target_agent,
