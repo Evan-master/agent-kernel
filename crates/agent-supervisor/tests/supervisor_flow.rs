@@ -92,4 +92,19 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[57] resource_retired agent=1 resource=3 capability=4"));
     assert!(stdout.contains("event[58] capability_derived agent=1 resource=1 capability=5"));
     assert!(stdout.contains("event[59] observation agent=2 resource=1"));
+    assert!(stdout.contains("event[60] resource_created agent=1 resource=4 capability=6"));
+    assert!(stdout.contains("event[61] capability_granted agent=1 resource=4 capability=6"));
+    assert!(stdout.contains("event[62] capability_derived agent=1 resource=4 capability=7"));
+    assert!(stdout.contains(
+        "event[63] driver_bound agent=1 resource=4 capability=6 driver_binding=1 target_agent=2"
+    ));
+    assert!(stdout.contains(
+        "event[64] device_event_raised agent=1 resource=4 capability=6 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
+    ));
+    assert!(stdout.contains(
+        "event[65] device_event_delivered agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
+    ));
+    assert!(stdout.contains(
+        "event[66] device_event_acknowledged agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
+    ));
 }

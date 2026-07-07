@@ -50,6 +50,18 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::AgentRetired => {
                         serial_write_line("agent_retired");
                     }
+                    EventKind::DriverBound => {
+                        serial_write_line("driver_bound");
+                    }
+                    EventKind::DeviceEventRaised => {
+                        serial_write_line("device_event_raised");
+                    }
+                    EventKind::DeviceEventDelivered => {
+                        serial_write_line("device_event_delivered");
+                    }
+                    EventKind::DeviceEventAcknowledged => {
+                        serial_write_line("device_event_acknowledged");
+                    }
                     EventKind::ResourceCreated => {
                         serial_write_line("resource_created");
                     }

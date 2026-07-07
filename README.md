@@ -9,11 +9,11 @@ attenuation, agent launch entries, runtime admission, typed intents, actions, ob
 agent executable image identity records, checkpoints, rollback, verification,
 tasks, delegation, native mailbox IPC, task wait signals, task fault traps,
 fault handlers, fault policies, memory cells, native object namespace entries,
-agent execution contexts, and event logs.
+driver bindings, device events, agent execution contexts, and event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, driver bindings, device event lifecycle, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
 - `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
@@ -67,7 +67,13 @@ The v0 flow is deliberately small:
 41. Retire that service resource through its owner capability.
 42. Derive an observe-only capability from the owner to the target agent.
 43. Let the target agent observe the workspace through that derived capability.
-44. Print the kernel event log from the supervisor.
+44. Create an owned device resource under the workspace.
+45. Derive observe/act driver authority from the owner to the target agent.
+46. Bind the target agent as the native driver for that device.
+47. Raise a typed device event against the bound device.
+48. Deliver that event to the bound driver.
+49. Let the bound driver acknowledge that event.
+50. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent launch, agent image registration, agent image verification, agent image retirement, agent
@@ -80,11 +86,13 @@ trapping, fault handler installation, fault policy installation, fault routing,
 fault policy application, task fault recovery, task waiting, signal emission,
 task wakeup, message send, message receive,
 message acknowledgement, memory cell creation, memory recall, memory remember,
-namespace bind, namespace resolve, namespace rebind, and resource retirement are
-first-class kernel events, not external tooling.
+namespace bind, namespace resolve, namespace rebind, resource retirement, driver
+binding, device event raise, device event delivery, and device event
+acknowledgement are first-class kernel events, not external tooling.
 Agents, agent images, launch entries, resources, checkpoints, waiters, fault records, fault
-handlers, fault policies, messages, memory cells, and namespace entries are also
-queryable fixed-capacity kernel records, and new root or derived capabilities
+handlers, fault policies, messages, memory cells, namespace entries, driver
+bindings, and device events are also queryable fixed-capacity kernel records,
+and new root or derived capabilities
 can only be issued to active registered agents. Kernel operations that act on
 behalf of an `AgentId` reject unknown, suspended, or retired actors before authorization, state, queue,
 mailbox, memory, or capacity checks. Each registered agent has a fixed-capacity
@@ -123,6 +131,11 @@ General capability derivation lets an agent attenuate its own authority for
 another active agent; the derived capability cannot exceed the source
 operations, cannot be created from task-scoped authority, and becomes unusable
 when the source capability is revoked.
+Driver bindings assign one active agent as the driver for an active `Device`,
+`Network`, or `Service` resource. Binding requires explicit `Delegate`
+authority, does not mint a capability for the driver, and device events move
+through `Raised`, `Delivered`, and `Acknowledged` states under explicit
+`Observe` and `Act` authority.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -150,7 +163,7 @@ The handoff now runs inside QEMU through the x86_64 BIOS image path.
 - UEFI image support.
 - POSIX compatibility.
 - Linux syscall compatibility.
-- A filesystem, network stack, preemptive scheduler, or driver model.
+- A filesystem, network stack, preemptive scheduler, or physical hardware driver execution.
 - Running an LLM inside kernel space.
 
 ## Commands
@@ -262,4 +275,11 @@ event[56] capability_granted agent=1 resource=3 capability=4
 event[57] resource_retired agent=1 resource=3 capability=4
 event[58] capability_derived agent=1 resource=1 capability=5
 event[59] observation agent=2 resource=1
+event[60] resource_created agent=1 resource=4 capability=6
+event[61] capability_granted agent=1 resource=4 capability=6
+event[62] capability_derived agent=1 resource=4 capability=7
+event[63] driver_bound agent=1 resource=4 capability=6 driver_binding=1 target_agent=2
+event[64] device_event_raised agent=1 resource=4 capability=6 driver_binding=1 device_event=1 kind=state_changed code=1 value=2
+event[65] device_event_delivered agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2
+event[66] device_event_acknowledged agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2
 ```

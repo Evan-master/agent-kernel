@@ -7,11 +7,12 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, CapabilityId, MemoryValue, NamespaceKey, NamespaceObject, Operation, OperationSet,
-    ResourceId, ResourceKind, TaskId,
+    AgentId, CapabilityId, DeviceEventKind, DeviceEventPayload, MemoryValue, NamespaceKey,
+    NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
 };
 
-pub type SupervisorKernel = AgentKernel<8, 8, 8, 64, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1>;
+pub type SupervisorKernel =
+    AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2>;
 
 pub struct ResourceFlowContext {
     pub agent: AgentId,
@@ -109,4 +110,51 @@ pub fn drive_resource_flow(kernel: &mut SupervisorKernel, context: ResourceFlowC
             context.workspace,
         )
         .expect("target agent should observe through derived capability");
+}
+
+pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowContext) {
+    let device = kernel
+        .sys_create_resource(
+            context.agent,
+            ResourceKind::Device,
+            Some((context.workspace, context.owner_capability)),
+            OperationSet::empty()
+                .with(Operation::Observe)
+                .with(Operation::Act)
+                .with(Operation::Delegate),
+        )
+        .expect("owned device resource should fit in simulator kernel");
+    let driver_capability = kernel
+        .sys_derive_capability(
+            context.agent,
+            device.capability,
+            context.target_agent,
+            OperationSet::empty()
+                .with(Operation::Observe)
+                .with(Operation::Act),
+        )
+        .expect("owner should derive device driver authority");
+    kernel
+        .sys_bind_driver(
+            context.agent,
+            device.capability,
+            device.resource,
+            context.target_agent,
+        )
+        .expect("owner should bind target as device driver");
+    let event = kernel
+        .sys_raise_device_event(
+            context.agent,
+            device.capability,
+            device.resource,
+            DeviceEventKind::StateChanged,
+            DeviceEventPayload { code: 1, value: 2 },
+        )
+        .expect("owner should raise simulated device event");
+    kernel
+        .sys_deliver_device_event(context.target_agent, driver_capability, event)
+        .expect("driver should receive device event");
+    kernel
+        .sys_acknowledge_device_event(context.target_agent, driver_capability, event)
+        .expect("driver should acknowledge device event");
 }

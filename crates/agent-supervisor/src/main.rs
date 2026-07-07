@@ -16,7 +16,9 @@ use agent_kernel_core::{
     ResourceKind, SignalKey, VerificationRequirement,
 };
 
-use crate::flow_resources::{drive_resource_flow, ResourceFlowContext, SupervisorKernel};
+use crate::flow_resources::{
+    drive_driver_flow, drive_resource_flow, ResourceFlowContext, SupervisorKernel,
+};
 use crate::format::format_event;
 
 fn main() {
@@ -244,6 +246,16 @@ fn main() {
         .expect("target agent should acknowledge task notification");
 
     drive_resource_flow(
+        &mut kernel,
+        ResourceFlowContext {
+            agent,
+            target_agent,
+            owner_capability,
+            workspace,
+            task,
+        },
+    );
+    drive_driver_flow(
         &mut kernel,
         ResourceFlowContext {
             agent,
