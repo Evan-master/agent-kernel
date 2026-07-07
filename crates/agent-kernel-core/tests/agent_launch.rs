@@ -13,7 +13,13 @@ fn prepare_agent(core: &mut TestCore) -> (AgentId, CapabilityId, ResourceId) {
         .register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let capability = core
-        .grant_capability(agent, resource, OperationSet::only(Operation::Act))
+        .grant_capability(
+            agent,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
         .expect("capability should fit");
 
     (agent, capability, resource)
@@ -38,6 +44,8 @@ fn launch_agent_records_entry_and_event() {
             1,
         )
         .expect("image should register");
+    core.verify_agent_image(agent, capability, image)
+        .expect("image should verify");
 
     let event = core
         .launch_agent(
@@ -57,7 +65,7 @@ fn launch_agent_records_entry_and_event() {
     assert_eq!(event.intent, None);
     assert_eq!(event.agent_image, Some(image));
     assert_eq!(event.target_agent, Some(agent));
-    assert_eq!(core.events()[3], event);
+    assert_eq!(core.events()[4], event);
 
     assert_eq!(core.agent_entries().len(), 1);
     let entry = core.agent_entry(agent).expect("agent entry should exist");
@@ -84,6 +92,8 @@ fn launch_agent_accepts_declared_action_intent() {
             1,
         )
         .expect("image should register");
+    core.verify_agent_image(agent, capability, image)
+        .expect("image should verify");
     let intent = core
         .declare_intent(
             agent,

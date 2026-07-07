@@ -133,7 +133,8 @@ impl<
     ) -> Result<AgentImageRecord, KernelError> {
         let record = self.find_agent_image(image)?;
         match record.status {
-            AgentImageStatus::Pending | AgentImageStatus::Verified => {}
+            AgentImageStatus::Verified => {}
+            AgentImageStatus::Pending => return Err(KernelError::AgentImageStatusMismatch),
             AgentImageStatus::Retired => return Err(KernelError::AgentImageRetired),
         }
         if record.resource != resource {
