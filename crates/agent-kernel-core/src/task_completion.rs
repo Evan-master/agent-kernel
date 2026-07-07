@@ -27,6 +27,8 @@ impl<
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
         const AGENT_IMAGES: usize,
+        const DRIVER_BINDINGS: usize,
+        const DEVICE_EVENTS: usize,
     >
     KernelCore<
         AGENTS,
@@ -47,6 +49,8 @@ impl<
         FAULT_POLICIES,
         WAITERS,
         AGENT_IMAGES,
+        DRIVER_BINDINGS,
+        DEVICE_EVENTS,
     >
 {
     pub fn complete_task(

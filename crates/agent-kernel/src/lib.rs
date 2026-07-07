@@ -41,6 +41,8 @@ pub struct AgentKernel<
     const FAULT_POLICIES: usize = 0,
     const WAITERS: usize = 0,
     const AGENT_IMAGES: usize = AGENTS,
+    const DRIVER_BINDINGS: usize = 0,
+    const DEVICE_EVENTS: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -61,6 +63,8 @@ pub struct AgentKernel<
         FAULT_POLICIES,
         WAITERS,
         AGENT_IMAGES,
+        DRIVER_BINDINGS,
+        DEVICE_EVENTS,
     >,
 }
 
@@ -83,6 +87,8 @@ impl<
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
         const AGENT_IMAGES: usize,
+        const DRIVER_BINDINGS: usize,
+        const DEVICE_EVENTS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -103,6 +109,8 @@ impl<
         FAULT_POLICIES,
         WAITERS,
         AGENT_IMAGES,
+        DRIVER_BINDINGS,
+        DEVICE_EVENTS,
     >
 {
     pub const fn new() -> Self {
@@ -268,6 +276,8 @@ impl<
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
         const AGENT_IMAGES: usize,
+        const DRIVER_BINDINGS: usize,
+        const DEVICE_EVENTS: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -288,6 +298,8 @@ impl<
         FAULT_POLICIES,
         WAITERS,
         AGENT_IMAGES,
+        DRIVER_BINDINGS,
+        DEVICE_EVENTS,
     >
 {
     fn default() -> Self {

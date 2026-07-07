@@ -28,6 +28,8 @@ impl<
         const FAULT_POLICIES: usize,
         const WAITERS: usize,
         const AGENT_IMAGES: usize,
+        const DRIVER_BINDINGS: usize,
+        const DEVICE_EVENTS: usize,
     >
     KernelCore<
         AGENTS,
@@ -48,6 +50,8 @@ impl<
         FAULT_POLICIES,
         WAITERS,
         AGENT_IMAGES,
+        DRIVER_BINDINGS,
+        DEVICE_EVENTS,
     >
 {
     pub(crate) fn record_agent_image_registered_event(
@@ -92,6 +96,7 @@ impl<
             waiter: None,
             signal: None,
             target_agent: Some(owner),
+            driver_binding: None,
             agent_image: Some(image),
             agent_image_kind: Some(kind),
             agent_image_digest: Some(digest),
@@ -139,6 +144,7 @@ impl<
             waiter: None,
             signal: None,
             target_agent: None,
+            driver_binding: None,
             agent_image: Some(image),
             agent_image_kind: Some(kind),
             agent_image_digest: None,
@@ -186,6 +192,7 @@ impl<
             waiter: None,
             signal: None,
             target_agent: Some(owner),
+            driver_binding: None,
             agent_image: Some(image),
             agent_image_kind: Some(kind),
             agent_image_digest: None,

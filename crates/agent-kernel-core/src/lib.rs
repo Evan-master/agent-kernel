@@ -24,6 +24,8 @@ mod capability_store;
 mod checkpoint;
 mod checkpoint_store;
 mod core;
+mod driver;
+mod driver_event;
 mod error;
 mod event;
 mod event_log;
@@ -73,15 +75,16 @@ pub use agent_image::{AgentImageDigest, AgentImageKind, AgentImageRecord, AgentI
 pub use capability::Capability;
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
+pub use driver::DriverBindingRecord;
 pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use fault::{FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
 pub use id::{
-    ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, FaultHandlerId, FaultId,
-    FaultPolicyId, IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId,
-    TaskId, WaiterId,
+    ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, DriverBindingId, FaultHandlerId,
+    FaultId, FaultPolicyId, IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId,
+    ResourceId, TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};
