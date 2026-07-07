@@ -6,9 +6,10 @@
 
 use crate::{
     ActionId, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId, CheckpointId,
-    DriverBindingId, FaultId, FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind,
-    MemoryCellId, MessageId, NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId,
-    Operation, OperationSet, ResourceId, SignalKey, TaskId, VerificationRequirement, WaiterId,
+    DeviceEventId, DeviceEventKind, DeviceEventPayload, DriverBindingId, FaultId, FaultKind,
+    FaultPolicyAction, FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId,
+    NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation, OperationSet,
+    ResourceId, SignalKey, TaskId, VerificationRequirement, WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -22,6 +23,9 @@ pub enum EventKind {
     AgentResumed,
     AgentRetired,
     DriverBound,
+    DeviceEventRaised,
+    DeviceEventDelivered,
+    DeviceEventAcknowledged,
     ResourceCreated,
     ResourceRetired,
     CapabilityGranted,
@@ -100,6 +104,9 @@ pub struct Event {
     pub signal: Option<SignalKey>,
     pub target_agent: Option<AgentId>,
     pub driver_binding: Option<DriverBindingId>,
+    pub device_event: Option<DeviceEventId>,
+    pub device_event_kind: Option<DeviceEventKind>,
+    pub device_event_payload: Option<DeviceEventPayload>,
     pub agent_image: Option<AgentImageId>,
     pub agent_image_kind: Option<AgentImageKind>,
     pub agent_image_digest: Option<AgentImageDigest>,
@@ -141,6 +148,9 @@ impl Event {
             signal: None,
             target_agent: None,
             driver_binding: None,
+            device_event: None,
+            device_event_kind: None,
+            device_event_payload: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,

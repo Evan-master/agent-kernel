@@ -104,7 +104,7 @@ impl<
             .ok_or(KernelError::DriverBindingNotFound)
     }
 
-    fn ensure_driver_resource(kind: ResourceKind) -> Result<(), KernelError> {
+    pub(crate) fn ensure_driver_resource(kind: ResourceKind) -> Result<(), KernelError> {
         match kind {
             ResourceKind::Device | ResourceKind::Network | ResourceKind::Service => Ok(()),
             ResourceKind::Workspace
@@ -112,6 +112,17 @@ impl<
             | ResourceKind::File
             | ResourceKind::Process => Err(KernelError::ResourceKindMismatch),
         }
+    }
+
+    pub(crate) fn find_driver_binding(
+        &self,
+        id: DriverBindingId,
+    ) -> Result<DriverBindingRecord, KernelError> {
+        self.driver_bindings()
+            .iter()
+            .find(|binding| binding.id == id)
+            .copied()
+            .ok_or(KernelError::DriverBindingNotFound)
     }
 
     fn record_driver_bound_event(
@@ -154,6 +165,9 @@ impl<
             signal: None,
             target_agent: Some(driver),
             driver_binding: Some(binding),
+            device_event: None,
+            device_event_kind: None,
+            device_event_payload: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,

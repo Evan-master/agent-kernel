@@ -4,9 +4,9 @@
 
 use crate::{
     ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord, AgentRecord,
-    Capability, CheckpointRecord, DriverBindingRecord, Event, FaultHandlerRecord,
-    FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord,
-    ObservationRecord, Resource, RunQueueEntry, Task, WaiterRecord,
+    Capability, CheckpointRecord, DeviceEventRecord, DriverBindingRecord, Event,
+    FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord,
+    NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -53,6 +53,7 @@ pub struct KernelCore<
     pub(crate) fault_policies: [FaultPolicyRecord; FAULT_POLICIES],
     pub(crate) waiters: [WaiterRecord; WAITERS],
     pub(crate) driver_bindings: [DriverBindingRecord; DRIVER_BINDINGS],
+    pub(crate) device_events: [DeviceEventRecord; DEVICE_EVENTS],
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
     pub(crate) agent_image_len: usize,
@@ -72,6 +73,7 @@ pub struct KernelCore<
     pub(crate) fault_policy_len: usize,
     pub(crate) waiter_len: usize,
     pub(crate) driver_binding_len: usize,
+    pub(crate) device_event_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_observation: u64,
@@ -86,6 +88,7 @@ pub struct KernelCore<
     pub(crate) next_waiter: u64,
     pub(crate) next_agent_image: u64,
     pub(crate) next_driver_binding: u64,
+    pub(crate) next_device_event: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -157,6 +160,7 @@ impl<
             fault_policies: [FaultPolicyRecord::empty(); FAULT_POLICIES],
             waiters: [WaiterRecord::empty(); WAITERS],
             driver_bindings: [DriverBindingRecord::empty(); DRIVER_BINDINGS],
+            device_events: [DeviceEventRecord::empty(); DEVICE_EVENTS],
             agent_len: 0,
             agent_entry_len: 0,
             agent_image_len: 0,
@@ -176,6 +180,7 @@ impl<
             fault_policy_len: 0,
             waiter_len: 0,
             driver_binding_len: 0,
+            device_event_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_observation: 1,
@@ -190,6 +195,7 @@ impl<
             next_waiter: 1,
             next_agent_image: 1,
             next_driver_binding: 1,
+            next_device_event: 1,
             next_sequence: 1,
         }
     }
