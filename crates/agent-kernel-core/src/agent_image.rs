@@ -26,7 +26,8 @@ pub enum AgentImageKind {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentImageStatus {
-    Active,
+    Pending,
+    Verified,
     Retired,
 }
 

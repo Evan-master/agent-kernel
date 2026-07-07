@@ -80,7 +80,7 @@ impl<
             digest,
             abi_version,
             entry_version,
-            status: AgentImageStatus::Active,
+            status: AgentImageStatus::Pending,
         };
         self.agent_image_len += 1;
         self.record_agent_image_registered_event(
@@ -132,8 +132,9 @@ impl<
         entry_kind: AgentEntryKind,
     ) -> Result<AgentImageRecord, KernelError> {
         let record = self.find_agent_image(image)?;
-        if record.status != AgentImageStatus::Active {
-            return Err(KernelError::AgentImageRetired);
+        match record.status {
+            AgentImageStatus::Pending | AgentImageStatus::Verified => {}
+            AgentImageStatus::Retired => return Err(KernelError::AgentImageRetired),
         }
         if record.resource != resource {
             return Err(KernelError::AgentImageResourceMismatch);
@@ -144,6 +145,35 @@ impl<
         Ok(record)
     }
 
+    pub fn verify_agent_image(
+        &mut self,
+        owner: AgentId,
+        capability: CapabilityId,
+        image: AgentImageId,
+    ) -> Result<Event, KernelError> {
+        self.ensure_agent_active(owner)?;
+        let record = self.find_agent_image(image)?;
+        if record.owner != owner {
+            return Err(KernelError::AgentMismatch);
+        }
+        match record.status {
+            AgentImageStatus::Pending => {}
+            AgentImageStatus::Verified => return Err(KernelError::AgentImageStatusMismatch),
+            AgentImageStatus::Retired => return Err(KernelError::AgentImageRetired),
+        }
+        self.ensure_authorized(owner, capability, record.resource, Operation::Verify)?;
+        self.ensure_event_slots(1)?;
+
+        self.find_agent_image_mut(image)?.status = AgentImageStatus::Verified;
+        self.record_agent_image_verified_event(
+            owner,
+            capability,
+            record.resource,
+            image,
+            record.kind,
+        )
+    }
+
     pub fn retire_agent_image(
         &mut self,
         owner: AgentId,
@@ -152,8 +182,9 @@ impl<
     ) -> Result<Event, KernelError> {
         self.ensure_agent_active(owner)?;
         let record = self.find_agent_image(image)?;
-        if record.status != AgentImageStatus::Active {
-            return Err(KernelError::AgentImageRetired);
+        match record.status {
+            AgentImageStatus::Pending | AgentImageStatus::Verified => {}
+            AgentImageStatus::Retired => return Err(KernelError::AgentImageRetired),
         }
         if record.owner != owner {
             return Err(KernelError::AgentMismatch);

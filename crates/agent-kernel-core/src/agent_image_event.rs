@@ -100,6 +100,53 @@ impl<
         })
     }
 
+    pub(crate) fn record_agent_image_verified_event(
+        &mut self,
+        owner: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        image: AgentImageId,
+        kind: AgentImageKind,
+    ) -> Result<Event, KernelError> {
+        self.record(Event {
+            sequence: 0,
+            agent: owner,
+            kind: EventKind::AgentImageVerified,
+            resource: Some(resource),
+            capability: Some(capability),
+            source_capability: None,
+            intent: None,
+            intent_kind: None,
+            action: None,
+            observation: None,
+            message: None,
+            memory_cell: None,
+            namespace_entry: None,
+            namespace_key: None,
+            namespace_object: None,
+            operation: Some(Operation::Verify),
+            operations: OperationSet::empty(),
+            verification: VerificationRequirement::Optional,
+            checkpoint: None,
+            task: None,
+            task_ticks: None,
+            task_quantum: None,
+            fault: None,
+            fault_kind: None,
+            fault_detail: None,
+            fault_policy: None,
+            fault_policy_action: None,
+            waiter: None,
+            signal: None,
+            target_agent: None,
+            agent_image: Some(image),
+            agent_image_kind: Some(kind),
+            agent_image_digest: None,
+            agent_image_abi_version: None,
+            agent_image_entry_version: None,
+        })
+    }
+
     pub(crate) fn record_agent_image_retired_event(
         &mut self,
         owner: AgentId,

@@ -15,6 +15,7 @@ use crate::{
 pub enum EventKind {
     AgentRegistered,
     AgentImageRegistered,
+    AgentImageVerified,
     AgentImageRetired,
     AgentLaunched,
     AgentSuspended,
