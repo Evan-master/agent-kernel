@@ -276,6 +276,8 @@ fn verified_task_rejects_further_transitions_without_events() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,

@@ -4,7 +4,7 @@ use agent_kernel_core::{
     IntentStatus, Operation, OperationSet, ResourceKind, TaskId, VerificationRequirement,
 };
 
-type TestKernel = AgentKernel<2, 4, 4, 16, 4, 4, 4, 4, 4, 4>;
+type TestKernel = AgentKernel<2, 4, 4, 17, 4, 4, 4, 4, 4, 4>;
 
 #[test]
 fn sys_declare_intent_records_and_exposes_intent() {
@@ -135,6 +135,9 @@ fn sys_verify_task_exposes_fulfilled_intent_status() {
             1,
         )
         .expect("worker image should register");
+    kernel
+        .sys_verify_agent_image(owner, capability, image)
+        .expect("image should verify");
     kernel
         .sys_launch_task_agent(
             assignee,

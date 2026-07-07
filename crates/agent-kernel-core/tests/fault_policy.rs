@@ -40,6 +40,7 @@ fn route_running_task(core: &mut RouteCore) -> (AgentId, AgentId, CapabilityId, 
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -79,6 +80,7 @@ fn recover_running_task(core: &mut RecoverCore) -> (AgentId, AgentId, Capability
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -153,6 +155,8 @@ fn create_running_task<
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         delegated_capability,

@@ -4,7 +4,7 @@ use agent_kernel_core::{
     VerificationRequirement,
 };
 
-type TestCore = KernelCore<2, 4, 4, 16, 2, 2, 2, 4, 4, 4>;
+type TestCore = KernelCore<2, 4, 4, 17, 2, 2, 2, 4, 4, 4>;
 
 fn declare_action_intent(
     core: &mut TestCore,
@@ -99,6 +99,8 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,
@@ -129,19 +131,21 @@ fn task_lifecycle_reaches_verified_through_authorized_transitions() {
     assert_eq!(core.events()[7].target_agent, Some(assignee));
     assert_eq!(core.events()[8].kind, EventKind::AgentImageRegistered);
     assert_eq!(core.events()[8].agent_image, Some(image));
-    assert_eq!(core.events()[9].kind, EventKind::AgentLaunched);
-    assert_eq!(core.events()[9].target_agent, Some(assignee));
-    assert_eq!(core.events()[9].task, Some(task));
-    assert_eq!(core.events()[10].kind, EventKind::TaskAccepted);
-    assert_eq!(core.events()[11].kind, EventKind::TaskQueued);
-    assert_eq!(core.events()[12].kind, EventKind::TaskDispatched);
-    assert_eq!(core.events()[13].kind, EventKind::TaskCompleted);
-    assert_eq!(core.events()[14].kind, EventKind::TaskVerified);
-    assert_eq!(core.events()[15].kind, EventKind::IntentFulfilled);
+    assert_eq!(core.events()[9].kind, EventKind::AgentImageVerified);
+    assert_eq!(core.events()[9].agent_image, Some(image));
+    assert_eq!(core.events()[10].kind, EventKind::AgentLaunched);
+    assert_eq!(core.events()[10].target_agent, Some(assignee));
+    assert_eq!(core.events()[10].task, Some(task));
+    assert_eq!(core.events()[11].kind, EventKind::TaskAccepted);
+    assert_eq!(core.events()[12].kind, EventKind::TaskQueued);
+    assert_eq!(core.events()[13].kind, EventKind::TaskDispatched);
+    assert_eq!(core.events()[14].kind, EventKind::TaskCompleted);
+    assert_eq!(core.events()[15].kind, EventKind::TaskVerified);
+    assert_eq!(core.events()[16].kind, EventKind::IntentFulfilled);
     for event in &core.events()[4..=7] {
         assert_eq!(event.intent, Some(intent));
     }
-    for event in &core.events()[9..=15] {
+    for event in &core.events()[10..=16] {
         assert_eq!(event.intent, Some(intent));
     }
 }

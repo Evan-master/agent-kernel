@@ -24,7 +24,13 @@ fn emit_signal_run_queue_full_leaves_waiter_waiting() {
         )
         .expect("owner capability should fit");
     let assignee_runtime_capability = core
-        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
+        .grant_capability(
+            assignee,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
         .expect("assignee runtime capability should fit");
     let image = core
         .register_agent_image(
@@ -37,6 +43,8 @@ fn emit_signal_run_queue_full_leaves_waiter_waiting() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(assignee, assignee_runtime_capability, image)
+        .expect("image should verify");
     core.launch_agent(
         assignee,
         assignee_runtime_capability,

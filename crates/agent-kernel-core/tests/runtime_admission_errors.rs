@@ -30,6 +30,7 @@ fn prepare_worker_task(core: &mut TestCore) -> PreparedTask {
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -73,16 +74,20 @@ fn create_delegated_task(
 }
 
 fn register_worker_image(core: &mut TestCore, prepared: &PreparedTask) -> AgentImageId {
-    core.register_agent_image(
-        prepared.owner,
-        prepared.owner_capability,
-        prepared.resource,
-        AgentImageKind::Worker,
-        AgentImageDigest::new([1; 32]),
-        1,
-        1,
-    )
-    .expect("worker image should register")
+    let image = core
+        .register_agent_image(
+            prepared.owner,
+            prepared.owner_capability,
+            prepared.resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([1; 32]),
+            1,
+            1,
+        )
+        .expect("worker image should register");
+    core.verify_agent_image(prepared.owner, prepared.owner_capability, image)
+        .expect("worker image should verify");
+    image
 }
 
 #[test]

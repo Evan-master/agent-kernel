@@ -26,7 +26,8 @@ fn execution_contexts_expose_dispatch_and_completion_state() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("capability should fit");
     let intent = kernel
@@ -58,6 +59,9 @@ fn execution_contexts_expose_dispatch_and_completion_state() {
             1,
         )
         .expect("worker image should register");
+    kernel
+        .sys_verify_agent_image(owner, capability, image)
+        .expect("image should verify");
     kernel
         .sys_launch_task_agent(
             assignee,

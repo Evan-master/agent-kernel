@@ -80,6 +80,8 @@ fn running_delegated_task(
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, source_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         delegated_capability,
@@ -194,7 +196,13 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
         .capability
         .expect("second delegation should derive capability");
     let assignee_capability = core
-        .grant_capability(assignee, resource, OperationSet::only(Operation::Act))
+        .grant_capability(
+            assignee,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
         .expect("assignee root capability should fit");
     let image = core
         .register_agent_image(
@@ -207,6 +215,8 @@ fn revoking_one_source_invalidates_multiple_derived_capabilities() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(assignee, assignee_capability, image)
+        .expect("image should verify");
     core.launch_agent(
         assignee,
         assignee_capability,

@@ -28,7 +28,8 @@ fn accepted_task(core: &mut TestCore, owner: AgentId, assignee: AgentId) -> Acce
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = core
@@ -62,6 +63,8 @@ fn accepted_task(core: &mut TestCore, owner: AgentId, assignee: AgentId) -> Acce
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,

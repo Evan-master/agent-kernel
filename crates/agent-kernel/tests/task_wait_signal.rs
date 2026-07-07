@@ -26,7 +26,8 @@ fn signal_syscalls_wait_wake_redispatch_and_complete_task() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = kernel
@@ -58,6 +59,9 @@ fn signal_syscalls_wait_wake_redispatch_and_complete_task() {
             1,
         )
         .expect("worker image should register");
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     kernel
         .sys_launch_task_agent(
             assignee,
@@ -98,7 +102,7 @@ fn signal_syscalls_wait_wake_redispatch_and_complete_task() {
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Completed);
     assert_eq!(kernel.waiters()[0].id, waiter);
     assert!(!kernel.waiters()[0].active);
-    assert_eq!(kernel.events()[13].kind, EventKind::TaskWaiting);
-    assert_eq!(kernel.events()[14].kind, EventKind::SignalEmitted);
-    assert_eq!(kernel.events()[15].kind, EventKind::TaskWoken);
+    assert_eq!(kernel.events()[14].kind, EventKind::TaskWaiting);
+    assert_eq!(kernel.events()[15].kind, EventKind::SignalEmitted);
+    assert_eq!(kernel.events()[16].kind, EventKind::TaskWoken);
 }

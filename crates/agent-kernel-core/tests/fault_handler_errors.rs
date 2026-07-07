@@ -34,6 +34,7 @@ fn prepare_fault<const EVENTS: usize, const MESSAGES: usize, const FAULT_HANDLER
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -75,6 +76,8 @@ fn prepare_fault<const EVENTS: usize, const MESSAGES: usize, const FAULT_HANDLER
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         delegated_capability,
@@ -238,7 +241,7 @@ fn route_fault_message_store_full_leaves_state_unchanged() {
 
 #[test]
 fn route_fault_event_log_full_leaves_state_unchanged() {
-    let mut core = KernelCore::<3, 1, 3, 16, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1>::new();
+    let mut core = KernelCore::<3, 1, 3, 17, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1>::new();
     let prepared = prepare_fault(&mut core, true);
     let fault = core
         .fault_task(
@@ -255,6 +258,6 @@ fn route_fault_event_log_full_leaves_state_unchanged() {
     );
     assert!(core.messages().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 16);
+    assert_eq!(core.events().len(), 17);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }

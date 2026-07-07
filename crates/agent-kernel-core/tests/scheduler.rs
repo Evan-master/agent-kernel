@@ -120,6 +120,8 @@ fn accepted_task_with_capabilities<
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,

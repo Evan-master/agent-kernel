@@ -34,6 +34,7 @@ fn prepare_route_fault<const EVENTS: usize, const MESSAGES: usize, const FAULT_P
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("capability should fit");
@@ -82,6 +83,7 @@ fn prepare_recover_fault<const EVENTS: usize>(
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("capability should fit");
@@ -161,6 +163,8 @@ fn create_running_task<
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         delegated_capability,
@@ -225,7 +229,7 @@ fn apply_route_policy_message_store_full_leaves_state_unchanged() {
 
 #[test]
 fn apply_route_policy_event_log_full_leaves_state_unchanged() {
-    let mut core = KernelCore::<3, 1, 3, 17, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1>::new();
+    let mut core = KernelCore::<3, 1, 3, 18, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1>::new();
     let prepared = prepare_route_fault(&mut core, true);
     let fault = core
         .fault_task(
@@ -242,13 +246,13 @@ fn apply_route_policy_event_log_full_leaves_state_unchanged() {
     );
     assert!(core.messages().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 17);
+    assert_eq!(core.events().len(), 18);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }
 
 #[test]
 fn apply_recover_policy_event_log_full_leaves_task_faulted() {
-    let mut core = KernelCore::<2, 1, 2, 15, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 16, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1>::new();
     let prepared = prepare_recover_fault(&mut core);
     let fault = core
         .fault_task(
@@ -264,6 +268,6 @@ fn apply_recover_policy_event_log_full_leaves_task_faulted() {
         Err(KernelError::EventLogFull)
     );
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
-    assert_eq!(core.events().len(), 15);
+    assert_eq!(core.events().len(), 16);
     assert_eq!(core.events().last().unwrap().kind, EventKind::TaskFaulted);
 }

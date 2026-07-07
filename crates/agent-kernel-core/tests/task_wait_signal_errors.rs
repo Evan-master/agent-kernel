@@ -44,7 +44,8 @@ fn prepared_task<
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = core
@@ -75,6 +76,8 @@ fn prepared_task<
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,
@@ -179,7 +182,7 @@ fn emit_signal_requires_act_authority_without_mutation() {
 
 #[test]
 fn emit_signal_event_log_full_leaves_waiter_waiting() {
-    let mut core = SignalCore::<14, 1, 1>::new();
+    let mut core = SignalCore::<15, 1, 1>::new();
     let prepared = prepared_task(&mut core, true);
     core.wait_task(
         prepared.assignee,

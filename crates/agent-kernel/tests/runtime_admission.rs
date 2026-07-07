@@ -24,7 +24,8 @@ fn facade_task_scoped_launch_admits_delegated_worker() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = kernel
@@ -57,6 +58,9 @@ fn facade_task_scoped_launch_admits_delegated_worker() {
         )
         .expect("worker image should register");
 
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, image)
+        .expect("worker image should verify");
     kernel
         .sys_launch_task_agent(
             worker,

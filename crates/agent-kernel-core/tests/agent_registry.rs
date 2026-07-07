@@ -103,7 +103,8 @@ fn delegate_task_rejects_unregistered_target_agent_without_mutation() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = core
@@ -198,7 +199,7 @@ fn accept_task_rejects_unregistered_actor_without_mutation() {
 
 #[test]
 fn dispatch_next_rejects_unregistered_actor_without_mutation() {
-    let mut core = KernelCore::<2, 1, 2, 12, 1, 1, 1, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 13, 1, 1, 1, 1, 1, 1>::new();
     let owner = AgentId::new(13);
     let runner = AgentId::new(14);
     let intruder = AgentId::new(15);
@@ -215,7 +216,8 @@ fn dispatch_next_rejects_unregistered_actor_without_mutation() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = core
@@ -246,6 +248,8 @@ fn dispatch_next_rejects_unregistered_actor_without_mutation() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         runner,
         runner_capability,

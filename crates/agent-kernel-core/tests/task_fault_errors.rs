@@ -52,6 +52,7 @@ fn accepted_task<
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -86,6 +87,8 @@ fn accepted_task<
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,
@@ -196,7 +199,7 @@ fn fault_store_full_leaves_running_task_unchanged() {
 
 #[test]
 fn fault_event_log_full_leaves_running_task_unchanged() {
-    let mut core = KernelCore::<2, 1, 2, 13, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 14, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
     let owner = AgentId::new(8);
     let assignee = AgentId::new(9);
     let prepared = running_task(&mut core, owner, assignee);
@@ -208,7 +211,7 @@ fn fault_event_log_full_leaves_running_task_unchanged() {
     assert!(core.faults().is_empty());
     assert_eq!(core.tasks()[0].status, TaskStatus::Running);
     assert_eq!(core.tasks()[0].last_fault, None);
-    assert_eq!(core.events().len(), 13);
+    assert_eq!(core.events().len(), 14);
 }
 
 #[test]
@@ -240,7 +243,7 @@ fn recover_requires_rollback_authority_without_mutation() {
 
 #[test]
 fn recover_event_log_full_leaves_task_faulted() {
-    let mut core = KernelCore::<2, 1, 2, 14, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 15, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1>::new();
     let owner = AgentId::new(12);
     let assignee = AgentId::new(13);
     let prepared = running_task(&mut core, owner, assignee);
@@ -254,5 +257,5 @@ fn recover_event_log_full_leaves_task_faulted() {
     );
     assert_eq!(core.tasks()[0].status, TaskStatus::Faulted);
     assert_eq!(core.tasks()[0].last_fault, Some(fault));
-    assert_eq!(core.events().len(), 14);
+    assert_eq!(core.events().len(), 15);
 }

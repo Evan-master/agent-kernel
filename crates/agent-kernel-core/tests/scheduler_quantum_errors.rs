@@ -38,7 +38,8 @@ fn accepted_task<
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = core
@@ -72,6 +73,8 @@ fn accepted_task<
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,
@@ -150,7 +153,7 @@ fn tick_rejects_wrong_agent_without_mutation() {
 
 #[test]
 fn tick_event_log_full_leaves_running_task_unchanged() {
-    let mut core = KernelCore::<2, 1, 2, 13, 0, 0, 0, 1, 1, 1>::new();
+    let mut core = KernelCore::<2, 1, 2, 14, 0, 0, 0, 1, 1, 1>::new();
     let owner = AgentId::new(8);
     let assignee = AgentId::new(9);
     let accepted = accepted_task(&mut core, owner, assignee);
@@ -166,7 +169,7 @@ fn tick_event_log_full_leaves_running_task_unchanged() {
     assert_eq!(core.tasks()[0].status, TaskStatus::Running);
     assert_eq!(core.tasks()[0].run_ticks, 0);
     assert_eq!(core.tasks()[0].quantum_remaining, 2);
-    assert_eq!(core.events().len(), 13);
+    assert_eq!(core.events().len(), 14);
 }
 
 #[test]

@@ -31,6 +31,7 @@ fn accepted_task(core: &mut TestCore) -> PreparedTask {
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -62,6 +63,8 @@ fn accepted_task(core: &mut TestCore) -> PreparedTask {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,

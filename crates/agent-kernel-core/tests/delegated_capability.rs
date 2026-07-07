@@ -92,6 +92,8 @@ fn dispatch_task(
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         delegated_capability,

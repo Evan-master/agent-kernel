@@ -32,6 +32,7 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -82,6 +83,9 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
             1,
         )
         .expect("worker image should register");
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     kernel
         .sys_launch_task_agent(
             assignee,
@@ -138,8 +142,8 @@ fn fault_policy_syscalls_apply_route_policy_and_allow_recovery() {
     assert_eq!(kernel.messages()[0].kind, MessageKind::Fault);
     assert_eq!(kernel.messages()[0].status, MessageStatus::Acknowledged);
     assert_eq!(kernel.messages()[0].payload.fault, Some(fault));
-    assert_eq!(kernel.events()[17].kind, EventKind::MessageSent);
-    assert_eq!(kernel.events()[18].kind, EventKind::FaultRouted);
-    assert_eq!(kernel.events()[19].kind, EventKind::FaultPolicyApplied);
+    assert_eq!(kernel.events()[18].kind, EventKind::MessageSent);
+    assert_eq!(kernel.events()[19].kind, EventKind::FaultRouted);
+    assert_eq!(kernel.events()[20].kind, EventKind::FaultPolicyApplied);
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Completed);
 }

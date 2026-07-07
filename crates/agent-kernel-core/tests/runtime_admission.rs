@@ -31,6 +31,7 @@ fn delegated_task(core: &mut TestCore, assignee: AgentId) -> PreparedTask {
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -81,6 +82,8 @@ fn resource_scoped_launch_admits_same_resource_task_runtime() {
             1,
         )
         .expect("supervisor image should register");
+    core.verify_agent_image(prepared.owner, prepared.owner_capability, image)
+        .expect("supervisor image should verify");
     core.launch_agent(
         prepared.owner,
         prepared.owner_capability,
@@ -119,6 +122,8 @@ fn task_scoped_launch_admits_delegated_worker_without_root_authority() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(prepared.owner, prepared.owner_capability, image)
+        .expect("worker image should verify");
 
     let event = core
         .launch_task_agent(

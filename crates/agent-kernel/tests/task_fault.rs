@@ -27,6 +27,7 @@ fn task_fault_syscalls_fault_recover_and_allow_completion() {
             OperationSet::empty()
                 .with(Operation::Act)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
                 .with(Operation::Rollback),
         )
         .expect("owner capability should fit");
@@ -59,6 +60,9 @@ fn task_fault_syscalls_fault_recover_and_allow_completion() {
             1,
         )
         .expect("worker image should register");
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     kernel
         .sys_launch_task_agent(
             assignee,

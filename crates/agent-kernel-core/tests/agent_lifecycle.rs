@@ -150,7 +150,8 @@ fn suspended_parent_agent_invalidates_delegated_task_authority() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let intent = core
@@ -181,6 +182,8 @@ fn suspended_parent_agent_invalidates_delegated_task_authority() {
             1,
         )
         .expect("worker image should register");
+    core.verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
     core.launch_task_agent(
         assignee,
         assignee_capability,
