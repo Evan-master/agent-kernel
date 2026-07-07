@@ -1,9 +1,9 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, ActionStatus, AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind,
-    CapabilityId, CheckpointId, CheckpointStatus, EventKind, IntentId, IntentKind, KernelError,
-    Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry, TaskId, TaskStatus,
-    VerificationRequirement,
+    AgentImageStatus, CapabilityId, CheckpointId, CheckpointStatus, EventKind, IntentId,
+    IntentKind, KernelError, Operation, OperationSet, ResourceId, ResourceKind, RunQueueEntry,
+    TaskId, TaskStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<4, 4, 6, 64, 8, 8, 8, 8, 8, 4>;
@@ -234,6 +234,9 @@ fn task_syscalls_record_full_task_lifecycle() {
         )
         .expect("worker image should register");
     kernel
+        .sys_verify_agent_image(owner, owner_capability, image)
+        .expect("image should verify");
+    kernel
         .sys_launch_task_agent(
             assignee,
             assignee_capability,
@@ -267,17 +270,19 @@ fn task_syscalls_record_full_task_lifecycle() {
     assert_eq!(kernel.events()[7].kind, EventKind::DelegationRequested);
     assert_eq!(kernel.events()[8].kind, EventKind::AgentImageRegistered);
     assert_eq!(kernel.events()[8].agent_image, Some(image));
-    assert_eq!(kernel.events()[9].kind, EventKind::AgentLaunched);
-    assert_eq!(kernel.events()[10].kind, EventKind::TaskAccepted);
-    assert_eq!(kernel.events()[11].kind, EventKind::TaskQueued);
-    assert_eq!(kernel.events()[12].kind, EventKind::TaskDispatched);
-    assert_eq!(kernel.events()[13].kind, EventKind::TaskCompleted);
-    assert_eq!(kernel.events()[14].kind, EventKind::TaskVerified);
-    assert_eq!(kernel.events()[15].kind, EventKind::IntentFulfilled);
+    assert_eq!(kernel.events()[9].kind, EventKind::AgentImageVerified);
+    assert_eq!(kernel.events()[9].agent_image, Some(image));
+    assert_eq!(kernel.events()[10].kind, EventKind::AgentLaunched);
+    assert_eq!(kernel.events()[11].kind, EventKind::TaskAccepted);
+    assert_eq!(kernel.events()[12].kind, EventKind::TaskQueued);
+    assert_eq!(kernel.events()[13].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[14].kind, EventKind::TaskCompleted);
+    assert_eq!(kernel.events()[15].kind, EventKind::TaskVerified);
+    assert_eq!(kernel.events()[16].kind, EventKind::IntentFulfilled);
     for event in &kernel.events()[4..=7] {
         assert_eq!(event.intent, Some(intent));
     }
-    for event in &kernel.events()[9..=15] {
+    for event in &kernel.events()[10..=16] {
         assert_eq!(event.intent, Some(intent));
     }
 }
@@ -338,7 +343,8 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
             resource,
             OperationSet::empty()
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owner capability should fit");
     let first_intent = declare_action_intent(&mut kernel, owner, owner_capability, resource);
@@ -383,6 +389,12 @@ fn scheduler_syscalls_enqueue_dispatch_and_yield_tasks() {
             1,
         )
         .expect("second worker image should register");
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, first_image)
+        .expect("first image should verify");
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, second_image)
+        .expect("second image should verify");
     kernel
         .sys_launch_task_agent(
             first_agent,
@@ -489,4 +501,57 @@ fn completing_task_before_dispatch_is_rejected_by_facade() {
     assert_eq!(result, Err(KernelError::TaskStatusMismatch));
     assert_eq!(kernel.tasks()[0].status, TaskStatus::Accepted);
     assert_eq!(kernel.events().len(), events_before);
+}
+
+#[test]
+fn image_verification_syscall_exposes_verified_status_and_event() {
+    let mut kernel = TestKernel::new();
+    let agent = AgentId::new(120);
+    kernel
+        .sys_register_agent(agent)
+        .expect("agent should register");
+    let resource = kernel
+        .sys_register_resource(ResourceKind::Workspace, None)
+        .expect("resource should fit");
+    let capability = kernel
+        .sys_grant(
+            agent,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
+        .expect("capability should fit");
+    let image = kernel
+        .sys_register_agent_image(
+            agent,
+            capability,
+            resource,
+            AgentImageKind::Worker,
+            AgentImageDigest::new([9; 32]),
+            1,
+            1,
+        )
+        .expect("image should register");
+    assert_eq!(
+        kernel
+            .agent_image(image)
+            .expect("image should be queryable")
+            .status,
+        AgentImageStatus::Pending
+    );
+
+    let event = kernel
+        .sys_verify_agent_image(agent, capability, image)
+        .expect("image should verify");
+
+    assert_eq!(event.kind, EventKind::AgentImageVerified);
+    assert_eq!(event.agent_image, Some(image));
+    assert_eq!(
+        kernel
+            .agent_image(image)
+            .expect("image should be queryable")
+            .status,
+        AgentImageStatus::Verified
+    );
 }

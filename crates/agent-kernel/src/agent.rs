@@ -78,6 +78,15 @@ impl<
         )
     }
 
+    pub fn sys_verify_agent_image(
+        &mut self,
+        owner: AgentId,
+        capability: CapabilityId,
+        image: AgentImageId,
+    ) -> Result<Event, KernelError> {
+        self.core.verify_agent_image(owner, capability, image)
+    }
+
     pub fn sys_retire_agent_image(
         &mut self,
         owner: AgentId,

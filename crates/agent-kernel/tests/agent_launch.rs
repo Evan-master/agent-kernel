@@ -16,7 +16,13 @@ fn facade_launches_agent_and_exposes_entry() {
         .sys_register_resource(ResourceKind::Workspace, None)
         .expect("resource should fit");
     let capability = kernel
-        .sys_grant(agent, resource, OperationSet::only(Operation::Act))
+        .sys_grant(
+            agent,
+            resource,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
         .expect("capability should fit");
     let image_digest = AgentImageDigest::new([11; 32]);
     let image = kernel
@@ -30,6 +36,9 @@ fn facade_launches_agent_and_exposes_entry() {
             1,
         )
         .expect("image should register through facade");
+    kernel
+        .sys_verify_agent_image(agent, capability, image)
+        .expect("image should verify");
 
     let event = kernel
         .sys_launch_agent(
