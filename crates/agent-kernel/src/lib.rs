@@ -7,6 +7,7 @@
 
 mod agent;
 mod capability;
+mod driver;
 mod fault;
 mod mailbox;
 mod memory;
