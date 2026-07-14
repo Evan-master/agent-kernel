@@ -28,6 +28,7 @@ pub enum EventKind {
     DeviceEventDelivered,
     DeviceEventAcknowledged,
     DriverCommandSubmitted,
+    DriverCommandDispatched,
     DriverCommandCompleted,
     DriverCommandFailed,
     DriverInvocationQueued,

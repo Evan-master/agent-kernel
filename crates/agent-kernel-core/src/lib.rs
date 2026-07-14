@@ -28,6 +28,8 @@ mod device_event;
 mod driver;
 mod driver_command;
 mod driver_command_event;
+mod driver_command_runtime;
+mod driver_command_submit;
 mod driver_event;
 mod driver_invocation;
 mod driver_invocation_event;
@@ -86,8 +88,8 @@ pub use core::KernelCore;
 pub use device_event::{DeviceEventKind, DeviceEventPayload, DeviceEventRecord, DeviceEventStatus};
 pub use driver::DriverBindingRecord;
 pub use driver_command::{
-    DriverCommandKind, DriverCommandPayload, DriverCommandRecord, DriverCommandResult,
-    DriverCommandStatus,
+    DriverCommandKind, DriverCommandPayload, DriverCommandRecord, DriverCommandRequest,
+    DriverCommandResult, DriverCommandStatus,
 };
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
 pub use error::KernelError;

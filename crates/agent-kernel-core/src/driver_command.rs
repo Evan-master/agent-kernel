@@ -31,8 +31,21 @@ pub struct DriverCommandResult {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DriverCommandStatus {
     Submitted,
+    Dispatched,
     Completed,
     Failed,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct DriverCommandRequest {
+    pub command: DriverCommandId,
+    pub binding: DriverBindingId,
+    pub resource: ResourceId,
+    pub driver: AgentId,
+    pub cause: Option<DeviceEventId>,
+    pub invocation: Option<DriverInvocationId>,
+    pub kind: DriverCommandKind,
+    pub payload: DriverCommandPayload,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

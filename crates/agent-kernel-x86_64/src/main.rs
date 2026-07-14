@@ -80,6 +80,9 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::DriverCommandSubmitted => {
                         serial_write_line("driver_command_submitted");
                     }
+                    EventKind::DriverCommandDispatched => {
+                        serial_write_line("driver_command_dispatched");
+                    }
                     EventKind::DriverCommandCompleted => {
                         serial_write_line("driver_command_completed");
                     }

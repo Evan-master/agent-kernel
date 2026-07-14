@@ -8,9 +8,12 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DeviceEventKind,
-    DeviceEventPayload, DriverCommandKind, DriverCommandPayload, DriverCommandResult, MemoryValue,
-    NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
+    DeviceEventPayload, DriverCommandKind, DriverCommandPayload, MemoryValue, NamespaceKey,
+    NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
 };
+use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
+
+use crate::virtual_device::VirtualRegisterDevice;
 
 pub type SupervisorKernel =
     AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2, 2, 2>;
@@ -130,6 +133,7 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
                 .with(Operation::Verify),
         )
         .expect("owned device resource should fit in simulator kernel");
+    let mut backend = VirtualRegisterDevice::new(device.resource);
     let driver_capability = kernel
         .sys_derive_capability(
             context.agent,
@@ -206,14 +210,19 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
             },
         )
         .expect("driver should submit device command");
-    kernel
-        .sys_complete_driver_command(
-            driver_agent,
-            driver_capability,
-            command,
-            DriverCommandResult { code: 0, value: 12 },
-        )
-        .expect("driver should complete device command");
+    let request = kernel
+        .sys_dispatch_driver_command(driver_agent, driver_capability, command)
+        .expect("kernel should dispatch authorized device command");
+    match backend.execute(request) {
+        DriverCommandOutcome::Completed(result) => kernel
+            .sys_complete_driver_command(driver_agent, driver_capability, command, result)
+            .expect("kernel should record completed backend outcome"),
+        DriverCommandOutcome::Failed(result) => kernel
+            .sys_fail_driver_command(driver_agent, driver_capability, command, result)
+            .expect("kernel should record failed backend outcome"),
+    };
+    assert_eq!(backend.value(), 11);
+    assert_eq!(backend.executions(), 1);
     kernel
         .sys_complete_driver_invocation(driver_agent, driver_capability, invocation)
         .expect("driver invocation should complete");

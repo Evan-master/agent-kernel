@@ -17,6 +17,8 @@ fn complete_driver_command_requires_bound_driver_without_mutation() {
             OperationSet::only(Operation::Act),
         );
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
     let events_before = core.events().len();
 
     let result = core.complete_driver_command(
@@ -29,7 +31,7 @@ fn complete_driver_command_requires_bound_driver_without_mutation() {
     assert_eq!(result, Err(KernelError::AgentMismatch));
     assert_eq!(
         core.driver_commands()[0].status,
-        DriverCommandStatus::Submitted
+        DriverCommandStatus::Dispatched
     );
     assert_eq!(core.driver_commands()[0].result, None);
     assert_eq!(core.events().len(), events_before);
@@ -47,6 +49,8 @@ fn complete_driver_command_requires_act_authority_without_mutation() {
         .grant_capability(driver, device, OperationSet::only(Operation::Observe))
         .unwrap();
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
     let events_before = core.events().len();
 
     let result = core.complete_driver_command(
@@ -59,18 +63,20 @@ fn complete_driver_command_requires_act_authority_without_mutation() {
     assert_eq!(result, Err(KernelError::OperationDenied));
     assert_eq!(
         core.driver_commands()[0].status,
-        DriverCommandStatus::Submitted
+        DriverCommandStatus::Dispatched
     );
     assert_eq!(core.events().len(), events_before);
 }
 
 #[test]
-fn complete_driver_command_log_full_leaves_command_submitted() {
-    let (mut core, _, driver, device, _, driver_capability) = prepare_bound_device::<6, 1>(
+fn complete_driver_command_log_full_leaves_command_dispatched() {
+    let (mut core, _, driver, device, _, driver_capability) = prepare_bound_device::<7, 1>(
         OperationSet::only(Operation::Delegate),
         OperationSet::only(Operation::Act),
     );
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
 
     let result = core.complete_driver_command(
         driver,
@@ -82,10 +88,10 @@ fn complete_driver_command_log_full_leaves_command_submitted() {
     assert_eq!(result, Err(KernelError::EventLogFull));
     assert_eq!(
         core.driver_commands()[0].status,
-        DriverCommandStatus::Submitted
+        DriverCommandStatus::Dispatched
     );
     assert_eq!(core.driver_commands()[0].result, None);
-    assert_eq!(core.events().len(), 6);
+    assert_eq!(core.events().len(), 7);
 }
 
 #[test]
@@ -95,6 +101,8 @@ fn fail_driver_command_records_terminal_failure() {
         OperationSet::only(Operation::Act),
     );
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
     let failure = DriverCommandResult { code: 5, value: 13 };
 
     core.fail_driver_command(driver, driver_capability, command, failure)
@@ -118,6 +126,8 @@ fn terminal_driver_command_rejects_second_transition_without_mutation() {
         OperationSet::only(Operation::Act),
     );
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
     let completed = DriverCommandResult { code: 0, value: 1 };
     core.complete_driver_command(driver, driver_capability, command, completed)
         .unwrap();
@@ -149,6 +159,8 @@ fn retired_resource_rejects_driver_command_transition() {
             OperationSet::only(Operation::Act),
         );
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
     core.retire_resource(owner, owner_capability, device)
         .unwrap();
     let events_before = core.events().len();
@@ -163,7 +175,7 @@ fn retired_resource_rejects_driver_command_transition() {
     assert_eq!(result, Err(KernelError::ResourceRetired));
     assert_eq!(
         core.driver_commands()[0].status,
-        DriverCommandStatus::Submitted
+        DriverCommandStatus::Dispatched
     );
     assert_eq!(core.events().len(), events_before);
 }

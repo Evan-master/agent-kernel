@@ -102,6 +102,13 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
             },
         )
         .unwrap();
+    let request = kernel
+        .sys_dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
+    assert_eq!(request.command, command);
+    assert_eq!(request.resource, device);
+    assert_eq!(request.driver, driver);
+    assert_eq!(request.invocation, Some(invocation));
     kernel
         .sys_complete_driver_command(
             driver,

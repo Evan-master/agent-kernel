@@ -62,6 +62,12 @@ fn driver_command_reaches_completed_with_device_event_cause() {
     );
     assert_eq!(core.driver_commands()[0].result, None);
 
+    let request = core
+        .dispatch_driver_command(driver, driver_capability, command)
+        .expect("bound driver should dispatch command");
+    assert_eq!(request.command, command);
+    assert_eq!(request.invocation, Some(invocation));
+
     let result = DriverCommandResult { code: 0, value: 12 };
     core.complete_driver_command(driver, driver_capability, command, result)
         .expect("bound driver should complete command");
@@ -71,11 +77,14 @@ fn driver_command_reaches_completed_with_device_event_cause() {
         DriverCommandStatus::Completed
     );
     assert_eq!(core.driver_commands()[0].result, Some(result));
-    let submitted = &core.events()[core.events().len() - 2];
+    let submitted = &core.events()[core.events().len() - 3];
     assert_eq!(submitted.kind, EventKind::DriverCommandSubmitted);
     assert_eq!(submitted.driver_command, Some(command));
     assert_eq!(submitted.device_event, Some(cause));
     assert_eq!(submitted.driver_invocation, Some(invocation));
+    let dispatched = &core.events()[core.events().len() - 2];
+    assert_eq!(dispatched.kind, EventKind::DriverCommandDispatched);
+    assert_eq!(dispatched.driver_command, Some(command));
     let completed = core.events().last().unwrap();
     assert_eq!(completed.kind, EventKind::DriverCommandCompleted);
     assert_eq!(completed.driver_command_result, Some(result));

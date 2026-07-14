@@ -22,6 +22,13 @@ name = "agent-kernel-core"
 version = "0.1.0"
 
 [[package]]
+name = "agent-kernel-hal"
+version = "0.1.0"
+dependencies = [
+ "agent-kernel-core",
+]
+
+[[package]]
 name = "agent-kernel-image"
 version = "0.1.0"
 dependencies = [
@@ -43,6 +50,7 @@ version = "0.1.0"
 dependencies = [
  "agent-kernel",
  "agent-kernel-core",
+ "agent-kernel-hal",
 ]
 
 [[package]]

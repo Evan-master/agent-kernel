@@ -10,6 +10,7 @@ mod format_agent;
 mod format_driver;
 mod format_fault;
 mod format_signal;
+mod virtual_device;
 
 use agent_kernel_core::{
     ActionId, AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CheckpointId, FaultKind,

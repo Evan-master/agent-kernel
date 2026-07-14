@@ -119,6 +119,8 @@ fn delivered_event_runs_as_driver_invocation_and_completes() {
         )
         .expect("running driver should submit response command");
     assert_eq!(core.driver_commands()[0].invocation, Some(invocation));
+    core.dispatch_driver_command(driver, driver_capability, command)
+        .unwrap();
     core.complete_driver_command(
         driver,
         driver_capability,

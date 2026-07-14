@@ -7,7 +7,8 @@
 use agent_kernel_core::{
     AgentId, CapabilityId, DeviceEventId, DeviceEventKind, DeviceEventPayload, DeviceEventRecord,
     DriverBindingId, DriverBindingRecord, DriverCommandId, DriverCommandKind, DriverCommandPayload,
-    DriverCommandRecord, DriverCommandResult, DriverInvocationId, Event, KernelError, ResourceId,
+    DriverCommandRecord, DriverCommandRequest, DriverCommandResult, DriverInvocationId, Event,
+    KernelError, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -114,6 +115,16 @@ impl<
     ) -> Result<DriverCommandId, KernelError> {
         self.core
             .submit_driver_command(driver, capability, resource, cause, kind, payload)
+    }
+
+    pub fn sys_dispatch_driver_command(
+        &mut self,
+        driver: AgentId,
+        capability: CapabilityId,
+        command: DriverCommandId,
+    ) -> Result<DriverCommandRequest, KernelError> {
+        self.core
+            .dispatch_driver_command(driver, capability, command)
     }
 
     pub fn sys_complete_driver_command(

@@ -57,6 +57,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::DriverCommandSubmitted => {
             format_driver_command_event(event, "driver_command_submitted")
         }
+        EventKind::DriverCommandDispatched => {
+            format_driver_command_event(event, "driver_command_dispatched")
+        }
         EventKind::DriverCommandCompleted => {
             format_driver_command_event(event, "driver_command_completed")
         }
