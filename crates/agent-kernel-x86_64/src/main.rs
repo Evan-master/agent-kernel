@@ -4,8 +4,9 @@
 //! x86_64 bootloader entry for Agent Kernel.
 //!
 //! This crate owns the architecture-specific QEMU boot entry. It runs the
-//! bounded COM1 Port command flow, prints the deterministic boot handoff event
-//! sequence, and exits QEMU through isa-debug-exit when the handoff succeeds.
+//! bounded COM1 interrupt-to-command flow, prints the deterministic boot
+//! handoff event sequence, and exits QEMU through isa-debug-exit when the
+//! handoff succeeds.
 
 use core::{arch::asm, panic::PanicInfo};
 
@@ -14,8 +15,9 @@ use agent_kernel_core::EventKind;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
 mod port_driver_flow;
+mod uart_interrupt;
 
-use port_driver_flow::PortPoll;
+use port_driver_flow::PortDriverSetup;
 
 const KERNEL_STACK_SIZE: u64 = 256 * 1024;
 
@@ -27,7 +29,7 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1>;
+pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1>;
 
 fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
@@ -35,13 +37,21 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
-            let Some(poll) = PortPoll::prepare(&mut booted, COM1) else {
+            let Some(setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
                 serial_write_line("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
                 exit_qemu(0x11);
                 halt_forever();
             };
-            let Some(mut flow) = poll.poll_and_dispatch(&mut booted, b'O') else {
-                serial_write_line("AGENT_KERNEL_PORT_DRIVER_POLL_ERROR");
+            let Some(signal) = uart_interrupt::wait_for_uart_thre() else {
+                serial_write_line("AGENT_KERNEL_UART_IRQ_ERROR");
+                exit_qemu(0x11);
+                halt_forever();
+            };
+            serial_write_line("AGENT_KERNEL_UART_IRQ_OK");
+            let Some(mut flow) =
+                setup.dispatch_interrupt(&mut booted, signal.iir, signal.line_status, b'O')
+            else {
+                serial_write_line("AGENT_KERNEL_PORT_DRIVER_INTERRUPT_ERROR");
                 exit_qemu(0x11);
                 halt_forever();
             };

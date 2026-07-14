@@ -1,22 +1,15 @@
-//! Driver admission, physical status polling, and invocation dispatch phase.
+//! Driver admission and interrupt invocation dispatch phase.
 
 use agent_kernel_core::{
     AgentEntryKind, AgentImageDigest, AgentImageKind, DeviceEventKind, DeviceEventPayload,
     DriverCommandKind, DriverCommandPayload, DriverEndpointDescriptor, Operation, OperationSet,
 };
-use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
-use agent_kernel_x86_64::{
-    port::{PortIoBackend, PORT_IO_RESULT_OK},
-    NativePortIo,
-};
+use agent_kernel_x86_64::{port::PortIoBackend, NativePortIo};
 
-use super::{
-    terminal::record_command_outcome, PortCommandFlow, PortPoll, DRIVER, INVOCATION_QUANTUM,
-    LINE_STATUS_OFFSET, TRANSMITTER_EMPTY,
-};
+use super::{PortCommandFlow, PortDriverSetup, DRIVER, INVOCATION_QUANTUM};
 use crate::X86BootedKernel;
 
-impl PortPoll {
+impl PortDriverSetup {
     pub fn prepare(booted: &mut X86BootedKernel, base: u16) -> Option<Self> {
         let report = *booted.report();
         let kernel = booted.kernel_mut();
@@ -71,22 +64,6 @@ impl PortPoll {
                 DRIVER,
             )
             .ok()?;
-        let command = kernel
-            .sys_submit_driver_command(
-                DRIVER,
-                driver_capability,
-                report.bootstrap_resource,
-                None,
-                DriverCommandKind::Read,
-                DriverCommandPayload {
-                    opcode: LINE_STATUS_OFFSET,
-                    value: 0,
-                },
-            )
-            .ok()?;
-        let request = kernel
-            .sys_dispatch_driver_command(DRIVER, driver_capability, command)
-            .ok()?;
         let endpoint = kernel.driver_endpoint(report.bootstrap_resource).ok()?;
         // SAFETY: the ring-0 boot adapter binds authority only to this validated endpoint.
         let backend = PortIoBackend::new(endpoint, unsafe { NativePortIo::new() }).ok()?;
@@ -94,26 +71,16 @@ impl PortPoll {
         Some(Self {
             backend,
             driver_capability,
-            command,
-            request,
         })
     }
 
-    pub fn poll_and_dispatch(
-        mut self,
+    pub fn dispatch_interrupt(
+        self,
         booted: &mut X86BootedKernel,
+        iir: u8,
+        line_status: u8,
         value: u8,
     ) -> Option<PortCommandFlow> {
-        let outcome = self.backend.execute(self.request);
-        let result = outcome.result();
-        if !record_command_outcome(booted, self.driver_capability, self.command, outcome)
-            || !matches!(outcome, DriverCommandOutcome::Completed(_))
-            || result.code != PORT_IO_RESULT_OK
-            || result.value & TRANSMITTER_EMPTY == 0
-        {
-            return None;
-        }
-
         let report = *booted.report();
         let kernel = booted.kernel_mut();
         let event = kernel
@@ -121,10 +88,10 @@ impl PortPoll {
                 report.bootstrap_agent,
                 report.bootstrap_capability,
                 report.bootstrap_resource,
-                DeviceEventKind::StateChanged,
+                DeviceEventKind::Interrupt,
                 DeviceEventPayload {
-                    code: LINE_STATUS_OFFSET,
-                    value: result.value,
+                    code: u16::from(iir),
+                    value: u64::from(line_status),
                 },
             )
             .ok()?;

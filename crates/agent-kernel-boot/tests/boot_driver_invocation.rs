@@ -6,10 +6,10 @@ use agent_kernel_core::{
     DriverInvocationStatus, Operation, OperationSet,
 };
 
-type DriverBoot = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1>;
+type DriverBoot = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1>;
 
 #[test]
-fn booted_kernel_completes_polled_causal_driver_invocation() {
+fn booted_kernel_completes_interrupt_causal_driver_invocation() {
     let mut booted = DriverBoot::boot(BootConfig::default()).unwrap();
     let report = *booted.report();
     let driver = AgentId::new(2);
@@ -67,44 +67,14 @@ fn booted_kernel_completes_polled_causal_driver_invocation() {
         )
         .unwrap();
 
-    let poll = kernel
-        .sys_submit_driver_command(
-            driver,
-            driver_capability,
-            report.bootstrap_resource,
-            None,
-            DriverCommandKind::Read,
-            DriverCommandPayload {
-                opcode: 5,
-                value: 0,
-            },
-        )
-        .unwrap();
-    let poll_request = kernel
-        .sys_dispatch_driver_command(driver, driver_capability, poll)
-        .unwrap();
-    assert_eq!(poll_request.cause, None);
-    assert_eq!(poll_request.invocation, None);
-    kernel
-        .sys_complete_driver_command(
-            driver,
-            driver_capability,
-            poll,
-            DriverCommandResult {
-                code: 0,
-                value: 0x20,
-            },
-        )
-        .unwrap();
-
     let event = kernel
         .sys_raise_device_event(
             report.bootstrap_agent,
             report.bootstrap_capability,
             report.bootstrap_resource,
-            DeviceEventKind::StateChanged,
+            DeviceEventKind::Interrupt,
             DeviceEventPayload {
-                code: 5,
+                code: 0xc2,
                 value: 0x20,
             },
         )
@@ -160,12 +130,10 @@ fn booted_kernel_completes_polled_causal_driver_invocation() {
         kernel.device_events()[0].status,
         DeviceEventStatus::Acknowledged
     );
+    assert_eq!(kernel.driver_commands().len(), 1);
+    assert_eq!(kernel.driver_commands()[0].cause, Some(event));
     assert_eq!(
         kernel.driver_commands()[0].status,
-        DriverCommandStatus::Completed
-    );
-    assert_eq!(
-        kernel.driver_commands()[1].status,
         DriverCommandStatus::Completed
     );
     assert_eq!(

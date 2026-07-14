@@ -34,6 +34,7 @@ for expected in \
   "AGENT_KERNEL_PORT_IO_BACKEND_OK" \
   "AGENT_KERNEL_PORT_COMMAND_FLOW_OK" \
   "AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK" \
+  "AGENT_KERNEL_UART_IRQ_OK" \
   "event[9] driver_endpoint_registered" \
   "event[10] agent_registered" \
   "event[11] capability_derived" \
@@ -41,19 +42,16 @@ for expected in \
   "event[13] agent_image_verified" \
   "event[14] agent_launched" \
   "event[15] driver_bound" \
-  "event[16] driver_command_submitted" \
-  "event[17] driver_command_dispatched" \
-  "event[18] driver_command_completed" \
-  "event[19] device_event_raised" \
-  "event[20] device_event_delivered" \
-  "event[21] driver_invocation_queued" \
-  "event[22] driver_invocation_dispatched" \
-  "event[23] driver_invocation_ticked" \
-  "event[24] device_event_acknowledged" \
-  "event[25] driver_command_submitted" \
-  "event[26] driver_command_dispatched" \
-  "event[27] driver_command_completed" \
-  "event[28] driver_invocation_completed" \
+  "event[16] device_event_raised" \
+  "event[17] device_event_delivered" \
+  "event[18] driver_invocation_queued" \
+  "event[19] driver_invocation_dispatched" \
+  "event[20] driver_invocation_ticked" \
+  "event[21] device_event_acknowledged" \
+  "event[22] driver_command_submitted" \
+  "event[23] driver_command_dispatched" \
+  "event[24] driver_command_completed" \
+  "event[25] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -61,3 +59,9 @@ do
     exit 1
   fi
 done
+
+EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
+if [[ "$EVENT_COUNT" -ne 25 ]]; then
+  printf 'expected exactly 25 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+  exit 1
+fi
