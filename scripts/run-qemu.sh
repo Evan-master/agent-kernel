@@ -31,6 +31,8 @@ for expected in \
   "event[6] observation" \
   "event[7] action" \
   "event[8] verification" \
+  "AGENT_KERNEL_PORT_IO_BACKEND_OK" \
+  "event[9] driver_endpoint_registered" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then

@@ -124,7 +124,8 @@ impl<
             OperationSet::empty()
                 .with(Operation::Observe)
                 .with(Operation::Act)
-                .with(Operation::Verify),
+                .with(Operation::Verify)
+                .with(Operation::Delegate),
         )?;
         let image = kernel.sys_register_agent_image(
             config.bootstrap_agent,
@@ -195,5 +196,22 @@ impl<
         RUN_QUEUE,
     > {
         &self.kernel
+    }
+
+    pub fn kernel_mut(
+        &mut self,
+    ) -> &mut AgentKernel<
+        AGENTS,
+        RESOURCES,
+        CAPS,
+        EVENTS,
+        ACTIONS,
+        OBSERVATIONS,
+        CHECKPOINTS,
+        INTENTS,
+        TASKS,
+        RUN_QUEUE,
+    > {
+        &mut self.kernel
     }
 }

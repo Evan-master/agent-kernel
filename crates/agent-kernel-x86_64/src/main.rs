@@ -3,9 +3,9 @@
 
 //! x86_64 bootloader entry for Agent Kernel.
 //!
-//! This crate owns the architecture-specific QEMU boot entry. It prints the
-//! deterministic boot handoff event sequence over COM1 serial and exits QEMU
-//! through isa-debug-exit when the handoff succeeds.
+//! This crate owns the architecture-specific QEMU boot entry. It runs the
+//! bounded COM1 Port backend probe, prints the deterministic boot handoff event
+//! sequence, and exits QEMU through isa-debug-exit when the handoff succeeds.
 
 use core::{arch::asm, panic::PanicInfo};
 
@@ -13,14 +13,33 @@ use agent_kernel_boot::{BootConfig, BootedKernel};
 use agent_kernel_core::EventKind;
 use bootloader_api::{entry_point, BootInfo};
 
+mod port_probe;
+
+use port_probe::PortProbe;
+
 entry_point!(kernel_main);
+
+pub(crate) type X86BootedKernel = BootedKernel<1, 1, 1, 9, 1, 1, 0, 0, 0, 0>;
 
 fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
 
-    match BootedKernel::<1, 1, 1, 8, 1, 1, 0, 0, 0, 0>::boot(BootConfig::default()) {
-        Ok(booted) => {
+    match X86BootedKernel::boot(BootConfig::default()) {
+        Ok(mut booted) => {
+            let Some(mut probe) = PortProbe::prepare(&mut booted, COM1) else {
+                serial_write_line("AGENT_KERNEL_PORT_IO_BACKEND_ERROR");
+                exit_qemu(0x11);
+                halt_forever();
+            };
+            serial_write_str("AGENT_KERNEL_PORT_IO_BACKEND_");
+            while !serial_transmit_empty() {}
+            if !probe.write_byte(b'O') {
+                serial_write_line("ERROR");
+                exit_qemu(0x11);
+                halt_forever();
+            }
+            serial_write_line("K");
             for event in booted.kernel().events() {
                 serial_write_str("event[");
                 serial_write_u64(event.sequence);

@@ -1,5 +1,5 @@
 use agent_kernel_boot::{BootConfig, BootPhase, BootedKernel};
-use agent_kernel_core::{ActionId, AgentImageId, EventKind};
+use agent_kernel_core::{ActionId, AgentImageId, DriverEndpointDescriptor, EventKind};
 
 #[test]
 fn boot_records_phase_sequence() {
@@ -35,4 +35,32 @@ fn boot_records_observe_action_and_verify_events() {
     assert_eq!(events[7].kind, EventKind::VerificationRequested);
     assert_eq!(events[6].action, Some(ActionId::new(99)));
     assert_eq!(events[7].action, Some(ActionId::new(99)));
+}
+
+#[test]
+fn trusted_boot_handoff_can_register_architecture_endpoint() {
+    let mut booted = BootedKernel::<2, 8, 8, 16, 4, 4, 4, 0, 4, 4>::boot(BootConfig::default())
+        .expect("boot flow should fit fixed stores");
+    let report = *booted.report();
+    let descriptor = DriverEndpointDescriptor::port(0x3f8, 8);
+
+    let event = booted
+        .kernel_mut()
+        .sys_register_driver_endpoint(
+            report.bootstrap_agent,
+            report.bootstrap_capability,
+            report.bootstrap_resource,
+            descriptor,
+        )
+        .expect("bootstrap authority should install architecture endpoint");
+
+    assert_eq!(event.kind, EventKind::DriverEndpointRegistered);
+    assert_eq!(
+        booted
+            .kernel()
+            .driver_endpoint(report.bootstrap_resource)
+            .unwrap()
+            .descriptor,
+        descriptor
+    );
 }

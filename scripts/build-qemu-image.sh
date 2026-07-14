@@ -11,7 +11,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 export RUSTC="$(rustup which rustc --toolchain "$TOOLCHAIN")"
 
 cd "$ROOT_DIR"
-rustup run "$TOOLCHAIN" cargo build -p agent-kernel-x86_64 --target "$TARGET"
+rustup run "$TOOLCHAIN" cargo build -p agent-kernel-x86_64 --features bare-metal --target "$TARGET"
 rustup run "$TOOLCHAIN" cargo run -p agent-kernel-image -- "$KERNEL" "$IMAGE" >/dev/null
 
 printf '%s\n' "$IMAGE"

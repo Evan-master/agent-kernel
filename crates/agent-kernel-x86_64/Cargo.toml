@@ -5,9 +5,14 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+bare-metal = []
+
 [dependencies]
 agent-kernel-boot = { path = "../agent-kernel-boot" }
 agent-kernel-core = { path = "../agent-kernel-core" }
+agent-kernel-hal = { path = "../agent-kernel-hal" }
 bootloader_api = "0.11.15"
 
 [[bin]]
@@ -15,3 +20,4 @@ name = "agent-kernel-x86_64"
 path = "src/main.rs"
 test = false
 bench = false
+required-features = ["bare-metal"]

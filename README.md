@@ -18,8 +18,8 @@ event logs.
 - `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, driver endpoint registry, driver bindings, device event lifecycle, driver invocation scheduling, driver command lifecycle, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
-- `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry that emits the boot handoff log over serial.
+- `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry plus a bounded byte-wide Port I/O backend with native `in`/`out` instructions.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -162,9 +162,11 @@ The kernel endpoint registry maps each device-like `ResourceId` to one validated
 `Virtual`, `Mmio`, or `Port` descriptor under `Delegate` authority. It rejects
 invalid or overlapping ranges, preserves retired mappings for audit, and blocks
 command dispatch until the resource has an endpoint. Raw addresses are never
-Agent command data. All records and transitions are replayable. Physical I/O
-still requires architecture-owned volatile access, page mapping, interrupt
-routing, and DMA policy on top of these endpoint records.
+Agent command data. All records and transitions are replayable. The x86_64
+architecture backend now executes byte-wide `Read` and `Write` commands against
+bounded `Port` endpoints, treating `opcode` only as a relative offset. MMIO,
+page mapping, interrupt routing, wider port operations, and DMA policy remain
+future architecture work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -177,12 +179,14 @@ remains available for system-seeded resources and leaves `owner: None`.
 2. Initialize `AgentKernel`.
 3. Register the bootstrap agent.
 4. Register a bootstrap resource.
-5. Grant observe/act/verify capability to the bootstrap agent.
+5. Grant observe/act/verify/delegate capability to the bootstrap agent.
 6. Register a bootstrap executable image as pending.
 7. Verify that bootstrap image, moving it from pending to verified.
 8. Launch the bootstrap agent into a bootstrap entry that references the verified image.
 9. Record observation, action, and verification events.
-10. Mark the kernel ready for supervisor handoff.
+10. Expose mutable handoff access for trusted architecture initialization.
+11. On x86_64, register a COM1 Port endpoint and execute a bounded native output probe.
+12. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -192,7 +196,7 @@ The handoff now runs inside QEMU through the x86_64 BIOS image path.
 - UEFI image support.
 - POSIX compatibility.
 - Linux syscall compatibility.
-- A filesystem, network stack, preemptive scheduler, or physical hardware driver execution.
+- A filesystem, network stack, preemptive scheduler, or complete physical hardware driver stack.
 - Running an LLM inside kernel space.
 
 ## Commands
@@ -223,10 +227,15 @@ scripts/build-qemu-image.sh
 scripts/run-qemu.sh
 ```
 
+The x86_64 binary requires the `bare-metal` Cargo feature. The image script
+enables it automatically; keeping it off by default lets non-x86 host workspace
+tests compile only the portable backend library and recording tests.
+
 Expected QEMU serial output:
 
 ```text
 AGENT_KERNEL_QEMU_BOOT_OK
+AGENT_KERNEL_PORT_IO_BACKEND_OK
 event[1] agent_registered
 event[2] capability_granted
 event[3] agent_image_registered
@@ -235,8 +244,13 @@ event[5] agent_launched
 event[6] observation
 event[7] action
 event[8] verification
+event[9] driver_endpoint_registered
 SUPERVISOR_HANDOFF_READY
 ```
+
+The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is emitted through the new
+kernel-registered COM1 endpoint and `PortIoBackend`; the surrounding text uses
+the existing serial writer so the marker proves the native backend path ran.
 
 `scripts/run-qemu.sh` treats QEMU exit code `33` as success because the kernel
 exits through the `isa-debug-exit` device with value `0x10`.
