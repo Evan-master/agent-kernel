@@ -26,6 +26,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     >
     KernelCore<
         AGENTS,
@@ -48,6 +49,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     pub fn events(&self) -> &[Event] {

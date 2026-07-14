@@ -7,12 +7,13 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, CapabilityId, DeviceEventKind, DeviceEventPayload, MemoryValue, NamespaceKey,
-    NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
+    AgentId, CapabilityId, DeviceEventKind, DeviceEventPayload, DriverCommandKind,
+    DriverCommandPayload, DriverCommandResult, MemoryValue, NamespaceKey, NamespaceObject,
+    Operation, OperationSet, ResourceId, ResourceKind, TaskId,
 };
 
 pub type SupervisorKernel =
-    AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2>;
+    AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2, 2>;
 
 pub struct ResourceFlowContext {
     pub agent: AgentId,
@@ -157,4 +158,25 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
     kernel
         .sys_acknowledge_device_event(context.target_agent, driver_capability, event)
         .expect("driver should acknowledge device event");
+    let command = kernel
+        .sys_submit_driver_command(
+            context.target_agent,
+            driver_capability,
+            device.resource,
+            Some(event),
+            DriverCommandKind::Write,
+            DriverCommandPayload {
+                opcode: 3,
+                value: 11,
+            },
+        )
+        .expect("driver should submit device command");
+    kernel
+        .sys_complete_driver_command(
+            context.target_agent,
+            driver_capability,
+            command,
+            DriverCommandResult { code: 0, value: 12 },
+        )
+        .expect("driver should complete device command");
 }

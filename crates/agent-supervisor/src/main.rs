@@ -7,6 +7,7 @@
 mod flow_resources;
 mod format;
 mod format_agent;
+mod format_driver;
 mod format_fault;
 mod format_signal;
 

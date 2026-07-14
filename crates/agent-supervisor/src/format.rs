@@ -1,10 +1,11 @@
 //! Host-side formatting for deterministic simulator event output.
 
-use agent_kernel_core::{DeviceEventKind, DeviceEventPayload, Event, EventKind};
+use agent_kernel_core::{Event, EventKind};
 
 use crate::format_agent::{
     format_agent_event, format_agent_image_event, format_agent_launch_event,
 };
+use crate::format_driver::{format_device_event, format_driver_command_event, format_driver_event};
 use crate::format_fault::{
     format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
     format_fault_route_event, format_task_fault_event,
@@ -34,6 +35,15 @@ pub fn format_event(event: &Event) -> String {
         EventKind::DeviceEventDelivered => format_device_event(event, "device_event_delivered"),
         EventKind::DeviceEventAcknowledged => {
             format_device_event(event, "device_event_acknowledged")
+        }
+        EventKind::DriverCommandSubmitted => {
+            format_driver_command_event(event, "driver_command_submitted")
+        }
+        EventKind::DriverCommandCompleted => {
+            format_driver_command_event(event, "driver_command_completed")
+        }
+        EventKind::DriverCommandFailed => {
+            format_driver_command_event(event, "driver_command_failed")
         }
         EventKind::ResourceCreated => format_capability_event(event, "resource_created"),
         EventKind::ResourceRetired => format_capability_event(event, "resource_retired"),
@@ -195,81 +205,6 @@ fn format_message_event(event: &Event, label: &str) -> String {
         "event[{}] {} agent={} target_agent={} message={}",
         event.sequence, label, agent, target_agent, message
     )
-}
-
-fn format_driver_event(event: &Event, label: &str) -> String {
-    let agent = event.agent.raw();
-    let resource = event
-        .resource
-        .map(|resource| resource.raw())
-        .unwrap_or_default();
-    let capability = event
-        .capability
-        .map(|capability| capability.raw())
-        .unwrap_or_default();
-    let binding = event
-        .driver_binding
-        .map(|binding| binding.raw())
-        .unwrap_or_default();
-    let target_agent = event
-        .target_agent
-        .map(|agent| agent.raw())
-        .unwrap_or_default();
-
-    format!(
-        "event[{}] {} agent={} resource={} capability={} driver_binding={} target_agent={}",
-        event.sequence, label, agent, resource, capability, binding, target_agent
-    )
-}
-
-fn format_device_event(event: &Event, label: &str) -> String {
-    let agent = event.agent.raw();
-    let resource = event
-        .resource
-        .map(|resource| resource.raw())
-        .unwrap_or_default();
-    let capability = event
-        .capability
-        .map(|capability| capability.raw())
-        .unwrap_or_default();
-    let binding = event
-        .driver_binding
-        .map(|binding| binding.raw())
-        .unwrap_or_default();
-    let device_event = event
-        .device_event
-        .map(|device_event| device_event.raw())
-        .unwrap_or_default();
-    let kind = event
-        .device_event_kind
-        .map(format_device_event_kind)
-        .unwrap_or("unknown");
-    let payload = event
-        .device_event_payload
-        .unwrap_or(DeviceEventPayload { code: 0, value: 0 });
-
-    format!(
-        "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} kind={} code={} value={}",
-        event.sequence,
-        label,
-        agent,
-        resource,
-        capability,
-        binding,
-        device_event,
-        kind,
-        payload.code,
-        payload.value
-    )
-}
-
-fn format_device_event_kind(kind: DeviceEventKind) -> &'static str {
-    match kind {
-        DeviceEventKind::Interrupt => "interrupt",
-        DeviceEventKind::DataReady => "data_ready",
-        DeviceEventKind::Fault => "fault",
-        DeviceEventKind::StateChanged => "state_changed",
-    }
 }
 
 fn format_memory_event(event: &Event, label: &str) -> String {

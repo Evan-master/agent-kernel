@@ -75,6 +75,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     >
     KernelCore<
         AGENTS,
@@ -97,6 +98,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     pub fn raise_device_event(
@@ -215,7 +217,10 @@ impl<
         )
     }
 
-    fn find_device_event(&self, id: DeviceEventId) -> Result<DeviceEventRecord, KernelError> {
+    pub(crate) fn find_device_event(
+        &self,
+        id: DeviceEventId,
+    ) -> Result<DeviceEventRecord, KernelError> {
         self.device_events()
             .iter()
             .find(|event| event.id == id)
@@ -282,6 +287,10 @@ impl<
             device_event: Some(event),
             device_event_kind: Some(event_kind),
             device_event_payload: Some(payload),
+            driver_command: None,
+            driver_command_kind: None,
+            driver_command_payload: None,
+            driver_command_result: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,

@@ -26,6 +26,8 @@ mod checkpoint_store;
 mod core;
 mod device_event;
 mod driver;
+mod driver_command;
+mod driver_command_event;
 mod driver_event;
 mod error;
 mod event;
@@ -78,6 +80,10 @@ pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
 pub use device_event::{DeviceEventKind, DeviceEventPayload, DeviceEventRecord, DeviceEventStatus};
 pub use driver::DriverBindingRecord;
+pub use driver_command::{
+    DriverCommandKind, DriverCommandPayload, DriverCommandRecord, DriverCommandResult,
+    DriverCommandStatus,
+};
 pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use fault::{FaultKind, FaultRecord};
@@ -85,8 +91,8 @@ pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
 pub use id::{
     ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, DeviceEventId, DriverBindingId,
-    FaultHandlerId, FaultId, FaultPolicyId, IntentId, MemoryCellId, MessageId, NamespaceEntryId,
-    ObservationId, ResourceId, TaskId, WaiterId,
+    DriverCommandId, FaultHandlerId, FaultId, FaultPolicyId, IntentId, MemoryCellId, MessageId,
+    NamespaceEntryId, ObservationId, ResourceId, TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};

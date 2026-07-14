@@ -30,6 +30,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     >
     KernelCore<
         AGENTS,
@@ -52,6 +53,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     pub fn launch_agent(
@@ -226,6 +228,10 @@ impl<
             device_event: None,
             device_event_kind: None,
             device_event_payload: None,
+            driver_command: None,
+            driver_command_kind: None,
+            driver_command_payload: None,
+            driver_command_result: None,
             agent_image: Some(image),
             agent_image_kind: None,
             agent_image_digest: None,

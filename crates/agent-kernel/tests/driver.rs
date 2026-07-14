@@ -1,13 +1,14 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, DeviceEventKind, DeviceEventPayload, DeviceEventStatus, EventKind, Operation,
+    AgentId, DeviceEventKind, DeviceEventPayload, DeviceEventStatus, DriverCommandKind,
+    DriverCommandPayload, DriverCommandResult, DriverCommandStatus, EventKind, Operation,
     OperationSet, ResourceKind,
 };
 
-type TestKernel = AgentKernel<4, 4, 6, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2>;
+type TestKernel = AgentKernel<4, 4, 6, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2>;
 
 #[test]
-fn driver_syscalls_expose_device_event_lifecycle() {
+fn driver_syscalls_expose_event_and_command_lifecycles() {
     let mut kernel = TestKernel::new();
     let owner = AgentId::new(1);
     let driver = AgentId::new(2);
@@ -52,6 +53,27 @@ fn driver_syscalls_expose_device_event_lifecycle() {
     kernel
         .sys_acknowledge_device_event(driver, driver_capability, event)
         .unwrap();
+    let command = kernel
+        .sys_submit_driver_command(
+            driver,
+            driver_capability,
+            device,
+            Some(event),
+            DriverCommandKind::Write,
+            DriverCommandPayload {
+                opcode: 3,
+                value: 11,
+            },
+        )
+        .unwrap();
+    kernel
+        .sys_complete_driver_command(
+            driver,
+            driver_capability,
+            command,
+            DriverCommandResult { code: 0, value: 12 },
+        )
+        .unwrap();
 
     assert_eq!(kernel.driver_bindings()[0].id, binding);
     assert_eq!(
@@ -59,7 +81,11 @@ fn driver_syscalls_expose_device_event_lifecycle() {
         DeviceEventStatus::Acknowledged
     );
     assert_eq!(
+        kernel.driver_commands()[0].status,
+        DriverCommandStatus::Completed
+    );
+    assert_eq!(
         kernel.events().last().unwrap().kind,
-        EventKind::DeviceEventAcknowledged
+        EventKind::DriverCommandCompleted
     );
 }

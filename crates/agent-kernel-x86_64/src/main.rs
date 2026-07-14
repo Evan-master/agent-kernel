@@ -62,6 +62,15 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::DeviceEventAcknowledged => {
                         serial_write_line("device_event_acknowledged");
                     }
+                    EventKind::DriverCommandSubmitted => {
+                        serial_write_line("driver_command_submitted");
+                    }
+                    EventKind::DriverCommandCompleted => {
+                        serial_write_line("driver_command_completed");
+                    }
+                    EventKind::DriverCommandFailed => {
+                        serial_write_line("driver_command_failed");
+                    }
                     EventKind::ResourceCreated => {
                         serial_write_line("resource_created");
                     }

@@ -31,6 +31,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -53,6 +54,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     pub fn sys_send_message(

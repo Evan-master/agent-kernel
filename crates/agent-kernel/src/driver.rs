@@ -1,12 +1,13 @@
 //! Driver binding syscall facade.
 //!
-//! This module belongs to `agent-kernel`. It exposes driver binding and device
-//! event lifecycle syscalls while keeping all authority and state mutation in
-//! `agent-kernel-core`.
+//! This module belongs to `agent-kernel`. It exposes driver binding, device
+//! event, and driver command lifecycle syscalls while keeping all authority and
+//! state mutation in `agent-kernel-core`.
 
 use agent_kernel_core::{
     AgentId, CapabilityId, DeviceEventId, DeviceEventKind, DeviceEventPayload, DeviceEventRecord,
-    DriverBindingId, DriverBindingRecord, Event, KernelError, ResourceId,
+    DriverBindingId, DriverBindingRecord, DriverCommandId, DriverCommandKind, DriverCommandPayload,
+    DriverCommandRecord, DriverCommandResult, Event, KernelError, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -32,6 +33,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -54,6 +56,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     pub fn sys_bind_driver(
@@ -98,11 +101,50 @@ impl<
             .acknowledge_device_event(driver, capability, event)
     }
 
+    pub fn sys_submit_driver_command(
+        &mut self,
+        driver: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+        cause: Option<DeviceEventId>,
+        kind: DriverCommandKind,
+        payload: DriverCommandPayload,
+    ) -> Result<DriverCommandId, KernelError> {
+        self.core
+            .submit_driver_command(driver, capability, resource, cause, kind, payload)
+    }
+
+    pub fn sys_complete_driver_command(
+        &mut self,
+        driver: AgentId,
+        capability: CapabilityId,
+        command: DriverCommandId,
+        result: DriverCommandResult,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .complete_driver_command(driver, capability, command, result)
+    }
+
+    pub fn sys_fail_driver_command(
+        &mut self,
+        driver: AgentId,
+        capability: CapabilityId,
+        command: DriverCommandId,
+        result: DriverCommandResult,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .fail_driver_command(driver, capability, command, result)
+    }
+
     pub fn driver_bindings(&self) -> &[DriverBindingRecord] {
         self.core.driver_bindings()
     }
 
     pub fn device_events(&self) -> &[DeviceEventRecord] {
         self.core.device_events()
+    }
+
+    pub fn driver_commands(&self) -> &[DriverCommandRecord] {
+        self.core.driver_commands()
     }
 }

@@ -107,4 +107,10 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains(
         "event[66] device_event_acknowledged agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
     ));
+    assert!(stdout.contains(
+        "event[67] driver_command_submitted agent=2 resource=4 capability=7 driver_binding=1 device_event=1 driver_command=1 kind=write opcode=3 value=11"
+    ));
+    assert!(stdout.contains(
+        "event[68] driver_command_completed agent=2 resource=4 capability=7 driver_binding=1 device_event=1 driver_command=1 kind=write opcode=3 value=11 result_code=0 result_value=12"
+    ));
 }

@@ -44,6 +44,7 @@ pub struct AgentKernel<
     const AGENT_IMAGES: usize = AGENTS,
     const DRIVER_BINDINGS: usize = 0,
     const DEVICE_EVENTS: usize = 0,
+    const DRIVER_COMMANDS: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -66,6 +67,7 @@ pub struct AgentKernel<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >,
 }
 
@@ -90,6 +92,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -112,6 +115,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     pub const fn new() -> Self {
@@ -279,6 +283,7 @@ impl<
         const AGENT_IMAGES: usize,
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
+        const DRIVER_COMMANDS: usize,
     > Default
     for AgentKernel<
         AGENTS,
@@ -301,6 +306,7 @@ impl<
         AGENT_IMAGES,
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
+        DRIVER_COMMANDS,
     >
 {
     fn default() -> Self {
