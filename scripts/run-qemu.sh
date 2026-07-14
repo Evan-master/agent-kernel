@@ -24,6 +24,8 @@ fi
 for expected in \
   "AGENT_KERNEL_QEMU_BOOT_OK" \
   "AGENT_KERNEL_EXCEPTION_BASELINE_OK" \
+  "AGENT_KERNEL_PIT_IRQ_OK" \
+  "AGENT_KERNEL_TIMER_PREEMPTION_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \
@@ -43,16 +45,29 @@ for expected in \
   "event[13] agent_image_verified" \
   "event[14] agent_launched" \
   "event[15] driver_bound" \
-  "event[16] device_event_raised" \
-  "event[17] device_event_delivered" \
-  "event[18] driver_invocation_queued" \
-  "event[19] driver_invocation_dispatched" \
-  "event[20] driver_invocation_ticked" \
-  "event[21] device_event_acknowledged" \
-  "event[22] driver_command_submitted" \
-  "event[23] driver_command_dispatched" \
-  "event[24] driver_command_completed" \
-  "event[25] driver_invocation_completed" \
+  "event[16] agent_registered" \
+  "event[17] intent_declared" \
+  "event[18] task_created" \
+  "event[19] intent_bound" \
+  "event[20] capability_derived" \
+  "event[21] delegation" \
+  "event[22] agent_image_registered" \
+  "event[23] agent_image_verified" \
+  "event[24] agent_launched" \
+  "event[25] task_accepted" \
+  "event[26] task_queued" \
+  "event[27] task_dispatched" \
+  "event[28] task_quantum_expired" \
+  "event[29] device_event_raised" \
+  "event[30] device_event_delivered" \
+  "event[31] driver_invocation_queued" \
+  "event[32] driver_invocation_dispatched" \
+  "event[33] driver_invocation_ticked" \
+  "event[34] device_event_acknowledged" \
+  "event[35] driver_command_submitted" \
+  "event[36] driver_command_dispatched" \
+  "event[37] driver_command_completed" \
+  "event[38] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -62,7 +77,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 25 ]]; then
-  printf 'expected exactly 25 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 38 ]]; then
+  printf 'expected exactly 38 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

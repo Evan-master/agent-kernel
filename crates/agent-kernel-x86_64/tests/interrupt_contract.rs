@@ -2,7 +2,9 @@ use core::mem::size_of;
 
 use agent_kernel_x86_64::interrupt::{
     legacy_irq_vector, pic_masks_for_irq, IdtEntry, IdtPointer, IDT_INTERRUPT_GATE_OPTIONS,
-    IDT_TRAP_GATE_OPTIONS, PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, UART_IRQ_LINE, UART_IRQ_VECTOR,
+    IDT_TRAP_GATE_OPTIONS, PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, PIT_CHANNEL0_COMMAND,
+    PIT_CHANNEL0_DATA_PORT, PIT_COMMAND_PORT, PIT_DIVISOR, PIT_INPUT_HZ, PIT_IRQ_LINE,
+    PIT_IRQ_VECTOR, PIT_TARGET_HZ, UART_IRQ_LINE, UART_IRQ_VECTOR,
 };
 
 #[test]
@@ -54,4 +56,19 @@ fn legacy_pic_vectors_and_masks_expose_only_requested_irq() {
     assert_eq!(pic_masks_for_irq(4), Some((0xef, 0xff)));
     assert_eq!(pic_masks_for_irq(12), Some((0xfb, 0xef)));
     assert_eq!(pic_masks_for_irq(16), None);
+}
+
+#[test]
+fn pit_channel_zero_contract_targets_one_hundred_hertz_irq_zero() {
+    assert_eq!(PIT_CHANNEL0_DATA_PORT, 0x40);
+    assert_eq!(PIT_COMMAND_PORT, 0x43);
+    assert_eq!(PIT_CHANNEL0_COMMAND, 0x36);
+    assert_eq!(PIT_INPUT_HZ, 1_193_182);
+    assert_eq!(PIT_TARGET_HZ, 100);
+    assert_eq!(PIT_DIVISOR, 11_932);
+    assert_eq!(PIT_DIVISOR.to_le_bytes(), [0x9c, 0x2e]);
+    assert_eq!(PIT_IRQ_LINE, 0);
+    assert_eq!(PIT_IRQ_VECTOR, 0x20);
+    assert_eq!(legacy_irq_vector(PIT_IRQ_LINE), Some(PIT_IRQ_VECTOR));
+    assert_eq!(pic_masks_for_irq(PIT_IRQ_LINE), Some((0xfe, 0xff)));
 }

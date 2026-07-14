@@ -10,22 +10,9 @@ use core::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use agent_kernel_x86_64::interrupt::{
-    pic_masks_for_irq, PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, UART_IRQ_LINE,
-};
+use agent_kernel_x86_64::interrupt::{UART_IRQ_LINE, UART_IRQ_VECTOR};
 
-use crate::{exception_runtime, inb, outb, COM1};
-
-const PIC_MASTER_COMMAND: u16 = 0x20;
-const PIC_MASTER_DATA: u16 = 0x21;
-const PIC_SLAVE_COMMAND: u16 = 0xa0;
-const PIC_SLAVE_DATA: u16 = 0xa1;
-const PIC_INITIALIZE: u8 = 0x11;
-const PIC_8086_MODE: u8 = 0x01;
-const PIC_MASTER_HAS_SLAVE_ON_IRQ2: u8 = 0x04;
-const PIC_SLAVE_IDENTITY: u8 = 0x02;
-const PIC_EOI: u8 = 0x20;
-const IO_WAIT_PORT: u16 = 0x80;
+use crate::{exception_runtime, inb, outb, pic, COM1};
 
 const UART_IER_THRE: u8 = 0x02;
 const UART_IIR_NO_INTERRUPT: u8 = 0x01;
@@ -86,8 +73,8 @@ agent_kernel_uart_irq_stub:
     uart_iir_port = const COM1 + 2,
     uart_lsr_port = const COM1 + 5,
     uart_ier_port = const COM1 + 1,
-    pic_master_command = const PIC_MASTER_COMMAND,
-    pic_eoi = const PIC_EOI,
+    pic_master_command = const pic::PIC_MASTER_COMMAND,
+    pic_eoi = const pic::PIC_EOI,
     irq_seen = sym AGENT_KERNEL_UART_IRQ_SEEN,
     irq_count = sym AGENT_KERNEL_UART_IRQ_COUNT,
     irq_iir = sym AGENT_KERNEL_UART_IRQ_IIR,
@@ -114,8 +101,8 @@ pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
     // SAFETY: IF is clear, the IDT gate is installed before STI, and COM1 was
     // initialized with OUT2 asserted by `serial_init`.
     unsafe {
-        exception_runtime::install_uart_irq_gate(agent_kernel_uart_irq_stub)?;
-        initialize_pic_for_uart()?;
+        exception_runtime::install_irq_gate(UART_IRQ_VECTOR, agent_kernel_uart_irq_stub)?;
+        pic::initialize_for_irq(UART_IRQ_LINE)?;
         let _ = inb(COM1 + 2);
         outb(COM1 + 1, UART_IER_THRE);
         asm!("sti", options(nomem, nostack));
@@ -132,8 +119,7 @@ pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
     unsafe {
         asm!("cli", options(nomem, nostack));
         outb(COM1 + 1, 0);
-        outb(PIC_MASTER_DATA, u8::MAX);
-        outb(PIC_SLAVE_DATA, u8::MAX);
+        pic::mask_all();
     }
 
     let count = AGENT_KERNEL_UART_IRQ_COUNT.load(Ordering::Acquire);
@@ -155,35 +141,4 @@ fn reset_mailbox() {
     AGENT_KERNEL_UART_IRQ_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_UART_IRQ_IIR.store(0, Ordering::Release);
     AGENT_KERNEL_UART_IRQ_LSR.store(0, Ordering::Release);
-}
-
-unsafe fn initialize_pic_for_uart() -> Option<()> {
-    let (master_mask, slave_mask) = pic_masks_for_irq(UART_IRQ_LINE)?;
-    unsafe {
-        outb(PIC_MASTER_COMMAND, PIC_INITIALIZE);
-        io_wait();
-        outb(PIC_SLAVE_COMMAND, PIC_INITIALIZE);
-        io_wait();
-        outb(PIC_MASTER_DATA, PIC_MASTER_OFFSET);
-        io_wait();
-        outb(PIC_SLAVE_DATA, PIC_SLAVE_OFFSET);
-        io_wait();
-        outb(PIC_MASTER_DATA, PIC_MASTER_HAS_SLAVE_ON_IRQ2);
-        io_wait();
-        outb(PIC_SLAVE_DATA, PIC_SLAVE_IDENTITY);
-        io_wait();
-        outb(PIC_MASTER_DATA, PIC_8086_MODE);
-        io_wait();
-        outb(PIC_SLAVE_DATA, PIC_8086_MODE);
-        io_wait();
-        outb(PIC_MASTER_DATA, master_mask);
-        outb(PIC_SLAVE_DATA, slave_mask);
-    }
-    Some(())
-}
-
-unsafe fn io_wait() {
-    unsafe {
-        outb(IO_WAIT_PORT, 0);
-    }
 }

@@ -11,6 +11,14 @@ pub const IDT_TRAP_GATE_OPTIONS: u16 = 0x8f00;
 pub const PIC_MASTER_OFFSET: u8 = 0x20;
 pub const PIC_SLAVE_OFFSET: u8 = 0x28;
 pub const PIC_CASCADE_IRQ: u8 = 2;
+pub const PIT_CHANNEL0_DATA_PORT: u16 = 0x40;
+pub const PIT_COMMAND_PORT: u16 = 0x43;
+pub const PIT_CHANNEL0_COMMAND: u8 = 0x36;
+pub const PIT_INPUT_HZ: u32 = 1_193_182;
+pub const PIT_TARGET_HZ: u32 = 100;
+pub const PIT_DIVISOR: u16 = 11_932;
+pub const PIT_IRQ_LINE: u8 = 0;
+pub const PIT_IRQ_VECTOR: u8 = PIC_MASTER_OFFSET + PIT_IRQ_LINE;
 pub const UART_IRQ_LINE: u8 = 4;
 pub const UART_IRQ_VECTOR: u8 = PIC_MASTER_OFFSET + UART_IRQ_LINE;
 

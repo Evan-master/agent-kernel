@@ -3,22 +3,25 @@
 
 //! x86_64 bootloader entry for Agent Kernel.
 //!
-//! This crate owns the architecture-specific QEMU boot entry. It runs the
-//! bounded COM1 interrupt-to-command flow, prints the deterministic boot
-//! handoff event sequence, and exits QEMU through isa-debug-exit when the
-//! handoff succeeds.
+//! This crate owns the architecture-specific QEMU boot entry. It proves
+//! persistent exceptions, physical PIT-driven task preemption, and the bounded
+//! COM1 interrupt-to-command flow before publishing the deterministic handoff.
 
 use core::{arch::asm, panic::PanicInfo};
 
 use agent_kernel_boot::{BootConfig, BootedKernel};
-use agent_kernel_core::EventKind;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
+mod event_trace;
 mod exception_runtime;
+mod pic;
+mod pit_timer;
 mod port_driver_flow;
+mod timer_task_flow;
 mod uart_interrupt;
 
 use port_driver_flow::PortDriverSetup;
+use timer_task_flow::TimerTaskFlow;
 
 const KERNEL_STACK_SIZE: u64 = 256 * 1024;
 
@@ -30,256 +33,59 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1>;
+pub(crate) type X86BootedKernel = BootedKernel<3, 1, 3, 48, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1>;
 
 fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
     if exception_runtime::install_and_probe().is_none() {
-        serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
-        exit_qemu(0x11);
-        halt_forever();
+        fatal_boot("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
     }
     serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_OK");
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
-            let Some(setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
-                serial_write_line("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
-                exit_qemu(0x11);
-                halt_forever();
+            let Some(driver_setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
+                fatal_boot("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
             };
-            let Some(signal) = uart_interrupt::wait_for_uart_thre() else {
-                serial_write_line("AGENT_KERNEL_UART_IRQ_ERROR");
-                exit_qemu(0x11);
-                halt_forever();
+            let Some(timer_flow) = TimerTaskFlow::prepare(&mut booted) else {
+                fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
+            };
+            let Some(timer_signal) = pit_timer::wait_for_tick() else {
+                fatal_boot("AGENT_KERNEL_PIT_IRQ_ERROR");
+            };
+            serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
+            if !timer_flow.apply_tick(&mut booted, timer_signal) {
+                fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
+            }
+            serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
+
+            let Some(uart_signal) = uart_interrupt::wait_for_uart_thre() else {
+                fatal_boot("AGENT_KERNEL_UART_IRQ_ERROR");
             };
             serial_write_line("AGENT_KERNEL_UART_IRQ_OK");
-            let Some(mut flow) =
-                setup.dispatch_interrupt(&mut booted, signal.iir, signal.line_status, b'O')
-            else {
-                serial_write_line("AGENT_KERNEL_PORT_DRIVER_INTERRUPT_ERROR");
-                exit_qemu(0x11);
-                halt_forever();
+            let Some(mut port_flow) = driver_setup.dispatch_interrupt(
+                &mut booted,
+                uart_signal.iir,
+                uart_signal.line_status,
+                b'O',
+            ) else {
+                fatal_boot("AGENT_KERNEL_PORT_DRIVER_INTERRUPT_ERROR");
             };
             serial_write_str("AGENT_KERNEL_PORT_IO_BACKEND_");
             while !serial_transmit_empty() {}
-            if !flow.execute_and_record(&mut booted) {
-                serial_write_line("ERROR");
-                exit_qemu(0x11);
-                halt_forever();
+            if !port_flow.execute_and_record(&mut booted) {
+                fatal_boot("ERROR");
             }
             serial_write_line("K");
             serial_write_line("AGENT_KERNEL_PORT_COMMAND_FLOW_OK");
             serial_write_line("AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK");
-            for event in booted.kernel().events() {
-                serial_write_str("event[");
-                serial_write_u64(event.sequence);
-                serial_write_str("] ");
-                match event.kind {
-                    EventKind::AgentRegistered => {
-                        serial_write_line("agent_registered");
-                    }
-                    EventKind::AgentImageRegistered => {
-                        serial_write_line("agent_image_registered");
-                    }
-                    EventKind::AgentImageVerified => {
-                        serial_write_line("agent_image_verified");
-                    }
-                    EventKind::AgentImageRetired => {
-                        serial_write_line("agent_image_retired");
-                    }
-                    EventKind::AgentLaunched => {
-                        serial_write_line("agent_launched");
-                    }
-                    EventKind::AgentSuspended => {
-                        serial_write_line("agent_suspended");
-                    }
-                    EventKind::AgentResumed => {
-                        serial_write_line("agent_resumed");
-                    }
-                    EventKind::AgentRetired => {
-                        serial_write_line("agent_retired");
-                    }
-                    EventKind::DriverEndpointRegistered => {
-                        serial_write_line("driver_endpoint_registered");
-                    }
-                    EventKind::DriverBound => {
-                        serial_write_line("driver_bound");
-                    }
-                    EventKind::DeviceEventRaised => {
-                        serial_write_line("device_event_raised");
-                    }
-                    EventKind::DeviceEventDelivered => {
-                        serial_write_line("device_event_delivered");
-                    }
-                    EventKind::DeviceEventAcknowledged => {
-                        serial_write_line("device_event_acknowledged");
-                    }
-                    EventKind::DriverInvocationQueued => {
-                        serial_write_line("driver_invocation_queued");
-                    }
-                    EventKind::DriverInvocationDispatched => {
-                        serial_write_line("driver_invocation_dispatched");
-                    }
-                    EventKind::DriverInvocationTicked => {
-                        serial_write_line("driver_invocation_ticked");
-                    }
-                    EventKind::DriverInvocationQuantumExpired => {
-                        serial_write_line("driver_invocation_quantum_expired");
-                    }
-                    EventKind::DriverInvocationCompleted => {
-                        serial_write_line("driver_invocation_completed");
-                    }
-                    EventKind::DriverCommandSubmitted => {
-                        serial_write_line("driver_command_submitted");
-                    }
-                    EventKind::DriverCommandDispatched => {
-                        serial_write_line("driver_command_dispatched");
-                    }
-                    EventKind::DriverCommandCompleted => {
-                        serial_write_line("driver_command_completed");
-                    }
-                    EventKind::DriverCommandFailed => {
-                        serial_write_line("driver_command_failed");
-                    }
-                    EventKind::ResourceCreated => {
-                        serial_write_line("resource_created");
-                    }
-                    EventKind::ResourceRetired => {
-                        serial_write_line("resource_retired");
-                    }
-                    EventKind::CapabilityGranted => {
-                        serial_write_line("capability_granted");
-                    }
-                    EventKind::CapabilityDerived => {
-                        serial_write_line("capability_derived");
-                    }
-                    EventKind::CapabilityRevoked => {
-                        serial_write_line("capability_revoked");
-                    }
-                    EventKind::IntentDeclared => {
-                        serial_write_line("intent_declared");
-                    }
-                    EventKind::IntentBound => {
-                        serial_write_line("intent_bound");
-                    }
-                    EventKind::IntentFulfilled => {
-                        serial_write_line("intent_fulfilled");
-                    }
-                    EventKind::IntentCancelled => {
-                        serial_write_line("intent_cancelled");
-                    }
-                    EventKind::Observation => {
-                        serial_write_line("observation");
-                    }
-                    EventKind::ActionExecuted => {
-                        serial_write_line("action");
-                    }
-                    EventKind::VerificationRequested => {
-                        serial_write_line("verification");
-                    }
-                    EventKind::CheckpointCreated => {
-                        serial_write_line("checkpoint");
-                    }
-                    EventKind::RollbackRequested => {
-                        serial_write_line("rollback");
-                    }
-                    EventKind::DelegationRequested => {
-                        serial_write_line("delegation");
-                    }
-                    EventKind::TaskCreated => {
-                        serial_write_line("task_created");
-                    }
-                    EventKind::TaskAccepted => {
-                        serial_write_line("task_accepted");
-                    }
-                    EventKind::TaskCompleted => {
-                        serial_write_line("task_completed");
-                    }
-                    EventKind::TaskVerified => {
-                        serial_write_line("task_verified");
-                    }
-                    EventKind::TaskCancelled => {
-                        serial_write_line("task_cancelled");
-                    }
-                    EventKind::TaskQueued => {
-                        serial_write_line("task_queued");
-                    }
-                    EventKind::TaskDispatched => {
-                        serial_write_line("task_dispatched");
-                    }
-                    EventKind::TaskYielded => {
-                        serial_write_line("task_yielded");
-                    }
-                    EventKind::TaskTicked => {
-                        serial_write_line("task_ticked");
-                    }
-                    EventKind::TaskQuantumExpired => {
-                        serial_write_line("task_quantum_expired");
-                    }
-                    EventKind::TaskWaiting => {
-                        serial_write_line("task_waiting");
-                    }
-                    EventKind::TaskWoken => {
-                        serial_write_line("task_woken");
-                    }
-                    EventKind::TaskFaulted => {
-                        serial_write_line("task_faulted");
-                    }
-                    EventKind::TaskFaultRecovered => {
-                        serial_write_line("task_fault_recovered");
-                    }
-                    EventKind::SignalEmitted => {
-                        serial_write_line("signal_emitted");
-                    }
-                    EventKind::FaultHandlerInstalled => {
-                        serial_write_line("fault_handler_installed");
-                    }
-                    EventKind::FaultRouted => {
-                        serial_write_line("fault_routed");
-                    }
-                    EventKind::FaultPolicyInstalled => {
-                        serial_write_line("fault_policy_installed");
-                    }
-                    EventKind::FaultPolicyApplied => {
-                        serial_write_line("fault_policy_applied");
-                    }
-                    EventKind::MessageSent => {
-                        serial_write_line("message_sent");
-                    }
-                    EventKind::MessageReceived => {
-                        serial_write_line("message_received");
-                    }
-                    EventKind::MessageAcknowledged => {
-                        serial_write_line("message_acknowledged");
-                    }
-                    EventKind::MemoryCellCreated => {
-                        serial_write_line("memory_cell_created");
-                    }
-                    EventKind::MemoryCellRecalled => {
-                        serial_write_line("memory_cell_recalled");
-                    }
-                    EventKind::MemoryCellRemembered => {
-                        serial_write_line("memory_cell_remembered");
-                    }
-                    EventKind::NamespaceEntryBound => {
-                        serial_write_line("namespace_entry_bound");
-                    }
-                    EventKind::NamespaceEntryResolved => {
-                        serial_write_line("namespace_entry_resolved");
-                    }
-                    EventKind::NamespaceEntryRebound => {
-                        serial_write_line("namespace_entry_rebound");
-                    }
-                }
-            }
+            event_trace::write(booted.kernel().events());
             serial_write_line("SUPERVISOR_HANDOFF_READY");
             exit_qemu(0x10);
         }
         Err(_) => {
-            serial_write_line("AGENT_KERNEL_BOOT_ERROR");
-            exit_qemu(0x11);
+            fatal_boot("AGENT_KERNEL_BOOT_ERROR");
         }
     }
 
@@ -289,9 +95,7 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     serial_init();
-    serial_write_line("AGENT_KERNEL_PANIC");
-    exit_qemu(0x11);
-    halt_forever()
+    fatal_boot("AGENT_KERNEL_PANIC")
 }
 
 const COM1: u16 = 0x3f8;
@@ -348,6 +152,12 @@ fn serial_write_byte(byte: u8) {
 
 fn serial_transmit_empty() -> bool {
     unsafe { inb(COM1 + 5) & 0x20 != 0 }
+}
+
+fn fatal_boot(message: &str) -> ! {
+    serial_write_line(message);
+    exit_qemu(0x11);
+    halt_forever()
 }
 
 fn exit_qemu(code: u8) {

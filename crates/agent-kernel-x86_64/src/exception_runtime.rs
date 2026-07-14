@@ -11,7 +11,7 @@ use core::{
     sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
 
-use agent_kernel_x86_64::interrupt::{IdtEntry, IdtPointer, UART_IRQ_VECTOR};
+use agent_kernel_x86_64::interrupt::{IdtEntry, IdtPointer, PIC_MASTER_OFFSET};
 
 const IDT_ENTRY_COUNT: usize = 256;
 const EXCEPTION_VECTOR_COUNT: usize = 32;
@@ -219,8 +219,8 @@ pub fn install_and_probe() -> Option<()> {
     Some(())
 }
 
-pub unsafe fn install_uart_irq_gate(handler: unsafe extern "C" fn()) -> Option<()> {
-    if IDT_READY.load(Ordering::Acquire) != 1 {
+pub unsafe fn install_irq_gate(vector: u8, handler: unsafe extern "C" fn()) -> Option<()> {
+    if IDT_READY.load(Ordering::Acquire) != 1 || vector < PIC_MASTER_OFFSET {
         return None;
     }
     let selector = unsafe { current_code_selector() };
@@ -229,7 +229,7 @@ pub unsafe fn install_uart_irq_gate(handler: unsafe extern "C" fn()) -> Option<(
     // volatile storage makes the descriptor write visible to the CPU-owned IDT.
     unsafe {
         entries
-            .add(usize::from(UART_IRQ_VECTOR))
+            .add(usize::from(vector))
             .write_volatile(IdtEntry::interrupt_gate(handler_address(handler), selector));
     }
     Some(())
