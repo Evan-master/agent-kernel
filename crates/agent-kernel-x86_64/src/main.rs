@@ -13,9 +13,9 @@ use agent_kernel_boot::{BootConfig, BootedKernel};
 use agent_kernel_core::EventKind;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-mod port_command_flow;
+mod port_driver_flow;
 
-use port_command_flow::PortCommandFlow;
+use port_driver_flow::PortPoll;
 
 const KERNEL_STACK_SIZE: u64 = 256 * 1024;
 
@@ -27,7 +27,7 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 20, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0>;
+pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1, 1, 2, 1>;
 
 fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
@@ -35,8 +35,13 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
-            let Some(mut flow) = PortCommandFlow::prepare(&mut booted, COM1, b'O') else {
-                serial_write_line("AGENT_KERNEL_PORT_IO_BACKEND_ERROR");
+            let Some(poll) = PortPoll::prepare(&mut booted, COM1) else {
+                serial_write_line("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
+                exit_qemu(0x11);
+                halt_forever();
+            };
+            let Some(mut flow) = poll.poll_and_dispatch(&mut booted, b'O') else {
+                serial_write_line("AGENT_KERNEL_PORT_DRIVER_POLL_ERROR");
                 exit_qemu(0x11);
                 halt_forever();
             };
@@ -49,6 +54,7 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
             }
             serial_write_line("K");
             serial_write_line("AGENT_KERNEL_PORT_COMMAND_FLOW_OK");
+            serial_write_line("AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK");
             for event in booted.kernel().events() {
                 serial_write_str("event[");
                 serial_write_u64(event.sequence);

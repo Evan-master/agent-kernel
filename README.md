@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry plus a bounded byte-wide Port I/O backend and kernel-dispatched COM1 command flow with native `in`/`out` instructions.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry plus a bounded byte-wide Port I/O backend and polled kernel Driver Invocation flow with native `in`/`out` instructions.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -165,11 +165,13 @@ command dispatch until the resource has an endpoint. Raw addresses are never
 Agent command data. All records and transitions are replayable. The x86_64
 architecture backend now executes byte-wide `Read` and `Write` commands against
 bounded `Port` endpoints, treating `opcode` only as a relative offset. Its QEMU
-boot path registers and launches a dedicated Driver Agent, submits and dispatches
-the physical COM1 request through the kernel, executes only that immutable
-request, and records the result as a terminal kernel transition. MMIO, page
-mapping, interrupt routing, wider port operations, and DMA policy remain future
-architecture work.
+boot path registers and launches a dedicated Driver Agent, polls the physical
+COM1 line-status register through a kernel command, records that result, and
+turns it into a Device Event and running Driver Invocation. The Driver then
+acknowledges the event, dispatches a causally linked write, records both terminal
+results, and completes the invocation. This flow is polling, not a hardware
+interrupt. MMIO, page mapping, interrupt routing, wider port operations, and DMA
+policy remain future architecture work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -189,9 +191,11 @@ remains available for system-seeded resources and leaves `owner: None`.
 9. Record observation, action, and verification events.
 10. Expose mutable handoff access for trusted architecture initialization.
 11. On x86_64, register a COM1 Port endpoint and admit a dedicated Driver Agent.
-12. Submit and dispatch a bounded write through the kernel command state machine.
-13. Execute the immutable request with native Port I/O and record its terminal result.
-14. Mark the kernel ready for supervisor handoff.
+12. Read COM1 line status through the kernel command state machine and record the result.
+13. Raise and deliver a Device Event from that result, then dispatch and tick its Driver Invocation.
+14. Acknowledge the event and dispatch a causally linked COM1 write request.
+15. Record the write result and complete the Driver Invocation.
+16. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -242,6 +246,7 @@ Expected QEMU serial output:
 AGENT_KERNEL_QEMU_BOOT_OK
 AGENT_KERNEL_PORT_IO_BACKEND_OK
 AGENT_KERNEL_PORT_COMMAND_FLOW_OK
+AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
 event[1] agent_registered
 event[2] capability_granted
 event[3] agent_image_registered
@@ -260,14 +265,27 @@ event[15] driver_bound
 event[16] driver_command_submitted
 event[17] driver_command_dispatched
 event[18] driver_command_completed
+event[19] device_event_raised
+event[20] device_event_delivered
+event[21] driver_invocation_queued
+event[22] driver_invocation_dispatched
+event[23] driver_invocation_ticked
+event[24] device_event_acknowledged
+event[25] driver_command_submitted
+event[26] driver_command_dispatched
+event[27] driver_command_completed
+event[28] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
-The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is emitted by the immutable request
-returned from kernel command dispatch through the registered COM1 endpoint and
-`PortIoBackend`; the surrounding text uses the existing serial writer. The
-command-flow marker is printed only after the backend result is accepted by the
-terminal syscall and the kernel command record is verified as `Completed`.
+Event 16 starts a kernel-dispatched read of COM1 line-status offset five. Its
+recorded physical result causes events 19 through 24 and the running Driver
+Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is then emitted by the
+immutable causal request at event 26 through the registered COM1 endpoint and
+`PortIoBackend`; the surrounding text uses the existing boot serial writer. The
+success markers are printed only after the write result and Driver Invocation
+terminal records are verified as `Completed` and the Driver execution context
+is `Idle`.
 
 The x86 entry configures a 256 KiB kernel stack. The fixed-capacity kernel state
 and its by-value boot construction exceed the bootloader's default 80 KiB stack

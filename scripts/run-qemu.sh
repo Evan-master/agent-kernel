@@ -33,6 +33,7 @@ for expected in \
   "event[8] verification" \
   "AGENT_KERNEL_PORT_IO_BACKEND_OK" \
   "AGENT_KERNEL_PORT_COMMAND_FLOW_OK" \
+  "AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK" \
   "event[9] driver_endpoint_registered" \
   "event[10] agent_registered" \
   "event[11] capability_derived" \
@@ -43,6 +44,16 @@ for expected in \
   "event[16] driver_command_submitted" \
   "event[17] driver_command_dispatched" \
   "event[18] driver_command_completed" \
+  "event[19] device_event_raised" \
+  "event[20] device_event_delivered" \
+  "event[21] driver_invocation_queued" \
+  "event[22] driver_invocation_dispatched" \
+  "event[23] driver_invocation_ticked" \
+  "event[24] device_event_acknowledged" \
+  "event[25] driver_command_submitted" \
+  "event[26] driver_command_dispatched" \
+  "event[27] driver_command_completed" \
+  "event[28] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
