@@ -7,13 +7,13 @@
 
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, CapabilityId, DeviceEventKind, DeviceEventPayload, DriverCommandKind,
-    DriverCommandPayload, DriverCommandResult, MemoryValue, NamespaceKey, NamespaceObject,
-    Operation, OperationSet, ResourceId, ResourceKind, TaskId,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DeviceEventKind,
+    DeviceEventPayload, DriverCommandKind, DriverCommandPayload, DriverCommandResult, MemoryValue,
+    NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
 };
 
 pub type SupervisorKernel =
-    AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2, 2>;
+    AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2, 2, 2>;
 
 pub struct ResourceFlowContext {
     pub agent: AgentId,
@@ -114,6 +114,10 @@ pub fn drive_resource_flow(kernel: &mut SupervisorKernel, context: ResourceFlowC
 }
 
 pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowContext) {
+    let driver_agent = AgentId::new(4);
+    kernel
+        .sys_register_agent(driver_agent)
+        .expect("driver agent should fit in simulator kernel");
     let device = kernel
         .sys_create_resource(
             context.agent,
@@ -122,25 +126,50 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
             OperationSet::empty()
                 .with(Operation::Observe)
                 .with(Operation::Act)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
         )
         .expect("owned device resource should fit in simulator kernel");
     let driver_capability = kernel
         .sys_derive_capability(
             context.agent,
             device.capability,
-            context.target_agent,
+            driver_agent,
             OperationSet::empty()
                 .with(Operation::Observe)
                 .with(Operation::Act),
         )
         .expect("owner should derive device driver authority");
+    let driver_image = kernel
+        .sys_register_agent_image(
+            context.agent,
+            device.capability,
+            device.resource,
+            AgentImageKind::Driver,
+            AgentImageDigest::new([3; 32]),
+            1,
+            1,
+        )
+        .expect("driver image should register");
+    kernel
+        .sys_verify_agent_image(context.agent, device.capability, driver_image)
+        .expect("driver image should verify");
+    kernel
+        .sys_launch_agent(
+            driver_agent,
+            driver_capability,
+            device.resource,
+            driver_image,
+            AgentEntryKind::Driver,
+            None,
+        )
+        .expect("driver agent should launch into device entry");
     kernel
         .sys_bind_driver(
             context.agent,
             device.capability,
             device.resource,
-            context.target_agent,
+            driver_agent,
         )
         .expect("owner should bind target as device driver");
     let event = kernel
@@ -152,15 +181,21 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
             DeviceEventPayload { code: 1, value: 2 },
         )
         .expect("owner should raise simulated device event");
-    kernel
-        .sys_deliver_device_event(context.target_agent, driver_capability, event)
+    let invocation = kernel
+        .sys_deliver_device_event(driver_agent, driver_capability, event)
         .expect("driver should receive device event");
     kernel
-        .sys_acknowledge_device_event(context.target_agent, driver_capability, event)
+        .sys_dispatch_next_driver_invocation(driver_agent, 2)
+        .expect("driver invocation should dispatch");
+    kernel
+        .sys_tick_driver_invocation(driver_agent, invocation)
+        .expect("driver invocation should advance one tick");
+    kernel
+        .sys_acknowledge_device_event(driver_agent, driver_capability, event)
         .expect("driver should acknowledge device event");
     let command = kernel
         .sys_submit_driver_command(
-            context.target_agent,
+            driver_agent,
             driver_capability,
             device.resource,
             Some(event),
@@ -173,10 +208,13 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
         .expect("driver should submit device command");
     kernel
         .sys_complete_driver_command(
-            context.target_agent,
+            driver_agent,
             driver_capability,
             command,
             DriverCommandResult { code: 0, value: 12 },
         )
         .expect("driver should complete device command");
+    kernel
+        .sys_complete_driver_invocation(driver_agent, driver_capability, invocation)
+        .expect("driver invocation should complete");
 }

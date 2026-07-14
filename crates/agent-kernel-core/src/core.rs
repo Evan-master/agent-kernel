@@ -5,9 +5,9 @@
 use crate::{
     ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord, AgentRecord,
     Capability, CheckpointRecord, DeviceEventRecord, DriverBindingRecord, DriverCommandRecord,
-    Event, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord,
-    MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, Task,
-    WaiterRecord,
+    DriverInvocationRecord, Event, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
+    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
+    RunQueueEntry, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -33,6 +33,7 @@ pub struct KernelCore<
     const DRIVER_BINDINGS: usize = 0,
     const DEVICE_EVENTS: usize = 0,
     const DRIVER_COMMANDS: usize = 0,
+    const DRIVER_INVOCATIONS: usize = 0,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) execution_contexts: [AgentExecutionContext; AGENTS],
@@ -57,6 +58,7 @@ pub struct KernelCore<
     pub(crate) driver_bindings: [DriverBindingRecord; DRIVER_BINDINGS],
     pub(crate) device_events: [DeviceEventRecord; DEVICE_EVENTS],
     pub(crate) driver_commands: [DriverCommandRecord; DRIVER_COMMANDS],
+    pub(crate) driver_invocations: [DriverInvocationRecord; DRIVER_INVOCATIONS],
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
     pub(crate) agent_image_len: usize,
@@ -78,6 +80,7 @@ pub struct KernelCore<
     pub(crate) driver_binding_len: usize,
     pub(crate) device_event_len: usize,
     pub(crate) driver_command_len: usize,
+    pub(crate) driver_invocation_len: usize,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
     pub(crate) next_observation: u64,
@@ -94,6 +97,7 @@ pub struct KernelCore<
     pub(crate) next_driver_binding: u64,
     pub(crate) next_device_event: u64,
     pub(crate) next_driver_command: u64,
+    pub(crate) next_driver_invocation: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -119,6 +123,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -142,6 +147,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub const fn new() -> Self {
@@ -169,6 +175,7 @@ impl<
             driver_bindings: [DriverBindingRecord::empty(); DRIVER_BINDINGS],
             device_events: [DeviceEventRecord::empty(); DEVICE_EVENTS],
             driver_commands: [DriverCommandRecord::empty(); DRIVER_COMMANDS],
+            driver_invocations: [DriverInvocationRecord::empty(); DRIVER_INVOCATIONS],
             agent_len: 0,
             agent_entry_len: 0,
             agent_image_len: 0,
@@ -190,6 +197,7 @@ impl<
             driver_binding_len: 0,
             device_event_len: 0,
             driver_command_len: 0,
+            driver_invocation_len: 0,
             next_resource: 1,
             next_capability: 1,
             next_observation: 1,
@@ -206,6 +214,7 @@ impl<
             next_driver_binding: 1,
             next_device_event: 1,
             next_driver_command: 1,
+            next_driver_invocation: 1,
             next_sequence: 1,
         }
     }
@@ -233,6 +242,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -256,6 +266,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     fn default() -> Self {

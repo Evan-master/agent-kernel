@@ -7,7 +7,7 @@
 use agent_kernel_core::{
     AgentId, CapabilityId, DeviceEventId, DeviceEventKind, DeviceEventPayload, DeviceEventRecord,
     DriverBindingId, DriverBindingRecord, DriverCommandId, DriverCommandKind, DriverCommandPayload,
-    DriverCommandRecord, DriverCommandResult, Event, KernelError, ResourceId,
+    DriverCommandRecord, DriverCommandResult, DriverInvocationId, Event, KernelError, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -34,6 +34,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -57,6 +58,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub fn sys_bind_driver(
@@ -87,7 +89,7 @@ impl<
         driver: AgentId,
         capability: CapabilityId,
         event: DeviceEventId,
-    ) -> Result<Event, KernelError> {
+    ) -> Result<DriverInvocationId, KernelError> {
         self.core.deliver_device_event(driver, capability, event)
     }
 

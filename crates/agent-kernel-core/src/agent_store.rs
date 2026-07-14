@@ -32,6 +32,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -55,6 +56,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub fn register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
@@ -113,6 +115,9 @@ impl<
             driver_command_kind: None,
             driver_command_payload: None,
             driver_command_result: None,
+            driver_invocation: None,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,
@@ -235,6 +240,9 @@ impl<
             driver_command_kind: None,
             driver_command_payload: None,
             driver_command_result: None,
+            driver_invocation: None,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,

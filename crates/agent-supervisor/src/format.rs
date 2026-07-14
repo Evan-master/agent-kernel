@@ -5,7 +5,10 @@ use agent_kernel_core::{Event, EventKind};
 use crate::format_agent::{
     format_agent_event, format_agent_image_event, format_agent_launch_event,
 };
-use crate::format_driver::{format_device_event, format_driver_command_event, format_driver_event};
+use crate::format_driver::{
+    format_device_event, format_driver_command_event, format_driver_event,
+    format_driver_invocation_event,
+};
 use crate::format_fault::{
     format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
     format_fault_route_event, format_task_fault_event,
@@ -35,6 +38,21 @@ pub fn format_event(event: &Event) -> String {
         EventKind::DeviceEventDelivered => format_device_event(event, "device_event_delivered"),
         EventKind::DeviceEventAcknowledged => {
             format_device_event(event, "device_event_acknowledged")
+        }
+        EventKind::DriverInvocationQueued => {
+            format_driver_invocation_event(event, "driver_invocation_queued")
+        }
+        EventKind::DriverInvocationDispatched => {
+            format_driver_invocation_event(event, "driver_invocation_dispatched")
+        }
+        EventKind::DriverInvocationTicked => {
+            format_driver_invocation_event(event, "driver_invocation_ticked")
+        }
+        EventKind::DriverInvocationQuantumExpired => {
+            format_driver_invocation_event(event, "driver_invocation_quantum_expired")
+        }
+        EventKind::DriverInvocationCompleted => {
+            format_driver_invocation_event(event, "driver_invocation_completed")
         }
         EventKind::DriverCommandSubmitted => {
             format_driver_command_event(event, "driver_command_submitted")

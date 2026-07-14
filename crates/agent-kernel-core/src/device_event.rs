@@ -6,8 +6,8 @@
 //! parses byte streams, or executes a driver.
 
 use crate::{
-    AgentId, CapabilityId, DeviceEventId, DriverBindingId, Event, EventKind, KernelCore,
-    KernelError, Operation, OperationSet, ResourceId, VerificationRequirement,
+    AgentId, CapabilityId, DeviceEventId, DriverBindingId, DriverInvocationId, Event, EventKind,
+    KernelCore, KernelError, Operation, OperationSet, ResourceId, VerificationRequirement,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -76,6 +76,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -99,6 +100,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub fn raise_device_event(
@@ -139,82 +141,13 @@ impl<
             resource,
             kind,
             payload,
+            None,
         )?;
         Ok(id)
     }
 
-    pub fn deliver_device_event(
-        &mut self,
-        driver: AgentId,
-        capability: CapabilityId,
-        event: DeviceEventId,
-    ) -> Result<Event, KernelError> {
-        self.transition_device_event(
-            driver,
-            capability,
-            event,
-            DeviceEventStatus::Raised,
-            DeviceEventStatus::Delivered,
-            Operation::Observe,
-            EventKind::DeviceEventDelivered,
-        )
-    }
-
-    pub fn acknowledge_device_event(
-        &mut self,
-        driver: AgentId,
-        capability: CapabilityId,
-        event: DeviceEventId,
-    ) -> Result<Event, KernelError> {
-        self.transition_device_event(
-            driver,
-            capability,
-            event,
-            DeviceEventStatus::Delivered,
-            DeviceEventStatus::Acknowledged,
-            Operation::Act,
-            EventKind::DeviceEventAcknowledged,
-        )
-    }
-
     pub fn device_events(&self) -> &[DeviceEventRecord] {
         &self.device_events[..self.device_event_len]
-    }
-
-    fn transition_device_event(
-        &mut self,
-        driver: AgentId,
-        capability: CapabilityId,
-        event: DeviceEventId,
-        from: DeviceEventStatus,
-        to: DeviceEventStatus,
-        operation: Operation,
-        kind: EventKind,
-    ) -> Result<Event, KernelError> {
-        self.ensure_agent_active(driver)?;
-        let record = self.find_device_event(event)?;
-        if record.status != from {
-            return Err(KernelError::DeviceEventStatusMismatch);
-        }
-        let binding = self.find_driver_binding(record.binding)?;
-        if binding.driver != driver {
-            return Err(KernelError::AgentMismatch);
-        }
-        self.find_resource(record.resource)?;
-        self.ensure_authorized(driver, capability, record.resource, operation)?;
-        self.ensure_event_slots(1)?;
-
-        self.find_device_event_mut(event)?.status = to;
-        self.record_device_event(
-            kind,
-            driver,
-            capability,
-            record.binding,
-            event,
-            record.resource,
-            record.kind,
-            record.payload,
-        )
     }
 
     pub(crate) fn find_device_event(
@@ -228,7 +161,7 @@ impl<
             .ok_or(KernelError::DeviceEventNotFound)
     }
 
-    fn find_device_event_mut(
+    pub(crate) fn find_device_event_mut(
         &mut self,
         id: DeviceEventId,
     ) -> Result<&mut DeviceEventRecord, KernelError> {
@@ -241,7 +174,8 @@ impl<
         Err(KernelError::DeviceEventNotFound)
     }
 
-    fn record_device_event(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn record_device_event(
         &mut self,
         kind: EventKind,
         agent: AgentId,
@@ -251,6 +185,7 @@ impl<
         resource: ResourceId,
         event_kind: DeviceEventKind,
         payload: DeviceEventPayload,
+        invocation: Option<DriverInvocationId>,
     ) -> Result<Event, KernelError> {
         self.record(Event {
             sequence: 0,
@@ -291,6 +226,9 @@ impl<
             driver_command_kind: None,
             driver_command_payload: None,
             driver_command_result: None,
+            driver_invocation: invocation,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,

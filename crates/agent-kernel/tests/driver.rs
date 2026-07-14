@@ -1,11 +1,11 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, DeviceEventKind, DeviceEventPayload, DeviceEventStatus, DriverCommandKind,
-    DriverCommandPayload, DriverCommandResult, DriverCommandStatus, EventKind, Operation,
-    OperationSet, ResourceKind,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, DeviceEventKind, DeviceEventPayload,
+    DeviceEventStatus, DriverCommandKind, DriverCommandPayload, DriverCommandResult,
+    DriverCommandStatus, DriverInvocationStatus, EventKind, Operation, OperationSet, ResourceKind,
 };
 
-type TestKernel = AgentKernel<4, 4, 6, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2>;
+type TestKernel = AgentKernel<4, 4, 8, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2>;
 
 #[test]
 fn driver_syscalls_expose_event_and_command_lifecycles() {
@@ -23,7 +23,8 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
             device,
             OperationSet::empty()
                 .with(Operation::Delegate)
-                .with(Operation::Act),
+                .with(Operation::Act)
+                .with(Operation::Verify),
         )
         .unwrap();
     let driver_capability = kernel
@@ -33,6 +34,30 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
             OperationSet::empty()
                 .with(Operation::Observe)
                 .with(Operation::Act),
+        )
+        .unwrap();
+    let image = kernel
+        .sys_register_agent_image(
+            owner,
+            owner_capability,
+            device,
+            AgentImageKind::Driver,
+            AgentImageDigest::new([3; 32]),
+            1,
+            1,
+        )
+        .unwrap();
+    kernel
+        .sys_verify_agent_image(owner, owner_capability, image)
+        .unwrap();
+    kernel
+        .sys_launch_agent(
+            driver,
+            driver_capability,
+            device,
+            image,
+            AgentEntryKind::Driver,
+            None,
         )
         .unwrap();
     let binding = kernel
@@ -47,9 +72,20 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
             DeviceEventPayload { code: 1, value: 2 },
         )
         .unwrap();
-    kernel
+    let invocation = kernel
         .sys_deliver_device_event(driver, driver_capability, event)
         .unwrap();
+    assert_eq!(
+        kernel.sys_dispatch_next_driver_invocation(driver, 2),
+        Ok(invocation)
+    );
+    assert_eq!(
+        kernel
+            .sys_tick_driver_invocation(driver, invocation)
+            .unwrap()
+            .kind,
+        EventKind::DriverInvocationTicked
+    );
     kernel
         .sys_acknowledge_device_event(driver, driver_capability, event)
         .unwrap();
@@ -74,6 +110,9 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
             DriverCommandResult { code: 0, value: 12 },
         )
         .unwrap();
+    kernel
+        .sys_complete_driver_invocation(driver, driver_capability, invocation)
+        .unwrap();
 
     assert_eq!(kernel.driver_bindings()[0].id, binding);
     assert_eq!(
@@ -85,7 +124,12 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
         DriverCommandStatus::Completed
     );
     assert_eq!(
+        kernel.driver_invocations()[0].status,
+        DriverInvocationStatus::Completed
+    );
+    assert_eq!(kernel.driver_invocations()[0].run_ticks, 1);
+    assert_eq!(
         kernel.events().last().unwrap().kind,
-        EventKind::DriverCommandCompleted
+        EventKind::DriverInvocationCompleted
     );
 }

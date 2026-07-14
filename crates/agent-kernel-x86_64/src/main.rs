@@ -62,6 +62,21 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::DeviceEventAcknowledged => {
                         serial_write_line("device_event_acknowledged");
                     }
+                    EventKind::DriverInvocationQueued => {
+                        serial_write_line("driver_invocation_queued");
+                    }
+                    EventKind::DriverInvocationDispatched => {
+                        serial_write_line("driver_invocation_dispatched");
+                    }
+                    EventKind::DriverInvocationTicked => {
+                        serial_write_line("driver_invocation_ticked");
+                    }
+                    EventKind::DriverInvocationQuantumExpired => {
+                        serial_write_line("driver_invocation_quantum_expired");
+                    }
+                    EventKind::DriverInvocationCompleted => {
+                        serial_write_line("driver_invocation_completed");
+                    }
                     EventKind::DriverCommandSubmitted => {
                         serial_write_line("driver_command_submitted");
                     }

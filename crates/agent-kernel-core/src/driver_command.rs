@@ -4,7 +4,9 @@
 //! command values shared by the command state machine, syscall facade, event
 //! log, and supervisor. It does not dispatch commands or perform device I/O.
 
-use crate::{AgentId, DeviceEventId, DriverBindingId, DriverCommandId, ResourceId};
+use crate::{
+    AgentId, DeviceEventId, DriverBindingId, DriverCommandId, DriverInvocationId, ResourceId,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DriverCommandKind {
@@ -40,6 +42,7 @@ pub struct DriverCommandRecord {
     pub resource: ResourceId,
     pub driver: AgentId,
     pub cause: Option<DeviceEventId>,
+    pub invocation: Option<DriverInvocationId>,
     pub kind: DriverCommandKind,
     pub payload: DriverCommandPayload,
     pub status: DriverCommandStatus,
@@ -54,6 +57,7 @@ impl DriverCommandRecord {
             resource: ResourceId::new(0),
             driver: AgentId::new(0),
             cause: None,
+            invocation: None,
             kind: DriverCommandKind::Configure,
             payload: DriverCommandPayload {
                 opcode: 0,

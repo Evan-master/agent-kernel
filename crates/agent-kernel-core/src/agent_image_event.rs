@@ -31,6 +31,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -54,6 +55,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub(crate) fn record_agent_image_registered_event(
@@ -106,6 +108,9 @@ impl<
             driver_command_kind: None,
             driver_command_payload: None,
             driver_command_result: None,
+            driver_invocation: None,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: Some(image),
             agent_image_kind: Some(kind),
             agent_image_digest: Some(digest),
@@ -161,6 +166,9 @@ impl<
             driver_command_kind: None,
             driver_command_payload: None,
             driver_command_result: None,
+            driver_invocation: None,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: Some(image),
             agent_image_kind: Some(kind),
             agent_image_digest: None,
@@ -216,6 +224,9 @@ impl<
             driver_command_kind: None,
             driver_command_payload: None,
             driver_command_result: None,
+            driver_invocation: None,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: Some(image),
             agent_image_kind: Some(kind),
             agent_image_digest: None,

@@ -31,6 +31,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -54,6 +55,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub fn register_agent_image(
@@ -216,5 +218,6 @@ fn image_kind_matches_entry(image: AgentImageKind, entry: AgentEntryKind) -> boo
         (AgentImageKind::Bootstrap, AgentEntryKind::Bootstrap)
             | (AgentImageKind::Supervisor, AgentEntryKind::Supervisor)
             | (AgentImageKind::Worker, AgentEntryKind::Worker)
+            | (AgentImageKind::Driver, AgentEntryKind::Driver)
     )
 }

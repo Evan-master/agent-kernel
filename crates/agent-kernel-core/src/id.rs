@@ -69,6 +69,19 @@ impl DriverCommandId {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct DriverInvocationId(u64);
+
+impl DriverInvocationId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ResourceId(u64);
 
 impl ResourceId {

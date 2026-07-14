@@ -10,6 +10,7 @@ pub enum AgentEntryKind {
     Bootstrap,
     Supervisor,
     Worker,
+    Driver,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

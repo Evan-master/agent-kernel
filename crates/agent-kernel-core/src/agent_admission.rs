@@ -6,7 +6,10 @@
 //! host I/O. Keep failed admission checks side-effect-free so rejected runtime
 //! operations remain invisible in the event log.
 
-use crate::{AgentId, KernelCore, KernelError, Operation, TaskId};
+use crate::{
+    AgentEntryKind, AgentId, DriverBindingId, KernelCore, KernelError, Operation, ResourceId,
+    TaskId,
+};
 
 impl<
         const AGENTS: usize,
@@ -30,6 +33,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -53,6 +57,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub(crate) fn ensure_agent_admitted_for_task(
@@ -86,5 +91,28 @@ impl<
                 Operation::Act,
             )
         }
+    }
+
+    pub(crate) fn ensure_agent_admitted_for_driver(
+        &self,
+        agent: AgentId,
+        binding: DriverBindingId,
+        resource: ResourceId,
+    ) -> Result<(), KernelError> {
+        let binding_record = self.find_driver_binding(binding)?;
+        if binding_record.driver != agent || binding_record.resource != resource {
+            return Err(KernelError::AgentMismatch);
+        }
+        let entry = self
+            .find_agent_entry(agent)
+            .map_err(|_| KernelError::AgentNotLaunched)?;
+        if entry.kind != AgentEntryKind::Driver {
+            return Err(KernelError::AgentEntryKindMismatch);
+        }
+        if entry.resource != resource || entry.task.is_some() {
+            return Err(KernelError::AgentEntryScopeMismatch);
+        }
+        self.ensure_authorized(agent, entry.capability, resource, Operation::Observe)?;
+        self.ensure_authorized(agent, entry.capability, resource, Operation::Act)
     }
 }

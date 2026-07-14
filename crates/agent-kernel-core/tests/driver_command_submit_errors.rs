@@ -5,7 +5,7 @@ use agent_kernel_core::{
     Operation, OperationSet, ResourceKind,
 };
 
-use driver_command_support::{prepare_bound_device, submit, EventKernel};
+use driver_command_support::{admit_driver, prepare_bound_device, submit, EventKernel};
 
 #[test]
 fn submit_driver_command_requires_existing_binding_without_mutation() {
@@ -115,6 +115,7 @@ fn submit_driver_command_rejects_foreign_cause_without_mutation() {
         .unwrap();
     core.bind_driver(owner, second_owner_capability, second, driver)
         .unwrap();
+    admit_driver(&mut core, owner, driver, first);
     let cause = core
         .raise_device_event(
             owner,

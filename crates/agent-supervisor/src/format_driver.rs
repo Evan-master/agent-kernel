@@ -51,6 +51,10 @@ pub fn format_device_event(event: &Event, label: &str) -> String {
         .device_event
         .map(|device_event| device_event.raw())
         .unwrap_or_default();
+    let invocation = event
+        .driver_invocation
+        .map(|invocation| invocation.raw())
+        .unwrap_or_default();
     let kind = event
         .device_event_kind
         .map(format_device_event_kind)
@@ -60,7 +64,7 @@ pub fn format_device_event(event: &Event, label: &str) -> String {
         .unwrap_or(DeviceEventPayload { code: 0, value: 0 });
 
     format!(
-        "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} kind={} code={} value={}",
+        "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} driver_invocation={} kind={} code={} value={}",
         event.sequence,
         label,
         agent,
@@ -68,6 +72,7 @@ pub fn format_device_event(event: &Event, label: &str) -> String {
         capability,
         binding,
         device_event,
+        invocation,
         kind,
         payload.code,
         payload.value
@@ -96,6 +101,10 @@ pub fn format_driver_command_event(event: &Event, label: &str) -> String {
         .driver_command
         .map(|command| command.raw())
         .unwrap_or_default();
+    let invocation = event
+        .driver_invocation
+        .map(|invocation| invocation.raw())
+        .unwrap_or_default();
     let kind = event
         .driver_command_kind
         .map(format_driver_command_kind)
@@ -109,7 +118,7 @@ pub fn format_driver_command_event(event: &Event, label: &str) -> String {
 
     if let Some(result) = event.driver_command_result {
         format!(
-            "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} driver_command={} kind={} opcode={} value={} result_code={} result_value={}",
+            "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} driver_invocation={} driver_command={} kind={} opcode={} value={} result_code={} result_value={}",
             event.sequence,
             label,
             agent,
@@ -117,6 +126,7 @@ pub fn format_driver_command_event(event: &Event, label: &str) -> String {
             capability,
             binding,
             cause,
+            invocation,
             command,
             kind,
             payload.opcode,
@@ -126,7 +136,7 @@ pub fn format_driver_command_event(event: &Event, label: &str) -> String {
         )
     } else {
         format!(
-            "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} driver_command={} kind={} opcode={} value={}",
+            "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} driver_invocation={} driver_command={} kind={} opcode={} value={}",
             event.sequence,
             label,
             agent,
@@ -134,12 +144,53 @@ pub fn format_driver_command_event(event: &Event, label: &str) -> String {
             capability,
             binding,
             cause,
+            invocation,
             command,
             kind,
             payload.opcode,
             payload.value
         )
     }
+}
+
+pub fn format_driver_invocation_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let capability = event
+        .capability
+        .map(|capability| capability.raw())
+        .unwrap_or_default();
+    let binding = event
+        .driver_binding
+        .map(|binding| binding.raw())
+        .unwrap_or_default();
+    let device_event = event
+        .device_event
+        .map(|device_event| device_event.raw())
+        .unwrap_or_default();
+    let invocation = event
+        .driver_invocation
+        .map(|invocation| invocation.raw())
+        .unwrap_or_default();
+    let ticks = event.driver_invocation_ticks.unwrap_or_default();
+    let quantum = event.driver_invocation_quantum.unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} capability={} driver_binding={} device_event={} driver_invocation={} ticks={} quantum={}",
+        event.sequence,
+        label,
+        agent,
+        resource,
+        capability,
+        binding,
+        device_event,
+        invocation,
+        ticks,
+        quantum
+    )
 }
 
 fn format_device_event_kind(kind: DeviceEventKind) -> &'static str {

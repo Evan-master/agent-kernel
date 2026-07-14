@@ -5,7 +5,10 @@
 //! model. Context mutations are always paired with existing agent or task
 //! events in their caller.
 
-use crate::{AgentExecutionContext, AgentExecutionState, AgentId, KernelCore, KernelError, TaskId};
+use crate::{
+    AgentExecutionContext, AgentExecutionState, AgentId, DriverInvocationId, KernelCore,
+    KernelError, TaskId,
+};
 
 impl<
         const AGENTS: usize,
@@ -29,6 +32,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -52,6 +56,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub fn execution_contexts(&self) -> &[AgentExecutionContext] {
@@ -86,6 +91,34 @@ impl<
         *self.find_execution_context_mut(agent)? =
             AgentExecutionContext::running(agent, task, run_ticks, quantum_remaining);
         Ok(())
+    }
+
+    pub(crate) fn set_execution_context_running_driver(
+        &mut self,
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        run_ticks: u64,
+        quantum_remaining: u64,
+    ) -> Result<(), KernelError> {
+        *self.find_execution_context_mut(agent)? =
+            AgentExecutionContext::running_driver(agent, invocation, run_ticks, quantum_remaining);
+        Ok(())
+    }
+
+    pub(crate) fn ensure_execution_context_running_driver(
+        &self,
+        agent: AgentId,
+        invocation: DriverInvocationId,
+    ) -> Result<(), KernelError> {
+        let context = self.find_execution_context(agent)?;
+        if context.state == AgentExecutionState::Running
+            && context.task.is_none()
+            && context.driver_invocation == Some(invocation)
+        {
+            Ok(())
+        } else {
+            Err(KernelError::DriverInvocationNotRunnable)
+        }
     }
 
     pub(crate) fn set_execution_context_waiting(

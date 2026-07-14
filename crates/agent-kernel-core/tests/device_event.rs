@@ -1,11 +1,12 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, DeviceEventId, DeviceEventKind, DeviceEventPayload, DeviceEventStatus,
-    EventKind, KernelCore, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DeviceEventId,
+    DeviceEventKind, DeviceEventPayload, DeviceEventStatus, EventKind, KernelCore, KernelError,
+    Operation, OperationSet, ResourceId, ResourceKind,
 };
 
-type TestKernel = KernelCore<4, 4, 6, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2>;
+type TestKernel = EventKernel<24, 2>;
 type EventKernel<const EVENTS: usize, const DEVICE_EVENTS: usize> =
-    KernelCore<4, 4, 8, EVENTS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, DEVICE_EVENTS>;
+    KernelCore<4, 4, 8, EVENTS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, DEVICE_EVENTS, 0, 2>;
 
 #[test]
 fn device_event_reaches_acknowledged_through_bound_driver() {
@@ -36,6 +37,7 @@ fn device_event_reaches_acknowledged_through_bound_driver() {
     let binding = core
         .bind_driver(owner, owner_capability, device, driver)
         .unwrap();
+    admit_driver(&mut core, owner, driver, device);
 
     let event = core
         .raise_device_event(
@@ -50,9 +52,11 @@ fn device_event_reaches_acknowledged_through_bound_driver() {
     assert_eq!(core.device_events()[0].binding, binding);
     assert_eq!(core.device_events()[0].status, DeviceEventStatus::Raised);
 
-    core.deliver_device_event(driver, driver_capability, event)
+    let invocation = core
+        .deliver_device_event(driver, driver_capability, event)
         .unwrap();
     assert_eq!(core.device_events()[0].status, DeviceEventStatus::Delivered);
+    core.dispatch_next_driver_invocation(driver, 2).unwrap();
     core.acknowledge_device_event(driver, driver_capability, event)
         .unwrap();
     assert_eq!(
@@ -60,18 +64,22 @@ fn device_event_reaches_acknowledged_through_bound_driver() {
         DeviceEventStatus::Acknowledged
     );
 
-    let kinds: [EventKind; 4] = [
-        core.events()[4].kind,
-        core.events()[5].kind,
-        core.events()[6].kind,
-        core.events()[7].kind,
+    assert_eq!(core.driver_invocations()[0].id, invocation);
+    let events = core.events();
+    let kinds: [EventKind; 5] = [
+        events[events.len() - 5].kind,
+        events[events.len() - 4].kind,
+        events[events.len() - 3].kind,
+        events[events.len() - 2].kind,
+        events[events.len() - 1].kind,
     ];
     assert_eq!(
         kinds,
         [
-            EventKind::DriverBound,
             EventKind::DeviceEventRaised,
             EventKind::DeviceEventDelivered,
+            EventKind::DriverInvocationQueued,
+            EventKind::DriverInvocationDispatched,
             EventKind::DeviceEventAcknowledged,
         ]
     );
@@ -213,15 +221,17 @@ fn deliver_device_event_requires_observe_authority_without_mutation() {
 #[test]
 fn acknowledge_device_event_requires_act_authority_without_mutation() {
     let (mut core, owner, driver, device, owner_capability, driver_capability) =
-        prepare_bound_device::<12, 1>(
+        prepare_bound_device::<20, 1>(
             OperationSet::empty()
                 .with(Operation::Delegate)
                 .with(Operation::Act),
             OperationSet::only(Operation::Observe),
         );
     let event = raise_state_event(&mut core, owner, owner_capability, device);
+    admit_driver(&mut core, owner, driver, device);
     core.deliver_device_event(driver, driver_capability, event)
         .unwrap();
+    core.dispatch_next_driver_invocation(driver, 2).unwrap();
     let events_before = core.events().len();
 
     let result = core.acknowledge_device_event(driver, driver_capability, event);
@@ -234,7 +244,7 @@ fn acknowledge_device_event_requires_act_authority_without_mutation() {
 #[test]
 fn repeated_delivery_or_acknowledgement_is_rejected_without_mutation() {
     let (mut core, owner, driver, device, owner_capability, driver_capability) =
-        prepare_bound_device::<12, 1>(
+        prepare_bound_device::<20, 1>(
             OperationSet::empty()
                 .with(Operation::Delegate)
                 .with(Operation::Act),
@@ -243,6 +253,7 @@ fn repeated_delivery_or_acknowledgement_is_rejected_without_mutation() {
                 .with(Operation::Act),
         );
     let event = raise_state_event(&mut core, owner, owner_capability, device);
+    admit_driver(&mut core, owner, driver, device);
     core.deliver_device_event(driver, driver_capability, event)
         .unwrap();
     let delivered_events = core.events().len();
@@ -253,6 +264,7 @@ fn repeated_delivery_or_acknowledgement_is_rejected_without_mutation() {
     assert_eq!(core.device_events()[0].status, DeviceEventStatus::Delivered);
     assert_eq!(core.events().len(), delivered_events);
 
+    core.dispatch_next_driver_invocation(driver, 2).unwrap();
     core.acknowledge_device_event(driver, driver_capability, event)
         .unwrap();
     let acknowledged_events = core.events().len();
@@ -344,4 +356,52 @@ fn raise_state_event<const EVENTS: usize, const DEVICE_EVENTS: usize>(
         DeviceEventPayload { code: 7, value: 9 },
     )
     .unwrap()
+}
+
+fn admit_driver<const EVENTS: usize, const DEVICE_EVENTS: usize>(
+    core: &mut EventKernel<EVENTS, DEVICE_EVENTS>,
+    owner: AgentId,
+    driver: AgentId,
+    device: ResourceId,
+) {
+    let image_capability = core
+        .grant_capability(
+            owner,
+            device,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
+        .unwrap();
+    let entry_capability = core
+        .grant_capability(
+            driver,
+            device,
+            OperationSet::empty()
+                .with(Operation::Observe)
+                .with(Operation::Act),
+        )
+        .unwrap();
+    let image = core
+        .register_agent_image(
+            owner,
+            image_capability,
+            device,
+            AgentImageKind::Driver,
+            AgentImageDigest::new([3; 32]),
+            1,
+            1,
+        )
+        .unwrap();
+    core.verify_agent_image(owner, image_capability, image)
+        .unwrap();
+    core.launch_agent(
+        driver,
+        entry_capability,
+        device,
+        image,
+        AgentEntryKind::Driver,
+        None,
+    )
+    .unwrap();
 }

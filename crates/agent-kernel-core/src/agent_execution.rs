@@ -4,7 +4,7 @@
 //! no_std execution context attached to each registered agent. It stores only
 //! deterministic kernel runtime state, not host runtime handles or model data.
 
-use crate::{AgentId, TaskId};
+use crate::{AgentId, DriverInvocationId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentExecutionState {
@@ -19,6 +19,7 @@ pub struct AgentExecutionContext {
     pub agent: AgentId,
     pub state: AgentExecutionState,
     pub task: Option<TaskId>,
+    pub driver_invocation: Option<DriverInvocationId>,
     pub run_ticks: u64,
     pub quantum_remaining: u64,
 }
@@ -33,6 +34,7 @@ impl AgentExecutionContext {
             agent,
             state: AgentExecutionState::Idle,
             task: None,
+            driver_invocation: None,
             run_ticks: 0,
             quantum_remaining: 0,
         }
@@ -48,6 +50,23 @@ impl AgentExecutionContext {
             agent,
             state: AgentExecutionState::Running,
             task: Some(task),
+            driver_invocation: None,
+            run_ticks,
+            quantum_remaining,
+        }
+    }
+
+    pub(crate) const fn running_driver(
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        run_ticks: u64,
+        quantum_remaining: u64,
+    ) -> Self {
+        Self {
+            agent,
+            state: AgentExecutionState::Running,
+            task: None,
+            driver_invocation: Some(invocation),
             run_ticks,
             quantum_remaining,
         }
@@ -58,6 +77,7 @@ impl AgentExecutionContext {
             agent,
             state: AgentExecutionState::Waiting,
             task: Some(task),
+            driver_invocation: None,
             run_ticks: 0,
             quantum_remaining: 0,
         }
@@ -68,6 +88,7 @@ impl AgentExecutionContext {
             agent,
             state: AgentExecutionState::Faulted,
             task: Some(task),
+            driver_invocation: None,
             run_ticks: 0,
             quantum_remaining: 0,
         }

@@ -92,25 +92,45 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains("event[57] resource_retired agent=1 resource=3 capability=4"));
     assert!(stdout.contains("event[58] capability_derived agent=1 resource=1 capability=5"));
     assert!(stdout.contains("event[59] observation agent=2 resource=1"));
-    assert!(stdout.contains("event[60] resource_created agent=1 resource=4 capability=6"));
-    assert!(stdout.contains("event[61] capability_granted agent=1 resource=4 capability=6"));
-    assert!(stdout.contains("event[62] capability_derived agent=1 resource=4 capability=7"));
+    assert!(stdout.contains("event[60] agent_registered agent=4 target_agent=4"));
+    assert!(stdout.contains("event[61] resource_created agent=1 resource=4 capability=6"));
+    assert!(stdout.contains("event[62] capability_granted agent=1 resource=4 capability=6"));
+    assert!(stdout.contains("event[63] capability_derived agent=1 resource=4 capability=7"));
     assert!(stdout.contains(
-        "event[63] driver_bound agent=1 resource=4 capability=6 driver_binding=1 target_agent=2"
+        "event[64] agent_image_registered agent=1 resource=4 capability=6 image=3 kind=driver"
     ));
     assert!(stdout.contains(
-        "event[64] device_event_raised agent=1 resource=4 capability=6 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
+        "event[65] agent_image_verified agent=1 resource=4 capability=6 image=3 kind=driver"
+    ));
+    assert!(stdout.contains("event[66] agent_launched agent=4 resource=4 capability=7 image=3"));
+    assert!(stdout.contains(
+        "event[67] driver_bound agent=1 resource=4 capability=6 driver_binding=1 target_agent=4"
     ));
     assert!(stdout.contains(
-        "event[65] device_event_delivered agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
+        "event[68] device_event_raised agent=1 resource=4 capability=6 driver_binding=1 device_event=1 driver_invocation=0 kind=state_changed code=1 value=2"
     ));
     assert!(stdout.contains(
-        "event[66] device_event_acknowledged agent=2 resource=4 capability=7 driver_binding=1 device_event=1 kind=state_changed code=1 value=2"
+        "event[69] device_event_delivered agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 kind=state_changed code=1 value=2"
     ));
     assert!(stdout.contains(
-        "event[67] driver_command_submitted agent=2 resource=4 capability=7 driver_binding=1 device_event=1 driver_command=1 kind=write opcode=3 value=11"
+        "event[70] driver_invocation_queued agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=0 quantum=0"
     ));
     assert!(stdout.contains(
-        "event[68] driver_command_completed agent=2 resource=4 capability=7 driver_binding=1 device_event=1 driver_command=1 kind=write opcode=3 value=11 result_code=0 result_value=12"
+        "event[71] driver_invocation_dispatched agent=4 resource=4 capability=0 driver_binding=1 device_event=1 driver_invocation=1 ticks=0 quantum=2"
+    ));
+    assert!(stdout.contains(
+        "event[72] driver_invocation_ticked agent=4 resource=4 capability=0 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=1"
+    ));
+    assert!(stdout.contains(
+        "event[73] device_event_acknowledged agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 kind=state_changed code=1 value=2"
+    ));
+    assert!(stdout.contains(
+        "event[74] driver_command_submitted agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11"
+    ));
+    assert!(stdout.contains(
+        "event[75] driver_command_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11 result_code=0 result_value=12"
+    ));
+    assert!(stdout.contains(
+        "event[76] driver_invocation_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=0"
     ));
 }

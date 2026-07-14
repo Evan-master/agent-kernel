@@ -8,7 +8,9 @@
 mod agent;
 mod capability;
 mod driver;
+mod driver_runtime;
 mod fault;
+mod kernel_default;
 mod mailbox;
 mod memory;
 mod namespace;
@@ -45,6 +47,7 @@ pub struct AgentKernel<
     const DRIVER_BINDINGS: usize = 0,
     const DEVICE_EVENTS: usize = 0,
     const DRIVER_COMMANDS: usize = 0,
+    const DRIVER_INVOCATIONS: usize = 0,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -68,6 +71,7 @@ pub struct AgentKernel<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >,
 }
 
@@ -93,6 +97,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -116,6 +121,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub const fn new() -> Self {
@@ -259,57 +265,5 @@ impl<
 
     pub fn tasks(&self) -> &[Task] {
         self.core.tasks()
-    }
-}
-
-impl<
-        const AGENTS: usize,
-        const RESOURCES: usize,
-        const CAPS: usize,
-        const EVENTS: usize,
-        const ACTIONS: usize,
-        const OBSERVATIONS: usize,
-        const CHECKPOINTS: usize,
-        const INTENTS: usize,
-        const TASKS: usize,
-        const RUN_QUEUE: usize,
-        const MESSAGES: usize,
-        const MEMORY_CELLS: usize,
-        const NAMESPACE_ENTRIES: usize,
-        const FAULTS: usize,
-        const FAULT_HANDLERS: usize,
-        const FAULT_POLICIES: usize,
-        const WAITERS: usize,
-        const AGENT_IMAGES: usize,
-        const DRIVER_BINDINGS: usize,
-        const DEVICE_EVENTS: usize,
-        const DRIVER_COMMANDS: usize,
-    > Default
-    for AgentKernel<
-        AGENTS,
-        RESOURCES,
-        CAPS,
-        EVENTS,
-        ACTIONS,
-        OBSERVATIONS,
-        CHECKPOINTS,
-        INTENTS,
-        TASKS,
-        RUN_QUEUE,
-        MESSAGES,
-        MEMORY_CELLS,
-        NAMESPACE_ENTRIES,
-        FAULTS,
-        FAULT_HANDLERS,
-        FAULT_POLICIES,
-        WAITERS,
-        AGENT_IMAGES,
-        DRIVER_BINDINGS,
-        DEVICE_EVENTS,
-        DRIVER_COMMANDS,
-    >
-{
-    fn default() -> Self {
-        Self::new()
     }
 }

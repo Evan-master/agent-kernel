@@ -1,10 +1,11 @@
 use agent_kernel_core::{
-    AgentId, CapabilityId, DeviceEventId, DriverCommandId, DriverCommandKind, DriverCommandPayload,
-    KernelCore, KernelError, OperationSet, ResourceId, ResourceKind,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DeviceEventId,
+    DriverCommandId, DriverCommandKind, DriverCommandPayload, KernelCore, KernelError, Operation,
+    OperationSet, ResourceId, ResourceKind,
 };
 
 pub type EventKernel<const EVENTS: usize, const DRIVER_COMMANDS: usize> =
-    KernelCore<4, 4, 8, EVENTS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, DRIVER_COMMANDS>;
+    KernelCore<4, 4, 8, EVENTS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, DRIVER_COMMANDS, 2>;
 
 pub fn prepare_bound_device<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
     owner_operations: OperationSet,
@@ -42,6 +43,7 @@ pub fn prepare_bound_device<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
     )
 }
 
+#[allow(dead_code)]
 pub fn submit<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
     core: &mut EventKernel<EVENTS, DRIVER_COMMANDS>,
     driver: AgentId,
@@ -60,4 +62,53 @@ pub fn submit<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
             value: 11,
         },
     )
+}
+
+#[allow(dead_code)]
+pub fn admit_driver<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
+    core: &mut EventKernel<EVENTS, DRIVER_COMMANDS>,
+    owner: AgentId,
+    driver: AgentId,
+    device: ResourceId,
+) {
+    let image_capability = core
+        .grant_capability(
+            owner,
+            device,
+            OperationSet::empty()
+                .with(Operation::Act)
+                .with(Operation::Verify),
+        )
+        .unwrap();
+    let entry_capability = core
+        .grant_capability(
+            driver,
+            device,
+            OperationSet::empty()
+                .with(Operation::Observe)
+                .with(Operation::Act),
+        )
+        .unwrap();
+    let image = core
+        .register_agent_image(
+            owner,
+            image_capability,
+            device,
+            AgentImageKind::Driver,
+            AgentImageDigest::new([3; 32]),
+            1,
+            1,
+        )
+        .unwrap();
+    core.verify_agent_image(owner, image_capability, image)
+        .unwrap();
+    core.launch_agent(
+        driver,
+        entry_capability,
+        device,
+        image,
+        AgentEntryKind::Driver,
+        None,
+    )
+    .unwrap();
 }

@@ -7,8 +7,8 @@
 use crate::{
     AgentId, CapabilityId, DeviceEventId, DeviceEventStatus, DriverBindingId, DriverCommandId,
     DriverCommandKind, DriverCommandPayload, DriverCommandRecord, DriverCommandResult,
-    DriverCommandStatus, Event, EventKind, KernelCore, KernelError, Operation, OperationSet,
-    ResourceId, VerificationRequirement,
+    DriverCommandStatus, DriverInvocationId, DriverInvocationStatus, Event, EventKind, KernelCore,
+    KernelError, Operation, OperationSet, ResourceId, VerificationRequirement,
 };
 
 impl<
@@ -33,6 +33,7 @@ impl<
         const DRIVER_BINDINGS: usize,
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
+        const DRIVER_INVOCATIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -56,6 +57,7 @@ impl<
         DRIVER_BINDINGS,
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
+        DRIVER_INVOCATIONS,
     >
 {
     pub fn submit_driver_command(
@@ -75,7 +77,7 @@ impl<
             return Err(KernelError::AgentMismatch);
         }
         self.ensure_authorized(driver, capability, resource, Operation::Act)?;
-        self.validate_driver_command_cause(binding.id, resource, cause)?;
+        let invocation = self.validate_driver_command_cause(driver, binding.id, resource, cause)?;
         if self.driver_command_len >= DRIVER_COMMANDS {
             return Err(KernelError::DriverCommandStoreFull);
         }
@@ -89,6 +91,7 @@ impl<
             resource,
             driver,
             cause,
+            invocation,
             kind,
             payload,
             status: DriverCommandStatus::Submitted,
@@ -103,6 +106,7 @@ impl<
             id,
             resource,
             cause,
+            invocation,
             kind,
             payload,
             None,
@@ -181,6 +185,7 @@ impl<
             command,
             record.resource,
             record.cause,
+            record.invocation,
             record.kind,
             record.payload,
             Some(result),
@@ -189,12 +194,13 @@ impl<
 
     fn validate_driver_command_cause(
         &self,
+        driver: AgentId,
         binding: DriverBindingId,
         resource: ResourceId,
         cause: Option<DeviceEventId>,
-    ) -> Result<(), KernelError> {
+    ) -> Result<Option<DriverInvocationId>, KernelError> {
         let Some(cause) = cause else {
-            return Ok(());
+            return Ok(None);
         };
         let event = self.find_device_event(cause)?;
         if event.binding != binding || event.resource != resource {
@@ -203,7 +209,12 @@ impl<
         if event.status == DeviceEventStatus::Raised {
             return Err(KernelError::DeviceEventStatusMismatch);
         }
-        Ok(())
+        let invocation = self.find_driver_invocation_for_event(cause)?;
+        if invocation.driver != driver || invocation.status != DriverInvocationStatus::Running {
+            return Err(KernelError::DriverInvocationNotRunnable);
+        }
+        self.ensure_execution_context_running_driver(driver, invocation.id)?;
+        Ok(Some(invocation.id))
     }
 
     fn find_driver_command(&self, id: DriverCommandId) -> Result<DriverCommandRecord, KernelError> {
@@ -234,6 +245,7 @@ impl<
         command: DriverCommandId,
         resource: ResourceId,
         cause: Option<DeviceEventId>,
+        invocation: Option<DriverInvocationId>,
         command_kind: DriverCommandKind,
         payload: DriverCommandPayload,
         result: Option<DriverCommandResult>,
@@ -277,6 +289,9 @@ impl<
             driver_command_kind: Some(command_kind),
             driver_command_payload: Some(payload),
             driver_command_result: result,
+            driver_invocation: invocation,
+            driver_invocation_ticks: None,
+            driver_invocation_quantum: None,
             agent_image: None,
             agent_image_kind: None,
             agent_image_digest: None,
