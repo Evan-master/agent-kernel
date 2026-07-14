@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry plus a bounded byte-wide Port I/O backend with native `in`/`out` instructions.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry plus a bounded byte-wide Port I/O backend and kernel-dispatched COM1 command flow with native `in`/`out` instructions.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -164,9 +164,12 @@ invalid or overlapping ranges, preserves retired mappings for audit, and blocks
 command dispatch until the resource has an endpoint. Raw addresses are never
 Agent command data. All records and transitions are replayable. The x86_64
 architecture backend now executes byte-wide `Read` and `Write` commands against
-bounded `Port` endpoints, treating `opcode` only as a relative offset. MMIO,
-page mapping, interrupt routing, wider port operations, and DMA policy remain
-future architecture work.
+bounded `Port` endpoints, treating `opcode` only as a relative offset. Its QEMU
+boot path registers and launches a dedicated Driver Agent, submits and dispatches
+the physical COM1 request through the kernel, executes only that immutable
+request, and records the result as a terminal kernel transition. MMIO, page
+mapping, interrupt routing, wider port operations, and DMA policy remain future
+architecture work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -185,8 +188,10 @@ remains available for system-seeded resources and leaves `owner: None`.
 8. Launch the bootstrap agent into a bootstrap entry that references the verified image.
 9. Record observation, action, and verification events.
 10. Expose mutable handoff access for trusted architecture initialization.
-11. On x86_64, register a COM1 Port endpoint and execute a bounded native output probe.
-12. Mark the kernel ready for supervisor handoff.
+11. On x86_64, register a COM1 Port endpoint and admit a dedicated Driver Agent.
+12. Submit and dispatch a bounded write through the kernel command state machine.
+13. Execute the immutable request with native Port I/O and record its terminal result.
+14. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -236,6 +241,7 @@ Expected QEMU serial output:
 ```text
 AGENT_KERNEL_QEMU_BOOT_OK
 AGENT_KERNEL_PORT_IO_BACKEND_OK
+AGENT_KERNEL_PORT_COMMAND_FLOW_OK
 event[1] agent_registered
 event[2] capability_granted
 event[3] agent_image_registered
@@ -245,12 +251,28 @@ event[6] observation
 event[7] action
 event[8] verification
 event[9] driver_endpoint_registered
+event[10] agent_registered
+event[11] capability_derived
+event[12] agent_image_registered
+event[13] agent_image_verified
+event[14] agent_launched
+event[15] driver_bound
+event[16] driver_command_submitted
+event[17] driver_command_dispatched
+event[18] driver_command_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
-The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is emitted through the new
-kernel-registered COM1 endpoint and `PortIoBackend`; the surrounding text uses
-the existing serial writer so the marker proves the native backend path ran.
+The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is emitted by the immutable request
+returned from kernel command dispatch through the registered COM1 endpoint and
+`PortIoBackend`; the surrounding text uses the existing serial writer. The
+command-flow marker is printed only after the backend result is accepted by the
+terminal syscall and the kernel command record is verified as `Completed`.
+
+The x86 entry configures a 256 KiB kernel stack. The fixed-capacity kernel state
+and its by-value boot construction exceed the bootloader's default 80 KiB stack
+in unoptimized QEMU builds; the explicit size keeps the guard page effective
+while making the debug boot contract deterministic.
 
 `scripts/run-qemu.sh` treats QEMU exit code `33` as success because the kernel
 exits through the `isa-debug-exit` device with value `0x10`.

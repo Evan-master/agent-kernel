@@ -4,22 +4,30 @@
 //! x86_64 bootloader entry for Agent Kernel.
 //!
 //! This crate owns the architecture-specific QEMU boot entry. It runs the
-//! bounded COM1 Port backend probe, prints the deterministic boot handoff event
+//! bounded COM1 Port command flow, prints the deterministic boot handoff event
 //! sequence, and exits QEMU through isa-debug-exit when the handoff succeeds.
 
 use core::{arch::asm, panic::PanicInfo};
 
 use agent_kernel_boot::{BootConfig, BootedKernel};
 use agent_kernel_core::EventKind;
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-mod port_probe;
+mod port_command_flow;
 
-use port_probe::PortProbe;
+use port_command_flow::PortCommandFlow;
 
-entry_point!(kernel_main);
+const KERNEL_STACK_SIZE: u64 = 256 * 1024;
 
-pub(crate) type X86BootedKernel = BootedKernel<1, 1, 1, 9, 1, 1, 0, 0, 0, 0>;
+static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.kernel_stack_size = KERNEL_STACK_SIZE;
+    config
+};
+
+entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
+
+pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 20, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0>;
 
 fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
@@ -27,19 +35,20 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
-            let Some(mut probe) = PortProbe::prepare(&mut booted, COM1) else {
+            let Some(mut flow) = PortCommandFlow::prepare(&mut booted, COM1, b'O') else {
                 serial_write_line("AGENT_KERNEL_PORT_IO_BACKEND_ERROR");
                 exit_qemu(0x11);
                 halt_forever();
             };
             serial_write_str("AGENT_KERNEL_PORT_IO_BACKEND_");
             while !serial_transmit_empty() {}
-            if !probe.write_byte(b'O') {
+            if !flow.execute_and_record(&mut booted) {
                 serial_write_line("ERROR");
                 exit_qemu(0x11);
                 halt_forever();
             }
             serial_write_line("K");
+            serial_write_line("AGENT_KERNEL_PORT_COMMAND_FLOW_OK");
             for event in booted.kernel().events() {
                 serial_write_str("event[");
                 serial_write_u64(event.sequence);

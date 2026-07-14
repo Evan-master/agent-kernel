@@ -32,7 +32,17 @@ for expected in \
   "event[7] action" \
   "event[8] verification" \
   "AGENT_KERNEL_PORT_IO_BACKEND_OK" \
+  "AGENT_KERNEL_PORT_COMMAND_FLOW_OK" \
   "event[9] driver_endpoint_registered" \
+  "event[10] agent_registered" \
+  "event[11] capability_derived" \
+  "event[12] agent_image_registered" \
+  "event[13] agent_image_verified" \
+  "event[14] agent_launched" \
+  "event[15] driver_bound" \
+  "event[16] driver_command_submitted" \
+  "event[17] driver_command_dispatched" \
+  "event[18] driver_command_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
