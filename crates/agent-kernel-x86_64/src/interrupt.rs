@@ -7,6 +7,7 @@
 use core::mem::size_of;
 
 pub const IDT_INTERRUPT_GATE_OPTIONS: u16 = 0x8e00;
+pub const IDT_TRAP_GATE_OPTIONS: u16 = 0x8f00;
 pub const PIC_MASTER_OFFSET: u8 = 0x20;
 pub const PIC_SLAVE_OFFSET: u8 = 0x28;
 pub const PIC_CASCADE_IRQ: u8 = 2;
@@ -37,10 +38,18 @@ impl IdtEntry {
     }
 
     pub const fn interrupt_gate(handler: u64, selector: u16) -> Self {
+        Self::gate(handler, selector, IDT_INTERRUPT_GATE_OPTIONS)
+    }
+
+    pub const fn trap_gate(handler: u64, selector: u16) -> Self {
+        Self::gate(handler, selector, IDT_TRAP_GATE_OPTIONS)
+    }
+
+    const fn gate(handler: u64, selector: u16, options: u16) -> Self {
         Self {
             offset_low: handler as u16,
             selector,
-            options: IDT_INTERRUPT_GATE_OPTIONS,
+            options,
             offset_middle: (handler >> 16) as u16,
             offset_high: (handler >> 32) as u32,
             reserved: 0,

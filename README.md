@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, fixed-width IDT/PIC contracts, one-shot UART IRQ4 ingress, and a bounded byte-wide Port I/O backend using native `in`/`out` instructions.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, persistent exception IDT and breakpoint proof, one-shot UART IRQ4 ingress, and a bounded byte-wide Port I/O backend using native `in`/`out` instructions.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -165,16 +165,19 @@ command dispatch until the resource has an endpoint. Raw addresses are never
 Agent command data. All records and transitions are replayable. The x86_64
 architecture backend now executes byte-wide `Read` and `Write` commands against
 bounded `Port` endpoints, treating `opcode` only as a relative offset. Its QEMU
-boot path registers and launches a dedicated Driver Agent, installs an IRQ4 IDT
-gate, remaps the legacy PIC, and arms the physical COM1 transmitter-empty
-interrupt. A bounded assembly top half captures IIR/LSR state, disables the UART
-source, acknowledges the PIC, and returns through `iretq`. Normal kernel context
-validates that mailbox, raises an Interrupt Device Event, and runs its Driver
-Invocation. The Driver acknowledges the event, dispatches a causally linked
-write, records its terminal result, and completes the invocation. This proves
-one-shot hardware interrupt ingress; exception handling, a general IRQ registry,
-APIC/IOAPIC, MMIO, page mapping, wider port operations, and DMA policy remain
-future architecture work.
+boot path first installs a persistent 256-entry IDT with explicit gates for CPU
+exception vectors 0 through 31. A returning breakpoint stub captures and
+validates the exact CPU return RIP; all other exception gates lead to
+vector-specific deterministic failure stubs. The same IDT then receives IRQ4,
+the legacy PIC is remapped, and the physical COM1 transmitter-empty interrupt is
+armed. A bounded UART top half captures IIR/LSR state, disables the source,
+acknowledges the PIC, and returns through `iretq`. Normal kernel context validates
+that mailbox, raises an Interrupt Device Event, and runs its Driver Invocation.
+The Driver acknowledges the event, dispatches a causally linked write, records
+its terminal result, and completes the invocation. This proves a returning CPU
+exception and one-shot hardware interrupt ingress; fatal exception recovery,
+error-code decoding, double-fault IST, a general IRQ registry, APIC/IOAPIC, MMIO,
+page mapping, wider port operations, and DMA policy remain future work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -184,21 +187,22 @@ remains available for system-seeded resources and leaves `owner: None`.
 `agent-kernel-boot` currently validates the kernel-native boot contract:
 
 1. Enter kernel phase.
-2. Initialize `AgentKernel`.
-3. Register the bootstrap agent.
-4. Register a bootstrap resource.
-5. Grant observe/act/verify/delegate capability to the bootstrap agent.
-6. Register a bootstrap executable image as pending.
-7. Verify that bootstrap image, moving it from pending to verified.
-8. Launch the bootstrap agent into a bootstrap entry that references the verified image.
-9. Record observation, action, and verification events.
-10. Expose mutable handoff access for trusted architecture initialization.
-11. On x86_64, register a COM1 Port endpoint and admit a dedicated Driver Agent.
-12. Install the IRQ4 IDT gate, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
-13. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
-14. Acknowledge the event and dispatch a causally linked COM1 write request.
-15. Record the write result and complete the Driver Invocation.
-16. Mark the kernel ready for supervisor handoff.
+2. On x86_64, install persistent exception gates and validate an `int3` round trip.
+3. Initialize `AgentKernel`.
+4. Register the bootstrap agent.
+5. Register a bootstrap resource.
+6. Grant observe/act/verify/delegate capability to the bootstrap agent.
+7. Register a bootstrap executable image as pending.
+8. Verify that bootstrap image, moving it from pending to verified.
+9. Launch the bootstrap agent into a bootstrap entry that references the verified image.
+10. Record observation, action, and verification events.
+11. Expose mutable handoff access for trusted architecture initialization.
+12. Register a COM1 Port endpoint and admit a dedicated Driver Agent.
+13. Install IRQ4 in the shared IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
+14. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
+15. Acknowledge the event and dispatch a causally linked COM1 write request.
+16. Record the write result and complete the Driver Invocation.
+17. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -247,6 +251,7 @@ Expected QEMU serial output:
 
 ```text
 AGENT_KERNEL_QEMU_BOOT_OK
+AGENT_KERNEL_EXCEPTION_BASELINE_OK
 AGENT_KERNEL_UART_IRQ_OK
 AGENT_KERNEL_PORT_IO_BACKEND_OK
 AGENT_KERNEL_PORT_COMMAND_FLOW_OK
@@ -279,9 +284,11 @@ event[25] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
-`AGENT_KERNEL_UART_IRQ_OK` is emitted only after the IRQ4 assembly entry captures
-a single THRE interrupt and normal context validates its IIR/LSR mailbox. That
-signal causes event 16 and the running Driver Invocation. The `O` in
+`AGENT_KERNEL_EXCEPTION_BASELINE_OK` is emitted only after the vector 3 trap gate
+captures the exact post-`int3` RIP and returns through `iretq`.
+`AGENT_KERNEL_UART_IRQ_OK` then requires the shared IDT's IRQ4 assembly entry to
+capture one THRE interrupt and normal context to validate its IIR/LSR mailbox.
+That signal causes event 16 and the running Driver Invocation. The `O` in
 `AGENT_KERNEL_PORT_IO_BACKEND_OK` is emitted by the immutable causal request at
 event 23 through the registered COM1 endpoint and `PortIoBackend`; the
 surrounding text uses the existing boot serial writer. The remaining success

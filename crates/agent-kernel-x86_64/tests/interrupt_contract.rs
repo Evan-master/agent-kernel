@@ -2,7 +2,7 @@ use core::mem::size_of;
 
 use agent_kernel_x86_64::interrupt::{
     legacy_irq_vector, pic_masks_for_irq, IdtEntry, IdtPointer, IDT_INTERRUPT_GATE_OPTIONS,
-    PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, UART_IRQ_LINE, UART_IRQ_VECTOR,
+    IDT_TRAP_GATE_OPTIONS, PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, UART_IRQ_LINE, UART_IRQ_VECTOR,
 };
 
 #[test]
@@ -14,6 +14,18 @@ fn long_mode_idt_entry_splits_handler_and_preserves_gate_contract() {
     assert_eq!(entry.handler_address(), handler);
     assert_eq!(entry.selector(), 0x08);
     assert_eq!(entry.options(), IDT_INTERRUPT_GATE_OPTIONS);
+    assert_eq!(entry.ist(), 0);
+    assert_eq!(entry.reserved(), 0);
+}
+
+#[test]
+fn long_mode_trap_gate_preserves_returning_exception_contract() {
+    let handler = 0xffff_8000_1234_5678;
+    let entry = IdtEntry::trap_gate(handler, 0x08);
+
+    assert_eq!(entry.handler_address(), handler);
+    assert_eq!(entry.selector(), 0x08);
+    assert_eq!(entry.options(), IDT_TRAP_GATE_OPTIONS);
     assert_eq!(entry.ist(), 0);
     assert_eq!(entry.reserved(), 0);
 }

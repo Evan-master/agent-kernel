@@ -1,24 +1,21 @@
 //! One-shot x86_64 COM1 IRQ4 ingress for the bare-metal boot proof.
 //!
-//! This architecture-binary module installs one IDT gate, remaps and masks the
-//! legacy PIC, and arms the 16550 THRE source. Its assembly top half only
-//! captures fixed-width hardware state and acknowledges controllers; normal
-//! Rust code validates the mailbox after interrupts are disabled again.
+//! This architecture-binary module registers IRQ4 in the persistent IDT,
+//! remaps and masks the legacy PIC, and arms the 16550 THRE source. Its assembly
+//! top half only captures fixed-width hardware state and acknowledges
+//! controllers; normal Rust code validates the mailbox after IF is clear again.
 
 use core::{
     arch::{asm, global_asm},
-    cell::UnsafeCell,
     sync::atomic::{AtomicU8, Ordering},
 };
 
 use agent_kernel_x86_64::interrupt::{
-    pic_masks_for_irq, IdtEntry, IdtPointer, PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, UART_IRQ_LINE,
-    UART_IRQ_VECTOR,
+    pic_masks_for_irq, PIC_MASTER_OFFSET, PIC_SLAVE_OFFSET, UART_IRQ_LINE,
 };
 
-use crate::{inb, outb, COM1};
+use crate::{exception_runtime, inb, outb, COM1};
 
-const IDT_ENTRY_COUNT: usize = 256;
 const PIC_MASTER_COMMAND: u16 = 0x20;
 const PIC_MASTER_DATA: u16 = 0x21;
 const PIC_SLAVE_COMMAND: u16 = 0xa0;
@@ -101,24 +98,6 @@ unsafe extern "C" {
     fn agent_kernel_uart_irq_stub();
 }
 
-#[repr(C, align(16))]
-struct IdtStorage {
-    entries: UnsafeCell<[IdtEntry; IDT_ENTRY_COUNT]>,
-}
-
-impl IdtStorage {
-    const fn new() -> Self {
-        Self {
-            entries: UnsafeCell::new([IdtEntry::missing(); IDT_ENTRY_COUNT]),
-        }
-    }
-}
-
-// SAFETY: IDT mutation occurs only with CPU interrupts disabled during one-core boot.
-unsafe impl Sync for IdtStorage {}
-
-static IDT: IdtStorage = IdtStorage::new();
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UartInterruptSignal {
     pub iir: u8,
@@ -135,7 +114,7 @@ pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
     // SAFETY: IF is clear, the IDT gate is installed before STI, and COM1 was
     // initialized with OUT2 asserted by `serial_init`.
     unsafe {
-        install_uart_idt()?;
+        exception_runtime::install_uart_irq_gate(agent_kernel_uart_irq_stub)?;
         initialize_pic_for_uart()?;
         let _ = inb(COM1 + 2);
         outb(COM1 + 1, UART_IER_THRE);
@@ -176,38 +155,6 @@ fn reset_mailbox() {
     AGENT_KERNEL_UART_IRQ_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_UART_IRQ_IIR.store(0, Ordering::Release);
     AGENT_KERNEL_UART_IRQ_LSR.store(0, Ordering::Release);
-}
-
-unsafe fn install_uart_idt() -> Option<()> {
-    let selector = unsafe { current_code_selector() };
-    let handler = agent_kernel_uart_irq_stub as *const () as usize as u64;
-    // SAFETY: the caller holds IF clear, boot is single-core, and IDT remains
-    // alive for the rest of the kernel image lifetime.
-    let entries = unsafe { &mut *IDT.entries.get() };
-    entries[usize::from(UART_IRQ_VECTOR)] = IdtEntry::interrupt_gate(handler, selector);
-    let pointer = IdtPointer::for_table(entries.as_ptr() as u64, entries.len())?;
-
-    // SAFETY: `pointer` describes the complete live static table above.
-    unsafe {
-        asm!(
-            "lidt [{pointer}]",
-            pointer = in(reg) &pointer,
-            options(readonly, nostack, preserves_flags)
-        );
-    }
-    Some(())
-}
-
-unsafe fn current_code_selector() -> u16 {
-    let selector: u16;
-    unsafe {
-        asm!(
-            "mov {selector:x}, cs",
-            selector = out(reg) selector,
-            options(nomem, nostack, preserves_flags)
-        );
-    }
-    selector
 }
 
 unsafe fn initialize_pic_for_uart() -> Option<()> {

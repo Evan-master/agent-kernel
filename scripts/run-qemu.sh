@@ -23,6 +23,7 @@ fi
 
 for expected in \
   "AGENT_KERNEL_QEMU_BOOT_OK" \
+  "AGENT_KERNEL_EXCEPTION_BASELINE_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \

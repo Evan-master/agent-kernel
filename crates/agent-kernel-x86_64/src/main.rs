@@ -14,6 +14,7 @@ use agent_kernel_boot::{BootConfig, BootedKernel};
 use agent_kernel_core::EventKind;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
+mod exception_runtime;
 mod port_driver_flow;
 mod uart_interrupt;
 
@@ -34,6 +35,12 @@ pub(crate) type X86BootedKernel = BootedKernel<2, 1, 2, 32, 1, 1, 0, 0, 0, 0, 1,
 fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
+    if exception_runtime::install_and_probe().is_none() {
+        serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
+        exit_qemu(0x11);
+        halt_forever();
+    }
+    serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_OK");
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
