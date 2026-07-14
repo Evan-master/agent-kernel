@@ -1,14 +1,11 @@
-//! One-shot x86_64 PIT IRQ0 ingress for scheduler tick delivery.
+//! x86_64 PIT IRQ0 source control for Agent CPU preemption.
 //!
-//! This architecture-binary module programs channel 0, installs its persistent
-//! IDT gate, and captures one interrupt in a fixed atomic mailbox. The assembly
-//! top half owns no Agent Kernel authority; normal Rust validates the signal
-//! after IF is clear and hands it to the scheduler bottom half.
+//! This architecture-binary module only installs a supplied IRQ gate, programs
+//! channel 0, and controls the shared PIC mask. The Agent CPU runtime owns the
+//! interrupt frame and mailbox; Agent Kernel task state never enters this
+//! privileged hardware boundary.
 
-use core::{
-    arch::{asm, global_asm},
-    sync::atomic::{AtomicU8, Ordering},
-};
+use core::arch::asm;
 
 use agent_kernel_x86_64::interrupt::{
     PIT_CHANNEL0_COMMAND, PIT_CHANNEL0_DATA_PORT, PIT_COMMAND_PORT, PIT_DIVISOR, PIT_IRQ_LINE,
@@ -17,106 +14,27 @@ use agent_kernel_x86_64::interrupt::{
 
 use crate::{exception_runtime, outb, pic};
 
-const IRQ_WAIT_SPINS: usize = 20_000_000;
-
-#[no_mangle]
-#[used]
-static AGENT_KERNEL_PIT_IRQ_SEEN: AtomicU8 = AtomicU8::new(0);
-
-#[no_mangle]
-#[used]
-static AGENT_KERNEL_PIT_IRQ_COUNT: AtomicU8 = AtomicU8::new(0);
-
-global_asm!(
-    r#"
-    .section .text.agent_kernel_pit_irq,"ax",@progbits
-    .global agent_kernel_pit_irq_stub
-    .type agent_kernel_pit_irq_stub,@function
-agent_kernel_pit_irq_stub:
-    push rax
-    push rdx
-
-    inc byte ptr [rip + {irq_count}]
-
-    mov dx, {pic_master_data}
-    mov al, 0xff
-    out dx, al
-
-    mov dx, {pic_master_command}
-    mov al, {pic_eoi}
-    out dx, al
-
-    mov byte ptr [rip + {irq_seen}], 1
-    pop rdx
-    pop rax
-    iretq
-    .size agent_kernel_pit_irq_stub, . - agent_kernel_pit_irq_stub
-"#,
-    pic_master_data = const pic::PIC_MASTER_DATA,
-    pic_master_command = const pic::PIC_MASTER_COMMAND,
-    pic_eoi = const pic::PIC_EOI,
-    irq_seen = sym AGENT_KERNEL_PIT_IRQ_SEEN,
-    irq_count = sym AGENT_KERNEL_PIT_IRQ_COUNT,
-);
-
-unsafe extern "C" {
-    fn agent_kernel_pit_irq_stub();
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(super) struct PitTimerSignal {
-    ticks: u8,
-}
-
-impl PitTimerSignal {
-    pub(super) const fn count(self) -> u8 {
-        self.ticks
-    }
-}
-
-pub(super) fn wait_for_tick() -> Option<PitTimerSignal> {
-    // SAFETY: the ring-0 single-core boot path owns IF and both PICs here.
+pub(super) fn arm(handler: unsafe extern "C" fn()) -> Option<()> {
+    // SAFETY: this single-core boot proof configures the gate and controllers
+    // with IF clear. The caller enables interrupts only after entering the
+    // dedicated Agent stack.
     unsafe {
         asm!("cli", options(nomem, nostack));
-    }
-    reset_mailbox();
-
-    // SAFETY: the gate and source are configured while IF is clear. Channel 0
-    // is programmed before the remapped PIC exposes IRQ0.
-    unsafe {
-        exception_runtime::install_irq_gate(PIT_IRQ_VECTOR, agent_kernel_pit_irq_stub)?;
+        exception_runtime::install_irq_gate(PIT_IRQ_VECTOR, handler)?;
         pic::mask_all();
         program_channel_zero();
         pic::initialize_for_irq(PIT_IRQ_LINE)?;
-        asm!("sti", options(nomem, nostack));
     }
+    Some(())
+}
 
-    for _ in 0..IRQ_WAIT_SPINS {
-        if AGENT_KERNEL_PIT_IRQ_SEEN.load(Ordering::Acquire) != 0 {
-            break;
-        }
-        core::hint::spin_loop();
-    }
-
-    // SAFETY: normal context reclaims IF before final controller masking and
-    // mailbox validation.
+pub(super) fn disarm() {
+    // SAFETY: masking occurs in trusted normal context after IRQ0 has already
+    // restored the kernel stack, or on an initialization failure with IF clear.
     unsafe {
         asm!("cli", options(nomem, nostack));
         pic::mask_all();
     }
-
-    let seen = AGENT_KERNEL_PIT_IRQ_SEEN.load(Ordering::Acquire);
-    let ticks = AGENT_KERNEL_PIT_IRQ_COUNT.load(Ordering::Acquire);
-    if seen != 1 || ticks != 1 {
-        return None;
-    }
-
-    Some(PitTimerSignal { ticks })
-}
-
-fn reset_mailbox() {
-    AGENT_KERNEL_PIT_IRQ_SEEN.store(0, Ordering::Release);
-    AGENT_KERNEL_PIT_IRQ_COUNT.store(0, Ordering::Release);
 }
 
 unsafe fn program_channel_zero() {

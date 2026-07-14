@@ -4,6 +4,7 @@
 //! This crate owns bounded hardware endpoint execution. Architecture-neutral
 //! authorization and command state remain in the core and facade crates.
 
+pub mod context;
 pub mod interrupt;
 pub mod port;
 

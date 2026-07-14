@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, persistent exception IDT and breakpoint proof, physical PIT IRQ0 task-quantum preemption, one-shot UART IRQ4 ingress, and a bounded byte-wide Port I/O backend using native `in`/`out` instructions.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, persistent exception IDT and breakpoint proof, fixed-stack Agent CPU execution with physical PIT IRQ0 preemption/resume, one-shot UART IRQ4 ingress, and a bounded byte-wide Port I/O backend using native `in`/`out` instructions.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -168,20 +168,24 @@ bounded `Port` endpoints, treating `opcode` only as a relative offset. Its QEMU
 boot path first installs a persistent 256-entry IDT with explicit gates for CPU
 exception vectors 0 through 31. A returning breakpoint stub captures and
 validates the exact CPU return RIP; all other exception gates lead to
-vector-specific deterministic failure stubs. The same IDT then receives IRQ0,
-the shared legacy-PIC adapter exposes PIT channel 0, and a bounded assembly top
-half captures one physical timer interrupt. Normal kernel context applies that
-tick to a running quantum-one Worker task through `sys_tick_task`, producing a
-`TaskQuantumExpired` event, returning the task to the fixed run queue, and
-making its execution context idle. The PIC is then remapped for IRQ4 and the
-physical COM1 transmitter-empty interrupt is armed. A bounded UART top half
+vector-specific deterministic failure stubs. A dispatched Worker then enters
+native code on its own fixed 32 KiB stack and arms PIT channel 0. IRQ0 saves all
+integer registers plus RIP/CS/RFLAGS on that Agent stack, then restores the
+previously saved kernel stack without discarding the Agent frame. Normal kernel
+context applies the tick through `sys_tick_task`, produces
+`TaskQuantumExpired`, requeues and redispatches the task, then resumes the exact
+interrupt frame through `iretq`. The Agent continues at its captured RIP and
+switches back cooperatively; `sys_yield_task` records that transition. The PIC
+is then remapped for IRQ4 and the physical COM1 transmitter-empty interrupt is
+armed. A bounded UART top half
 captures IIR/LSR state, disables the source, acknowledges the PIC, and returns
 through `iretq`. Normal kernel context validates that mailbox, raises an
 Interrupt Device Event, and runs its Driver Invocation.
 The Driver acknowledges the event, dispatches a causally linked write, records
 its terminal result, and completes the invocation. This proves a returning CPU
-exception, physical scheduler-tick ingress, and one-shot device interrupt
-ingress; full Agent CPU context switching, fatal exception recovery, error-code
+exception, real Agent CPU context switching, asynchronous preemption/resume,
+and one-shot device interrupt ingress; ring 3 isolation, per-Agent address
+spaces, multiple runnable CPU contexts, fatal exception recovery, error-code
 decoding, double-fault IST, a general IRQ registry, APIC/IOAPIC, MMIO, page
 mapping, wider port operations, and DMA policy remain future work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
@@ -205,13 +209,15 @@ remains available for system-seeded resources and leaves `owner: None`.
 11. Expose mutable handoff access for trusted architecture initialization.
 12. Register a COM1 Port endpoint and admit a dedicated Driver Agent.
 13. Register an admitted Worker Agent and dispatch its delegated task with quantum one.
-14. Install IRQ0 in the persistent IDT, program PIT channel 0, and receive one physical timer interrupt.
-15. Apply the validated tick through the scheduler, expire the quantum, and requeue the task.
-16. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
-17. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
-18. Acknowledge the event and dispatch a causally linked COM1 write request.
-19. Record the write result and complete the Driver Invocation.
-20. Mark the kernel ready for supervisor handoff.
+14. Switch from the kernel stack to the Worker's fixed CPU stack and arm PIT channel 0 there.
+15. Let IRQ0 save the full integer return frame and restore the suspended kernel continuation.
+16. Apply the validated tick through the scheduler, expire the quantum, and requeue the task.
+17. Redispatch the task, restore it through `iretq`, and record its cooperative yield.
+18. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
+19. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
+20. Acknowledge the event and dispatch a causally linked COM1 write request.
+21. Record the write result and complete the Driver Invocation.
+22. Mark the kernel ready for supervisor handoff.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -221,7 +227,7 @@ The handoff now runs inside QEMU through the x86_64 BIOS image path.
 - UEFI image support.
 - POSIX compatibility.
 - Linux syscall compatibility.
-- A filesystem, network stack, full CPU-context-switching scheduler, or complete physical hardware driver stack.
+- A filesystem, network stack, ring 3 multi-Agent scheduler, or complete physical hardware driver stack.
 - Running an LLM inside kernel space.
 
 ## Commands
@@ -262,7 +268,9 @@ Expected QEMU serial output:
 AGENT_KERNEL_QEMU_BOOT_OK
 AGENT_KERNEL_EXCEPTION_BASELINE_OK
 AGENT_KERNEL_PIT_IRQ_OK
+AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK
 AGENT_KERNEL_TIMER_PREEMPTION_OK
+AGENT_KERNEL_AGENT_CPU_RESUME_OK
 AGENT_KERNEL_UART_IRQ_OK
 AGENT_KERNEL_PORT_IO_BACKEND_OK
 AGENT_KERNEL_PORT_COMMAND_FLOW_OK
@@ -295,29 +303,36 @@ event[25] task_accepted
 event[26] task_queued
 event[27] task_dispatched
 event[28] task_quantum_expired
-event[29] device_event_raised
-event[30] device_event_delivered
-event[31] driver_invocation_queued
-event[32] driver_invocation_dispatched
-event[33] driver_invocation_ticked
-event[34] device_event_acknowledged
-event[35] driver_command_submitted
-event[36] driver_command_dispatched
-event[37] driver_command_completed
-event[38] driver_invocation_completed
+event[29] task_dispatched
+event[30] task_yielded
+event[31] device_event_raised
+event[32] device_event_delivered
+event[33] driver_invocation_queued
+event[34] driver_invocation_dispatched
+event[35] driver_invocation_ticked
+event[36] device_event_acknowledged
+event[37] driver_command_submitted
+event[38] driver_command_dispatched
+event[39] driver_command_completed
+event[40] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
 `AGENT_KERNEL_EXCEPTION_BASELINE_OK` is emitted only after the vector 3 trap gate
 captures the exact post-`int3` RIP and returns through `iretq`.
 `AGENT_KERNEL_PIT_IRQ_OK` requires the shared IDT's IRQ0 assembly entry to
-capture exactly one PIT channel 0 interrupt. `AGENT_KERNEL_TIMER_PREEMPTION_OK`
-then requires event 28, task status `Accepted`, one cumulative run tick, an
-empty Worker execution context, and the task's return to the run queue.
+capture exactly one PIT channel 0 interrupt on the fixed Agent stack.
+`AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK` additionally requires a complete in-range
+integer/return frame and a successful switch back to the kernel stack.
+`AGENT_KERNEL_TIMER_PREEMPTION_OK` requires event 28, task status `Accepted`, one
+cumulative run tick, an empty Worker execution context, and the task's return to
+the run queue. `AGENT_KERNEL_AGENT_CPU_RESUME_OK` is emitted only after event 29
+redispatches that task, `iretq` resumes the captured RIP, and event 30 records
+the Agent's switch back as `TaskYielded`.
 `AGENT_KERNEL_UART_IRQ_OK` requires IRQ4 to capture one THRE interrupt and normal
-context to validate its IIR/LSR mailbox. That signal causes event 29 and the
+context to validate its IIR/LSR mailbox. That signal causes event 31 and the
 running Driver Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is
-emitted by the immutable causal request at event 36 through the registered COM1
+emitted by the immutable causal request at event 38 through the registered COM1
 endpoint and `PortIoBackend`; the surrounding text uses the existing boot
 serial writer. The remaining success markers are printed only after the write
 and Driver Invocation terminal records are verified as `Completed` and the

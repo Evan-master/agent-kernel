@@ -4,14 +4,16 @@
 //! x86_64 bootloader entry for Agent Kernel.
 //!
 //! This crate owns the architecture-specific QEMU boot entry. It proves
-//! persistent exceptions, physical PIT-driven task preemption, and the bounded
-//! COM1 interrupt-to-command flow before publishing the deterministic handoff.
+//! persistent exceptions, physical PIT preemption of a real Agent CPU context,
+//! and the bounded COM1 interrupt-to-command flow before publishing the
+//! deterministic handoff.
 
 use core::{arch::asm, panic::PanicInfo};
 
 use agent_kernel_boot::{BootConfig, BootedKernel};
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
+mod agent_cpu;
 mod event_trace;
 mod exception_runtime;
 mod pic;
@@ -20,6 +22,7 @@ mod port_driver_flow;
 mod timer_task_flow;
 mod uart_interrupt;
 
+use agent_cpu::PreparedAgentCpu;
 use port_driver_flow::PortDriverSetup;
 use timer_task_flow::TimerTaskFlow;
 
@@ -51,14 +54,29 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
             let Some(timer_flow) = TimerTaskFlow::prepare(&mut booted) else {
                 fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
             };
-            let Some(timer_signal) = pit_timer::wait_for_tick() else {
-                fatal_boot("AGENT_KERNEL_PIT_IRQ_ERROR");
+            let Some(agent_cpu) = PreparedAgentCpu::prepare() else {
+                fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
+            };
+            let Some(preempted_cpu) = agent_cpu.run_until_preempted() else {
+                fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
             };
             serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
-            if !timer_flow.apply_tick(&mut booted, timer_signal) {
+            serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
+            let Some(queued_timer_flow) = timer_flow.apply_preemption(&mut booted, &preempted_cpu)
+            else {
                 fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
-            }
+            };
             serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
+            let Some(running_timer_flow) = queued_timer_flow.redispatch(&mut booted) else {
+                fatal_boot("AGENT_KERNEL_TIMER_REDISPATCH_ERROR");
+            };
+            let Some(yielded_cpu) = preempted_cpu.resume_until_yield() else {
+                fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
+            };
+            if !running_timer_flow.record_yield(&mut booted, yielded_cpu) {
+                fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
+            }
+            serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
 
             let Some(uart_signal) = uart_interrupt::wait_for_uart_thre() else {
                 fatal_boot("AGENT_KERNEL_UART_IRQ_ERROR");

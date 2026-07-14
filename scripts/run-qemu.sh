@@ -25,7 +25,9 @@ for expected in \
   "AGENT_KERNEL_QEMU_BOOT_OK" \
   "AGENT_KERNEL_EXCEPTION_BASELINE_OK" \
   "AGENT_KERNEL_PIT_IRQ_OK" \
+  "AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK" \
   "AGENT_KERNEL_TIMER_PREEMPTION_OK" \
+  "AGENT_KERNEL_AGENT_CPU_RESUME_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \
@@ -58,16 +60,18 @@ for expected in \
   "event[26] task_queued" \
   "event[27] task_dispatched" \
   "event[28] task_quantum_expired" \
-  "event[29] device_event_raised" \
-  "event[30] device_event_delivered" \
-  "event[31] driver_invocation_queued" \
-  "event[32] driver_invocation_dispatched" \
-  "event[33] driver_invocation_ticked" \
-  "event[34] device_event_acknowledged" \
-  "event[35] driver_command_submitted" \
-  "event[36] driver_command_dispatched" \
-  "event[37] driver_command_completed" \
-  "event[38] driver_invocation_completed" \
+  "event[29] task_dispatched" \
+  "event[30] task_yielded" \
+  "event[31] device_event_raised" \
+  "event[32] device_event_delivered" \
+  "event[33] driver_invocation_queued" \
+  "event[34] driver_invocation_dispatched" \
+  "event[35] driver_invocation_ticked" \
+  "event[36] device_event_acknowledged" \
+  "event[37] driver_command_submitted" \
+  "event[38] driver_command_dispatched" \
+  "event[39] driver_command_completed" \
+  "event[40] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -77,7 +81,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 38 ]]; then
-  printf 'expected exactly 38 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 40 ]]; then
+  printf 'expected exactly 40 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

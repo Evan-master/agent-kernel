@@ -87,4 +87,28 @@ fn booted_kernel_expires_running_worker_quantum_and_requeues_task() {
     assert_eq!(kernel.events().len(), 21);
     assert_eq!(kernel.events()[19].kind, EventKind::TaskDispatched);
     assert_eq!(kernel.events()[20].kind, EventKind::TaskQuantumExpired);
+
+    assert_eq!(kernel.sys_dispatch_next_with_quantum(worker, 1), Ok(task));
+    let yielded = kernel.sys_yield_task(worker, task).unwrap();
+
+    assert_eq!(yielded.kind, EventKind::TaskYielded);
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(kernel.tasks()[0].run_ticks, 1);
+    assert_eq!(
+        kernel.run_queue(),
+        &[RunQueueEntry {
+            task,
+            agent: worker,
+        }]
+    );
+    let context = kernel
+        .execution_contexts()
+        .iter()
+        .find(|context| context.agent == worker)
+        .unwrap();
+    assert_eq!(context.state, AgentExecutionState::Idle);
+    assert_eq!(context.task, None);
+    assert_eq!(kernel.events().len(), 23);
+    assert_eq!(kernel.events()[21].kind, EventKind::TaskDispatched);
+    assert_eq!(kernel.events()[22].kind, EventKind::TaskYielded);
 }
