@@ -8,8 +8,9 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DeviceEventKind,
-    DeviceEventPayload, DriverCommandKind, DriverCommandPayload, MemoryValue, NamespaceKey,
-    NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
+    DeviceEventPayload, DriverCommandKind, DriverCommandPayload, DriverEndpointDescriptor,
+    MemoryValue, NamespaceKey, NamespaceObject, Operation, OperationSet, ResourceId, ResourceKind,
+    TaskId,
 };
 use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
 
@@ -133,7 +134,20 @@ pub fn drive_driver_flow(kernel: &mut SupervisorKernel, context: ResourceFlowCon
                 .with(Operation::Verify),
         )
         .expect("owned device resource should fit in simulator kernel");
-    let mut backend = VirtualRegisterDevice::new(device.resource);
+    kernel
+        .sys_register_driver_endpoint(
+            context.agent,
+            device.capability,
+            device.resource,
+            DriverEndpointDescriptor::virtual_channel(1),
+        )
+        .expect("owner should register virtual device endpoint");
+    let endpoint = kernel
+        .driver_endpoint(device.resource)
+        .expect("registered device endpoint should resolve");
+    let mut backend =
+        VirtualRegisterDevice::new(endpoint).expect("virtual endpoint should configure backend");
+    assert_eq!(backend.channel(), 1);
     let driver_capability = kernel
         .sys_derive_capability(
             context.agent,

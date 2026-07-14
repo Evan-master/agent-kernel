@@ -33,6 +33,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),
+        EventKind::DriverEndpointRegistered => {
+            format_capability_event(event, "driver_endpoint_registered")
+        }
         EventKind::DriverBound => format_driver_event(event, "driver_bound"),
         EventKind::DeviceEventRaised => format_device_event(event, "device_event_raised"),
         EventKind::DeviceEventDelivered => format_device_event(event, "device_event_delivered"),

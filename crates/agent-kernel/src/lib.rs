@@ -8,6 +8,7 @@
 mod agent;
 mod capability;
 mod driver;
+mod driver_endpoint;
 mod driver_runtime;
 mod fault;
 mod kernel_default;

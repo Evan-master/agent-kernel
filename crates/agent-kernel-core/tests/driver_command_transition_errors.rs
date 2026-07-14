@@ -5,7 +5,7 @@ use agent_kernel_core::{
     OperationSet,
 };
 
-use driver_command_support::{prepare_bound_device, submit};
+use driver_command_support::{prepare_bound_device, register_virtual_endpoint, submit};
 
 #[test]
 fn complete_driver_command_requires_bound_driver_without_mutation() {
@@ -16,6 +16,7 @@ fn complete_driver_command_requires_bound_driver_without_mutation() {
                 .with(Operation::Act),
             OperationSet::only(Operation::Act),
         );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
     core.dispatch_driver_command(driver, driver_capability, command)
         .unwrap();
@@ -39,15 +40,17 @@ fn complete_driver_command_requires_bound_driver_without_mutation() {
 
 #[test]
 fn complete_driver_command_requires_act_authority_without_mutation() {
-    let (mut core, _, driver, device, _, driver_capability) = prepare_bound_device::<10, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::empty()
-            .with(Operation::Observe)
-            .with(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, driver_capability) =
+        prepare_bound_device::<10, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::empty()
+                .with(Operation::Observe)
+                .with(Operation::Act),
+        );
     let observe_capability = core
         .grant_capability(driver, device, OperationSet::only(Operation::Observe))
         .unwrap();
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
     core.dispatch_driver_command(driver, driver_capability, command)
         .unwrap();
@@ -70,10 +73,12 @@ fn complete_driver_command_requires_act_authority_without_mutation() {
 
 #[test]
 fn complete_driver_command_log_full_leaves_command_dispatched() {
-    let (mut core, _, driver, device, _, driver_capability) = prepare_bound_device::<7, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::only(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, driver_capability) =
+        prepare_bound_device::<8, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::only(Operation::Act),
+        );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
     core.dispatch_driver_command(driver, driver_capability, command)
         .unwrap();
@@ -91,15 +96,17 @@ fn complete_driver_command_log_full_leaves_command_dispatched() {
         DriverCommandStatus::Dispatched
     );
     assert_eq!(core.driver_commands()[0].result, None);
-    assert_eq!(core.events().len(), 7);
+    assert_eq!(core.events().len(), 8);
 }
 
 #[test]
 fn fail_driver_command_records_terminal_failure() {
-    let (mut core, _, driver, device, _, driver_capability) = prepare_bound_device::<8, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::only(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, driver_capability) =
+        prepare_bound_device::<9, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::only(Operation::Act),
+        );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
     core.dispatch_driver_command(driver, driver_capability, command)
         .unwrap();
@@ -121,10 +128,12 @@ fn fail_driver_command_records_terminal_failure() {
 
 #[test]
 fn terminal_driver_command_rejects_second_transition_without_mutation() {
-    let (mut core, _, driver, device, _, driver_capability) = prepare_bound_device::<9, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::only(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, driver_capability) =
+        prepare_bound_device::<9, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::only(Operation::Act),
+        );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
     core.dispatch_driver_command(driver, driver_capability, command)
         .unwrap();
@@ -158,6 +167,7 @@ fn retired_resource_rejects_driver_command_transition() {
                 .with(Operation::Rollback),
             OperationSet::only(Operation::Act),
         );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, driver_capability, device, None).unwrap();
     core.dispatch_driver_command(driver, driver_capability, command)
         .unwrap();

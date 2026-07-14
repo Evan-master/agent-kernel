@@ -2,7 +2,8 @@ use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, DeviceEventKind, DeviceEventPayload,
     DeviceEventStatus, DriverCommandKind, DriverCommandPayload, DriverCommandResult,
-    DriverCommandStatus, DriverInvocationStatus, EventKind, Operation, OperationSet, ResourceKind,
+    DriverCommandStatus, DriverEndpointDescriptor, DriverInvocationStatus, EventKind, Operation,
+    OperationSet, ResourceKind,
 };
 
 type TestKernel = AgentKernel<4, 4, 8, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2>;
@@ -36,6 +37,12 @@ fn driver_syscalls_expose_event_and_command_lifecycles() {
                 .with(Operation::Act),
         )
         .unwrap();
+    let endpoint = DriverEndpointDescriptor::virtual_channel(1);
+    kernel
+        .sys_register_driver_endpoint(owner, owner_capability, device, endpoint)
+        .unwrap();
+    assert_eq!(kernel.driver_endpoint(device).unwrap().descriptor, endpoint);
+    assert_eq!(kernel.driver_endpoints().len(), 1);
     let image = kernel
         .sys_register_agent_image(
             owner,

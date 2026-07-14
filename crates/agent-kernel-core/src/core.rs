@@ -5,9 +5,9 @@
 use crate::{
     ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord, AgentRecord,
     Capability, CheckpointRecord, DeviceEventRecord, DriverBindingRecord, DriverCommandRecord,
-    DriverInvocationRecord, Event, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
-    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
-    RunQueueEntry, Task, WaiterRecord,
+    DriverEndpointRecord, DriverInvocationRecord, Event, FaultHandlerRecord, FaultPolicyRecord,
+    FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord,
+    Resource, RunQueueEntry, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -55,6 +55,7 @@ pub struct KernelCore<
     pub(crate) fault_handlers: [FaultHandlerRecord; FAULT_HANDLERS],
     pub(crate) fault_policies: [FaultPolicyRecord; FAULT_POLICIES],
     pub(crate) waiters: [WaiterRecord; WAITERS],
+    pub(crate) driver_endpoints: [DriverEndpointRecord; RESOURCES],
     pub(crate) driver_bindings: [DriverBindingRecord; DRIVER_BINDINGS],
     pub(crate) device_events: [DeviceEventRecord; DEVICE_EVENTS],
     pub(crate) driver_commands: [DriverCommandRecord; DRIVER_COMMANDS],
@@ -77,6 +78,7 @@ pub struct KernelCore<
     pub(crate) fault_handler_len: usize,
     pub(crate) fault_policy_len: usize,
     pub(crate) waiter_len: usize,
+    pub(crate) driver_endpoint_len: usize,
     pub(crate) driver_binding_len: usize,
     pub(crate) device_event_len: usize,
     pub(crate) driver_command_len: usize,
@@ -172,6 +174,7 @@ impl<
             fault_handlers: [FaultHandlerRecord::empty(); FAULT_HANDLERS],
             fault_policies: [FaultPolicyRecord::empty(); FAULT_POLICIES],
             waiters: [WaiterRecord::empty(); WAITERS],
+            driver_endpoints: [DriverEndpointRecord::empty(); RESOURCES],
             driver_bindings: [DriverBindingRecord::empty(); DRIVER_BINDINGS],
             device_events: [DeviceEventRecord::empty(); DEVICE_EVENTS],
             driver_commands: [DriverCommandRecord::empty(); DRIVER_COMMANDS],
@@ -194,6 +197,7 @@ impl<
             fault_handler_len: 0,
             fault_policy_len: 0,
             waiter_len: 0,
+            driver_endpoint_len: 0,
             driver_binding_len: 0,
             device_event_len: 0,
             driver_command_len: 0,

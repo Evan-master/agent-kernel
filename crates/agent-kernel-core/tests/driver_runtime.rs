@@ -1,8 +1,8 @@
 use agent_kernel_core::{
     AgentEntryKind, AgentExecutionState, AgentId, AgentImageDigest, AgentImageKind,
     DeviceEventKind, DeviceEventPayload, DeviceEventStatus, DriverCommandKind,
-    DriverCommandPayload, DriverCommandResult, DriverInvocationId, DriverInvocationStatus,
-    EventKind, KernelCore, Operation, OperationSet, ResourceKind,
+    DriverCommandPayload, DriverCommandResult, DriverEndpointDescriptor, DriverInvocationId,
+    DriverInvocationStatus, EventKind, KernelCore, Operation, OperationSet, ResourceKind,
 };
 
 type TestKernel = KernelCore<4, 4, 10, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2>;
@@ -34,6 +34,13 @@ fn delivered_event_runs_as_driver_invocation_and_completes() {
                 .with(Operation::Act),
         )
         .unwrap();
+    core.register_driver_endpoint(
+        owner,
+        owner_capability,
+        device,
+        DriverEndpointDescriptor::virtual_channel(1),
+    )
+    .unwrap();
     let image = core
         .register_agent_image(
             owner,

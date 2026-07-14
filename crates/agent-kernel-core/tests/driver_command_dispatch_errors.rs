@@ -4,7 +4,7 @@ use agent_kernel_core::{
     DriverCommandId, DriverCommandStatus, KernelError, Operation, OperationSet,
 };
 
-use driver_command_support::{prepare_bound_device, submit};
+use driver_command_support::{prepare_bound_device, register_virtual_endpoint, submit};
 
 #[test]
 fn missing_command_cannot_dispatch() {
@@ -44,10 +44,12 @@ fn only_bound_driver_can_dispatch() {
 
 #[test]
 fn revoked_act_authority_blocks_dispatch() {
-    let (mut core, _, driver, device, _, capability) = prepare_bound_device::<9, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::only(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, capability) =
+        prepare_bound_device::<9, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::only(Operation::Act),
+        );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, capability, device, None).unwrap();
     core.revoke_capability(capability).unwrap();
     let events_before = core.events().len();
@@ -60,6 +62,25 @@ fn revoked_act_authority_blocks_dispatch() {
         DriverCommandStatus::Submitted
     );
     assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn revoked_authority_is_rejected_before_endpoint_lookup() {
+    let (mut core, _, driver, device, _, capability) = prepare_bound_device::<8, 1>(
+        OperationSet::only(Operation::Delegate),
+        OperationSet::only(Operation::Act),
+    );
+    let command = submit(&mut core, driver, capability, device, None).unwrap();
+    core.revoke_capability(capability).unwrap();
+
+    assert_eq!(
+        core.dispatch_driver_command(driver, capability, command),
+        Err(KernelError::CapabilityRevoked)
+    );
+    assert_eq!(
+        core.driver_commands()[0].status,
+        DriverCommandStatus::Submitted
+    );
 }
 
 #[test]
@@ -88,10 +109,12 @@ fn retired_resource_blocks_dispatch() {
 
 #[test]
 fn full_event_log_leaves_command_submitted() {
-    let (mut core, _, driver, device, _, capability) = prepare_bound_device::<6, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::only(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, capability) =
+        prepare_bound_device::<7, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::only(Operation::Act),
+        );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, capability, device, None).unwrap();
 
     let result = core.dispatch_driver_command(driver, capability, command);
@@ -102,15 +125,17 @@ fn full_event_log_leaves_command_submitted() {
         DriverCommandStatus::Submitted
     );
     assert_eq!(core.driver_commands()[0].result, None);
-    assert_eq!(core.events().len(), 6);
+    assert_eq!(core.events().len(), 7);
 }
 
 #[test]
 fn command_cannot_dispatch_twice() {
-    let (mut core, _, driver, device, _, capability) = prepare_bound_device::<8, 1>(
-        OperationSet::only(Operation::Delegate),
-        OperationSet::only(Operation::Act),
-    );
+    let (mut core, owner, driver, device, owner_capability, capability) =
+        prepare_bound_device::<8, 1>(
+            OperationSet::only(Operation::Delegate),
+            OperationSet::only(Operation::Act),
+        );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     let command = submit(&mut core, driver, capability, device, None).unwrap();
     core.dispatch_driver_command(driver, capability, command)
         .unwrap();

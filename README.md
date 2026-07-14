@@ -10,11 +10,12 @@ agent executable image identity records, checkpoints, rollback, verification,
 tasks, delegation, native mailbox IPC, task wait signals, task fault traps,
 fault handlers, fault policies, memory cells, native object namespace entries,
 driver bindings, device events, driver invocations, driver commands, agent
-execution contexts, HAL dispatch requests, and event logs.
+execution contexts, driver endpoint registries, HAL dispatch requests, and
+event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, driver bindings, device event lifecycle, driver invocation scheduling, driver command lifecycle, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, driver endpoint registry, driver bindings, device event lifecycle, driver invocation scheduling, driver command lifecycle, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow.
@@ -71,18 +72,19 @@ The v0 flow is deliberately small:
 43. Let the target agent observe the workspace through that derived capability.
 44. Register a dedicated Driver Agent with its own idle execution context.
 45. Create an owned device resource under the workspace.
-46. Derive observe/act driver authority from the owner to the Driver Agent.
-47. Register and verify a Driver image, then launch the agent into a device-scoped Driver entry.
-48. Bind the Driver Agent as the native driver for that device.
-49. Raise a typed device event against the bound device.
-50. Deliver that event and atomically queue a Driver Invocation.
-51. Dispatch the invocation with a deterministic quantum and advance one explicit tick.
-52. Let the running Driver Agent acknowledge the event.
-53. Let it submit a typed command causally linked to the running invocation.
-54. Dispatch an immutable, authorized command request to the HAL boundary.
-55. Execute the request against a stateful virtual device and record its fixed-width result.
-56. Complete the invocation and return the Driver Agent execution context to idle.
-57. Print the kernel event log from the supervisor.
+46. Register an immutable virtual endpoint for the device under `Delegate` authority.
+47. Derive observe/act driver authority from the owner to the Driver Agent.
+48. Register and verify a Driver image, then launch the agent into a device-scoped Driver entry.
+49. Bind the Driver Agent as the native driver for that device.
+50. Raise a typed device event against the bound device.
+51. Deliver that event and atomically queue a Driver Invocation.
+52. Dispatch the invocation with a deterministic quantum and advance one explicit tick.
+53. Let the running Driver Agent acknowledge the event.
+54. Let it submit a typed command causally linked to the running invocation.
+55. Resolve its kernel-owned endpoint and dispatch an immutable request to the HAL boundary.
+56. Execute the request against a stateful virtual device and record its fixed-width result.
+57. Complete the invocation and return the Driver Agent execution context to idle.
+58. Print the kernel event log from the supervisor.
 
 All resource operations go through explicit capabilities. Agent registration,
 agent launch, agent image registration, agent image verification, agent image retirement, agent
@@ -96,13 +98,13 @@ fault policy application, task fault recovery, task waiting, signal emission,
 task wakeup, message send, message receive,
 message acknowledgement, memory cell creation, memory recall, memory remember,
 namespace bind, namespace resolve, namespace rebind, resource retirement, driver
-binding, device event raise, device event delivery, device event
+endpoint registration, driver binding, device event raise, device event delivery, device event
 acknowledgement, driver invocation queueing, dispatch, ticks, quantum expiry,
 and completion, plus driver command submission, dispatch, completion, and
 failure are first-class kernel events, not external tooling.
 Agents, agent images, launch entries, resources, checkpoints, waiters, fault records, fault
 handlers, fault policies, messages, memory cells, namespace entries, driver
-bindings, device events, driver invocations, and driver commands are also
+endpoints, driver bindings, device events, driver invocations, and driver commands are also
 queryable fixed-capacity kernel records, and new root or derived capabilities
 can only be issued to active registered agents. Kernel operations that act on
 behalf of an `AgentId` reject unknown, suspended, or retired actors before authorization, state, queue,
@@ -156,9 +158,13 @@ move each command exactly once from `Submitted` through `Dispatched` to
 `Completed` or `Failed`. Dispatch returns an immutable request to the no_std HAL
 contract. The supervisor's virtual register backend executes that request and
 returns the terminal outcome without owning kernel authority or command state.
-All records and transitions are replayable. Physical I/O requires a future
-kernel-owned endpoint registry that maps resource identities to architecture
-MMIO, port, interrupt, and DMA descriptors; raw addresses are not command data.
+The kernel endpoint registry maps each device-like `ResourceId` to one validated
+`Virtual`, `Mmio`, or `Port` descriptor under `Delegate` authority. It rejects
+invalid or overlapping ranges, preserves retired mappings for audit, and blocks
+command dispatch until the resource has an endpoint. Raw addresses are never
+Agent command data. All records and transitions are replayable. Physical I/O
+still requires architecture-owned volatile access, page mapping, interrupt
+routing, and DMA policy on top of these endpoint records.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -301,19 +307,20 @@ event[59] observation agent=2 resource=1
 event[60] agent_registered agent=4 target_agent=4
 event[61] resource_created agent=1 resource=4 capability=6
 event[62] capability_granted agent=1 resource=4 capability=6
-event[63] capability_derived agent=1 resource=4 capability=7
-event[64] agent_image_registered agent=1 resource=4 capability=6 image=3 kind=driver
-event[65] agent_image_verified agent=1 resource=4 capability=6 image=3 kind=driver
-event[66] agent_launched agent=4 resource=4 capability=7 image=3
-event[67] driver_bound agent=1 resource=4 capability=6 driver_binding=1 target_agent=4
-event[68] device_event_raised agent=1 resource=4 capability=6 driver_binding=1 device_event=1 driver_invocation=0 kind=state_changed code=1 value=2
-event[69] device_event_delivered agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 kind=state_changed code=1 value=2
-event[70] driver_invocation_queued agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=0 quantum=0
-event[71] driver_invocation_dispatched agent=4 resource=4 capability=0 driver_binding=1 device_event=1 driver_invocation=1 ticks=0 quantum=2
-event[72] driver_invocation_ticked agent=4 resource=4 capability=0 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=1
-event[73] device_event_acknowledged agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 kind=state_changed code=1 value=2
-event[74] driver_command_submitted agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11
-event[75] driver_command_dispatched agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11
-event[76] driver_command_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11 result_code=0 result_value=11
-event[77] driver_invocation_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=0
+event[63] driver_endpoint_registered agent=1 resource=4 capability=6
+event[64] capability_derived agent=1 resource=4 capability=7
+event[65] agent_image_registered agent=1 resource=4 capability=6 image=3 kind=driver
+event[66] agent_image_verified agent=1 resource=4 capability=6 image=3 kind=driver
+event[67] agent_launched agent=4 resource=4 capability=7 image=3
+event[68] driver_bound agent=1 resource=4 capability=6 driver_binding=1 target_agent=4
+event[69] device_event_raised agent=1 resource=4 capability=6 driver_binding=1 device_event=1 driver_invocation=0 kind=state_changed code=1 value=2
+event[70] device_event_delivered agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 kind=state_changed code=1 value=2
+event[71] driver_invocation_queued agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=0 quantum=0
+event[72] driver_invocation_dispatched agent=4 resource=4 capability=0 driver_binding=1 device_event=1 driver_invocation=1 ticks=0 quantum=2
+event[73] driver_invocation_ticked agent=4 resource=4 capability=0 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=1
+event[74] device_event_acknowledged agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 kind=state_changed code=1 value=2
+event[75] driver_command_submitted agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11
+event[76] driver_command_dispatched agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11
+event[77] driver_command_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 driver_command=1 kind=write opcode=3 value=11 result_code=0 result_value=11
+event[78] driver_invocation_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=0
 ```

@@ -76,6 +76,7 @@ impl<
         let resource = self.find_resource(record.resource)?;
         Self::ensure_driver_resource(resource.kind)?;
         self.ensure_authorized(driver, capability, record.resource, Operation::Act)?;
+        self.find_driver_endpoint_record(record.resource)?;
         self.ensure_driver_command_invocation_running(record)?;
         self.ensure_event_slots(1)?;
 

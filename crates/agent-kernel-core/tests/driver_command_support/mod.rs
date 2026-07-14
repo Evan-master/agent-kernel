@@ -1,7 +1,7 @@
 use agent_kernel_core::{
     AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DeviceEventId,
-    DriverCommandId, DriverCommandKind, DriverCommandPayload, KernelCore, KernelError, Operation,
-    OperationSet, ResourceId, ResourceKind,
+    DriverCommandId, DriverCommandKind, DriverCommandPayload, DriverEndpointDescriptor, KernelCore,
+    KernelError, Operation, OperationSet, ResourceId, ResourceKind,
 };
 
 pub type EventKernel<const EVENTS: usize, const DRIVER_COMMANDS: usize> =
@@ -109,6 +109,22 @@ pub fn admit_driver<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
         image,
         AgentEntryKind::Driver,
         None,
+    )
+    .unwrap();
+}
+
+#[allow(dead_code)]
+pub fn register_virtual_endpoint<const EVENTS: usize, const DRIVER_COMMANDS: usize>(
+    core: &mut EventKernel<EVENTS, DRIVER_COMMANDS>,
+    installer: AgentId,
+    capability: CapabilityId,
+    device: ResourceId,
+) {
+    core.register_driver_endpoint(
+        installer,
+        capability,
+        device,
+        DriverEndpointDescriptor::virtual_channel(device.raw()),
     )
     .unwrap();
 }

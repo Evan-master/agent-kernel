@@ -50,6 +50,9 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                     EventKind::AgentRetired => {
                         serial_write_line("agent_retired");
                     }
+                    EventKind::DriverEndpointRegistered => {
+                        serial_write_line("driver_endpoint_registered");
+                    }
                     EventKind::DriverBound => {
                         serial_write_line("driver_bound");
                     }

@@ -30,6 +30,9 @@ mod driver_command;
 mod driver_command_event;
 mod driver_command_runtime;
 mod driver_command_submit;
+mod driver_endpoint;
+mod driver_endpoint_event;
+mod driver_endpoint_store;
 mod driver_event;
 mod driver_invocation;
 mod driver_invocation_event;
@@ -91,6 +94,7 @@ pub use driver_command::{
     DriverCommandKind, DriverCommandPayload, DriverCommandRecord, DriverCommandRequest,
     DriverCommandResult, DriverCommandStatus,
 };
+pub use driver_endpoint::{DriverEndpointDescriptor, DriverEndpointKind, DriverEndpointRecord};
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
 pub use error::KernelError;
 pub use event::{Event, EventKind};

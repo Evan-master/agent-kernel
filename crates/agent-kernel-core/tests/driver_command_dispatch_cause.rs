@@ -5,7 +5,9 @@ use agent_kernel_core::{
     Operation, OperationSet,
 };
 
-use driver_command_support::{admit_driver, prepare_bound_device, submit};
+use driver_command_support::{
+    admit_driver, prepare_bound_device, register_virtual_endpoint, submit,
+};
 
 #[test]
 fn causal_command_requires_its_invocation_to_still_be_running() {
@@ -18,6 +20,7 @@ fn causal_command_requires_its_invocation_to_still_be_running() {
                 .with(Operation::Observe)
                 .with(Operation::Act),
         );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     admit_driver(&mut core, owner, driver, device);
     let event = core
         .raise_device_event(
@@ -59,6 +62,7 @@ fn backend_outcome_can_arrive_after_causal_invocation_completes() {
                 .with(Operation::Observe)
                 .with(Operation::Act),
         );
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     admit_driver(&mut core, owner, driver, device);
     let event = core
         .raise_device_event(

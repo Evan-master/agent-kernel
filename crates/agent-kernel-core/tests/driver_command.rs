@@ -5,7 +5,7 @@ use agent_kernel_core::{
     DriverCommandResult, DriverCommandStatus, EventKind, Operation, OperationSet,
 };
 
-use driver_command_support::{admit_driver, prepare_bound_device};
+use driver_command_support::{admit_driver, prepare_bound_device, register_virtual_endpoint};
 
 #[test]
 fn driver_command_reaches_completed_with_device_event_cause() {
@@ -19,6 +19,7 @@ fn driver_command_reaches_completed_with_device_event_cause() {
                 .with(Operation::Act),
         );
     let binding = core.driver_bindings()[0].id;
+    register_virtual_endpoint(&mut core, owner, owner_capability, device);
     admit_driver(&mut core, owner, driver, device);
     let cause = core
         .raise_device_event(
