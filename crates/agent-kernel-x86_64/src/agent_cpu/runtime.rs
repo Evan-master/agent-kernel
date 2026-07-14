@@ -1,21 +1,37 @@
-//! Type-state runtime for one fixed x86_64 Agent CPU context.
+//! Type-state runtime for one ring-3 x86_64 Agent context.
 //!
-//! Each transition validates assembly evidence before exposing the next token
-//! to the semantic task adapter.
+//! Each transition validates a complete privilege frame on the TSS RSP0 stack
+//! before exposing evidence to the semantic task adapter.
 
-use core::{arch::asm, sync::atomic::Ordering};
+use core::sync::atomic::Ordering;
 
-use agent_kernel_x86_64::context::{InterruptStackFrame, INTERRUPT_STACK_FRAME_BYTES};
+use agent_kernel_x86_64::{
+    context::{PrivilegeInterruptStackFrame, PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES},
+    interrupt::AGENT_CALL_VECTOR,
+    privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
+    user_memory::AGENT_CALL_RETURN_OFFSET,
+};
 
 use super::{assembly, storage};
-use crate::pit_timer;
+use crate::{
+    agent_memory::PreparedUserMemory,
+    exception_runtime, pit_timer,
+    privilege_runtime::{
+        current_privilege_level, stack_canary_valid, PrivilegeBoundary, PrivilegedStackBounds,
+    },
+};
+
+const RFLAGS_IOPL: u64 = 3 << 12;
+const RFLAGS_NESTED_TASK: u64 = 1 << 14;
 
 pub(crate) struct PreparedAgentCpu {
-    stack: storage::StackBounds,
+    memory: PreparedUserMemory,
+    kernel_stack: PrivilegedStackBounds,
 }
 
 pub(crate) struct PreemptedAgentCpu {
-    stack: storage::StackBounds,
+    memory: PreparedUserMemory,
+    kernel_stack: PrivilegedStackBounds,
     frame_rsp: u64,
     frame_rip: u64,
     ticks: u8,
@@ -26,59 +42,64 @@ pub(crate) struct YieldedAgentCpu {
 }
 
 impl PreparedAgentCpu {
-    pub(crate) fn prepare() -> Option<Self> {
-        let entry_rip = agent_task_entry as *const () as usize as u64;
+    pub(crate) fn prepare(
+        privilege: &PrivilegeBoundary,
+        memory: PreparedUserMemory,
+    ) -> Option<Self> {
+        storage::initialize()?;
+        let kernel_stack = privilege.stack_bounds();
+        if current_privilege_level() != 0 || !stack_canary_valid(kernel_stack) {
+            return None;
+        }
+        // SAFETY: storage initialization left IF clear, and this gate is the
+        // single bounded Agent-call ingress for the current IDT.
+        unsafe {
+            exception_runtime::install_user_interrupt_gate(
+                AGENT_CALL_VECTOR,
+                assembly::agent_kernel_agent_call_stub,
+            )?;
+        }
         Some(Self {
-            stack: storage::initialize(entry_rip)?,
+            memory,
+            kernel_stack,
         })
     }
 
     pub(crate) fn run_until_preempted(self) -> Option<PreemptedAgentCpu> {
-        // SAFETY: both context slots and the bootstrap frame are exclusively
-        // owned by this type-state transition, with IF clear on entry.
+        pit_timer::arm(assembly::agent_kernel_agent_timer_irq_stub)?;
+        let layout = self.memory.layout();
+        // SAFETY: both user pages and the RSP0 stack were validated, all gates
+        // are live, and entry constructs the complete privilege return frame.
         unsafe {
-            assembly::context_switch(
+            assembly::enter_user(
                 storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
-                storage::AGENT_KERNEL_AGENT_CONTEXT_RSP.pointer(),
+                layout.code_start(),
+                layout.stack_top(),
+                USER_CODE_SELECTOR,
+                USER_DATA_SELECTOR,
             );
         }
         pit_timer::disarm();
 
         let frame_rsp = storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP.load(Ordering::Acquire);
         let frame_rip = storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP.load(Ordering::Acquire);
-        let frame_end = usize::try_from(frame_rsp)
-            .ok()?
-            .checked_add(INTERRUPT_STACK_FRAME_BYTES)?;
-        if storage::AGENT_KERNEL_AGENT_ARM_FAILED.load(Ordering::Acquire) != 0
-            || storage::AGENT_KERNEL_AGENT_ENTRY_COUNT.load(Ordering::Acquire) != 1
-            || storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 1
+        let frame = read_validated_frame(frame_rsp, self.kernel_stack)?;
+        if storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_IRQ_SEEN.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
-            || frame_rsp < self.stack.start as u64
-            || frame_end > self.stack.end
-            || !storage::stack_canary_valid(self.stack)
+            || frame.rip != frame_rip
+            || !user_frame_valid(&frame, layout)
+            || current_privilege_level() != 0
+            || !stack_canary_valid(self.kernel_stack)
             || !storage::interrupts_are_clear()
         {
             return None;
         }
 
-        // SAFETY: the complete frame range was checked against the fixed stack,
-        // and the Agent cannot mutate it while the kernel owns execution.
-        let frame = unsafe { (frame_rsp as *const InterruptStackFrame).read_volatile() };
-        let entry_rsp = storage::AGENT_KERNEL_AGENT_ENTRY_RSP.load(Ordering::Acquire);
-        if frame.rip != frame_rip
-            || frame.rip == 0
-            || frame.cs & 0x3 != 0
-            || frame.rflags & storage::RFLAGS_INTERRUPT_ENABLE == 0
-            || entry_rsp < self.stack.start as u64
-            || entry_rsp >= self.stack.end as u64
-        {
-            return None;
-        }
-
         Some(PreemptedAgentCpu {
-            stack: self.stack,
+            memory: self.memory,
+            kernel_stack: self.kernel_stack,
             frame_rsp,
             frame_rip,
             ticks: 1,
@@ -91,31 +112,39 @@ impl PreemptedAgentCpu {
         self.ticks
     }
 
-    pub(crate) fn resume_until_yield(self) -> Option<YieldedAgentCpu> {
+    pub(crate) fn resume_until_yield(mut self) -> Option<YieldedAgentCpu> {
         if storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP.load(Ordering::Acquire) != self.frame_rsp
             || storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP.load(Ordering::Acquire) != self.frame_rip
             || storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) != 1
+            || !self.memory.release_for_agent_call()
         {
             return None;
         }
 
-        // SAFETY: frame_rsp names the validated complete interrupt frame. The
+        // SAFETY: frame_rsp names the validated complete privilege frame. The
         // resume assembly saves a fresh kernel continuation before iretq.
         unsafe {
-            assembly::resume_interrupted_agent(
+            assembly::resume_interrupted_user(
                 storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
                 self.frame_rsp,
             );
         }
         pit_timer::disarm();
 
-        let yielded_rsp = storage::AGENT_KERNEL_AGENT_CONTEXT_RSP.load();
-        if storage::AGENT_KERNEL_AGENT_RESUMED.load(Ordering::Acquire) != 1
+        let call_rsp = storage::AGENT_KERNEL_AGENT_CALL_RSP.load(Ordering::Acquire);
+        let call_rip = storage::AGENT_KERNEL_AGENT_CALL_RIP.load(Ordering::Acquire);
+        let frame = read_validated_frame(call_rsp, self.kernel_stack)?;
+        let layout = self.memory.layout();
+        if storage::AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire) != 1
+            || storage::AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_YIELDED.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 1
-            || yielded_rsp < self.stack.start as u64
-            || yielded_rsp >= self.stack.end as u64
-            || !storage::stack_canary_valid(self.stack)
+            || frame.rip != call_rip
+            || frame.rip != layout.code_start() + AGENT_CALL_RETURN_OFFSET
+            || frame.rax != layout.signal_start()
+            || !user_frame_valid(&frame, layout)
+            || current_privilege_level() != 0
+            || !stack_canary_valid(self.kernel_stack)
             || !storage::interrupts_are_clear()
         {
             return None;
@@ -131,53 +160,28 @@ impl YieldedAgentCpu {
     }
 }
 
-extern "C" fn agent_task_entry() -> ! {
-    let rsp: u64;
-    // SAFETY: reading the active stack pointer has no side effect.
-    unsafe {
-        asm!("mov {}, rsp", out(reg) rsp, options(nomem, nostack, preserves_flags));
+fn read_validated_frame(
+    frame_rsp: u64,
+    stack: PrivilegedStackBounds,
+) -> Option<PrivilegeInterruptStackFrame> {
+    let frame_start = usize::try_from(frame_rsp).ok()?;
+    let frame_end = frame_start.checked_add(PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES)?;
+    if frame_start < stack.start || frame_end > stack.end {
+        return None;
     }
-    storage::AGENT_KERNEL_AGENT_ENTRY_RSP.store(rsp, Ordering::Release);
-    storage::AGENT_KERNEL_AGENT_ENTRY_COUNT.fetch_add(1, Ordering::AcqRel);
-
-    if pit_timer::arm(assembly::agent_kernel_agent_timer_irq_stub).is_none() {
-        storage::AGENT_KERNEL_AGENT_ARM_FAILED.store(1, Ordering::Release);
-        // SAFETY: the initial switch already populated the host context slot.
-        unsafe {
-            assembly::context_switch(
-                storage::AGENT_KERNEL_AGENT_CONTEXT_RSP.pointer(),
-                storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
-            );
-        }
-        stop_agent();
-    }
-
-    // SAFETY: IRQ0 is installed and the current RSP is inside the Agent stack.
-    unsafe {
-        asm!("sti", options(nomem, nostack));
-    }
-    while storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) == 0 {
-        core::hint::spin_loop();
-    }
-
-    storage::AGENT_KERNEL_AGENT_RESUMED.store(1, Ordering::Release);
-    storage::AGENT_KERNEL_AGENT_YIELDED.store(1, Ordering::Release);
-    // SAFETY: the resume path saved a fresh host continuation before iretq.
-    unsafe {
-        assembly::context_switch(
-            storage::AGENT_KERNEL_AGENT_CONTEXT_RSP.pointer(),
-            storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
-        );
-    }
-    stop_agent()
+    // SAFETY: the complete range lies in the kernel-owned RSP0 stack while CPL3
+    // is suspended and cannot modify it.
+    Some(unsafe { (frame_rsp as *const PrivilegeInterruptStackFrame).read_volatile() })
 }
 
-fn stop_agent() -> ! {
-    loop {
-        // SAFETY: this is an unreachable terminal path for a context that must
-        // not continue without an explicit future resume transition.
-        unsafe {
-            asm!("cli", "hlt", options(nomem, nostack));
-        }
-    }
+fn user_frame_valid(
+    frame: &PrivilegeInterruptStackFrame,
+    layout: agent_kernel_x86_64::user_memory::UserMemoryLayout,
+) -> bool {
+    frame.cs == u64::from(USER_CODE_SELECTOR)
+        && frame.user_ss == u64::from(USER_DATA_SELECTOR)
+        && layout.contains_code(frame.rip)
+        && layout.contains_stack_pointer(frame.user_rsp)
+        && frame.rflags & storage::RFLAGS_INTERRUPT_ENABLE != 0
+        && frame.rflags & (RFLAGS_IOPL | RFLAGS_NESTED_TASK) == 0
 }

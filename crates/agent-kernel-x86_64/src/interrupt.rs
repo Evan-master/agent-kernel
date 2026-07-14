@@ -8,6 +8,7 @@ use core::mem::size_of;
 
 pub const IDT_INTERRUPT_GATE_OPTIONS: u16 = 0x8e00;
 pub const IDT_TRAP_GATE_OPTIONS: u16 = 0x8f00;
+pub const IDT_USER_INTERRUPT_GATE_OPTIONS: u16 = 0xee00;
 pub const PIC_MASTER_OFFSET: u8 = 0x20;
 pub const PIC_SLAVE_OFFSET: u8 = 0x28;
 pub const PIC_CASCADE_IRQ: u8 = 2;
@@ -19,6 +20,7 @@ pub const PIT_TARGET_HZ: u32 = 100;
 pub const PIT_DIVISOR: u16 = 11_932;
 pub const PIT_IRQ_LINE: u8 = 0;
 pub const PIT_IRQ_VECTOR: u8 = PIC_MASTER_OFFSET + PIT_IRQ_LINE;
+pub const AGENT_CALL_VECTOR: u8 = 0x90;
 pub const UART_IRQ_LINE: u8 = 4;
 pub const UART_IRQ_VECTOR: u8 = PIC_MASTER_OFFSET + UART_IRQ_LINE;
 
@@ -51,6 +53,10 @@ impl IdtEntry {
 
     pub const fn trap_gate(handler: u64, selector: u16) -> Self {
         Self::gate(handler, selector, IDT_TRAP_GATE_OPTIONS)
+    }
+
+    pub const fn user_interrupt_gate(handler: u64, selector: u16) -> Self {
+        Self::gate(handler, selector, IDT_USER_INTERRUPT_GATE_OPTIONS)
     }
 
     const fn gate(handler: u64, selector: u16, options: u16) -> Self {

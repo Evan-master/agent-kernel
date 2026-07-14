@@ -46,6 +46,36 @@ pub struct InterruptStackFrame {
 pub const INTERRUPT_RIP_OFFSET: usize = core::mem::offset_of!(InterruptStackFrame, rip);
 pub const INTERRUPT_STACK_FRAME_BYTES: usize = core::mem::size_of::<InterruptStackFrame>();
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct PrivilegeInterruptStackFrame {
+    pub r15: u64,
+    pub r14: u64,
+    pub r13: u64,
+    pub r12: u64,
+    pub r11: u64,
+    pub r10: u64,
+    pub r9: u64,
+    pub r8: u64,
+    pub rbp: u64,
+    pub rdi: u64,
+    pub rsi: u64,
+    pub rdx: u64,
+    pub rcx: u64,
+    pub rbx: u64,
+    pub rax: u64,
+    pub rip: u64,
+    pub cs: u64,
+    pub rflags: u64,
+    pub user_rsp: u64,
+    pub user_ss: u64,
+}
+
+pub const PRIVILEGE_INTERRUPT_RIP_OFFSET: usize =
+    core::mem::offset_of!(PrivilegeInterruptStackFrame, rip);
+pub const PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES: usize =
+    core::mem::size_of::<PrivilegeInterruptStackFrame>();
+
 pub const fn bootstrap_stack_pointer(stack_start: usize, stack_len: usize) -> Option<usize> {
     if !stack_start.is_multiple_of(CONTEXT_STACK_ALIGNMENT)
         || !stack_len.is_multiple_of(CONTEXT_STACK_ALIGNMENT)

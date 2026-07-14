@@ -235,6 +235,27 @@ pub unsafe fn install_irq_gate(vector: u8, handler: unsafe extern "C" fn()) -> O
     Some(())
 }
 
+pub unsafe fn install_user_interrupt_gate(
+    vector: u8,
+    handler: unsafe extern "C" fn(),
+) -> Option<()> {
+    if IDT_READY.load(Ordering::Acquire) != 1 || vector < PIC_MASTER_OFFSET {
+        return None;
+    }
+    let selector = unsafe { current_code_selector() };
+    let entries = IDT.entries.get().cast::<IdtEntry>();
+    // SAFETY: the caller holds IF clear during this single-core gate update.
+    unsafe {
+        entries
+            .add(usize::from(vector))
+            .write_volatile(IdtEntry::user_interrupt_gate(
+                handler_address(handler),
+                selector,
+            ));
+    }
+    Some(())
+}
+
 fn reset_probe_mailbox() {
     AGENT_KERNEL_EXCEPTION_SEEN.store(0, Ordering::Release);
     AGENT_KERNEL_EXCEPTION_COUNT.store(0, Ordering::Release);

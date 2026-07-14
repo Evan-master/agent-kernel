@@ -15,6 +15,9 @@ agent-kernel-core = { path = "../agent-kernel-core" }
 agent-kernel-hal = { path = "../agent-kernel-hal" }
 bootloader_api = "0.11.15"
 
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86_64 = { version = "=0.15.5", default-features = false, features = ["instructions"] }
+
 [[bin]]
 name = "agent-kernel-x86_64"
 path = "src/main.rs"

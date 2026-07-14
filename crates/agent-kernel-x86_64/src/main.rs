@@ -4,47 +4,52 @@
 //! x86_64 bootloader entry for Agent Kernel.
 //!
 //! This crate owns the architecture-specific QEMU boot entry. It proves
-//! persistent exceptions, physical PIT preemption of a real Agent CPU context,
-//! and the bounded COM1 interrupt-to-command flow before publishing the
-//! deterministic handoff.
+//! persistent exceptions, CPL3 Agent preemption, and the bounded COM1
+//! interrupt-to-command flow before publishing the deterministic handoff.
 
 use core::{arch::asm, panic::PanicInfo};
 
 use agent_kernel_boot::{BootConfig, BootedKernel};
-use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
+use bootloader_api::{entry_point, BootInfo};
 
 mod agent_cpu;
+mod agent_memory;
+mod boot_config;
 mod event_trace;
 mod exception_runtime;
 mod pic;
 mod pit_timer;
 mod port_driver_flow;
+mod privilege_runtime;
 mod timer_task_flow;
 mod uart_interrupt;
 
 use agent_cpu::PreparedAgentCpu;
+use agent_memory::PreparedUserMemory;
+use boot_config::BOOTLOADER_CONFIG;
 use port_driver_flow::PortDriverSetup;
+use privilege_runtime::PrivilegeBoundary;
 use timer_task_flow::TimerTaskFlow;
-
-const KERNEL_STACK_SIZE: u64 = 256 * 1024;
-
-static BOOTLOADER_CONFIG: BootloaderConfig = {
-    let mut config = BootloaderConfig::new_default();
-    config.kernel_stack_size = KERNEL_STACK_SIZE;
-    config
-};
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) type X86BootedKernel = BootedKernel<3, 1, 3, 48, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1>;
 
-fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
+fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
+    let Some(privilege_boundary) = PrivilegeBoundary::install() else {
+        fatal_boot("AGENT_KERNEL_GDT_TSS_ERROR");
+    };
+    serial_write_line("AGENT_KERNEL_GDT_TSS_OK");
     if exception_runtime::install_and_probe().is_none() {
         fatal_boot("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
     }
     serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_OK");
+    let Some(user_memory) = PreparedUserMemory::prepare(boot_info) else {
+        fatal_boot("AGENT_KERNEL_AGENT_USER_MEMORY_ERROR");
+    };
+    serial_write_line("AGENT_KERNEL_AGENT_USER_MEMORY_OK");
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
@@ -54,7 +59,8 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
             let Some(timer_flow) = TimerTaskFlow::prepare(&mut booted) else {
                 fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
             };
-            let Some(agent_cpu) = PreparedAgentCpu::prepare() else {
+            let Some(agent_cpu) = PreparedAgentCpu::prepare(&privilege_boundary, user_memory)
+            else {
                 fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
             };
             let Some(preempted_cpu) = agent_cpu.run_until_preempted() else {
@@ -62,6 +68,7 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
             };
             serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
             serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
+            serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
             let Some(queued_timer_flow) = timer_flow.apply_preemption(&mut booted, &preempted_cpu)
             else {
                 fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
@@ -77,6 +84,7 @@ fn kernel_main(_boot_info: &'static mut BootInfo) -> ! {
                 fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
             }
             serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
+            serial_write_line("AGENT_KERNEL_AGENT_CALL_YIELD_OK");
 
             let Some(uart_signal) = uart_interrupt::wait_for_uart_thre() else {
                 fatal_boot("AGENT_KERNEL_UART_IRQ_ERROR");

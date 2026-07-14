@@ -7,6 +7,8 @@
 pub mod context;
 pub mod interrupt;
 pub mod port;
+pub mod privilege;
+pub mod user_memory;
 
 #[cfg(target_arch = "x86_64")]
 mod native_port_io;
