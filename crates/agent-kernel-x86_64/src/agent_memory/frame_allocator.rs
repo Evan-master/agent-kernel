@@ -19,6 +19,10 @@ impl<'a> BootFrameAllocator<'a> {
     pub(super) fn new(regions: &'a mut [MemoryRegion]) -> Self {
         Self { regions }
     }
+
+    pub(super) fn allocate(&mut self) -> Option<PhysFrame<Size4KiB>> {
+        self.allocate_frame()
+    }
 }
 
 // SAFETY: each returned frame is removed from the front of one Usable region,

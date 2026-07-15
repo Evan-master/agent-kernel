@@ -13,7 +13,6 @@ use crate::pic;
 global_asm!(
     r#"
     .section .text.agent_kernel_cpu_context,"ax",@progbits
-
     .macro agent_kernel_push_integer_frame
     push rax
     push rbx
@@ -31,7 +30,6 @@ global_asm!(
     push r14
     push r15
     .endm
-
     .macro agent_kernel_restore_host
     mov rsp, qword ptr [rip + {host_context}]
     pop r15
@@ -42,7 +40,6 @@ global_asm!(
     pop rbp
     ret
     .endm
-
     .global agent_kernel_enter_user
     .type agent_kernel_enter_user,@function
 agent_kernel_enter_user:
@@ -55,7 +52,6 @@ agent_kernel_enter_user:
     push r14
     push r15
     mov qword ptr [rdi], rsp
-
     push r8
     push rdx
     pushfq
@@ -65,12 +61,27 @@ agent_kernel_enter_user:
     push rax
     push rcx
     push rsi
+    mov cr3, r9
+    xor eax, eax
+    xor ebx, ebx
+    xor ecx, ecx
+    xor edx, edx
+    xor esi, esi
+    xor edi, edi
+    xor ebp, ebp
+    xor r8d, r8d
+    xor r9d, r9d
+    xor r10d, r10d
+    xor r11d, r11d
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
     iretq
 .Lagent_kernel_user_host:
     cli
     ret
     .size agent_kernel_enter_user, . - agent_kernel_enter_user
-
     .global agent_kernel_resume_interrupted_user
     .type agent_kernel_resume_interrupted_user,@function
 agent_kernel_resume_interrupted_user:
@@ -84,6 +95,7 @@ agent_kernel_resume_interrupted_user:
     push r15
     mov qword ptr [rdi], rsp
     mov rsp, rsi
+    mov cr3, rdx
     pop r15
     pop r14
     pop r13
@@ -101,32 +113,36 @@ agent_kernel_resume_interrupted_user:
     pop rax
     iretq
     .size agent_kernel_resume_interrupted_user, . - agent_kernel_resume_interrupted_user
-
     .global agent_kernel_agent_timer_irq_stub
     .type agent_kernel_agent_timer_irq_stub,@function
 agent_kernel_agent_timer_irq_stub:
     agent_kernel_push_integer_frame
+    mov r10, cr3
+    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov cr3, rax
+    mov qword ptr [rip + {interrupt_cr3}], r10
     mov qword ptr [rip + {interrupt_rsp}], rsp
     mov rax, qword ptr [rsp + {rip_offset}]
     mov qword ptr [rip + {interrupt_rip}], rax
     inc byte ptr [rip + {irq_count}]
-
     mov dx, {pic_master_data}
     mov al, 0xff
     out dx, al
     mov dx, {pic_master_command}
     mov al, {pic_eoi}
     out dx, al
-
     mov byte ptr [rip + {irq_seen}], 1
     mov byte ptr [rip + {preempted}], 1
     agent_kernel_restore_host
     .size agent_kernel_agent_timer_irq_stub, . - agent_kernel_agent_timer_irq_stub
-
     .global agent_kernel_agent_call_stub
     .type agent_kernel_agent_call_stub,@function
 agent_kernel_agent_call_stub:
     agent_kernel_push_integer_frame
+    mov r10, cr3
+    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov cr3, rax
+    mov qword ptr [rip + {call_cr3}], r10
     mov qword ptr [rip + {call_rsp}], rsp
     mov rax, qword ptr [rsp + {rip_offset}]
     mov qword ptr [rip + {call_rip}], rax
@@ -141,11 +157,14 @@ agent_kernel_agent_call_stub:
     irq_count = sym super::storage::AGENT_KERNEL_AGENT_IRQ_COUNT,
     irq_seen = sym super::storage::AGENT_KERNEL_AGENT_IRQ_SEEN,
     preempted = sym super::storage::AGENT_KERNEL_AGENT_PREEMPTED,
+    kernel_cr3 = sym super::storage::AGENT_KERNEL_KERNEL_CR3,
+    interrupt_cr3 = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_CR3,
     call_rsp = sym super::storage::AGENT_KERNEL_AGENT_CALL_RSP,
     call_rip = sym super::storage::AGENT_KERNEL_AGENT_CALL_RIP,
     call_count = sym super::storage::AGENT_KERNEL_AGENT_CALL_COUNT,
     call_seen = sym super::storage::AGENT_KERNEL_AGENT_CALL_SEEN,
     yielded = sym super::storage::AGENT_KERNEL_AGENT_YIELDED,
+    call_cr3 = sym super::storage::AGENT_KERNEL_AGENT_CALL_CR3,
     host_context = sym super::storage::AGENT_KERNEL_HOST_CONTEXT_RSP,
     rip_offset = const PRIVILEGE_INTERRUPT_RIP_OFFSET,
     pic_master_data = const pic::PIC_MASTER_DATA,
@@ -160,8 +179,9 @@ unsafe extern "C" {
         user_rsp: u64,
         user_cs: u64,
         user_ss: u64,
+        agent_cr3: u64,
     );
-    fn agent_kernel_resume_interrupted_user(host_rsp: *mut u64, interrupt_rsp: u64);
+    fn agent_kernel_resume_interrupted_user(host_rsp: *mut u64, interrupt_rsp: u64, agent_cr3: u64);
     pub(super) fn agent_kernel_agent_timer_irq_stub();
     pub(super) fn agent_kernel_agent_call_stub();
 }
@@ -172,6 +192,7 @@ pub(super) unsafe fn enter_user(
     user_rsp: u64,
     user_cs: u16,
     user_ss: u16,
+    agent_cr3: u64,
 ) {
     unsafe {
         agent_kernel_enter_user(
@@ -180,12 +201,17 @@ pub(super) unsafe fn enter_user(
             user_rsp,
             u64::from(user_cs),
             u64::from(user_ss),
+            agent_cr3,
         );
     }
 }
 
-pub(super) unsafe fn resume_interrupted_user(host_rsp: *mut u64, interrupt_rsp: u64) {
+pub(super) unsafe fn resume_interrupted_user(
+    host_rsp: *mut u64,
+    interrupt_rsp: u64,
+    agent_cr3: u64,
+) {
     unsafe {
-        agent_kernel_resume_interrupted_user(host_rsp, interrupt_rsp);
+        agent_kernel_resume_interrupted_user(host_rsp, interrupt_rsp, agent_cr3);
     }
 }

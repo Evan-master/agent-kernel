@@ -10,6 +10,8 @@ use core::{
     sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
 
+use agent_kernel_x86_64::address_space::AddressSpaceRoots;
+
 pub(super) const RFLAGS_INTERRUPT_ENABLE: u64 = 1 << 9;
 
 #[repr(C, align(8))]
@@ -70,6 +72,14 @@ pub(super) static AGENT_KERNEL_AGENT_PREEMPTED: AtomicU8 = AtomicU8::new(0);
 
 #[no_mangle]
 #[used]
+pub(super) static AGENT_KERNEL_KERNEL_CR3: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_INTERRUPT_CR3: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[used]
 pub(super) static AGENT_KERNEL_AGENT_CALL_RSP: AtomicU64 = AtomicU64::new(0);
 
 #[no_mangle]
@@ -88,21 +98,35 @@ pub(super) static AGENT_KERNEL_AGENT_CALL_SEEN: AtomicU8 = AtomicU8::new(0);
 #[used]
 pub(super) static AGENT_KERNEL_AGENT_YIELDED: AtomicU8 = AtomicU8::new(0);
 
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_CALL_CR3: AtomicU64 = AtomicU64::new(0);
+
 static AGENT_KERNEL_AGENT_RUNTIME_READY: AtomicU8 = AtomicU8::new(0);
 
-pub(super) fn initialize() -> Option<()> {
+pub(super) fn initialize(roots: AddressSpaceRoots) -> Option<()> {
     // SAFETY: this runtime is initialized only on the ring-0 boot CPU.
     unsafe {
         asm!("cli", options(nomem, nostack));
     }
-    if AGENT_KERNEL_AGENT_RUNTIME_READY
-        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
+    if current_raw_cr3() != roots.kernel_cr3()
+        || AGENT_KERNEL_AGENT_RUNTIME_READY
+            .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
     {
         return None;
     }
-    reset_mailbox();
+    reset_mailbox(roots);
     Some(())
+}
+
+pub(super) fn current_raw_cr3() -> u64 {
+    let raw: u64;
+    // SAFETY: reading CR3 does not modify address-space state.
+    unsafe {
+        asm!("mov {}, cr3", out(reg) raw, options(nomem, nostack, preserves_flags));
+    }
+    raw
 }
 
 pub(super) fn interrupts_are_clear() -> bool {
@@ -114,15 +138,18 @@ pub(super) fn interrupts_are_clear() -> bool {
     rflags & RFLAGS_INTERRUPT_ENABLE == 0
 }
 
-fn reset_mailbox() {
+fn reset_mailbox(roots: AddressSpaceRoots) {
     AGENT_KERNEL_HOST_CONTEXT_RSP.store(0);
+    AGENT_KERNEL_KERNEL_CR3.store(roots.kernel_cr3(), Ordering::Release);
     AGENT_KERNEL_AGENT_INTERRUPT_RSP.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_INTERRUPT_RIP.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_INTERRUPT_CR3.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_IRQ_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_IRQ_SEEN.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_PREEMPTED.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_RSP.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_RIP.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_CALL_CR3.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_SEEN.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_YIELDED.store(0, Ordering::Release);

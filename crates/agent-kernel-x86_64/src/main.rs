@@ -25,7 +25,7 @@ mod timer_task_flow;
 mod uart_interrupt;
 
 use agent_cpu::PreparedAgentCpu;
-use agent_memory::PreparedUserMemory;
+use agent_memory::PreparedAgentMemory;
 use boot_config::BOOTLOADER_CONFIG;
 use port_driver_flow::PortDriverSetup;
 use privilege_runtime::PrivilegeBoundary;
@@ -46,10 +46,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         fatal_boot("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
     }
     serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_OK");
-    let Some(user_memory) = PreparedUserMemory::prepare(boot_info) else {
+    let Some(agent_memory) = PreparedAgentMemory::prepare(boot_info) else {
         fatal_boot("AGENT_KERNEL_AGENT_USER_MEMORY_ERROR");
     };
     serial_write_line("AGENT_KERNEL_AGENT_USER_MEMORY_OK");
+    if !agent_memory.kernel_address_space_active() {
+        fatal_boot("AGENT_KERNEL_AGENT_ADDRESS_SPACE_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK");
 
     match X86BootedKernel::boot(BootConfig::default()) {
         Ok(mut booted) => {
@@ -59,7 +63,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             let Some(timer_flow) = TimerTaskFlow::prepare(&mut booted) else {
                 fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
             };
-            let Some(agent_cpu) = PreparedAgentCpu::prepare(&privilege_boundary, user_memory)
+            let Some(agent_cpu) = PreparedAgentCpu::prepare(&privilege_boundary, agent_memory)
             else {
                 fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
             };
@@ -80,11 +84,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             let Some(yielded_cpu) = preempted_cpu.resume_until_yield() else {
                 fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
             };
+            if yielded_cpu.address_space_switch_count() != 2 {
+                fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
+            }
             if !running_timer_flow.record_yield(&mut booted, yielded_cpu) {
                 fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
             }
             serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
             serial_write_line("AGENT_KERNEL_AGENT_CALL_YIELD_OK");
+            serial_write_line("AGENT_KERNEL_AGENT_CR3_SWITCH_OK");
 
             let Some(uart_signal) = uart_interrupt::wait_for_uart_thre() else {
                 fatal_boot("AGENT_KERNEL_UART_IRQ_ERROR");

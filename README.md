@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, permanent GDT/TSS, fixed ring-3 Agent pages with a guarded user stack, physical PIT IRQ0 preemption/resume through a dedicated RSP0 stack, a bounded Agent call gate, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, permanent GDT/TSS, an isolated Agent CR3 with fixed ring-3 pages and a guarded stack, physical PIT IRQ0 preemption/resume through a dedicated RSP0 stack, a bounded Agent call gate, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -171,22 +171,26 @@ validates the exact CPU return RIP; all other exception gates lead to
 vector-specific deterministic failure stubs. Before that IDT becomes active,
 the kernel installs a permanent GDT with ring-0/ring-3 segments and a long-mode
 TSS whose RSP0 points at a dedicated 32 KiB privileged stack. A bounded allocator
-then consumes only BootInfo `Usable` frames and maps one read-only executable
-Agent code page, one read-only/NX signal page, an unmapped guard page, and four
-writable/NX user stack pages. Kernel pages and the physical-memory window remain
-supervisor-only.
+then consumes only BootInfo `Usable` frames and creates a distinct Agent P4 root.
+That root inherits identical supervisor-only kernel mappings, while its dedicated
+P4 index 128 contains one read-only executable Agent code page, one read-only/NX
+signal page, an unmapped guard page, and four writable/NX stack pages. The kernel
+CR3 has no translation for any of those Agent-owned virtual pages.
 
 A dispatched Worker enters that code through a five-word `iretq` frame at CPL3.
-PIT IRQ0 performs a hardware privilege transition to TSS RSP0, then assembly
-saves all integer registers plus RIP/CS/RFLAGS/user-RSP/user-SS. Normal kernel
-context validates the complete 160-byte frame, exact selectors `0x23/0x1b`,
-user addresses, IOPL zero, canary, and one physical tick before
+The entry clears all general-purpose registers, selects the Agent CR3, and only
+then returns to the Agent. PIT IRQ0 performs a hardware privilege transition to
+TSS RSP0; assembly saves all integer registers plus RIP/CS/RFLAGS/user-RSP/user-SS,
+records the interrupted CR3, and restores the kernel CR3 before touching normal
+kernel context. The kernel validates the complete 160-byte frame, distinct roots,
+exact selectors `0x23/0x1b`, user addresses, IOPL zero, canary, and one physical tick before
 `sys_tick_task` produces `TaskQuantumExpired`. After event 29 redispatches the
-task, the kernel releases the read-only user signal through its supervisor
-physical alias and resumes the exact frame through `iretq`. The Agent continues
-at the captured RIP and invokes DPL3 interrupt `0x90`; the second validated
-privilege frame authorizes only the current task yield, and `sys_yield_task`
-records event 30. This is an Agent-native call gate, not a POSIX syscall ABI.
+task, the kernel releases the read-only Agent signal through its supervisor
+physical alias, selects the Agent CR3, and resumes the exact frame through
+`iretq`. The Agent continues at the captured RIP and invokes DPL3 interrupt
+`0x90`; that entry restores the kernel CR3 and the second validated privilege
+frame authorizes only the current task yield. `sys_yield_task` records event 30.
+This is an Agent-native call gate, not a POSIX syscall ABI.
 The PIC is then remapped for IRQ4 and the physical COM1 transmitter-empty
 interrupt is armed. A bounded UART top half
 captures IIR/LSR state, disables the source, acknowledges the PIC, and returns
@@ -196,10 +200,10 @@ The Driver acknowledges the event, dispatches a causally linked write, records
 its terminal result, and completes the invocation. This proves a returning CPU
 exception, hardware-enforced ring-3 Agent execution, asynchronous
 preemption/resume, a bounded Agent call ingress, and one-shot device interrupt
-ingress; distinct per-Agent CR3 address spaces, multiple runnable CPU contexts,
-arbitrary executable loading, fatal exception recovery, error-code decoding,
-double-fault IST, a general IRQ registry, APIC/IOAPIC, MMIO drivers, wider port
-operations, and DMA policy remain future work.
+ingress. Multiple simultaneous Agent roots and runnable CPU contexts, page-table
+teardown, PCIDs, arbitrary executable loading, fatal exception recovery,
+error-code decoding, double-fault IST, a general IRQ registry, APIC/IOAPIC, MMIO
+drivers, wider port operations, and DMA policy remain future work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
 first capability atomically with the resource. Bootstrap `register_resource`
 remains available for system-seeded resources and leaves `owner: None`.
@@ -211,7 +215,7 @@ remains available for system-seeded resources and leaves `owner: None`.
 1. Enter kernel phase.
 2. On x86_64, install the permanent GDT, long-mode TSS, and dedicated RSP0 stack.
 3. Install persistent exception gates and validate an `int3` round trip.
-4. Allocate and map the fixed CPL3 Agent code, signal, guard, and stack region.
+4. Allocate a distinct Agent P4, inherit supervisor kernel mappings, and map the fixed CPL3 Agent code, signal, guard, and stack region only there.
 5. Initialize `AgentKernel`.
 6. Register the bootstrap agent.
 7. Register a bootstrap resource.
@@ -223,11 +227,11 @@ remains available for system-seeded resources and leaves `owner: None`.
 13. Expose mutable handoff access for trusted architecture initialization.
 14. Register a COM1 Port endpoint and admit a dedicated Driver Agent.
 15. Register an admitted Worker Agent and dispatch its delegated task with quantum one.
-16. Arm PIT at CPL0, build a user return frame, and enter the Worker at CPL3.
-17. Let IRQ0 switch to TSS RSP0, save the privilege frame, and restore the kernel continuation.
+16. Arm PIT at CPL0, build an Agent return frame, select the Agent CR3, and enter the Worker at CPL3.
+17. Let IRQ0 switch to TSS RSP0, save the privilege frame, restore the kernel CR3, and return to the kernel continuation.
 18. Apply the validated tick through the scheduler, expire the quantum, and requeue the task.
-19. Redispatch and resume the exact CPL3 frame through `iretq`.
-20. Accept the Worker's DPL3 Agent yield call and record `TaskYielded`.
+19. Redispatch, select the Agent CR3, and resume the exact CPL3 frame through `iretq`.
+20. Restore the kernel CR3 on the Worker's DPL3 Agent yield call and record `TaskYielded`.
 21. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
 22. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
 23. Acknowledge the event and dispatch a causally linked COM1 write request.
@@ -284,12 +288,14 @@ AGENT_KERNEL_QEMU_BOOT_OK
 AGENT_KERNEL_GDT_TSS_OK
 AGENT_KERNEL_EXCEPTION_BASELINE_OK
 AGENT_KERNEL_AGENT_USER_MEMORY_OK
+AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK
 AGENT_KERNEL_PIT_IRQ_OK
 AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK
 AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK
 AGENT_KERNEL_TIMER_PREEMPTION_OK
 AGENT_KERNEL_AGENT_CPU_RESUME_OK
 AGENT_KERNEL_AGENT_CALL_YIELD_OK
+AGENT_KERNEL_AGENT_CR3_SWITCH_OK
 AGENT_KERNEL_UART_IRQ_OK
 AGENT_KERNEL_PORT_IO_BACKEND_OK
 AGENT_KERNEL_PORT_COMMAND_FLOW_OK
@@ -343,6 +349,9 @@ then captures the exact post-`int3` RIP and returns through `iretq` before
 `AGENT_KERNEL_EXCEPTION_BASELINE_OK` is emitted.
 `AGENT_KERNEL_AGENT_USER_MEMORY_OK` requires successful fixed mappings for the
 Agent RX code, read-only/NX signal, unmapped guard, and writable/NX stack pages.
+`AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK` additionally requires distinct aligned P4
+roots, identical supervisor-only inherited mappings, an unused kernel P4 index
+128, and no kernel translation for any Agent-owned virtual page.
 `AGENT_KERNEL_PIT_IRQ_OK` requires the shared IDT's IRQ0 assembly entry to
 capture exactly one PIT channel 0 interrupt after hardware switched from CPL3
 to TSS RSP0. `AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK` requires a complete
@@ -355,6 +364,9 @@ the run queue. `AGENT_KERNEL_AGENT_CPU_RESUME_OK` is emitted only after event 29
 redispatches that task and `iretq` resumes the captured CPL3 RIP.
 `AGENT_KERNEL_AGENT_CALL_YIELD_OK` requires a second valid privilege frame from
 DPL3 interrupt `0x90`; only then does event 30 record `TaskYielded`.
+`AGENT_KERNEL_AGENT_CR3_SWITCH_OK` requires both PIT and Agent-call entry to have
+observed the Agent CR3 and both returns to normal context to have restored the
+kernel CR3.
 `AGENT_KERNEL_UART_IRQ_OK` requires IRQ4 to capture one THRE interrupt and normal
 context to validate its IIR/LSR mailbox. That signal causes event 31 and the
 running Driver Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is

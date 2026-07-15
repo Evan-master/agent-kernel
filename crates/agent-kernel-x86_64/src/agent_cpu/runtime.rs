@@ -6,31 +6,27 @@
 use core::sync::atomic::Ordering;
 
 use agent_kernel_x86_64::{
-    context::{PrivilegeInterruptStackFrame, PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES},
     interrupt::AGENT_CALL_VECTOR,
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
     user_memory::AGENT_CALL_RETURN_OFFSET,
 };
 
-use super::{assembly, storage};
+use super::{assembly, storage, validation};
 use crate::{
-    agent_memory::PreparedUserMemory,
+    agent_memory::PreparedAgentMemory,
     exception_runtime, pit_timer,
     privilege_runtime::{
         current_privilege_level, stack_canary_valid, PrivilegeBoundary, PrivilegedStackBounds,
     },
 };
 
-const RFLAGS_IOPL: u64 = 3 << 12;
-const RFLAGS_NESTED_TASK: u64 = 1 << 14;
-
 pub(crate) struct PreparedAgentCpu {
-    memory: PreparedUserMemory,
+    memory: PreparedAgentMemory,
     kernel_stack: PrivilegedStackBounds,
 }
 
 pub(crate) struct PreemptedAgentCpu {
-    memory: PreparedUserMemory,
+    memory: PreparedAgentMemory,
     kernel_stack: PrivilegedStackBounds,
     frame_rsp: u64,
     frame_rip: u64,
@@ -39,16 +35,20 @@ pub(crate) struct PreemptedAgentCpu {
 
 pub(crate) struct YieldedAgentCpu {
     yields: u8,
+    address_space_switches: u8,
 }
 
 impl PreparedAgentCpu {
     pub(crate) fn prepare(
         privilege: &PrivilegeBoundary,
-        memory: PreparedUserMemory,
+        memory: PreparedAgentMemory,
     ) -> Option<Self> {
-        storage::initialize()?;
+        storage::initialize(memory.roots())?;
         let kernel_stack = privilege.stack_bounds();
-        if current_privilege_level() != 0 || !stack_canary_valid(kernel_stack) {
+        if current_privilege_level() != 0
+            || !stack_canary_valid(kernel_stack)
+            || !memory.kernel_address_space_active()
+        {
             return None;
         }
         // SAFETY: storage initialization left IF clear, and this gate is the
@@ -68,6 +68,7 @@ impl PreparedAgentCpu {
     pub(crate) fn run_until_preempted(self) -> Option<PreemptedAgentCpu> {
         pit_timer::arm(assembly::agent_kernel_agent_timer_irq_stub)?;
         let layout = self.memory.layout();
+        let roots = self.memory.roots();
         // SAFETY: both user pages and the RSP0 stack were validated, all gates
         // are live, and entry constructs the complete privilege return frame.
         unsafe {
@@ -77,22 +78,27 @@ impl PreparedAgentCpu {
                 layout.stack_top(),
                 USER_CODE_SELECTOR,
                 USER_DATA_SELECTOR,
+                roots.agent_cr3(),
             );
         }
         pit_timer::disarm();
 
         let frame_rsp = storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP.load(Ordering::Acquire);
         let frame_rip = storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP.load(Ordering::Acquire);
-        let frame = read_validated_frame(frame_rsp, self.kernel_stack)?;
+        let frame = validation::read_frame(frame_rsp, self.kernel_stack)?;
         if storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_IRQ_SEEN.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
+            || storage::AGENT_KERNEL_AGENT_INTERRUPT_CR3.load(Ordering::Acquire)
+                != roots.agent_cr3()
             || frame.rip != frame_rip
-            || !user_frame_valid(&frame, layout)
+            || !validation::user_frame_valid(&frame, layout)
+            || !validation::initial_registers_sanitized(&frame, layout)
             || current_privilege_level() != 0
             || !stack_canary_valid(self.kernel_stack)
             || !storage::interrupts_are_clear()
+            || storage::current_raw_cr3() != roots.kernel_cr3()
         {
             return None;
         }
@@ -113,9 +119,11 @@ impl PreemptedAgentCpu {
     }
 
     pub(crate) fn resume_until_yield(mut self) -> Option<YieldedAgentCpu> {
+        let roots = self.memory.roots();
         if storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP.load(Ordering::Acquire) != self.frame_rsp
             || storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP.load(Ordering::Acquire) != self.frame_rip
             || storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) != 1
+            || storage::current_raw_cr3() != roots.kernel_cr3()
             || !self.memory.release_for_agent_call()
         {
             return None;
@@ -127,30 +135,36 @@ impl PreemptedAgentCpu {
             assembly::resume_interrupted_user(
                 storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
                 self.frame_rsp,
+                roots.agent_cr3(),
             );
         }
         pit_timer::disarm();
 
         let call_rsp = storage::AGENT_KERNEL_AGENT_CALL_RSP.load(Ordering::Acquire);
         let call_rip = storage::AGENT_KERNEL_AGENT_CALL_RIP.load(Ordering::Acquire);
-        let frame = read_validated_frame(call_rsp, self.kernel_stack)?;
+        let frame = validation::read_frame(call_rsp, self.kernel_stack)?;
         let layout = self.memory.layout();
         if storage::AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_YIELDED.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 1
+            || storage::AGENT_KERNEL_AGENT_CALL_CR3.load(Ordering::Acquire) != roots.agent_cr3()
             || frame.rip != call_rip
             || frame.rip != layout.code_start() + AGENT_CALL_RETURN_OFFSET
             || frame.rax != layout.signal_start()
-            || !user_frame_valid(&frame, layout)
+            || !validation::user_frame_valid(&frame, layout)
             || current_privilege_level() != 0
             || !stack_canary_valid(self.kernel_stack)
             || !storage::interrupts_are_clear()
+            || storage::current_raw_cr3() != roots.kernel_cr3()
         {
             return None;
         }
 
-        Some(YieldedAgentCpu { yields: 1 })
+        Some(YieldedAgentCpu {
+            yields: 1,
+            address_space_switches: 2,
+        })
     }
 }
 
@@ -158,30 +172,8 @@ impl YieldedAgentCpu {
     pub(crate) const fn yield_count(&self) -> u8 {
         self.yields
     }
-}
 
-fn read_validated_frame(
-    frame_rsp: u64,
-    stack: PrivilegedStackBounds,
-) -> Option<PrivilegeInterruptStackFrame> {
-    let frame_start = usize::try_from(frame_rsp).ok()?;
-    let frame_end = frame_start.checked_add(PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES)?;
-    if frame_start < stack.start || frame_end > stack.end {
-        return None;
+    pub(crate) const fn address_space_switch_count(&self) -> u8 {
+        self.address_space_switches
     }
-    // SAFETY: the complete range lies in the kernel-owned RSP0 stack while CPL3
-    // is suspended and cannot modify it.
-    Some(unsafe { (frame_rsp as *const PrivilegeInterruptStackFrame).read_volatile() })
-}
-
-fn user_frame_valid(
-    frame: &PrivilegeInterruptStackFrame,
-    layout: agent_kernel_x86_64::user_memory::UserMemoryLayout,
-) -> bool {
-    frame.cs == u64::from(USER_CODE_SELECTOR)
-        && frame.user_ss == u64::from(USER_DATA_SELECTOR)
-        && layout.contains_code(frame.rip)
-        && layout.contains_stack_pointer(frame.user_rsp)
-        && frame.rflags & storage::RFLAGS_INTERRUPT_ENABLE != 0
-        && frame.rflags & (RFLAGS_IOPL | RFLAGS_NESTED_TASK) == 0
 }

@@ -6,5 +6,6 @@
 mod assembly;
 mod runtime;
 mod storage;
+mod validation;
 
 pub(super) use runtime::{PreemptedAgentCpu, PreparedAgentCpu, YieldedAgentCpu};

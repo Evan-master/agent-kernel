@@ -172,7 +172,7 @@ impl QueuedTimerTaskFlow {
 
 impl RunningTimerTaskFlow {
     pub(super) fn record_yield(self, booted: &mut X86BootedKernel, cpu: YieldedAgentCpu) -> bool {
-        if cpu.yield_count() != 1 {
+        if cpu.yield_count() != 1 || cpu.address_space_switch_count() != 2 {
             return false;
         }
 

@@ -4,11 +4,12 @@
 //! proof-program bytes. The bare-metal mapper owns physical allocation and page
 //! permissions; host tests validate this pure layout.
 
+use crate::address_space::{p4_index, AGENT_REGION_BASE};
+
 pub const PAGE_BYTES: u64 = 4096;
 pub const STACK_PAGE_COUNT: usize = 4;
 pub const AGENT_CODE_BYTES: usize = 21;
 pub const AGENT_CALL_RETURN_OFFSET: u64 = 19;
-const USER_REGION_BASE: u64 = 0x0000_4000_0000_0000;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {
@@ -21,7 +22,7 @@ pub struct UserMemoryLayout {
 
 impl UserMemoryLayout {
     pub const fn fixed() -> Self {
-        let code_start = USER_REGION_BASE;
+        let code_start = AGENT_REGION_BASE;
         let signal_start = code_start + PAGE_BYTES;
         let guard_start = signal_start + PAGE_BYTES;
         let stack_bottom = guard_start + PAGE_BYTES;
@@ -53,6 +54,14 @@ impl UserMemoryLayout {
 
     pub const fn stack_top(self) -> u64 {
         self.stack_top
+    }
+
+    pub const fn p4_index(self) -> usize {
+        p4_index(self.code_start)
+    }
+
+    pub const fn last_mapped_p4_index(self) -> usize {
+        p4_index(self.stack_top - 1)
     }
 
     pub const fn contains_code(self, address: u64) -> bool {
