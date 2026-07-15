@@ -9,9 +9,10 @@
 
 use core::{arch::asm, panic::PanicInfo};
 
-use agent_kernel_boot::{BootConfig, BootedKernel};
+use agent_kernel_boot::BootedKernel;
 use bootloader_api::{entry_point, BootInfo};
 
+mod agent_boot_flow;
 mod agent_cpu;
 mod agent_memory;
 mod boot_config;
@@ -24,16 +25,12 @@ mod privilege_runtime;
 mod timer_task_flow;
 mod uart_interrupt;
 
-use agent_cpu::PreparedAgentCpu;
-use agent_memory::PreparedAgentMemory;
 use boot_config::BOOTLOADER_CONFIG;
-use port_driver_flow::PortDriverSetup;
 use privilege_runtime::PrivilegeBoundary;
-use timer_task_flow::TimerTaskFlow;
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-pub(crate) type X86BootedKernel = BootedKernel<3, 1, 3, 48, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1>;
+pub(crate) type X86BootedKernel = BootedKernel<4, 1, 4, 64, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1>;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();
@@ -46,84 +43,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         fatal_boot("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
     }
     serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_OK");
-    let Some(agent_memory) = PreparedAgentMemory::prepare(boot_info) else {
-        fatal_boot("AGENT_KERNEL_AGENT_USER_MEMORY_ERROR");
-    };
-    serial_write_line("AGENT_KERNEL_AGENT_USER_MEMORY_OK");
-    if !agent_memory.kernel_address_space_active() {
-        fatal_boot("AGENT_KERNEL_AGENT_ADDRESS_SPACE_ERROR");
-    }
-    serial_write_line("AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK");
-
-    match X86BootedKernel::boot(BootConfig::default()) {
-        Ok(mut booted) => {
-            let Some(driver_setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
-                fatal_boot("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
-            };
-            let Some(timer_flow) = TimerTaskFlow::prepare(&mut booted) else {
-                fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
-            };
-            let Some(agent_cpu) = PreparedAgentCpu::prepare(&privilege_boundary, agent_memory)
-            else {
-                fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
-            };
-            let Some(preempted_cpu) = agent_cpu.run_until_preempted() else {
-                fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
-            };
-            serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
-            serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
-            serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
-            let Some(queued_timer_flow) = timer_flow.apply_preemption(&mut booted, &preempted_cpu)
-            else {
-                fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
-            };
-            serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
-            let Some(running_timer_flow) = queued_timer_flow.redispatch(&mut booted) else {
-                fatal_boot("AGENT_KERNEL_TIMER_REDISPATCH_ERROR");
-            };
-            let Some(yielded_cpu) = preempted_cpu.resume_until_yield() else {
-                fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
-            };
-            if yielded_cpu.address_space_switch_count() != 2 {
-                fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
-            }
-            if !running_timer_flow.record_yield(&mut booted, yielded_cpu) {
-                fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
-            }
-            serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
-            serial_write_line("AGENT_KERNEL_AGENT_CALL_YIELD_OK");
-            serial_write_line("AGENT_KERNEL_AGENT_CR3_SWITCH_OK");
-
-            let Some(uart_signal) = uart_interrupt::wait_for_uart_thre() else {
-                fatal_boot("AGENT_KERNEL_UART_IRQ_ERROR");
-            };
-            serial_write_line("AGENT_KERNEL_UART_IRQ_OK");
-            let Some(mut port_flow) = driver_setup.dispatch_interrupt(
-                &mut booted,
-                uart_signal.iir,
-                uart_signal.line_status,
-                b'O',
-            ) else {
-                fatal_boot("AGENT_KERNEL_PORT_DRIVER_INTERRUPT_ERROR");
-            };
-            serial_write_str("AGENT_KERNEL_PORT_IO_BACKEND_");
-            while !serial_transmit_empty() {}
-            if !port_flow.execute_and_record(&mut booted) {
-                fatal_boot("ERROR");
-            }
-            serial_write_line("K");
-            serial_write_line("AGENT_KERNEL_PORT_COMMAND_FLOW_OK");
-            serial_write_line("AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK");
-            event_trace::write(booted.kernel().events());
-            serial_write_line("SUPERVISOR_HANDOFF_READY");
-            exit_qemu(0x10);
-        }
-        Err(_) => {
-            fatal_boot("AGENT_KERNEL_BOOT_ERROR");
-        }
-    }
-
-    halt_forever()
+    agent_boot_flow::run(boot_info, privilege_boundary)
 }
 
 #[panic_handler]

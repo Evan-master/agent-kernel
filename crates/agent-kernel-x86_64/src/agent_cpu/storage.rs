@@ -1,8 +1,8 @@
-//! Single-core evidence storage for the ring-3 Agent runtime.
+//! Single-core evidence storage shared by ring-3 Agent contexts.
 //!
 //! Entry, PIT, and Agent-call assembly share one saved host context plus fixed
-//! atomic mailboxes. Rust reads them only after assembly has returned at CPL0
-//! with IF clear.
+//! per-dispatch atomic mailboxes. Rust reads them only after assembly has
+//! returned at CPL0 with IF clear.
 
 use core::{
     arch::asm,
@@ -104,7 +104,7 @@ pub(super) static AGENT_KERNEL_AGENT_CALL_CR3: AtomicU64 = AtomicU64::new(0);
 
 static AGENT_KERNEL_AGENT_RUNTIME_READY: AtomicU8 = AtomicU8::new(0);
 
-pub(super) fn initialize(roots: AddressSpaceRoots) -> Option<()> {
+pub(super) fn install(roots: AddressSpaceRoots) -> Option<()> {
     // SAFETY: this runtime is initialized only on the ring-0 boot CPU.
     unsafe {
         asm!("cli", options(nomem, nostack));
@@ -116,7 +116,23 @@ pub(super) fn initialize(roots: AddressSpaceRoots) -> Option<()> {
     {
         return None;
     }
-    reset_mailbox(roots);
+    AGENT_KERNEL_KERNEL_CR3.store(roots.kernel_cr3(), Ordering::Release);
+    reset_mailbox();
+    Some(())
+}
+
+pub(super) fn begin_dispatch(roots: AddressSpaceRoots) -> Option<()> {
+    // SAFETY: each dispatch begins in single-core kernel context.
+    unsafe {
+        asm!("cli", options(nomem, nostack));
+    }
+    if AGENT_KERNEL_AGENT_RUNTIME_READY.load(Ordering::Acquire) != 1
+        || current_raw_cr3() != roots.kernel_cr3()
+        || AGENT_KERNEL_KERNEL_CR3.load(Ordering::Acquire) != roots.kernel_cr3()
+    {
+        return None;
+    }
+    reset_mailbox();
     Some(())
 }
 
@@ -138,9 +154,8 @@ pub(super) fn interrupts_are_clear() -> bool {
     rflags & RFLAGS_INTERRUPT_ENABLE == 0
 }
 
-fn reset_mailbox(roots: AddressSpaceRoots) {
+fn reset_mailbox() {
     AGENT_KERNEL_HOST_CONTEXT_RSP.store(0);
-    AGENT_KERNEL_KERNEL_CR3.store(roots.kernel_cr3(), Ordering::Release);
     AGENT_KERNEL_AGENT_INTERRUPT_RSP.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_INTERRUPT_RIP.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_INTERRUPT_CR3.store(0, Ordering::Release);

@@ -5,7 +5,9 @@
 //! CPU or semantic task state.
 
 use agent_kernel_x86_64::{
-    context::{PrivilegeInterruptStackFrame, PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES},
+    context::{
+        PrivilegeInterruptStackFrame, SavedAgentFrame, PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES,
+    },
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
     user_memory::UserMemoryLayout,
 };
@@ -61,4 +63,8 @@ pub(super) fn initial_registers_sanitized(
         && frame.r13 == 0
         && frame.r14 == 0
         && frame.r15 == 0
+}
+
+pub(super) fn saved_frame_valid(saved: &SavedAgentFrame, layout: UserMemoryLayout) -> bool {
+    user_frame_valid(saved.frame(), layout)
 }

@@ -76,6 +76,28 @@ pub const PRIVILEGE_INTERRUPT_RIP_OFFSET: usize =
 pub const PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES: usize =
     core::mem::size_of::<PrivilegeInterruptStackFrame>();
 
+#[repr(transparent)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct SavedAgentFrame {
+    frame: PrivilegeInterruptStackFrame,
+}
+
+pub const SAVED_AGENT_FRAME_BYTES: usize = core::mem::size_of::<SavedAgentFrame>();
+
+impl SavedAgentFrame {
+    pub const fn new(frame: PrivilegeInterruptStackFrame) -> Self {
+        Self { frame }
+    }
+
+    pub const fn frame(&self) -> &PrivilegeInterruptStackFrame {
+        &self.frame
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut PrivilegeInterruptStackFrame {
+        &mut self.frame
+    }
+}
+
 pub const fn bootstrap_stack_pointer(stack_start: usize, stack_len: usize) -> Option<usize> {
     if !stack_start.is_multiple_of(CONTEXT_STACK_ALIGNMENT)
         || !stack_len.is_multiple_of(CONTEXT_STACK_ALIGNMENT)

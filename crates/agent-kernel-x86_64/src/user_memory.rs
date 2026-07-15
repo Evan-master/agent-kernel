@@ -1,4 +1,4 @@
-//! Fixed user-memory contract for the first ring-3 Agent proof.
+//! Fixed user-memory contract shared by isolated ring-3 Agent contexts.
 //!
 //! This architecture-library module defines virtual addresses and immutable
 //! proof-program bytes. The bare-metal mapper owns physical allocation and page

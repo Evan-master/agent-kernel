@@ -11,7 +11,7 @@ use bootloader_api::BootInfo;
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
-    address_space::AddressSpaceRoots,
+    address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     user_memory::{agent_proof_program, UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
 
@@ -23,6 +23,7 @@ pub(crate) struct PreparedAgentMemory {
     layout: UserMemoryLayout,
     signal_pointer: *mut u8,
     roots: AddressSpaceRoots,
+    identity: AgentMemoryIdentity,
 }
 
 impl PreparedAgentMemory {
@@ -54,11 +55,19 @@ impl PreparedAgentMemory {
         if !page_tables::kernel_is_active(roots) {
             return None;
         }
+        let mut content_frames = [0; AGENT_CONTENT_FRAME_COUNT];
+        content_frames[0] = code_frame.start_address().as_u64();
+        content_frames[1] = signal_frame.start_address().as_u64();
+        for (index, frame) in stack_frames.iter().enumerate() {
+            content_frames[index + 2] = frame.start_address().as_u64();
+        }
+        let identity = AgentMemoryIdentity::new(roots.agent_root(), content_frames)?;
 
         Some(Self {
             layout,
             signal_pointer,
             roots,
+            identity,
         })
     }
 
@@ -70,6 +79,10 @@ impl PreparedAgentMemory {
         self.roots
     }
 
+    pub(crate) fn is_disjoint_from(&self, other: &Self) -> bool {
+        self.identity.is_disjoint_from(other.identity)
+    }
+
     pub(crate) fn kernel_address_space_active(&self) -> bool {
         page_tables::kernel_is_active(self.roots)
     }
@@ -77,10 +90,19 @@ impl PreparedAgentMemory {
     pub(crate) fn release_for_agent_call(&mut self) -> bool {
         // SAFETY: the kernel is active and owns this supervisor physical alias
         // of the exclusively allocated signal frame.
+        if !self.signal_is_clear() {
+            return false;
+        }
         unsafe {
             self.signal_pointer.write_volatile(1);
             self.signal_pointer.read_volatile() == 1
         }
+    }
+
+    pub(crate) fn signal_is_clear(&self) -> bool {
+        // SAFETY: callers run at CPL0 under the kernel CR3; this pointer is the
+        // supervisor physical alias of this Agent's exclusive signal frame.
+        unsafe { self.signal_pointer.read_volatile() == 0 }
     }
 }
 
