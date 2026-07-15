@@ -12,7 +12,8 @@ use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
-    user_memory::{agent_proof_program, UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
+    agent_image::VerifiedAgentImage,
+    user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
 
 use self::frame_allocator::BootFrameAllocator;
@@ -24,10 +25,11 @@ pub(crate) struct PreparedAgentMemory {
     signal_pointer: *mut u8,
     roots: AddressSpaceRoots,
     identity: AgentMemoryIdentity,
+    entry_rip: u64,
 }
 
 impl PreparedAgentMemory {
-    pub(crate) fn prepare(boot_info: &mut BootInfo) -> Option<Self> {
+    pub(crate) fn prepare(boot_info: &mut BootInfo, image: VerifiedAgentImage<'_>) -> Option<Self> {
         let physical_offset = boot_info.physical_memory_offset.into_option()?;
         if physical_offset != PHYSICAL_MEMORY_OFFSET {
             return None;
@@ -41,9 +43,20 @@ impl PreparedAgentMemory {
             *frame = allocator.allocate()?;
         }
 
-        let signal_pointer =
-            initialize_content(physical_offset, code_frame, signal_frame, &stack_frames)?;
+        let signal_pointer = initialize_content(
+            physical_offset,
+            code_frame,
+            signal_frame,
+            &stack_frames,
+            image.code(),
+        )?;
         let layout = UserMemoryLayout::fixed();
+        let entry_rip = layout
+            .code_start()
+            .checked_add(u64::from(image.entry_offset()))?;
+        if !layout.contains_code(entry_rip) {
+            return None;
+        }
         let roots = page_tables::install(
             physical_offset,
             &mut allocator,
@@ -68,6 +81,7 @@ impl PreparedAgentMemory {
             signal_pointer,
             roots,
             identity,
+            entry_rip,
         })
     }
 
@@ -77,6 +91,10 @@ impl PreparedAgentMemory {
 
     pub(crate) const fn roots(&self) -> AddressSpaceRoots {
         self.roots
+    }
+
+    pub(crate) const fn entry_rip(&self) -> u64 {
+        self.entry_rip
     }
 
     pub(crate) fn is_disjoint_from(&self, other: &Self) -> bool {
@@ -111,20 +129,28 @@ fn initialize_content(
     code_frame: PhysFrame,
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
+    code: &[u8],
 ) -> Option<*mut u8> {
-    let program = agent_proof_program();
+    if code.is_empty() || code.len() > PAGE_BYTES as usize {
+        return None;
+    }
     let code_pointer = physical_pointer(physical_offset, code_frame)?;
     let signal_pointer = physical_pointer(physical_offset, signal_frame)?;
     // SAFETY: all frames were just removed from Usable memory and are
     // exclusively owned by this preparation operation.
     unsafe {
         code_pointer.write_bytes(0, PAGE_BYTES as usize);
-        program
-            .as_ptr()
-            .copy_to_nonoverlapping(code_pointer, program.len());
+        code.as_ptr()
+            .copy_to_nonoverlapping(code_pointer, code.len());
         signal_pointer.write_bytes(0, PAGE_BYTES as usize);
         for frame in stack_frames {
             physical_pointer(physical_offset, *frame)?.write_bytes(0, PAGE_BYTES as usize);
+        }
+    }
+    for (offset, expected) in code.iter().copied().enumerate() {
+        // SAFETY: the code frame remains exclusively owned and supervisor-mapped.
+        if unsafe { code_pointer.add(offset).read_volatile() } != expected {
+            return None;
         }
     }
     Some(signal_pointer)

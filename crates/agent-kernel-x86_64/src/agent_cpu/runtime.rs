@@ -11,7 +11,6 @@ use agent_kernel_x86_64::{
     context::SavedAgentFrame,
     interrupt::AGENT_CALL_VECTOR,
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
-    user_memory::AGENT_CALL_RETURN_OFFSET,
 };
 
 use super::{assembly, storage, validation};
@@ -44,6 +43,7 @@ pub(crate) struct PreemptedAgentCpu {
 pub(crate) struct YieldedAgentCpu {
     yields: u8,
     address_space_switches: u8,
+    call_return_offset: u32,
 }
 
 impl AgentCpuRuntime {
@@ -93,7 +93,7 @@ impl PreparedAgentCpu {
         unsafe {
             assembly::enter_user(
                 storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
-                layout.code_start(),
+                self.memory.entry_rip(),
                 layout.stack_top(),
                 USER_CODE_SELECTOR,
                 USER_DATA_SELECTOR,
@@ -161,13 +161,14 @@ impl PreemptedAgentCpu {
         let call_rsp = storage::AGENT_KERNEL_AGENT_CALL_RSP.load(Ordering::Acquire);
         let call_rip = storage::AGENT_KERNEL_AGENT_CALL_RIP.load(Ordering::Acquire);
         let call_frame = validation::read_frame(call_rsp, self.runtime.kernel_stack)?;
+        let call_return_offset =
+            u32::try_from(call_frame.rip.checked_sub(layout.code_start())?).ok()?;
         if storage::AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_YIELDED.load(Ordering::Acquire) != 1
             || storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 0
             || storage::AGENT_KERNEL_AGENT_CALL_CR3.load(Ordering::Acquire) != roots.agent_cr3()
             || call_frame.rip != call_rip
-            || call_frame.rip != layout.code_start() + AGENT_CALL_RETURN_OFFSET
             || call_frame.rax != layout.signal_start()
             || !validation::user_frame_valid(&call_frame, layout)
             || !kernel_boundary_valid(self.runtime)
@@ -178,6 +179,7 @@ impl PreemptedAgentCpu {
         Some(YieldedAgentCpu {
             yields: 1,
             address_space_switches: 2,
+            call_return_offset,
         })
     }
 }
@@ -189,6 +191,10 @@ impl YieldedAgentCpu {
 
     pub(crate) const fn address_space_switch_count(&self) -> u8 {
         self.address_space_switches
+    }
+
+    pub(crate) const fn call_return_offset(&self) -> u32 {
+        self.call_return_offset
     }
 }
 

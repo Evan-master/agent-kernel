@@ -1,0 +1,7 @@
+[target.x86_64-unknown-none]
+rustflags = [
+    "--cfg",
+    'sha2_backend="soft"',
+    "--cfg",
+    'sha2_backend_soft="compact"',
+]

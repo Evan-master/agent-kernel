@@ -7,7 +7,7 @@
 mod setup;
 mod transitions;
 
-use agent_kernel_core::{AgentId, TaskId};
+use agent_kernel_core::{AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, TaskId};
 
 use crate::{
     agent_cpu::{PreemptedAgentCpu, YieldedAgentCpu},
@@ -22,12 +22,18 @@ pub(super) const TASK_QUANTUM: u64 = 1;
 pub(super) struct WorkerTask {
     agent: AgentId,
     task: TaskId,
+    image: AgentImageId,
 }
 
 impl WorkerTask {
-    const fn new(agent: AgentId, task: TaskId) -> Self {
-        Self { agent, task }
+    const fn new(agent: AgentId, task: TaskId, image: AgentImageId) -> Self {
+        Self { agent, task, image }
     }
+}
+
+pub(super) struct QueuedTimerTaskFlow {
+    first: WorkerTask,
+    second: WorkerTask,
 }
 
 pub(super) struct TimerTaskFlow {
@@ -51,9 +57,13 @@ pub(super) struct SecondResumedFlow {
 }
 
 impl TimerTaskFlow {
-    pub(super) fn prepare(booted: &mut X86BootedKernel) -> Option<Self> {
-        let (first, second) = setup::prepare(booted)?;
-        Some(Self { first, second })
+    pub(super) fn prepare(
+        booted: &mut X86BootedKernel,
+        first_digest: AgentImageDigest,
+        second_digest: AgentImageDigest,
+    ) -> Option<QueuedTimerTaskFlow> {
+        let (first, second) = setup::prepare(booted, first_digest, second_digest)?;
+        Some(QueuedTimerTaskFlow { first, second })
     }
 
     pub(super) fn expire_first_and_dispatch_second(
@@ -63,6 +73,25 @@ impl TimerTaskFlow {
     ) -> Option<SecondRunningFlow> {
         transitions::expire_and_dispatch(booted, self.first, self.second, cpu, 0)?;
         Some(SecondRunningFlow {
+            first: self.first,
+            second: self.second,
+        })
+    }
+}
+
+impl QueuedTimerTaskFlow {
+    pub(super) fn image_records(
+        &self,
+        booted: &X86BootedKernel,
+    ) -> Option<(AgentImageRecord, AgentImageRecord)> {
+        let first = booted.kernel().agent_image(self.first.image).ok()?;
+        let second = booted.kernel().agent_image(self.second.image).ok()?;
+        (first.id != second.id && first.digest != second.digest).then_some((first, second))
+    }
+
+    pub(super) fn dispatch_first(self, booted: &mut X86BootedKernel) -> Option<TimerTaskFlow> {
+        setup::dispatch_first(booted, self.first, self.second)?;
+        Some(TimerTaskFlow {
             first: self.first,
             second: self.second,
         })

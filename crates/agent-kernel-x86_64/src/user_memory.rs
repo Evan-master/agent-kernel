@@ -8,8 +8,6 @@ use crate::address_space::{p4_index, AGENT_REGION_BASE};
 
 pub const PAGE_BYTES: u64 = 4096;
 pub const STACK_PAGE_COUNT: usize = 4;
-pub const AGENT_CODE_BYTES: usize = 21;
-pub const AGENT_CALL_RETURN_OFFSET: u64 = 19;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {
@@ -75,12 +73,4 @@ impl UserMemoryLayout {
     pub const fn contains_stack_pointer(self, address: u64) -> bool {
         address > self.stack_bottom && address <= self.stack_top
     }
-}
-
-pub const fn agent_proof_program() -> [u8; AGENT_CODE_BYTES] {
-    let signal = UserMemoryLayout::fixed().signal_start().to_le_bytes();
-    [
-        0x53, 0x5b, 0x48, 0xb8, signal[0], signal[1], signal[2], signal[3], signal[4], signal[5],
-        signal[6], signal[7], 0x80, 0x38, 0x00, 0x74, 0xfb, 0xcd, 0x90, 0xeb, 0xfe,
-    ]
 }

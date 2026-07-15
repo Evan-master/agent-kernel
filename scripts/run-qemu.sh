@@ -27,6 +27,9 @@ for expected in \
   "AGENT_KERNEL_EXCEPTION_BASELINE_OK" \
   "AGENT_KERNEL_AGENT_USER_MEMORY_OK" \
   "AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK" \
+  "AGENT_KERNEL_AGENT_IMAGE_FORMAT_OK" \
+  "AGENT_KERNEL_AGENT_IMAGE_DIGEST_OK" \
+  "AGENT_KERNEL_AGENT_IMAGE_LOAD_OK" \
   "AGENT_KERNEL_MULTI_AGENT_MEMORY_OK" \
   "AGENT_KERNEL_PIT_IRQ_OK" \
   "AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK" \
@@ -38,6 +41,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
   "AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK" \
   "AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK" \
+  "AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \
@@ -71,30 +75,32 @@ for expected in \
   "event[27] delegation" \
   "event[28] agent_image_registered" \
   "event[29] agent_image_verified" \
-  "event[30] agent_launched" \
-  "event[31] task_accepted" \
-  "event[32] task_queued" \
-  "event[33] agent_launched" \
-  "event[34] task_accepted" \
-  "event[35] task_queued" \
-  "event[36] task_dispatched" \
-  "event[37] task_quantum_expired" \
+  "event[30] agent_image_registered" \
+  "event[31] agent_image_verified" \
+  "event[32] agent_launched" \
+  "event[33] task_accepted" \
+  "event[34] task_queued" \
+  "event[35] agent_launched" \
+  "event[36] task_accepted" \
+  "event[37] task_queued" \
   "event[38] task_dispatched" \
   "event[39] task_quantum_expired" \
   "event[40] task_dispatched" \
-  "event[41] task_yielded" \
+  "event[41] task_quantum_expired" \
   "event[42] task_dispatched" \
   "event[43] task_yielded" \
-  "event[44] device_event_raised" \
-  "event[45] device_event_delivered" \
-  "event[46] driver_invocation_queued" \
-  "event[47] driver_invocation_dispatched" \
-  "event[48] driver_invocation_ticked" \
-  "event[49] device_event_acknowledged" \
-  "event[50] driver_command_submitted" \
-  "event[51] driver_command_dispatched" \
-  "event[52] driver_command_completed" \
-  "event[53] driver_invocation_completed" \
+  "event[44] task_dispatched" \
+  "event[45] task_yielded" \
+  "event[46] device_event_raised" \
+  "event[47] device_event_delivered" \
+  "event[48] driver_invocation_queued" \
+  "event[49] driver_invocation_dispatched" \
+  "event[50] driver_invocation_ticked" \
+  "event[51] device_event_acknowledged" \
+  "event[52] driver_command_submitted" \
+  "event[53] driver_command_dispatched" \
+  "event[54] driver_command_completed" \
+  "event[55] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -104,7 +110,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 53 ]]; then
-  printf 'expected exactly 53 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 55 ]]; then
+  printf 'expected exactly 55 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

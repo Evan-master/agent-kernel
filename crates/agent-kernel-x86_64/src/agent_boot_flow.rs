@@ -5,37 +5,54 @@
 //! existing UART Driver flow. All failures terminate through explicit markers.
 
 use agent_kernel_boot::BootConfig;
+use agent_kernel_x86_64::agent_image::{AgentImageCapsule, VerifiedAgentImage};
 use bootloader_api::BootInfo;
 
 use crate::{
-    agent_cpu::AgentCpuRuntime, agent_memory::PreparedAgentMemory, event_trace, exit_qemu,
-    fatal_boot, halt_forever, port_driver_flow::PortDriverSetup,
+    agent_cpu::AgentCpuRuntime, agent_memory::PreparedAgentMemory, boot_agent_images, event_trace,
+    exit_qemu, fatal_boot, halt_forever, port_driver_flow::PortDriverSetup,
     privilege_runtime::PrivilegeBoundary, serial_transmit_empty, serial_write_line,
     serial_write_str, timer_task_flow::TimerTaskFlow, uart_interrupt, X86BootedKernel, COM1,
 };
 
 pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: PrivilegeBoundary) -> ! {
-    let Some(agent_a_memory) = PreparedAgentMemory::prepare(boot_info) else {
+    let worker_a = boot_agent_images::worker_a();
+    let worker_b = boot_agent_images::worker_b();
+    let Ok(mut booted) = X86BootedKernel::boot(BootConfig::default()) else {
+        fatal_boot("AGENT_KERNEL_BOOT_ERROR");
+    };
+    let Some(driver_setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
+        fatal_boot("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
+    };
+    let Some(queued_timer_flow) =
+        TimerTaskFlow::prepare(&mut booted, worker_a.digest(), worker_b.digest())
+    else {
+        fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
+    };
+    let Some((agent_a_record, agent_b_record)) = queued_timer_flow.image_records(&booted) else {
+        fatal_boot("AGENT_KERNEL_AGENT_IMAGE_RECORD_ERROR");
+    };
+    if AgentImageCapsule::parse(worker_a.bytes()).is_err()
+        || AgentImageCapsule::parse(worker_b.bytes()).is_err()
+    {
+        fatal_boot("AGENT_KERNEL_AGENT_IMAGE_FORMAT_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_AGENT_IMAGE_FORMAT_OK");
+    let Ok(agent_a_image) = VerifiedAgentImage::verify(agent_a_record, worker_a.bytes()) else {
+        fatal_boot("AGENT_KERNEL_AGENT_IMAGE_DIGEST_ERROR");
+    };
+    let Ok(agent_b_image) = VerifiedAgentImage::verify(agent_b_record, worker_b.bytes()) else {
+        fatal_boot("AGENT_KERNEL_AGENT_IMAGE_DIGEST_ERROR");
+    };
+    serial_write_line("AGENT_KERNEL_AGENT_IMAGE_DIGEST_OK");
+    let Some(agent_a_memory) = PreparedAgentMemory::prepare(boot_info, agent_a_image) else {
         fatal_boot("AGENT_KERNEL_AGENT_USER_MEMORY_ERROR");
     };
-    let Some(agent_b_memory) = PreparedAgentMemory::prepare(boot_info) else {
+    let Some(agent_b_memory) = PreparedAgentMemory::prepare(boot_info, agent_b_image) else {
         fatal_boot("AGENT_KERNEL_AGENT_USER_MEMORY_ERROR");
     };
-    serial_write_line("AGENT_KERNEL_AGENT_USER_MEMORY_OK");
-    if !agent_a_memory.kernel_address_space_active()
-        || !agent_b_memory.kernel_address_space_active()
-        || agent_a_memory.roots().kernel_cr3() != agent_b_memory.roots().kernel_cr3()
-    {
-        fatal_boot("AGENT_KERNEL_AGENT_ADDRESS_SPACE_ERROR");
-    }
-    serial_write_line("AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK");
-    if !agent_a_memory.is_disjoint_from(&agent_b_memory)
-        || !agent_a_memory.signal_is_clear()
-        || !agent_b_memory.signal_is_clear()
-    {
-        fatal_boot("AGENT_KERNEL_MULTI_AGENT_MEMORY_ERROR");
-    }
-    serial_write_line("AGENT_KERNEL_MULTI_AGENT_MEMORY_OK");
+    validate_agent_memory(&agent_a_memory, &agent_b_memory);
+    serial_write_line("AGENT_KERNEL_AGENT_IMAGE_LOAD_OK");
     let Some(cpu_runtime) = AgentCpuRuntime::install(&privilege_boundary, agent_a_memory.roots())
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
@@ -46,13 +63,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(agent_b_cpu) = cpu_runtime.prepare(agent_b_memory) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
-    let Ok(mut booted) = X86BootedKernel::boot(BootConfig::default()) else {
-        fatal_boot("AGENT_KERNEL_BOOT_ERROR");
-    };
-    let Some(driver_setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
-        fatal_boot("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
-    };
-    let Some(timer_flow) = TimerTaskFlow::prepare(&mut booted) else {
+    let Some(timer_flow) = queued_timer_flow.dispatch_first(&mut booted) else {
         fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
     };
     let Some(preempted_a) = agent_a_cpu.run_until_preempted() else {
@@ -82,7 +93,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(yielded_a) = preempted_a.resume_until_yield() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
-    if yielded_a.address_space_switch_count() != 2 || !preempted_b.signal_is_clear() {
+    let call_return_a = yielded_a.call_return_offset();
+    if yielded_a.address_space_switch_count() != 2
+        || call_return_a != worker_a.expected_call_return_offset()
+        || !preempted_b.signal_is_clear()
+    {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
     }
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
@@ -94,7 +109,10 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(yielded_b) = preempted_b.resume_until_yield() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
+    let call_return_b = yielded_b.call_return_offset();
     if yielded_b.address_space_switch_count() != 2
+        || call_return_b != worker_b.expected_call_return_offset()
+        || call_return_a == call_return_b
         || !second_resumed_flow.record_second_yield(&mut booted, yielded_b)
     {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
@@ -103,11 +121,27 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     serial_write_line("AGENT_KERNEL_AGENT_CALL_YIELD_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CR3_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK");
+    serial_write_line("AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK");
     complete_driver_flow(&mut booted, driver_setup);
     event_trace::write(booted.kernel().events());
     serial_write_line("SUPERVISOR_HANDOFF_READY");
     exit_qemu(0x10);
     halt_forever()
+}
+
+fn validate_agent_memory(first: &PreparedAgentMemory, second: &PreparedAgentMemory) {
+    serial_write_line("AGENT_KERNEL_AGENT_USER_MEMORY_OK");
+    if !first.kernel_address_space_active()
+        || !second.kernel_address_space_active()
+        || first.roots().kernel_cr3() != second.roots().kernel_cr3()
+    {
+        fatal_boot("AGENT_KERNEL_AGENT_ADDRESS_SPACE_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK");
+    if !first.is_disjoint_from(second) || !first.signal_is_clear() || !second.signal_is_clear() {
+        fatal_boot("AGENT_KERNEL_MULTI_AGENT_MEMORY_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_MULTI_AGENT_MEMORY_OK");
 }
 
 fn complete_driver_flow(booted: &mut X86BootedKernel, driver_setup: PortDriverSetup) {

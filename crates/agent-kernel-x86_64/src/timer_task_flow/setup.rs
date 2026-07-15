@@ -1,7 +1,8 @@
-//! Admission and initial FIFO dispatch for two delegated Workers.
+//! Admission and queued state for two delegated Worker images.
 //!
 //! This child module uses only public kernel syscalls. Both tasks receive
-//! attenuated task-scoped capabilities and share one verified Worker image.
+//! attenuated task-scoped capabilities and remain queued until both capsules
+//! have been verified and loaded by the architecture adapter.
 
 use agent_kernel_core::{
     AgentEntryKind, AgentExecutionState, AgentId, AgentImageDigest, AgentImageId, AgentImageKind,
@@ -18,24 +19,21 @@ struct PendingWorker {
     capability: CapabilityId,
 }
 
-pub(super) fn prepare(booted: &mut X86BootedKernel) -> Option<(WorkerTask, WorkerTask)> {
+pub(super) fn prepare(
+    booted: &mut X86BootedKernel,
+    first_digest: AgentImageDigest,
+    second_digest: AgentImageDigest,
+) -> Option<(WorkerTask, WorkerTask)> {
     let first = register_delegated_task(booted, WORKER_A)?;
     let second = register_delegated_task(booted, WORKER_B)?;
-    let image = register_worker_image(booted)?;
-    launch_and_enqueue(booted, WORKER_A, first, image)?;
-    launch_and_enqueue(booted, WORKER_B, second, image)?;
+    let first_image = register_worker_image(booted, first_digest)?;
+    let second_image = register_worker_image(booted, second_digest)?;
+    launch_and_enqueue(booted, WORKER_A, first, first_image)?;
+    launch_and_enqueue(booted, WORKER_B, second, second_image)?;
 
-    let kernel = booted.kernel_mut();
-    if kernel
-        .sys_dispatch_next_with_quantum(WORKER_A, TASK_QUANTUM)
-        .ok()?
-        != first.task
-    {
-        return None;
-    }
-    let first = WorkerTask::new(WORKER_A, first.task);
-    let second = WorkerTask::new(WORKER_B, second.task);
-    setup_state_valid(booted, first, second).then_some((first, second))
+    let first = WorkerTask::new(WORKER_A, first.task, first_image);
+    let second = WorkerTask::new(WORKER_B, second.task, second_image);
+    queued_state_valid(booted, first, second).then_some((first, second))
 }
 
 fn register_delegated_task(booted: &mut X86BootedKernel, worker: AgentId) -> Option<PendingWorker> {
@@ -70,7 +68,10 @@ fn register_delegated_task(booted: &mut X86BootedKernel, worker: AgentId) -> Opt
     Some(PendingWorker { task, capability })
 }
 
-fn register_worker_image(booted: &mut X86BootedKernel) -> Option<AgentImageId> {
+fn register_worker_image(
+    booted: &mut X86BootedKernel,
+    digest: AgentImageDigest,
+) -> Option<AgentImageId> {
     let report = *booted.report();
     let kernel = booted.kernel_mut();
     let image = kernel
@@ -79,7 +80,7 @@ fn register_worker_image(booted: &mut X86BootedKernel) -> Option<AgentImageId> {
             report.bootstrap_capability,
             report.bootstrap_resource,
             AgentImageKind::Worker,
-            AgentImageDigest::new([0x57; 32]),
+            digest,
             1,
             1,
         )
@@ -111,7 +112,7 @@ fn launch_and_enqueue(
     Some(())
 }
 
-fn setup_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: WorkerTask) -> bool {
+fn queued_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: WorkerTask) -> bool {
     let kernel = booted.kernel();
     let first_task = kernel.tasks().iter().find(|task| task.id == first.task);
     let second_task = kernel.tasks().iter().find(|task| task.id == second.task);
@@ -123,14 +124,71 @@ fn setup_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: Worker
         .execution_contexts()
         .iter()
         .find(|context| context.agent == second.agent);
-    matches!(first_task, Some(task) if task.status == TaskStatus::Running && task.run_ticks == 0 && task.quantum_remaining == TASK_QUANTUM)
+    let first_entry = kernel.agent_entry(first.agent).ok();
+    let second_entry = kernel.agent_entry(second.agent).ok();
+    matches!(first_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0)
         && matches!(second_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0)
-        && matches!(first_context, Some(context) if context.state == AgentExecutionState::Running && context.task == Some(first.task) && context.run_ticks == 0 && context.quantum_remaining == TASK_QUANTUM)
+        && matches!(first_context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none() && context.run_ticks == 0 && context.quantum_remaining == 0)
         && matches!(second_context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none() && context.run_ticks == 0 && context.quantum_remaining == 0)
+        && matches!(first_entry, Some(entry) if entry.image == first.image && entry.task == Some(first.task))
+        && matches!(second_entry, Some(entry) if entry.image == second.image && entry.task == Some(second.task))
+        && kernel.run_queue()
+            == [
+                RunQueueEntry {
+                    task: first.task,
+                    agent: first.agent,
+                },
+                RunQueueEntry {
+                    task: second.task,
+                    agent: second.agent,
+                },
+            ]
+        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskQueued && event.task == Some(second.task))
+}
+
+pub(super) fn dispatch_first(
+    booted: &mut X86BootedKernel,
+    first: WorkerTask,
+    second: WorkerTask,
+) -> Option<()> {
+    if booted
+        .kernel_mut()
+        .sys_dispatch_next_with_quantum(first.agent, TASK_QUANTUM)
+        .ok()?
+        != first.task
+    {
+        return None;
+    }
+    let kernel = booted.kernel();
+    let first_task = kernel.tasks().iter().find(|task| task.id == first.task)?;
+    let first_context = kernel
+        .execution_contexts()
+        .iter()
+        .find(|context| context.agent == first.agent)?;
+    let second_task = kernel.tasks().iter().find(|task| task.id == second.task)?;
+    let second_context = kernel
+        .execution_contexts()
+        .iter()
+        .find(|context| context.agent == second.agent)?;
+    (first_task.status == TaskStatus::Running
+        && first_task.run_ticks == 0
+        && first_task.quantum_remaining == TASK_QUANTUM
+        && first_context.state == AgentExecutionState::Running
+        && first_context.task == Some(first.task)
+        && first_context.run_ticks == 0
+        && first_context.quantum_remaining == TASK_QUANTUM
+        && second_task.status == TaskStatus::Accepted
+        && second_task.run_ticks == 0
+        && second_task.quantum_remaining == 0
+        && second_context.state == AgentExecutionState::Idle
+        && second_context.task.is_none()
+        && second_context.run_ticks == 0
+        && second_context.quantum_remaining == 0
         && kernel.run_queue()
             == [RunQueueEntry {
                 task: second.task,
                 agent: second.agent,
             }]
-        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskDispatched && event.task == Some(first.task))
+        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskDispatched && event.task == Some(first.task)))
+    .then_some(())
 }
