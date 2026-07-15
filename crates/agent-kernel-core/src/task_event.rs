@@ -6,7 +6,7 @@
 
 use crate::{
     AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, OperationSet, TaskId,
-    VerificationRequirement,
+    TaskResult, VerificationRequirement,
 };
 
 impl<
@@ -66,6 +66,35 @@ impl<
         task: TaskId,
         target_agent: Option<AgentId>,
     ) -> Result<Event, KernelError> {
+        self.record_task_event_with_result(kind, agent, capability, task, target_agent, None)
+    }
+
+    pub(crate) fn record_task_result_event(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        result: TaskResult,
+    ) -> Result<Event, KernelError> {
+        self.record_task_event_with_result(
+            EventKind::TaskResultSubmitted,
+            agent,
+            Some(capability),
+            task,
+            None,
+            Some(result),
+        )
+    }
+
+    fn record_task_event_with_result(
+        &mut self,
+        kind: EventKind,
+        agent: AgentId,
+        capability: Option<CapabilityId>,
+        task: TaskId,
+        target_agent: Option<AgentId>,
+        result: Option<TaskResult>,
+    ) -> Result<Event, KernelError> {
         let task_record = self.find_task(task)?;
         self.record(Event {
             sequence: self.next_sequence,
@@ -88,6 +117,7 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: Some(task),
+            task_result: result,
             task_ticks: None,
             task_quantum: None,
             fault: None,

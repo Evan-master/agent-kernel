@@ -22,7 +22,7 @@ mod signal;
 use agent_kernel_core::{
     ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, CheckpointRecord, Event, Intent,
     IntentId, IntentKind, KernelCore, KernelError, ObservationRecord, ResourceId, Task, TaskId,
-    VerificationRequirement,
+    TaskResult, VerificationRequirement,
 };
 
 #[derive(Debug)]
@@ -224,6 +224,17 @@ impl<
         task: TaskId,
     ) -> Result<Event, KernelError> {
         self.core.complete_task(agent, capability, task)
+    }
+
+    pub fn sys_submit_task_result(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+        result: TaskResult,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .submit_task_result(agent, capability, task, result)
     }
 
     pub fn sys_verify_task(

@@ -180,6 +180,7 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: Some(task),
+            task_result: None,
             task_ticks: None,
             task_quantum: None,
             fault: Some(fault),

@@ -8,13 +8,13 @@ use core::sync::atomic::Ordering;
 
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots,
-    agent_call::{AgentCallContext, AgentCallRequest},
+    agent_call::AgentCallContext,
     context::SavedAgentFrame,
     interrupt::AGENT_CALL_VECTOR,
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
 };
 
-use super::{assembly, call, storage, validation};
+use super::{assembly, storage, validation};
 use crate::{
     agent_memory::PreparedAgentMemory,
     exception_runtime, pit_timer,
@@ -25,8 +25,8 @@ use crate::{
 
 #[derive(Copy, Clone)]
 pub(crate) struct AgentCpuRuntime {
-    kernel_stack: PrivilegedStackBounds,
-    kernel_cr3: u64,
+    pub(super) kernel_stack: PrivilegedStackBounds,
+    pub(super) kernel_cr3: u64,
 }
 
 pub(crate) struct PreparedAgentCpu {
@@ -36,20 +36,11 @@ pub(crate) struct PreparedAgentCpu {
 }
 
 pub(crate) struct PreemptedAgentCpu {
-    memory: PreparedAgentMemory,
-    runtime: AgentCpuRuntime,
-    frame: SavedAgentFrame,
-    context: AgentCallContext,
+    pub(super) memory: PreparedAgentMemory,
+    pub(super) runtime: AgentCpuRuntime,
+    pub(super) frame: SavedAgentFrame,
+    pub(super) context: AgentCallContext,
     ticks: u8,
-}
-
-pub(crate) struct CompletedAgentCpu {
-    calls: u8,
-    address_space_switches: u8,
-    describe_return_offset: u32,
-    completion_return_offset: u32,
-    nonce: u64,
-    context: AgentCallContext,
 }
 
 impl AgentCpuRuntime {
@@ -150,68 +141,5 @@ impl PreemptedAgentCpu {
 
     pub(crate) fn signal_is_clear(&self) -> bool {
         self.memory.signal_is_clear()
-    }
-
-    pub(crate) fn resume_until_completion(mut self) -> Option<CompletedAgentCpu> {
-        let roots = self.memory.roots();
-        let layout = self.memory.layout();
-        storage::begin_dispatch(roots)?;
-        if !self.memory.release_for_agent_call() {
-            return None;
-        }
-        call::resume_owned(&mut self.frame, roots, layout)?;
-
-        let describe = call::capture(self.runtime.kernel_stack, roots, layout)?;
-        let nonce = match describe.request() {
-            AgentCallRequest::DescribeContext { nonce } => nonce,
-            AgentCallRequest::Yield { .. } | AgentCallRequest::CompleteTask { .. } => return None,
-        };
-        let describe_return_offset = describe.return_offset();
-        let mut reply_frame = describe.into_frame();
-        self.context
-            .encode_describe_reply(reply_frame.frame_mut(), nonce)
-            .ok()?;
-
-        storage::begin_dispatch(roots)?;
-        call::resume_owned(&mut reply_frame, roots, layout)?;
-        let completed = call::capture(self.runtime.kernel_stack, roots, layout)?;
-        if !self.context.matches_completion(completed.request(), nonce) {
-            return None;
-        }
-
-        Some(CompletedAgentCpu {
-            calls: 2,
-            address_space_switches: 4,
-            describe_return_offset,
-            completion_return_offset: completed.return_offset(),
-            nonce,
-            context: self.context,
-        })
-    }
-}
-
-impl CompletedAgentCpu {
-    pub(crate) const fn call_count(&self) -> u8 {
-        self.calls
-    }
-
-    pub(crate) const fn address_space_switch_count(&self) -> u8 {
-        self.address_space_switches
-    }
-
-    pub(crate) const fn describe_return_offset(&self) -> u32 {
-        self.describe_return_offset
-    }
-
-    pub(crate) const fn completion_return_offset(&self) -> u32 {
-        self.completion_return_offset
-    }
-
-    pub(crate) const fn nonce(&self) -> u64 {
-        self.nonce
-    }
-
-    pub(crate) const fn context(&self) -> AgentCallContext {
-        self.context
     }
 }

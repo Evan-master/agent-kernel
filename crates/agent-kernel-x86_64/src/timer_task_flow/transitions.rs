@@ -119,8 +119,8 @@ pub(super) fn record_final_completion(
 }
 
 fn completion_evidence_valid(cpu: &CompletedAgentCpu, running: WorkerTask) -> bool {
-    cpu.call_count() == 2
-        && cpu.address_space_switch_count() == 4
+    cpu.call_count() == 3
+        && cpu.address_space_switch_count() == 6
         && running.call_context() == Some(cpu.context())
 }
 
@@ -140,6 +140,7 @@ fn running_after_completion_valid(
     (task.status == TaskStatus::Running
         && task.assignee == Some(running.agent)
         && task.delegated_capability == Some(running.capability)
+        && task.result.is_none()
         && task.run_ticks == running_prior_ticks
         && task.quantum_remaining == TASK_QUANTUM
         && context.state == AgentExecutionState::Running
@@ -170,6 +171,7 @@ fn running_and_queue_valid(
     (task.status == TaskStatus::Running
         && task.assignee == Some(running.agent)
         && task.delegated_capability == Some(running.capability)
+        && task.result.is_none()
         && task.run_ticks == running_prior_ticks
         && task.quantum_remaining == TASK_QUANTUM
         && context.state == AgentExecutionState::Running
@@ -197,6 +199,7 @@ fn idle_task_valid(booted: &X86BootedKernel, worker: WorkerTask, ticks: u64) -> 
     matches!(task, Some(task) if task.status == TaskStatus::Accepted
         && task.assignee == Some(worker.agent)
         && task.delegated_capability == Some(worker.capability)
+        && task.result.is_none()
         && task.run_ticks == ticks)
         && matches!(context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none())
 }
@@ -211,6 +214,7 @@ fn completed_task_valid(booted: &X86BootedKernel, worker: WorkerTask, ticks: u64
     matches!(task, Some(task) if task.status == TaskStatus::Completed
         && task.assignee == Some(worker.agent)
         && task.delegated_capability == Some(worker.capability)
+        && task.result == Some(worker.result)
         && task.run_ticks == ticks)
         && matches!(context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none())
 }

@@ -78,6 +78,7 @@ mod task;
 mod task_completion;
 mod task_event;
 mod task_lookup;
+mod task_result_store;
 mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};
@@ -115,4 +116,4 @@ pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceCreateOutcome, ResourceKind, ResourceStatus};
 pub use run_queue::RunQueueEntry;
 pub use signal::{SignalKey, SignalOutcome, WaiterRecord};
-pub use task::{Task, TaskStatus};
+pub use task::{Task, TaskResult, TaskStatus};

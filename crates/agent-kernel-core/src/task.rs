@@ -7,6 +7,12 @@
 use crate::{AgentId, CapabilityId, FaultId, IntentId, ResourceId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct TaskResult {
+    pub code: u16,
+    pub value: u64,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TaskStatus {
     Created,
     Delegated,
@@ -31,6 +37,7 @@ pub struct Task {
     pub run_ticks: u64,
     pub quantum_remaining: u64,
     pub last_fault: Option<FaultId>,
+    pub result: Option<TaskResult>,
 }
 
 impl Task {
@@ -46,6 +53,7 @@ impl Task {
             run_ticks: 0,
             quantum_remaining: 0,
             last_fault: None,
+            result: None,
         }
     }
 }

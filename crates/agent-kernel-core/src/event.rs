@@ -10,7 +10,7 @@ use crate::{
     DriverCommandKind, DriverCommandPayload, DriverCommandResult, DriverInvocationId, FaultId,
     FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId,
     NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation, OperationSet,
-    ResourceId, SignalKey, TaskId, VerificationRequirement, WaiterId,
+    ResourceId, SignalKey, TaskId, TaskResult, VerificationRequirement, WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -54,6 +54,7 @@ pub enum EventKind {
     DelegationRequested,
     TaskCreated,
     TaskAccepted,
+    TaskResultSubmitted,
     TaskCompleted,
     TaskVerified,
     TaskCancelled,
@@ -104,6 +105,7 @@ pub struct Event {
     pub verification: VerificationRequirement,
     pub checkpoint: Option<CheckpointId>,
     pub task: Option<TaskId>,
+    pub task_result: Option<TaskResult>,
     pub task_ticks: Option<u64>,
     pub task_quantum: Option<u64>,
     pub fault: Option<FaultId>,
@@ -155,6 +157,7 @@ impl Event {
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: None,
+            task_result: None,
             task_ticks: None,
             task_quantum: None,
             fault: None,

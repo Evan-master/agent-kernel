@@ -202,6 +202,7 @@ impl<
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: Some(task),
+            task_result: None,
             task_ticks,
             task_quantum,
             fault: None,

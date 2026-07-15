@@ -7,7 +7,7 @@ The project starts from new OS primitives instead of POSIX compatibility:
 agents, owned resources, resource lifecycle, capabilities, capability
 attenuation, agent launch entries, runtime admission, typed intents, actions, observations,
 agent executable image identity records, checkpoints, rollback, verification,
-tasks, delegation, native mailbox IPC, task wait signals, task fault traps,
+tasks, fixed-width task results, delegation, native mailbox IPC, task wait signals, task fault traps,
 fault handlers, fault policies, memory cells, native object namespace entries,
 driver bindings, device events, driver invocations, driver commands, agent
 execution contexts, driver endpoint registries, HAL dispatch requests, and
@@ -15,11 +15,11 @@ event logs.
 
 ## Current Scope
 
-- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, driver endpoint registry, driver bindings, device event lifecycle, driver invocation scheduling, driver command lifecycle, rollback, and event model.
+- `agent-kernel-core`: no_std-friendly agent registry, agent image records, agent launch entries, runtime admission, agent execution contexts, owned resource creation, resource lifecycle, capability lifecycle, capability attenuation, action, observation, checkpoint, intent store, task store, fixed-width task results, lifecycle, FIFO run queue, mailbox IPC, task wait signals, task fault traps, fault handlers, fault policies, memory cells, object namespace entries, driver endpoint registry, driver bindings, device event lifecycle, driver invocation scheduling, driver command lifecycle, rollback, and event model.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Agent Image Capsule parsing and SHA-256 verification binding, two isolated Agent CR3 roots with same-address private pages, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a versioned Agent Call ABI with trusted context replies and task-scoped completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Agent Image Capsule parsing and SHA-256 verification binding, two isolated Agent CR3 roots with same-address private pages, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a versioned Agent Call ABI with trusted context replies, returning task-result submission, and task-scoped completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -202,14 +202,18 @@ interrupt `0x90` with the versioned `AGNTCALL` DescribeContext envelope. The
 kernel validates the full frame and request, writes the scheduler-owned
 Agent/Task/Image identity plus caller nonce into an owned reply frame, and
 returns it through `iretq` under A's CR3. A preserves that reply payload in a
-terminal structured CompleteTask call. Only an exact context and nonce echo,
-matched to the kernel-held delegated task capability, permits event 43. Event 44
-dispatches B, whose own two-call completion round trip produces event 45. Both
-tasks are then `Completed`, both execution contexts are `Idle`, and the run queue
-is empty. A uses a 72-byte image, while B executes a distinct 74-byte image with a two-NOP
-prefix and different nonce. Their DescribeContext/CompleteTask return offsets are
-46/70 and 48/72. This is an Agent-native image format, call ABI, and scheduler,
-not a POSIX process or syscall ABI.
+structured SubmitTaskResult call. Only an exact context and nonce echo, matched
+to the kernel-held delegated task capability, may store A's fixed-width result
+and emit event 43 while the task remains `Running`. The kernel then encodes an
+operation-4 success reply in the owned frame and returns to A a second time. A
+uses that reply identity in a terminal CompleteTask call, producing event 44;
+event 45 dispatches B, whose own result and completion calls produce events 46
+and 47. Both tasks retain different results in `Completed`, both execution
+contexts are `Idle`, and the run queue is empty. A uses a 78-byte image, while B
+executes a distinct 80-byte image with a two-NOP prefix and different nonce.
+Their DescribeContext/SubmitTaskResult/CompleteTask return offsets are
+46/67/76 and 48/69/78. This is an Agent-native image format, call ABI, and
+scheduler, not a POSIX process or syscall ABI.
 The PIC is then remapped for IRQ4 and the physical COM1 transmitter-empty
 interrupt is armed. A bounded UART top half
 captures IIR/LSR state, disables the source, acknowledges the PIC, and returns
@@ -253,8 +257,8 @@ remains available for system-seeded resources and leaves `owner: None`.
 17. Parse both fixed Capsule headers, bind their SHA-256 digests to the verified records, copy/read back private code pages, and only then dispatch A with quantum one.
 18. Enter A under its CR3, let IRQ0 switch to RSP0, copy the validated frame, expire A, and dispatch B.
 19. Enter B under its distinct CR3, copy its IRQ0 frame, expire B, and redispatch A.
-20. Resume A, answer its versioned DescribeContext call through an owned reply frame, validate its context-bound CompleteTask request against kernel-held delegated authority, complete A, and dispatch B.
-21. Prove A's signal and reply did not affect B, then complete B's distinct DescribeContext/CompleteTask round trip and verify both tasks are terminal with an empty run queue.
+20. Resume A, answer DescribeContext, authorize and record its fixed-width TaskResult, return that successful mutation reply to ring 3, then validate CompleteTask, complete A, and dispatch B.
+21. Prove A's signal and replies did not affect B, run B's distinct three-call round trip, and verify both results persist in terminal tasks with an empty run queue.
 22. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
 23. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
 24. Acknowledge the event and dispatch a causally linked COM1 write request.
@@ -327,6 +331,8 @@ AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 AGENT_KERNEL_AGENT_CPU_RESUME_OK
 AGENT_KERNEL_AGENT_CALL_ABI_OK
 AGENT_KERNEL_AGENT_CALL_RETURN_OK
+AGENT_KERNEL_AGENT_CALL_RESULT_OK
+AGENT_KERNEL_AGENT_CALL_RETURNING_MUTATION_OK
 AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK
 AGENT_KERNEL_AGENT_CALL_COMPLETE_OK
 AGENT_KERNEL_AGENT_CR3_SWITCH_OK
@@ -378,19 +384,21 @@ event[39] task_quantum_expired
 event[40] task_dispatched
 event[41] task_quantum_expired
 event[42] task_dispatched
-event[43] task_completed
-event[44] task_dispatched
-event[45] task_completed
-event[46] device_event_raised
-event[47] device_event_delivered
-event[48] driver_invocation_queued
-event[49] driver_invocation_dispatched
-event[50] driver_invocation_ticked
-event[51] device_event_acknowledged
-event[52] driver_command_submitted
-event[53] driver_command_dispatched
-event[54] driver_command_completed
-event[55] driver_invocation_completed
+event[43] task_result_submitted
+event[44] task_completed
+event[45] task_dispatched
+event[46] task_result_submitted
+event[47] task_completed
+event[48] device_event_raised
+event[49] device_event_delivered
+event[50] driver_invocation_queued
+event[51] driver_invocation_dispatched
+event[52] driver_invocation_ticked
+event[53] device_event_acknowledged
+event[54] driver_command_submitted
+event[55] driver_command_dispatched
+event[56] driver_command_completed
+event[57] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -421,30 +429,36 @@ selectors, in-range user RIP/RSP, IF set, IOPL clear, and an intact RSP0 canary.
 second owned frame after RSP0 has been reused. `AGENT_KERNEL_TIMER_PREEMPTION_OK`
 requires events 39 through 42 to preserve `[B, A]` then `[A, B]` FIFO rotation.
 `AGENT_KERNEL_AGENT_CPU_RESUME_OK` requires both owned PIT frames to resume at
-their captured CPL3 RIP. `AGENT_KERNEL_AGENT_CALL_ABI_OK` requires two canonical
-`AGNTCALL` requests per Worker with version 1, supported operations, zero flags,
-and zero reserved words. `AGENT_KERNEL_AGENT_CALL_RETURN_OK` requires each
-DescribeContext call to return its scheduler-owned Agent/Task/Image identity and
-nonce through an owned `iretq` frame, then receive the same payload in
-CompleteTask. `AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK` requires each physical
-request to match the scheduler context whose private capability equals both the
-task's delegated capability and launch entry authority.
+their captured CPL3 RIP. `AGENT_KERNEL_AGENT_CALL_ABI_OK` requires three
+canonical `AGNTCALL` requests per Worker with version 1, supported operations,
+zero flags, operation-specific result registers, and zero reserved words for
+legacy operations. `AGENT_KERNEL_AGENT_CALL_RETURN_OK` requires DescribeContext
+and SubmitTaskResult to return their scheduler-owned Agent/Task/Image identity
+and nonce through owned `iretq` frames before CompleteTask receives the same
+payload. `AGENT_KERNEL_AGENT_CALL_RESULT_OK` requires A and B to persist
+`{0x0a01, 0xa11c0001}` and `{0x0b02, 0xb22c0002}` in events 43 and 46 without
+leaving `Running`. `AGENT_KERNEL_AGENT_CALL_RETURNING_MUTATION_OK` additionally
+requires each semantic result event and unchanged scheduler state to be
+validated before its success reply can resume ring 3.
+`AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK` requires each physical request to match
+the scheduler context whose private capability equals both the task's delegated
+capability and launch entry authority.
 `AGENT_KERNEL_AGENT_CALL_COMPLETE_OK` requires core authorization to accept
-those capabilities, produce events 43 and 45, leave both tasks `Completed` and
+those capabilities, produce events 44 and 47, leave both tasks `Completed` and
 both execution contexts `Idle`, and empty the run queue.
 `AGENT_KERNEL_AGENT_CR3_SWITCH_OK` requires each Worker's PIT and Agent-call
 entry to have observed that Worker's CR3 and every return to normal context to
 have restored the kernel CR3.
 `AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK` requires A's released signal to leave B
-blocked. `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` requires all four physical
+blocked. `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` requires all six physical
 Agent-call CR3 transitions per Worker and both terminal scheduler states.
 `AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK` requires A and B to return from
-DescribeContext/CompleteTask at distinct verified offsets 46/70 and 48/72 with
-different nonces.
+DescribeContext/SubmitTaskResult/CompleteTask at distinct verified offsets
+46/67/76 and 48/69/78 with different nonces.
 `AGENT_KERNEL_UART_IRQ_OK` requires IRQ4 to capture one THRE interrupt and normal
-context to validate its IIR/LSR mailbox. That signal causes event 46 and the
+context to validate its IIR/LSR mailbox. That signal causes event 48 and the
 running Driver Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is
-emitted by the immutable causal request at event 53 through the registered COM1
+emitted by the immutable causal request at event 55 through the registered COM1
 endpoint and `PortIoBackend`; the surrounding text uses the existing boot
 serial writer. The remaining success markers are printed only after the write
 and Driver Invocation terminal records are verified as `Completed` and the

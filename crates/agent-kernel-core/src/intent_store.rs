@@ -159,6 +159,7 @@ impl<
             verification,
             checkpoint: None,
             task: None,
+            task_result: None,
             task_ticks: None,
             task_quantum: None,
             fault: None,

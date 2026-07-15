@@ -84,6 +84,7 @@ pub enum KernelError {
     TaskNotFound,
     TaskAgentMismatch,
     TaskStatusMismatch,
+    TaskResultAlreadySubmitted,
     TaskQuantumInvalid,
     RunQueueFull,
     RunQueueEmpty,

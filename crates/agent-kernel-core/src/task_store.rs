@@ -93,6 +93,7 @@ impl<
             run_ticks: 0,
             quantum_remaining: 0,
             last_fault: None,
+            result: None,
         };
         self.task_len += 1;
         self.record_task_event(EventKind::TaskCreated, agent, Some(capability), task, None)?;

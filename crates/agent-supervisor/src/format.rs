@@ -131,6 +131,7 @@ pub fn format_event(event: &Event) -> String {
         }
         EventKind::TaskCreated => format_task_event(event, "task_created"),
         EventKind::TaskAccepted => format_task_event(event, "task_accepted"),
+        EventKind::TaskResultSubmitted => format_task_result_event(event),
         EventKind::TaskCompleted => format_task_event(event, "task_completed"),
         EventKind::TaskVerified => format_task_event(event, "task_verified"),
         EventKind::TaskCancelled => format_task_event(event, "task_cancelled"),
@@ -195,6 +196,18 @@ fn format_task_event(event: &Event, label: &str) -> String {
     format!(
         "event[{}] {} agent={} resource={} task={}",
         event.sequence, label, agent, resource, task
+    )
+}
+
+fn format_task_result_event(event: &Event) -> String {
+    let result = event
+        .task_result
+        .unwrap_or(agent_kernel_core::TaskResult { code: 0, value: 0 });
+    format!(
+        "{} code={} value={}",
+        format_task_event(event, "task_result_submitted"),
+        result.code,
+        result.value
     )
 }
 

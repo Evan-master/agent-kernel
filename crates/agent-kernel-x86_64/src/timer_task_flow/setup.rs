@@ -6,7 +6,7 @@
 
 use agent_kernel_core::{
     AgentEntryKind, AgentExecutionState, AgentId, AgentImageDigest, AgentImageId, AgentImageKind,
-    CapabilityId, EventKind, IntentKind, RunQueueEntry, TaskId, TaskStatus,
+    CapabilityId, EventKind, IntentKind, RunQueueEntry, TaskId, TaskResult, TaskStatus,
     VerificationRequirement,
 };
 
@@ -23,6 +23,8 @@ pub(super) fn prepare(
     booted: &mut X86BootedKernel,
     first_digest: AgentImageDigest,
     second_digest: AgentImageDigest,
+    first_result: TaskResult,
+    second_result: TaskResult,
 ) -> Option<(WorkerTask, WorkerTask)> {
     let first = register_delegated_task(booted, WORKER_A)?;
     let second = register_delegated_task(booted, WORKER_B)?;
@@ -31,8 +33,20 @@ pub(super) fn prepare(
     launch_and_enqueue(booted, WORKER_A, first, first_image)?;
     launch_and_enqueue(booted, WORKER_B, second, second_image)?;
 
-    let first = WorkerTask::new(WORKER_A, first.task, first_image, first.capability);
-    let second = WorkerTask::new(WORKER_B, second.task, second_image, second.capability);
+    let first = WorkerTask::new(
+        WORKER_A,
+        first.task,
+        first_image,
+        first.capability,
+        first_result,
+    );
+    let second = WorkerTask::new(
+        WORKER_B,
+        second.task,
+        second_image,
+        second.capability,
+        second_result,
+    );
     queued_state_valid(booted, first, second).then_some((first, second))
 }
 
@@ -126,8 +140,8 @@ fn queued_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: Worke
         .find(|context| context.agent == second.agent);
     let first_entry = kernel.agent_entry(first.agent).ok();
     let second_entry = kernel.agent_entry(second.agent).ok();
-    matches!(first_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0 && task.delegated_capability == Some(first.capability))
-        && matches!(second_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0 && task.delegated_capability == Some(second.capability))
+    matches!(first_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0 && task.delegated_capability == Some(first.capability) && task.result.is_none())
+        && matches!(second_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0 && task.delegated_capability == Some(second.capability) && task.result.is_none())
         && matches!(first_context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none() && context.run_ticks == 0 && context.quantum_remaining == 0)
         && matches!(second_context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none() && context.run_ticks == 0 && context.quantum_remaining == 0)
         && matches!(first_entry, Some(entry) if entry.image == first.image && entry.task == Some(first.task) && entry.capability == first.capability)
@@ -173,6 +187,7 @@ pub(super) fn dispatch_first(
     (first_task.status == TaskStatus::Running
         && first_task.run_ticks == 0
         && first_task.quantum_remaining == TASK_QUANTUM
+        && first_task.result.is_none()
         && first_context.state == AgentExecutionState::Running
         && first_context.task == Some(first.task)
         && first_context.run_ticks == 0
@@ -180,6 +195,7 @@ pub(super) fn dispatch_first(
         && second_task.status == TaskStatus::Accepted
         && second_task.run_ticks == 0
         && second_task.quantum_remaining == 0
+        && second_task.result.is_none()
         && second_context.state == AgentExecutionState::Idle
         && second_context.task.is_none()
         && second_context.run_ticks == 0

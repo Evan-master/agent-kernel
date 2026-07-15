@@ -2,18 +2,22 @@
 //!
 //! This boot adapter owns only type-state ordering between architecture evidence
 //! and public task syscalls. Setup admits both Workers; transition helpers prove
-//! FIFO queue state across two expiries and two terminal completion calls.
+//! FIFO queue state across two expiries, returning result calls, and terminal
+//! completion calls.
 
+mod result_transition;
 mod setup;
 mod transitions;
 
 use agent_kernel_core::{
-    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId,
+    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId, TaskResult,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use crate::{
-    agent_cpu::{CompletedAgentCpu, PreemptedAgentCpu},
+    agent_cpu::{
+        AcknowledgedTaskResultCpu, CompletedAgentCpu, PreemptedAgentCpu, RequestedTaskResultCpu,
+    },
     X86BootedKernel,
 };
 
@@ -27,6 +31,7 @@ pub(super) struct WorkerTask {
     task: TaskId,
     image: AgentImageId,
     capability: CapabilityId,
+    result: TaskResult,
 }
 
 impl WorkerTask {
@@ -35,12 +40,14 @@ impl WorkerTask {
         task: TaskId,
         image: AgentImageId,
         capability: CapabilityId,
+        result: TaskResult,
     ) -> Self {
         Self {
             agent,
             task,
             image,
             capability,
+            result,
         }
     }
 
@@ -74,13 +81,31 @@ pub(super) struct SecondResumedFlow {
     second: WorkerTask,
 }
 
+pub(super) struct FirstResultSubmittedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+}
+
+pub(super) struct SecondResultSubmittedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+}
+
 impl TimerTaskFlow {
     pub(super) fn prepare(
         booted: &mut X86BootedKernel,
         first_digest: AgentImageDigest,
         second_digest: AgentImageDigest,
+        first_result: TaskResult,
+        second_result: TaskResult,
     ) -> Option<QueuedTimerTaskFlow> {
-        let (first, second) = setup::prepare(booted, first_digest, second_digest)?;
+        let (first, second) = setup::prepare(
+            booted,
+            first_digest,
+            second_digest,
+            first_result,
+            second_result,
+        )?;
         Some(QueuedTimerTaskFlow { first, second })
     }
 
@@ -135,6 +160,24 @@ impl SecondRunningFlow {
 }
 
 impl FirstResumedFlow {
+    pub(super) fn submit_first_result(
+        self,
+        booted: &mut X86BootedKernel,
+        cpu: RequestedTaskResultCpu,
+    ) -> Option<(FirstResultSubmittedFlow, AcknowledgedTaskResultCpu)> {
+        let acknowledged =
+            result_transition::submit(booted, self.first, Some(self.second), None, cpu)?;
+        Some((
+            FirstResultSubmittedFlow {
+                first: self.first,
+                second: self.second,
+            },
+            acknowledged,
+        ))
+    }
+}
+
+impl FirstResultSubmittedFlow {
     pub(super) fn complete_first_and_dispatch_second(
         self,
         booted: &mut X86BootedKernel,
@@ -149,6 +192,24 @@ impl FirstResumedFlow {
 }
 
 impl SecondResumedFlow {
+    pub(super) fn submit_second_result(
+        self,
+        booted: &mut X86BootedKernel,
+        cpu: RequestedTaskResultCpu,
+    ) -> Option<(SecondResultSubmittedFlow, AcknowledgedTaskResultCpu)> {
+        let acknowledged =
+            result_transition::submit(booted, self.second, None, Some(self.first), cpu)?;
+        Some((
+            SecondResultSubmittedFlow {
+                first: self.first,
+                second: self.second,
+            },
+            acknowledged,
+        ))
+    }
+}
+
+impl SecondResultSubmittedFlow {
     pub(super) fn record_second_completion(
         self,
         booted: &mut X86BootedKernel,

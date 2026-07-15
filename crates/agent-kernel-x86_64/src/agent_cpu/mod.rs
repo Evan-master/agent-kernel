@@ -6,8 +6,10 @@
 
 mod assembly;
 mod call;
+mod call_flow;
 mod runtime;
 mod storage;
 mod validation;
 
-pub(super) use runtime::{AgentCpuRuntime, CompletedAgentCpu, PreemptedAgentCpu};
+pub(super) use call_flow::{AcknowledgedTaskResultCpu, CompletedAgentCpu, RequestedTaskResultCpu};
+pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu};
