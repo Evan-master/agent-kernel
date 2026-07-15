@@ -1,9 +1,9 @@
-use agent_kernel_core::{AgentId, AgentImageId, TaskId};
+use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId};
 use agent_kernel_x86_64::{
     agent_call::{
         AgentCallContext, AgentCallDecodeError, AgentCallOperation, AgentCallRequest,
-        AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_DESCRIBE_CONTEXT,
-        AGENT_CALL_STATUS_OK, AGENT_CALL_YIELD,
+        AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_COMPLETE_TASK,
+        AGENT_CALL_DESCRIBE_CONTEXT, AGENT_CALL_STATUS_OK, AGENT_CALL_YIELD,
     },
     context::PrivilegeInterruptStackFrame,
 };
@@ -16,6 +16,7 @@ fn call_abi_constants_are_native_and_versioned() {
     assert_eq!(AGENT_CALL_ABI_VERSION, 1);
     assert_eq!(AGENT_CALL_DESCRIBE_CONTEXT, 1);
     assert_eq!(AGENT_CALL_YIELD, 2);
+    assert_eq!(AGENT_CALL_COMPLETE_TASK, 3);
     assert_eq!(AGENT_CALL_STATUS_OK, 0);
 }
 
@@ -46,6 +47,47 @@ fn yield_request_decodes_context_echo() {
             nonce: NONCE,
         })
     );
+}
+
+#[test]
+fn complete_task_request_matches_trusted_context_without_capability_in_request() {
+    let frame = request_frame(AGENT_CALL_COMPLETE_TASK, [3, 9, 4, NONCE]);
+    let request = AgentCallRequest::decode(&frame).unwrap();
+
+    assert_eq!(
+        request,
+        AgentCallRequest::CompleteTask {
+            agent: AgentId::new(3),
+            task: TaskId::new(9),
+            image: AgentImageId::new(4),
+            nonce: NONCE,
+        }
+    );
+    assert_eq!(request.operation(), AgentCallOperation::CompleteTask);
+    assert!(context().matches_completion(request, NONCE));
+    assert!(!context().matches_completion(request, 0));
+    assert_eq!(context().capability(), CapabilityId::new(7));
+    assert_ne!(
+        context(),
+        AgentCallContext::new(
+            AgentId::new(3),
+            TaskId::new(9),
+            AgentImageId::new(4),
+            CapabilityId::new(8),
+        )
+        .unwrap()
+    );
+
+    for payload in [
+        [5, 9, 4, NONCE],
+        [3, 10, 4, NONCE],
+        [3, 9, 6, NONCE],
+        [3, 9, 4, NONCE + 1],
+    ] {
+        let wrong =
+            AgentCallRequest::decode(&request_frame(AGENT_CALL_COMPLETE_TASK, payload)).unwrap();
+        assert!(!context().matches_completion(wrong, NONCE));
+    }
 }
 
 #[test]
@@ -90,16 +132,18 @@ fn operations_reject_noncanonical_payloads() {
             Err(AgentCallDecodeError::InvalidPayload)
         );
     }
-    for payload in [
-        [0, 9, 4, NONCE],
-        [3, 0, 4, NONCE],
-        [3, 9, 0, NONCE],
-        [3, 9, 4, 0],
-    ] {
-        assert_eq!(
-            AgentCallRequest::decode(&request_frame(AGENT_CALL_YIELD, payload)),
-            Err(AgentCallDecodeError::InvalidPayload)
-        );
+    for operation in [AGENT_CALL_YIELD, AGENT_CALL_COMPLETE_TASK] {
+        for payload in [
+            [0, 9, 4, NONCE],
+            [3, 0, 4, NONCE],
+            [3, 9, 0, NONCE],
+            [3, 9, 4, 0],
+        ] {
+            assert_eq!(
+                AgentCallRequest::decode(&request_frame(operation, payload)),
+                Err(AgentCallDecodeError::InvalidPayload)
+            );
+        }
     }
 }
 
@@ -142,15 +186,39 @@ fn describe_reply_encodes_trusted_context_without_changing_control_frame() {
 #[test]
 fn trusted_call_context_rejects_zero_identifiers() {
     assert_eq!(
-        AgentCallContext::new(AgentId::new(0), TaskId::new(9), AgentImageId::new(4)),
+        AgentCallContext::new(
+            AgentId::new(0),
+            TaskId::new(9),
+            AgentImageId::new(4),
+            CapabilityId::new(7),
+        ),
         None
     );
     assert_eq!(
-        AgentCallContext::new(AgentId::new(3), TaskId::new(0), AgentImageId::new(4)),
+        AgentCallContext::new(
+            AgentId::new(3),
+            TaskId::new(0),
+            AgentImageId::new(4),
+            CapabilityId::new(7),
+        ),
         None
     );
     assert_eq!(
-        AgentCallContext::new(AgentId::new(3), TaskId::new(9), AgentImageId::new(0)),
+        AgentCallContext::new(
+            AgentId::new(3),
+            TaskId::new(9),
+            AgentImageId::new(0),
+            CapabilityId::new(7),
+        ),
+        None
+    );
+    assert_eq!(
+        AgentCallContext::new(
+            AgentId::new(3),
+            TaskId::new(9),
+            AgentImageId::new(4),
+            CapabilityId::new(0),
+        ),
         None
     );
 }
@@ -180,7 +248,13 @@ fn yield_context_must_match_the_immediately_returned_identity_and_nonce() {
 }
 
 fn context() -> AgentCallContext {
-    AgentCallContext::new(AgentId::new(3), TaskId::new(9), AgentImageId::new(4)).unwrap()
+    AgentCallContext::new(
+        AgentId::new(3),
+        TaskId::new(9),
+        AgentImageId::new(4),
+        CapabilityId::new(7),
+    )
+    .unwrap()
 }
 
 fn request_frame(operation: u64, payload: [u64; 4]) -> PrivilegeInterruptStackFrame {

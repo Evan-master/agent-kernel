@@ -93,49 +93,50 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     if !preempted_a.signal_is_clear() || !preempted_b.signal_is_clear() {
         fatal_boot("AGENT_KERNEL_MULTI_AGENT_ISOLATION_ERROR");
     }
-    let Some(yielded_a) = preempted_a.resume_until_yield() else {
+    let Some(completed_a) = preempted_a.resume_until_completion() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
-    let describe_return_a = yielded_a.describe_return_offset();
-    let yield_return_a = yielded_a.yield_return_offset();
-    let nonce_a = yielded_a.nonce();
-    if yielded_a.call_count() != 2
-        || yielded_a.address_space_switch_count() != 4
+    let describe_return_a = completed_a.describe_return_offset();
+    let completion_return_a = completed_a.completion_return_offset();
+    let nonce_a = completed_a.nonce();
+    if completed_a.call_count() != 2
+        || completed_a.address_space_switch_count() != 4
         || nonce_a != worker_a.nonce()
         || describe_return_a != worker_a.expected_describe_return_offset()
-        || yield_return_a != worker_a.expected_yield_return_offset()
+        || completion_return_a != worker_a.expected_completion_return_offset()
         || !preempted_b.signal_is_clear()
     {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
     }
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
     let Some(second_resumed_flow) =
-        first_resumed_flow.yield_first_and_dispatch_second(&mut booted, yielded_a)
+        first_resumed_flow.complete_first_and_dispatch_second(&mut booted, completed_a)
     else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
+        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     };
-    let Some(yielded_b) = preempted_b.resume_until_yield() else {
+    let Some(completed_b) = preempted_b.resume_until_completion() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
-    let describe_return_b = yielded_b.describe_return_offset();
-    let yield_return_b = yielded_b.yield_return_offset();
-    let nonce_b = yielded_b.nonce();
-    if yielded_b.call_count() != 2
-        || yielded_b.address_space_switch_count() != 4
+    let describe_return_b = completed_b.describe_return_offset();
+    let completion_return_b = completed_b.completion_return_offset();
+    let nonce_b = completed_b.nonce();
+    if completed_b.call_count() != 2
+        || completed_b.address_space_switch_count() != 4
         || nonce_b != worker_b.nonce()
         || nonce_a == nonce_b
         || describe_return_b != worker_b.expected_describe_return_offset()
-        || yield_return_b != worker_b.expected_yield_return_offset()
+        || completion_return_b != worker_b.expected_completion_return_offset()
         || describe_return_a == describe_return_b
-        || yield_return_a == yield_return_b
-        || !second_resumed_flow.record_second_yield(&mut booted, yielded_b)
+        || completion_return_a == completion_return_b
+        || !second_resumed_flow.record_second_completion(&mut booted, completed_b)
     {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
+        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     }
     serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURN_OK");
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_YIELD_OK");
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK");
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_COMPLETE_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CR3_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK");

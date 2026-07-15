@@ -31,8 +31,8 @@ pub(super) fn prepare(
     launch_and_enqueue(booted, WORKER_A, first, first_image)?;
     launch_and_enqueue(booted, WORKER_B, second, second_image)?;
 
-    let first = WorkerTask::new(WORKER_A, first.task, first_image);
-    let second = WorkerTask::new(WORKER_B, second.task, second_image);
+    let first = WorkerTask::new(WORKER_A, first.task, first_image, first.capability);
+    let second = WorkerTask::new(WORKER_B, second.task, second_image, second.capability);
     queued_state_valid(booted, first, second).then_some((first, second))
 }
 
@@ -126,12 +126,12 @@ fn queued_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: Worke
         .find(|context| context.agent == second.agent);
     let first_entry = kernel.agent_entry(first.agent).ok();
     let second_entry = kernel.agent_entry(second.agent).ok();
-    matches!(first_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0)
-        && matches!(second_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0)
+    matches!(first_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0 && task.delegated_capability == Some(first.capability))
+        && matches!(second_task, Some(task) if task.status == TaskStatus::Accepted && task.run_ticks == 0 && task.quantum_remaining == 0 && task.delegated_capability == Some(second.capability))
         && matches!(first_context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none() && context.run_ticks == 0 && context.quantum_remaining == 0)
         && matches!(second_context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none() && context.run_ticks == 0 && context.quantum_remaining == 0)
-        && matches!(first_entry, Some(entry) if entry.image == first.image && entry.task == Some(first.task))
-        && matches!(second_entry, Some(entry) if entry.image == second.image && entry.task == Some(second.task))
+        && matches!(first_entry, Some(entry) if entry.image == first.image && entry.task == Some(first.task) && entry.capability == first.capability)
+        && matches!(second_entry, Some(entry) if entry.image == second.image && entry.task == Some(second.task) && entry.capability == second.capability)
         && kernel.run_queue()
             == [
                 RunQueueEntry {

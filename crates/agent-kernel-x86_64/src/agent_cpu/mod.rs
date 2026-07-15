@@ -10,4 +10,4 @@ mod runtime;
 mod storage;
 mod validation;
 
-pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu, YieldedAgentCpu};
+pub(super) use runtime::{AgentCpuRuntime, CompletedAgentCpu, PreemptedAgentCpu};

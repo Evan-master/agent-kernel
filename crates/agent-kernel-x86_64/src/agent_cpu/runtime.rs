@@ -43,13 +43,13 @@ pub(crate) struct PreemptedAgentCpu {
     ticks: u8,
 }
 
-pub(crate) struct YieldedAgentCpu {
-    yields: u8,
+pub(crate) struct CompletedAgentCpu {
     calls: u8,
     address_space_switches: u8,
     describe_return_offset: u32,
-    yield_return_offset: u32,
+    completion_return_offset: u32,
     nonce: u64,
+    context: AgentCallContext,
 }
 
 impl AgentCpuRuntime {
@@ -152,7 +152,7 @@ impl PreemptedAgentCpu {
         self.memory.signal_is_clear()
     }
 
-    pub(crate) fn resume_until_yield(mut self) -> Option<YieldedAgentCpu> {
+    pub(crate) fn resume_until_completion(mut self) -> Option<CompletedAgentCpu> {
         let roots = self.memory.roots();
         let layout = self.memory.layout();
         storage::begin_dispatch(roots)?;
@@ -164,7 +164,7 @@ impl PreemptedAgentCpu {
         let describe = call::capture(self.runtime.kernel_stack, roots, layout)?;
         let nonce = match describe.request() {
             AgentCallRequest::DescribeContext { nonce } => nonce,
-            AgentCallRequest::Yield { .. } => return None,
+            AgentCallRequest::Yield { .. } | AgentCallRequest::CompleteTask { .. } => return None,
         };
         let describe_return_offset = describe.return_offset();
         let mut reply_frame = describe.into_frame();
@@ -174,27 +174,23 @@ impl PreemptedAgentCpu {
 
         storage::begin_dispatch(roots)?;
         call::resume_owned(&mut reply_frame, roots, layout)?;
-        let yielded = call::capture(self.runtime.kernel_stack, roots, layout)?;
-        if !self.context.matches_yield(yielded.request(), nonce) {
+        let completed = call::capture(self.runtime.kernel_stack, roots, layout)?;
+        if !self.context.matches_completion(completed.request(), nonce) {
             return None;
         }
 
-        Some(YieldedAgentCpu {
-            yields: 1,
+        Some(CompletedAgentCpu {
             calls: 2,
             address_space_switches: 4,
             describe_return_offset,
-            yield_return_offset: yielded.return_offset(),
+            completion_return_offset: completed.return_offset(),
             nonce,
+            context: self.context,
         })
     }
 }
 
-impl YieldedAgentCpu {
-    pub(crate) const fn yield_count(&self) -> u8 {
-        self.yields
-    }
-
+impl CompletedAgentCpu {
     pub(crate) const fn call_count(&self) -> u8 {
         self.calls
     }
@@ -207,11 +203,15 @@ impl YieldedAgentCpu {
         self.describe_return_offset
     }
 
-    pub(crate) const fn yield_return_offset(&self) -> u32 {
-        self.yield_return_offset
+    pub(crate) const fn completion_return_offset(&self) -> u32 {
+        self.completion_return_offset
     }
 
     pub(crate) const fn nonce(&self) -> u64 {
         self.nonce
+    }
+
+    pub(crate) const fn context(&self) -> AgentCallContext {
+        self.context
     }
 }

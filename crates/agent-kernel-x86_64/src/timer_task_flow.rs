@@ -2,16 +2,18 @@
 //!
 //! This boot adapter owns only type-state ordering between architecture evidence
 //! and public task syscalls. Setup admits both Workers; transition helpers prove
-//! FIFO queue state across two expiries and two cooperative yields.
+//! FIFO queue state across two expiries and two terminal completion calls.
 
 mod setup;
 mod transitions;
 
-use agent_kernel_core::{AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, TaskId};
+use agent_kernel_core::{
+    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId,
+};
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use crate::{
-    agent_cpu::{PreemptedAgentCpu, YieldedAgentCpu},
+    agent_cpu::{CompletedAgentCpu, PreemptedAgentCpu},
     X86BootedKernel,
 };
 
@@ -24,11 +26,26 @@ pub(super) struct WorkerTask {
     agent: AgentId,
     task: TaskId,
     image: AgentImageId,
+    capability: CapabilityId,
 }
 
 impl WorkerTask {
-    const fn new(agent: AgentId, task: TaskId, image: AgentImageId) -> Self {
-        Self { agent, task, image }
+    const fn new(
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        capability: CapabilityId,
+    ) -> Self {
+        Self {
+            agent,
+            task,
+            image,
+            capability,
+        }
+    }
+
+    const fn call_context(self) -> Option<AgentCallContext> {
+        AgentCallContext::new(self.agent, self.task, self.image, self.capability)
     }
 }
 
@@ -82,10 +99,7 @@ impl TimerTaskFlow {
 
 impl QueuedTimerTaskFlow {
     pub(super) fn call_contexts(&self) -> Option<(AgentCallContext, AgentCallContext)> {
-        Some((
-            AgentCallContext::new(self.first.agent, self.first.task, self.first.image)?,
-            AgentCallContext::new(self.second.agent, self.second.task, self.second.image)?,
-        ))
+        Some((self.first.call_context()?, self.second.call_context()?))
     }
 
     pub(super) fn image_records(
@@ -121,12 +135,12 @@ impl SecondRunningFlow {
 }
 
 impl FirstResumedFlow {
-    pub(super) fn yield_first_and_dispatch_second(
+    pub(super) fn complete_first_and_dispatch_second(
         self,
         booted: &mut X86BootedKernel,
-        cpu: YieldedAgentCpu,
+        cpu: CompletedAgentCpu,
     ) -> Option<SecondResumedFlow> {
-        transitions::yield_and_dispatch(booted, self.first, self.second, cpu, 1)?;
+        transitions::complete_and_dispatch(booted, self.first, self.second, cpu, 1)?;
         Some(SecondResumedFlow {
             first: self.first,
             second: self.second,
@@ -135,11 +149,11 @@ impl FirstResumedFlow {
 }
 
 impl SecondResumedFlow {
-    pub(super) fn record_second_yield(
+    pub(super) fn record_second_completion(
         self,
         booted: &mut X86BootedKernel,
-        cpu: YieldedAgentCpu,
+        cpu: CompletedAgentCpu,
     ) -> bool {
-        transitions::record_final_yield(booted, self.second, self.first, cpu)
+        transitions::record_final_completion(booted, self.second, self.first, cpu)
     }
 }

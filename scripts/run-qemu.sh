@@ -39,7 +39,8 @@ for expected in \
   "AGENT_KERNEL_AGENT_CPU_RESUME_OK" \
   "AGENT_KERNEL_AGENT_CALL_ABI_OK" \
   "AGENT_KERNEL_AGENT_CALL_RETURN_OK" \
-  "AGENT_KERNEL_AGENT_CALL_YIELD_OK" \
+  "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
+  "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
   "AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK" \
   "AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK" \
@@ -90,9 +91,9 @@ for expected in \
   "event[40] task_dispatched" \
   "event[41] task_quantum_expired" \
   "event[42] task_dispatched" \
-  "event[43] task_yielded" \
+  "event[43] task_completed" \
   "event[44] task_dispatched" \
-  "event[45] task_yielded" \
+  "event[45] task_completed" \
   "event[46] device_event_raised" \
   "event[47] device_event_delivered" \
   "event[48] driver_invocation_queued" \
