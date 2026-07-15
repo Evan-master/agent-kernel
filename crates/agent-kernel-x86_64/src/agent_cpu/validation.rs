@@ -13,7 +13,9 @@ use agent_kernel_x86_64::{
 };
 
 use super::storage;
-use crate::privilege_runtime::PrivilegedStackBounds;
+use crate::privilege_runtime::{
+    current_privilege_level, stack_canary_valid, PrivilegedStackBounds,
+};
 
 const RFLAGS_IOPL: u64 = 3 << 12;
 const RFLAGS_NESTED_TASK: u64 = 1 << 14;
@@ -67,4 +69,11 @@ pub(super) fn initial_registers_sanitized(
 
 pub(super) fn saved_frame_valid(saved: &SavedAgentFrame, layout: UserMemoryLayout) -> bool {
     user_frame_valid(saved.frame(), layout)
+}
+
+pub(super) fn kernel_boundary_valid(stack: PrivilegedStackBounds, kernel_cr3: u64) -> bool {
+    current_privilege_level() == 0
+        && stack_canary_valid(stack)
+        && storage::interrupts_are_clear()
+        && storage::current_raw_cr3() == kernel_cr3
 }

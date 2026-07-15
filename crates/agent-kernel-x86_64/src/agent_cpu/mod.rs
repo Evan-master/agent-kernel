@@ -5,6 +5,7 @@
 //! validated type-state transitions for multiple suspended contexts.
 
 mod assembly;
+mod call;
 mod runtime;
 mod storage;
 mod validation;

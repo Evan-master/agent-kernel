@@ -8,12 +8,13 @@ use core::sync::atomic::Ordering;
 
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots,
+    agent_call::{AgentCallContext, AgentCallRequest},
     context::SavedAgentFrame,
     interrupt::AGENT_CALL_VECTOR,
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
 };
 
-use super::{assembly, storage, validation};
+use super::{assembly, call, storage, validation};
 use crate::{
     agent_memory::PreparedAgentMemory,
     exception_runtime, pit_timer,
@@ -31,19 +32,24 @@ pub(crate) struct AgentCpuRuntime {
 pub(crate) struct PreparedAgentCpu {
     memory: PreparedAgentMemory,
     runtime: AgentCpuRuntime,
+    context: AgentCallContext,
 }
 
 pub(crate) struct PreemptedAgentCpu {
     memory: PreparedAgentMemory,
     runtime: AgentCpuRuntime,
     frame: SavedAgentFrame,
+    context: AgentCallContext,
     ticks: u8,
 }
 
 pub(crate) struct YieldedAgentCpu {
     yields: u8,
+    calls: u8,
     address_space_switches: u8,
-    call_return_offset: u32,
+    describe_return_offset: u32,
+    yield_return_offset: u32,
+    nonce: u64,
 }
 
 impl AgentCpuRuntime {
@@ -67,7 +73,11 @@ impl AgentCpuRuntime {
         })
     }
 
-    pub(crate) fn prepare(&self, memory: PreparedAgentMemory) -> Option<PreparedAgentCpu> {
+    pub(crate) fn prepare(
+        &self,
+        memory: PreparedAgentMemory,
+        context: AgentCallContext,
+    ) -> Option<PreparedAgentCpu> {
         if memory.roots().kernel_cr3() != self.kernel_cr3
             || !memory.kernel_address_space_active()
             || !memory.signal_is_clear()
@@ -78,6 +88,7 @@ impl AgentCpuRuntime {
         Some(PreparedAgentCpu {
             memory,
             runtime: *self,
+            context,
         })
     }
 }
@@ -114,7 +125,10 @@ impl PreparedAgentCpu {
             || frame.rip != frame_rip
             || !validation::user_frame_valid(&frame, layout)
             || !validation::initial_registers_sanitized(&frame, layout)
-            || !kernel_boundary_valid(self.runtime)
+            || !validation::kernel_boundary_valid(
+                self.runtime.kernel_stack,
+                self.runtime.kernel_cr3,
+            )
         {
             return None;
         }
@@ -123,6 +137,7 @@ impl PreparedAgentCpu {
             memory: self.memory,
             runtime: self.runtime,
             frame: SavedAgentFrame::new(frame),
+            context: self.context,
             ticks: 1,
         })
     }
@@ -140,46 +155,37 @@ impl PreemptedAgentCpu {
     pub(crate) fn resume_until_yield(mut self) -> Option<YieldedAgentCpu> {
         let roots = self.memory.roots();
         let layout = self.memory.layout();
-        if !validation::saved_frame_valid(&self.frame, layout) {
-            return None;
-        }
         storage::begin_dispatch(roots)?;
         if !self.memory.release_for_agent_call() {
             return None;
         }
-        let frame_rsp = self.frame.as_mut_ptr() as usize as u64;
-        // SAFETY: frame_rsp names this context's complete owned privilege frame.
-        // It stays live until the Agent-call entry restores the host continuation.
-        unsafe {
-            assembly::resume_interrupted_user(
-                storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
-                frame_rsp,
-                roots.agent_cr3(),
-            );
-        }
+        call::resume_owned(&mut self.frame, roots, layout)?;
 
-        let call_rsp = storage::AGENT_KERNEL_AGENT_CALL_RSP.load(Ordering::Acquire);
-        let call_rip = storage::AGENT_KERNEL_AGENT_CALL_RIP.load(Ordering::Acquire);
-        let call_frame = validation::read_frame(call_rsp, self.runtime.kernel_stack)?;
-        let call_return_offset =
-            u32::try_from(call_frame.rip.checked_sub(layout.code_start())?).ok()?;
-        if storage::AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire) != 1
-            || storage::AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) != 1
-            || storage::AGENT_KERNEL_AGENT_YIELDED.load(Ordering::Acquire) != 1
-            || storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 0
-            || storage::AGENT_KERNEL_AGENT_CALL_CR3.load(Ordering::Acquire) != roots.agent_cr3()
-            || call_frame.rip != call_rip
-            || call_frame.rax != layout.signal_start()
-            || !validation::user_frame_valid(&call_frame, layout)
-            || !kernel_boundary_valid(self.runtime)
-        {
+        let describe = call::capture(self.runtime.kernel_stack, roots, layout)?;
+        let nonce = match describe.request() {
+            AgentCallRequest::DescribeContext { nonce } => nonce,
+            AgentCallRequest::Yield { .. } => return None,
+        };
+        let describe_return_offset = describe.return_offset();
+        let mut reply_frame = describe.into_frame();
+        self.context
+            .encode_describe_reply(reply_frame.frame_mut(), nonce)
+            .ok()?;
+
+        storage::begin_dispatch(roots)?;
+        call::resume_owned(&mut reply_frame, roots, layout)?;
+        let yielded = call::capture(self.runtime.kernel_stack, roots, layout)?;
+        if !self.context.matches_yield(yielded.request(), nonce) {
             return None;
         }
 
         Some(YieldedAgentCpu {
             yields: 1,
-            address_space_switches: 2,
-            call_return_offset,
+            calls: 2,
+            address_space_switches: 4,
+            describe_return_offset,
+            yield_return_offset: yielded.return_offset(),
+            nonce,
         })
     }
 }
@@ -189,18 +195,23 @@ impl YieldedAgentCpu {
         self.yields
     }
 
+    pub(crate) const fn call_count(&self) -> u8 {
+        self.calls
+    }
+
     pub(crate) const fn address_space_switch_count(&self) -> u8 {
         self.address_space_switches
     }
 
-    pub(crate) const fn call_return_offset(&self) -> u32 {
-        self.call_return_offset
+    pub(crate) const fn describe_return_offset(&self) -> u32 {
+        self.describe_return_offset
     }
-}
 
-fn kernel_boundary_valid(runtime: AgentCpuRuntime) -> bool {
-    current_privilege_level() == 0
-        && stack_canary_valid(runtime.kernel_stack)
-        && storage::interrupts_are_clear()
-        && storage::current_raw_cr3() == runtime.kernel_cr3
+    pub(crate) const fn yield_return_offset(&self) -> u32 {
+        self.yield_return_offset
+    }
+
+    pub(crate) const fn nonce(&self) -> u64 {
+        self.nonce
+    }
 }

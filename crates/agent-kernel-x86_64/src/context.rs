@@ -93,6 +93,10 @@ impl SavedAgentFrame {
         &self.frame
     }
 
+    pub fn frame_mut(&mut self) -> &mut PrivilegeInterruptStackFrame {
+        &mut self.frame
+    }
+
     pub fn as_mut_ptr(&mut self) -> *mut PrivilegeInterruptStackFrame {
         &mut self.frame
     }

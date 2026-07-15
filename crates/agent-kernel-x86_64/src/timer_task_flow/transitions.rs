@@ -63,7 +63,7 @@ pub(super) fn yield_and_dispatch(
     cpu: YieldedAgentCpu,
     next_prior_ticks: u64,
 ) -> Option<()> {
-    if cpu.yield_count() != 1 || cpu.address_space_switch_count() != 2 {
+    if cpu.yield_count() != 1 || cpu.call_count() != 2 || cpu.address_space_switch_count() != 4 {
         return None;
     }
     let yielded = booted
@@ -105,7 +105,7 @@ pub(super) fn record_final_yield(
     queued: WorkerTask,
     cpu: YieldedAgentCpu,
 ) -> bool {
-    if cpu.yield_count() != 1 || cpu.address_space_switch_count() != 2 {
+    if cpu.yield_count() != 1 || cpu.call_count() != 2 || cpu.address_space_switch_count() != 4 {
         return false;
     }
     let kernel = booted.kernel_mut();

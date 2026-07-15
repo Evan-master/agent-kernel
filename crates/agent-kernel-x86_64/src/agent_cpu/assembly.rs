@@ -148,7 +148,6 @@ agent_kernel_agent_call_stub:
     mov qword ptr [rip + {call_rip}], rax
     inc byte ptr [rip + {call_count}]
     mov byte ptr [rip + {call_seen}], 1
-    mov byte ptr [rip + {yielded}], 1
     agent_kernel_restore_host
     .size agent_kernel_agent_call_stub, . - agent_kernel_agent_call_stub
 "#,
@@ -163,7 +162,6 @@ agent_kernel_agent_call_stub:
     call_rip = sym super::storage::AGENT_KERNEL_AGENT_CALL_RIP,
     call_count = sym super::storage::AGENT_KERNEL_AGENT_CALL_COUNT,
     call_seen = sym super::storage::AGENT_KERNEL_AGENT_CALL_SEEN,
-    yielded = sym super::storage::AGENT_KERNEL_AGENT_YIELDED,
     call_cr3 = sym super::storage::AGENT_KERNEL_AGENT_CALL_CR3,
     host_context = sym super::storage::AGENT_KERNEL_HOST_CONTEXT_RSP,
     rip_offset = const PRIVILEGE_INTERRUPT_RIP_OFFSET,

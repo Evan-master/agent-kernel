@@ -32,6 +32,9 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some((agent_a_record, agent_b_record)) = queued_timer_flow.image_records(&booted) else {
         fatal_boot("AGENT_KERNEL_AGENT_IMAGE_RECORD_ERROR");
     };
+    let Some((agent_a_context, agent_b_context)) = queued_timer_flow.call_contexts() else {
+        fatal_boot("AGENT_KERNEL_AGENT_CALL_CONTEXT_ERROR");
+    };
     if AgentImageCapsule::parse(worker_a.bytes()).is_err()
         || AgentImageCapsule::parse(worker_b.bytes()).is_err()
     {
@@ -57,10 +60,10 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
-    let Some(agent_a_cpu) = cpu_runtime.prepare(agent_a_memory) else {
+    let Some(agent_a_cpu) = cpu_runtime.prepare(agent_a_memory, agent_a_context) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
-    let Some(agent_b_cpu) = cpu_runtime.prepare(agent_b_memory) else {
+    let Some(agent_b_cpu) = cpu_runtime.prepare(agent_b_memory, agent_b_context) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
     let Some(timer_flow) = queued_timer_flow.dispatch_first(&mut booted) else {
@@ -93,9 +96,14 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(yielded_a) = preempted_a.resume_until_yield() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
-    let call_return_a = yielded_a.call_return_offset();
-    if yielded_a.address_space_switch_count() != 2
-        || call_return_a != worker_a.expected_call_return_offset()
+    let describe_return_a = yielded_a.describe_return_offset();
+    let yield_return_a = yielded_a.yield_return_offset();
+    let nonce_a = yielded_a.nonce();
+    if yielded_a.call_count() != 2
+        || yielded_a.address_space_switch_count() != 4
+        || nonce_a != worker_a.nonce()
+        || describe_return_a != worker_a.expected_describe_return_offset()
+        || yield_return_a != worker_a.expected_yield_return_offset()
         || !preempted_b.signal_is_clear()
     {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
@@ -109,15 +117,24 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(yielded_b) = preempted_b.resume_until_yield() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
-    let call_return_b = yielded_b.call_return_offset();
-    if yielded_b.address_space_switch_count() != 2
-        || call_return_b != worker_b.expected_call_return_offset()
-        || call_return_a == call_return_b
+    let describe_return_b = yielded_b.describe_return_offset();
+    let yield_return_b = yielded_b.yield_return_offset();
+    let nonce_b = yielded_b.nonce();
+    if yielded_b.call_count() != 2
+        || yielded_b.address_space_switch_count() != 4
+        || nonce_b != worker_b.nonce()
+        || nonce_a == nonce_b
+        || describe_return_b != worker_b.expected_describe_return_offset()
+        || yield_return_b != worker_b.expected_yield_return_offset()
+        || describe_return_a == describe_return_b
+        || yield_return_a == yield_return_b
         || !second_resumed_flow.record_second_yield(&mut booted, yielded_b)
     {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_YIELD_ERROR");
     }
     serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURN_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_YIELD_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CR3_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK");

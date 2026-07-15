@@ -96,10 +96,6 @@ pub(super) static AGENT_KERNEL_AGENT_CALL_SEEN: AtomicU8 = AtomicU8::new(0);
 
 #[no_mangle]
 #[used]
-pub(super) static AGENT_KERNEL_AGENT_YIELDED: AtomicU8 = AtomicU8::new(0);
-
-#[no_mangle]
-#[used]
 pub(super) static AGENT_KERNEL_AGENT_CALL_CR3: AtomicU64 = AtomicU64::new(0);
 
 static AGENT_KERNEL_AGENT_RUNTIME_READY: AtomicU8 = AtomicU8::new(0);
@@ -167,5 +163,4 @@ fn reset_mailbox() {
     AGENT_KERNEL_AGENT_CALL_CR3.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_SEEN.store(0, Ordering::Release);
-    AGENT_KERNEL_AGENT_YIELDED.store(0, Ordering::Release);
 }

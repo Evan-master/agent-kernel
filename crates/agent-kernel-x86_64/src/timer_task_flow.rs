@@ -8,6 +8,7 @@ mod setup;
 mod transitions;
 
 use agent_kernel_core::{AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, TaskId};
+use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use crate::{
     agent_cpu::{PreemptedAgentCpu, YieldedAgentCpu},
@@ -80,6 +81,13 @@ impl TimerTaskFlow {
 }
 
 impl QueuedTimerTaskFlow {
+    pub(super) fn call_contexts(&self) -> Option<(AgentCallContext, AgentCallContext)> {
+        Some((
+            AgentCallContext::new(self.first.agent, self.first.task, self.first.image)?,
+            AgentCallContext::new(self.second.agent, self.second.task, self.second.image)?,
+        ))
+    }
+
     pub(super) fn image_records(
         &self,
         booted: &X86BootedKernel,

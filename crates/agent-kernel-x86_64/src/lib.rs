@@ -5,6 +5,7 @@
 //! authorization and command state remain in the core and facade crates.
 
 pub mod address_space;
+pub mod agent_call;
 pub mod agent_image;
 pub mod context;
 pub mod interrupt;

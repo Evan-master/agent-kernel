@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Agent Image Capsule parsing and SHA-256 verification binding, two isolated Agent CR3 roots with same-address private pages, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a bounded Agent call gate, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Agent Image Capsule parsing and SHA-256 verification binding, two isolated Agent CR3 roots with same-address private pages, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a versioned Agent Call ABI with trusted context replies, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -197,12 +197,17 @@ kernel context. The kernel validates the complete 160-byte frame, copies it into
 the preempted Agent context, and releases RSP0 for the other Worker. Events 39
 through 42 expire A and B in turn and redispatch A with queue order preserved.
 The kernel then releases only A's read-only signal through its supervisor alias,
-proves B remains blocked, and resumes A's owned frame. DPL3 interrupt `0x90`
-returns A to the kernel for event 43; event 44 dispatches B, whose own signal and
-saved frame produce event 45. A uses the 21-byte polling image and B executes a
-distinct 23-byte image with a two-NOP prefix; validated Agent-call return offsets
-19 and 21 prove both private payloads ran. This is an Agent-native image format,
-call gate, and scheduler, not a POSIX process or syscall ABI.
+proves B remains blocked, and resumes A's owned frame. A first invokes DPL3
+interrupt `0x90` with the versioned `AGNTCALL` DescribeContext envelope. The
+kernel validates the full frame and request, writes the scheduler-owned
+Agent/Task/Image identity plus caller nonce into an owned reply frame, and
+returns it through `iretq` under A's CR3. A preserves that reply payload in a
+second structured Yield call; only an exact context and nonce echo permits event
+43. Event 44 dispatches B, whose own two-call round trip produces event 45. A
+uses a 72-byte image and B executes a distinct 74-byte image with a two-NOP
+prefix and different nonce. Their DescribeContext/Yield return offsets are
+46/70 and 48/72. This is an Agent-native image format, call ABI, and scheduler,
+not a POSIX process or syscall ABI.
 The PIC is then remapped for IRQ4 and the physical COM1 transmitter-empty
 interrupt is armed. A bounded UART top half
 captures IIR/LSR state, disables the source, acknowledges the PIC, and returns
@@ -211,10 +216,11 @@ Interrupt Device Event, and runs its Driver Invocation.
 The Driver acknowledges the event, dispatches a causally linked write, records
 its terminal result, and completes the invocation. This proves a returning CPU
 exception, hardware-enforced ring-3 Agent execution, asynchronous
-preemption/resume, a bounded Agent call ingress, and one-shot device interrupt
+preemption/resume, a returning Agent call protocol, and one-shot device interrupt
 ingress. Multi-page images, writable data segments, relocations, dynamic linking,
-signatures, persistent image sources, a general dynamic context store beyond two
-Workers, page-table teardown, PCIDs, SMP execution, context migration, fatal
+signatures, persistent image sources, pointer-bearing calls, asynchronous call
+completion, a general dynamic context store beyond two Workers, page-table
+teardown, PCIDs, SMP execution, context migration, fatal
 exception recovery, error-code decoding, double-fault IST, a general IRQ
 registry, APIC/IOAPIC, MMIO drivers, wider port operations, and DMA policy remain
 future work.
@@ -245,8 +251,8 @@ remains available for system-seeded resources and leaves `owner: None`.
 17. Parse both fixed Capsule headers, bind their SHA-256 digests to the verified records, copy/read back private code pages, and only then dispatch A with quantum one.
 18. Enter A under its CR3, let IRQ0 switch to RSP0, copy the validated frame, expire A, and dispatch B.
 19. Enter B under its distinct CR3, copy its IRQ0 frame, expire B, and redispatch A.
-20. Resume A from its owned frame, restore the kernel CR3 on its DPL3 yield, and dispatch B.
-21. Prove A's signal did not affect B, then resume B from its distinct payload and record its yield.
+20. Resume A, answer its versioned DescribeContext call through an owned reply frame, validate its context-bound Yield, and dispatch B.
+21. Prove A's signal and reply did not affect B, then complete B's distinct DescribeContext/Yield round trip.
 22. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
 23. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
 24. Acknowledge the event and dispatch a causally linked COM1 write request.
@@ -317,6 +323,8 @@ AGENT_KERNEL_AGENT_B_PREEMPTION_OK
 AGENT_KERNEL_TIMER_PREEMPTION_OK
 AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 AGENT_KERNEL_AGENT_CPU_RESUME_OK
+AGENT_KERNEL_AGENT_CALL_ABI_OK
+AGENT_KERNEL_AGENT_CALL_RETURN_OK
 AGENT_KERNEL_AGENT_CALL_YIELD_OK
 AGENT_KERNEL_AGENT_CR3_SWITCH_OK
 AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK
@@ -409,17 +417,23 @@ selectors, in-range user RIP/RSP, IF set, IOPL clear, and an intact RSP0 canary.
 `AGENT_KERNEL_AGENT_B_PREEMPTION_OK` additionally requires a second CR3 and a
 second owned frame after RSP0 has been reused. `AGENT_KERNEL_TIMER_PREEMPTION_OK`
 requires events 39 through 42 to preserve `[B, A]` then `[A, B]` FIFO rotation.
-`AGENT_KERNEL_AGENT_CPU_RESUME_OK` and `AGENT_KERNEL_AGENT_CALL_YIELD_OK` require
-both owned frames to resume at their captured CPL3 RIP and yield through DPL3
-interrupt `0x90` at events 43 and 45.
+`AGENT_KERNEL_AGENT_CPU_RESUME_OK` requires both owned PIT frames to resume at
+their captured CPL3 RIP. `AGENT_KERNEL_AGENT_CALL_ABI_OK` requires two canonical
+`AGNTCALL` requests per Worker with version 1, supported operations, zero flags,
+and zero reserved words. `AGENT_KERNEL_AGENT_CALL_RETURN_OK` requires each
+DescribeContext call to return its scheduler-owned Agent/Task/Image identity and
+nonce through an owned `iretq` frame, then receive the same payload in Yield.
+`AGENT_KERNEL_AGENT_CALL_YIELD_OK` requires those validated Yield calls to
+produce events 43 and 45.
 `AGENT_KERNEL_AGENT_CR3_SWITCH_OK` requires each Worker's PIT and Agent-call
 entry to have observed that Worker's CR3 and every return to normal context to
 have restored the kernel CR3.
 `AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK` requires A's released signal to leave B
 blocked. `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` requires all four physical
-round trips and both terminal scheduler states.
+Agent-call CR3 transitions per Worker and both terminal scheduler states.
 `AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK` requires A and B to return from
-their call instructions at distinct verified offsets 19 and 21.
+DescribeContext/Yield at distinct verified offsets 46/70 and 48/72 with
+different nonces.
 `AGENT_KERNEL_UART_IRQ_OK` requires IRQ4 to capture one THRE interrupt and normal
 context to validate its IIR/LSR mailbox. That signal causes event 46 and the
 running Driver Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is
