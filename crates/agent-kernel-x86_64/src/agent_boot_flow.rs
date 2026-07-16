@@ -108,7 +108,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     };
     let mut native_runtime = NativeAgentRuntime::new();
     for cpu in [agent_a_cpu, agent_b_cpu, verifier_cpu] {
-        if native_runtime.register(cpu).is_some() {
+        if native_runtime.register_prepared(cpu).is_some() {
             fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
         }
     }
@@ -118,7 +118,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some((timer_flow, dispatched_b)) = queued_timer_flow.dispatch_second(&mut booted) else {
         fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
     };
-    let Some(agent_b_cpu) = native_runtime.take_dispatched(dispatched_b) else {
+    let Some(agent_b_cpu) = native_runtime.take_prepared(dispatched_b) else {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     };
     if native_runtime.len() != 2 {
@@ -131,31 +131,37 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
     serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
     let Some((first_running_flow, dispatched_a)) =
-        timer_flow.expire_second_and_dispatch_first(&mut booted, &preempted_b)
+        timer_flow.expire_second_and_dispatch_first(&mut booted, preempted_b, &mut native_runtime)
     else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
-    let Some(agent_a_cpu) = native_runtime.take_dispatched(dispatched_a) else {
+    let Some(agent_a_cpu) = native_runtime.take_prepared(dispatched_a) else {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     };
-    if native_runtime.len() != 1 {
+    if native_runtime.len() != 2 {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     }
     let Some(preempted_a) = agent_a_cpu.run_until_preempted() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
     };
     serial_write_line("AGENT_KERNEL_AGENT_A_PREEMPTION_OK");
-    let Some(second_resumed_flow) =
-        first_running_flow.expire_first_and_dispatch_second(&mut booted, &preempted_a)
+    let Some((second_resumed_flow, dispatched_b)) = first_running_flow
+        .expire_first_and_dispatch_second(&mut booted, preempted_a, &mut native_runtime)
     else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
+    let Some(preempted_b) = native_runtime.take_preempted(dispatched_b) else {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    };
+    if native_runtime.len() != 2 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
     serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
     serial_write_line("AGENT_KERNEL_KERNEL_SELECTED_DISPATCH_OK");
     let completed_workers = mailbox::run(
         &mut booted,
+        &mut native_runtime,
         second_resumed_flow,
-        preempted_a,
         preempted_b,
         worker_a,
         worker_b,

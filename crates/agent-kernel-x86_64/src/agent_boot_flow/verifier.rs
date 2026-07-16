@@ -17,18 +17,25 @@ pub(super) fn run(
     workers: CompletedWorkerTasks,
 ) -> Option<CompletedVerifierFlow> {
     let subject = workers.subject();
-    if subject.task().raw() != image.target() || subject.result() != image.result() {
+    if subject.task().raw() != image.target()
+        || subject.result() != image.result()
+        || runtime.len() != 1
+    {
         return None;
     }
     let (running, dispatched) = flow.dispatch_after_workers(booted, workers)?;
-    let cpu = runtime.take_dispatched(dispatched)?;
+    let cpu = runtime.take_prepared(dispatched)?;
     if !runtime.is_empty() {
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_STORE_OK");
     let preempted = cpu.run_until_preempted()?;
     serial_write_line("AGENT_KERNEL_VERIFIER_PREEMPTION_OK");
-    let resumed = running.expire_and_redispatch(booted, &preempted)?;
+    let (resumed, dispatched) = running.expire_and_redispatch(booted, preempted, runtime)?;
+    let preempted = runtime.take_preempted(dispatched)?;
+    if !runtime.is_empty() {
+        return None;
+    }
 
     let requested_inspection = preempted.resume_until_task_inspection(subject.task())?;
     let offsets = image.expected_return_offsets();
@@ -72,6 +79,10 @@ pub(super) fn run(
         return None;
     }
     let terminal = verified.complete(booted, completed)?;
+    if !runtime.is_empty() {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     Some(terminal)
 }

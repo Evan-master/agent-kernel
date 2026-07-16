@@ -18,6 +18,7 @@ use crate::{
         AcknowledgedTaskInspectionCpu, AcknowledgedTaskVerificationCpu, CompletedVerifierCpu,
         PreemptedAgentCpu, RequestedTaskInspectionCpu, RequestedTaskVerificationCpu,
     },
+    native_agent_runtime::NativeAgentRuntime,
     timer_task_flow::{CompletedWorkerTasks, VerificationSubject},
     X86BootedKernel,
 };
@@ -110,13 +111,18 @@ impl RunningVerifierFlow {
     pub(super) fn expire_and_redispatch(
         self,
         booted: &mut X86BootedKernel,
-        cpu: &PreemptedAgentCpu,
-    ) -> Option<ResumedVerifierFlow> {
-        transitions::expire_and_redispatch(booted, self.verifier, &self.workers, cpu)?;
-        Some(ResumedVerifierFlow {
-            verifier: self.verifier,
-            workers: self.workers,
-        })
+        cpu: PreemptedAgentCpu,
+        runtime: &mut NativeAgentRuntime,
+    ) -> Option<(ResumedVerifierFlow, RunQueueEntry)> {
+        let dispatched =
+            transitions::expire_and_redispatch(booted, self.verifier, &self.workers, cpu, runtime)?;
+        Some((
+            ResumedVerifierFlow {
+                verifier: self.verifier,
+                workers: self.workers,
+            },
+            dispatched,
+        ))
     }
 }
 

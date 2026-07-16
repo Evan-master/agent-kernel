@@ -40,13 +40,20 @@ impl SecondResumedFlow {
 }
 
 impl SecondWaitingFlow {
-    pub(crate) fn dispatch_first(self, booted: &mut X86BootedKernel) -> Option<FirstResumedFlow> {
-        wait_transition::dispatch_sender(booted, self.first, self.second, self.waiter)?;
-        Some(FirstResumedFlow {
-            first: self.first,
-            second: self.second,
-            waiter: self.waiter,
-        })
+    pub(crate) fn dispatch_first(
+        self,
+        booted: &mut X86BootedKernel,
+    ) -> Option<(FirstResumedFlow, agent_kernel_core::RunQueueEntry)> {
+        let dispatched =
+            wait_transition::dispatch_sender(booted, self.first, self.second, self.waiter)?;
+        Some((
+            FirstResumedFlow {
+                first: self.first,
+                second: self.second,
+                waiter: self.waiter,
+            },
+            dispatched,
+        ))
     }
 }
 
@@ -99,13 +106,17 @@ impl FirstMessageSentFlow {
         self,
         booted: &mut X86BootedKernel,
         cpu: CompletedMailboxSenderCpu,
-    ) -> Option<SecondRedispatchedFlow> {
-        transitions::complete_and_dispatch(booted, self.first, self.second, cpu, 1)?;
-        Some(SecondRedispatchedFlow {
-            first: self.first,
-            second: self.second,
-            waiter: self.waiter,
-        })
+    ) -> Option<(SecondRedispatchedFlow, agent_kernel_core::RunQueueEntry)> {
+        let dispatched =
+            transitions::complete_and_dispatch(booted, self.first, self.second, cpu, 1)?;
+        Some((
+            SecondRedispatchedFlow {
+                first: self.first,
+                second: self.second,
+                waiter: self.waiter,
+            },
+            dispatched,
+        ))
     }
 }
 

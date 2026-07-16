@@ -6,20 +6,22 @@
 use crate::{
     agent_cpu::PreemptedAgentCpu,
     boot_agent_images::BootAgentImage,
-    fatal_boot, serial_write_line,
+    fatal_boot,
+    native_agent_runtime::NativeAgentRuntime,
+    serial_write_line,
     timer_task_flow::{CompletedWorkerTasks, SecondResumedFlow, WORKER_B},
     X86BootedKernel,
 };
 
 pub(super) fn run(
     booted: &mut X86BootedKernel,
+    runtime: &mut NativeAgentRuntime,
     second_resumed_flow: SecondResumedFlow,
-    preempted_a: PreemptedAgentCpu,
     preempted_b: PreemptedAgentCpu,
     worker_a: BootAgentImage,
     worker_b: BootAgentImage,
 ) -> CompletedWorkerTasks {
-    if !preempted_a.signal_is_clear() || !preempted_b.signal_is_clear() {
+    if !preempted_b.signal_is_clear() || runtime.len() != 2 {
         fatal_boot("AGENT_KERNEL_MULTI_AGENT_ISOLATION_ERROR");
     }
     let Some(expected_offsets_a) = worker_a.expected_sender_return_offsets() else {
@@ -48,11 +50,21 @@ pub(super) fn run(
     {
         fatal_boot("AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_ERROR");
     }
+    if runtime.park_waiting_mailbox(waiting_receive).is_some() || runtime.len() != 3 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAIT_OK");
-    let Some(first_resumed_flow) = second_waiting_flow.dispatch_first(booted) else {
+    let Some((first_resumed_flow, dispatched_a)) = second_waiting_flow.dispatch_first(booted)
+    else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
+    let Some(preempted_a) = runtime.take_preempted(dispatched_a) else {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    };
+    if !preempted_a.signal_is_clear() || runtime.len() != 2 {
+        fatal_boot("AGENT_KERNEL_MULTI_AGENT_ISOLATION_ERROR");
+    }
     let Some(requested_a) = preempted_a.resume_until_sender_result() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
@@ -63,7 +75,6 @@ pub(super) fn run(
         || requested_a.result() != worker_a.result()
         || requested_a.describe_return_offset() != expected_offsets_a[0]
         || requested_a.result_return_offset() != expected_offsets_a[1]
-        || !waiting_receive.agent_call_is_released()
     {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
     }
@@ -98,16 +109,21 @@ pub(super) fn run(
         || completed_a.recipient() != WORKER_B
         || completed_a.message().raw() != 1
         || completed_a.return_offsets() != expected_offsets_a
-        || !waiting_receive.agent_call_is_released()
     {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
     }
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
-    let Some(second_redispatched_flow) =
+    let Some((second_redispatched_flow, dispatched_b)) =
         first_message_flow.complete_first_and_dispatch_second(booted, completed_a)
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     };
+    let Some(waiting_receive) = runtime.take_waiting_mailbox(dispatched_b) else {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    };
+    if runtime.len() != 1 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
     let Some((second_message_flow, acknowledged_receive)) =
         second_redispatched_flow.receive_from_first(booted, waiting_receive)
     else {

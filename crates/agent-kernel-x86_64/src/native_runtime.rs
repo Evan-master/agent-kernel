@@ -2,9 +2,10 @@
 //!
 //! This x86_64 architecture-library module maps kernel-selected Agent IDs to
 //! non-Copy physical runtime values. It owns deterministic insert/take and
-//! compaction only; scheduler policy, CPU instructions, and semantic state stay
-//! in the kernel core and bare-metal adapter. Failed insertion returns the value
-//! so callers never lose an unregistered CPU or address-space ownership token.
+//! guarded selection; scheduler policy, CPU instructions, and semantic state
+//! stay in the kernel core and bare-metal adapter. Failed insertion returns the
+//! value so callers never lose an unregistered CPU or address-space ownership
+//! token.
 
 use agent_kernel_core::AgentId;
 
@@ -13,6 +14,7 @@ pub enum NativeAgentRuntimeError {
     InvalidAgent,
     AgentAlreadyRegistered,
     AgentNotFound,
+    ContextMismatch,
     StoreFull,
 }
 
@@ -67,6 +69,17 @@ impl<T, const CAPACITY: usize> NativeAgentRuntimeStore<T, CAPACITY> {
         self.slots[last] = None;
         self.len = last;
         Ok(removed.value)
+    }
+
+    pub fn take_matching(
+        &mut self,
+        agent: AgentId,
+        matches: impl FnOnce(&T) -> bool,
+    ) -> Result<T, NativeAgentRuntimeError> {
+        if !matches(self.get(agent)?) {
+            return Err(NativeAgentRuntimeError::ContextMismatch);
+        }
+        self.take(agent)
     }
 
     pub fn get(&self, agent: AgentId) -> Result<&T, NativeAgentRuntimeError> {

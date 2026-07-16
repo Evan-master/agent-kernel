@@ -81,3 +81,27 @@ fn runtime_store_compaction_reuses_capacity_and_missing_take_is_atomic() {
     assert_eq!(store.take(AgentId::new(4)), Ok(OwnedRuntime("worker-b")));
     assert_eq!(store.take(AgentId::new(5)), Ok(OwnedRuntime("verifier")));
 }
+
+#[test]
+fn guarded_take_rejects_context_mismatch_without_transferring_ownership() {
+    let mut store = NativeAgentRuntimeStore::<OwnedRuntime, 2>::new();
+    store
+        .insert(AgentId::new(3), OwnedRuntime("preempted-a"))
+        .unwrap();
+    store
+        .insert(AgentId::new(4), OwnedRuntime("waiting-b"))
+        .unwrap();
+
+    assert_eq!(
+        store.take_matching(AgentId::new(3), |runtime| runtime.0 == "waiting-a"),
+        Err(NativeAgentRuntimeError::ContextMismatch)
+    );
+    assert_eq!(store.len(), 2);
+    assert_eq!(store.get(AgentId::new(3)), Ok(&OwnedRuntime("preempted-a")));
+    assert_eq!(
+        store.take_matching(AgentId::new(4), |runtime| runtime.0 == "waiting-b"),
+        Ok(OwnedRuntime("waiting-b"))
+    );
+    assert_eq!(store.take(AgentId::new(3)), Ok(OwnedRuntime("preempted-a")));
+    assert!(store.is_empty());
+}

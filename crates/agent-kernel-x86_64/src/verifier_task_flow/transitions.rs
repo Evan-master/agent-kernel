@@ -5,7 +5,10 @@ mod result;
 use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatus};
 
 use super::{VerifierTask, VERIFIER_QUANTUM};
-use crate::{agent_cpu::PreemptedAgentCpu, timer_task_flow::CompletedWorkerTasks, X86BootedKernel};
+use crate::{
+    agent_cpu::PreemptedAgentCpu, native_agent_runtime::NativeAgentRuntime,
+    timer_task_flow::CompletedWorkerTasks, X86BootedKernel,
+};
 
 pub(super) use result::{complete, inspect, verify};
 
@@ -54,8 +57,9 @@ pub(super) fn expire_and_redispatch(
     booted: &mut X86BootedKernel,
     verifier: VerifierTask,
     workers: &CompletedWorkerTasks,
-    cpu: &PreemptedAgentCpu,
-) -> Option<()> {
+    cpu: PreemptedAgentCpu,
+    runtime: &mut NativeAgentRuntime,
+) -> Option<RunQueueEntry> {
     if cpu.tick_count() != 1 || verifier.call_context() != Some(cpu.context()) {
         return None;
     }
@@ -71,10 +75,14 @@ pub(super) fn expire_and_redispatch(
     {
         return None;
     }
-    if booted
+    if runtime.park_preempted(cpu).is_some() {
+        return None;
+    }
+    let dispatched = booted
         .kernel_mut()
         .sys_dispatch_next_ready_with_quantum(VERIFIER_QUANTUM)
-        .ok()?
+        .ok()?;
+    if dispatched
         != (RunQueueEntry {
             task: verifier.task,
             agent: verifier.agent,
@@ -82,7 +90,8 @@ pub(super) fn expire_and_redispatch(
     {
         return None;
     }
-    running_state_valid(booted, verifier, workers, 1, EventKind::TaskDispatched)
+    running_state_valid(booted, verifier, workers, 1, EventKind::TaskDispatched)?;
+    Some(dispatched)
 }
 
 pub(super) fn running_state_valid(

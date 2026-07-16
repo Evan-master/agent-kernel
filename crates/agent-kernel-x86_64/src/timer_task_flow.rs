@@ -19,7 +19,9 @@ use agent_kernel_core::{
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
-use crate::{agent_cpu::PreemptedAgentCpu, X86BootedKernel};
+use crate::{
+    agent_cpu::PreemptedAgentCpu, native_agent_runtime::NativeAgentRuntime, X86BootedKernel,
+};
 
 pub(super) use completed::{CompletedWorkerTasks, VerificationSubject};
 
@@ -144,9 +146,11 @@ impl TimerTaskFlow {
     pub(super) fn expire_second_and_dispatch_first(
         self,
         booted: &mut X86BootedKernel,
-        cpu: &PreemptedAgentCpu,
+        cpu: PreemptedAgentCpu,
+        runtime: &mut NativeAgentRuntime,
     ) -> Option<(FirstRunningFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched = transitions::expire_and_dispatch(booted, self.second, self.first, cpu, 0)?;
+        let dispatched =
+            transitions::expire_and_dispatch(booted, self.second, self.first, cpu, runtime, 0)?;
         Some((
             FirstRunningFlow {
                 first: self.first,
@@ -194,12 +198,17 @@ impl FirstRunningFlow {
     pub(super) fn expire_first_and_dispatch_second(
         self,
         booted: &mut X86BootedKernel,
-        cpu: &PreemptedAgentCpu,
-    ) -> Option<SecondResumedFlow> {
-        transitions::expire_and_dispatch(booted, self.first, self.second, cpu, 1)?;
-        Some(SecondResumedFlow {
-            first: self.first,
-            second: self.second,
-        })
+        cpu: PreemptedAgentCpu,
+        runtime: &mut NativeAgentRuntime,
+    ) -> Option<(SecondResumedFlow, agent_kernel_core::RunQueueEntry)> {
+        let dispatched =
+            transitions::expire_and_dispatch(booted, self.first, self.second, cpu, runtime, 1)?;
+        Some((
+            SecondResumedFlow {
+                first: self.first,
+                second: self.second,
+            },
+            dispatched,
+        ))
     }
 }

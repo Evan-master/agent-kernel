@@ -54,21 +54,24 @@ pub(super) fn dispatch_sender(
     sender: WorkerTask,
     receiver: WorkerTask,
     waiter: WaiterId,
-) -> Option<()> {
-    if !receiver_waiting_state_valid(booted, receiver, sender, waiter)
-        || booted
-            .kernel_mut()
-            .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
-            .ok()?
-            != (RunQueueEntry {
-                task: sender.task,
-                agent: sender.agent,
-            })
+) -> Option<RunQueueEntry> {
+    if !receiver_waiting_state_valid(booted, receiver, sender, waiter) {
+        return None;
+    }
+    let dispatched = booted
+        .kernel_mut()
+        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
+        .ok()?;
+    if dispatched
+        != (RunQueueEntry {
+            task: sender.task,
+            agent: sender.agent,
+        })
         || !sender_running_receiver_waiting_state_valid(booted, sender, receiver, waiter)
     {
         return None;
     }
-    Some(())
+    Some(dispatched)
 }
 
 pub(super) fn receiver_waiting_state_valid(

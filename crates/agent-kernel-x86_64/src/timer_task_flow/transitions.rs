@@ -8,6 +8,7 @@ use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatu
 use super::{completed::task_valid as completed_task_valid, WorkerTask, TASK_QUANTUM};
 use crate::{
     agent_cpu::{CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, PreemptedAgentCpu},
+    native_agent_runtime::NativeAgentRuntime,
     X86BootedKernel,
 };
 
@@ -23,7 +24,8 @@ pub(super) fn expire_and_dispatch(
     booted: &mut X86BootedKernel,
     running: WorkerTask,
     next: WorkerTask,
-    cpu: &PreemptedAgentCpu,
+    cpu: PreemptedAgentCpu,
+    runtime: &mut NativeAgentRuntime,
     next_prior_ticks: u64,
 ) -> Option<RunQueueEntry> {
     if cpu.tick_count() != 1 {
@@ -53,6 +55,9 @@ pub(super) fn expire_and_dispatch(
     {
         return None;
     }
+    if runtime.park_preempted(cpu).is_some() {
+        return None;
+    }
     let dispatched = booted
         .kernel_mut()
         .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
@@ -75,7 +80,7 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     next: WorkerTask,
     cpu: E,
     next_prior_ticks: u64,
-) -> Option<()> {
+) -> Option<RunQueueEntry> {
     if !completion_evidence_valid(&cpu, running) {
         return None;
     }
@@ -109,7 +114,8 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     {
         return None;
     }
-    running_after_completion_valid(booted, next, running, next_prior_ticks)
+    running_after_completion_valid(booted, next, running, next_prior_ticks)?;
+    Some(dispatched)
 }
 
 pub(super) fn record_final_completion<E: CompletionEvidence>(
