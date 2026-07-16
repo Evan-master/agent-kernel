@@ -1,16 +1,16 @@
 # X86 Native Agent Runtime Loop V0 Plan
 
-- [ ] Add and observe failing fixed-capacity call transcript tests.
-- [ ] Implement the host-testable no_std transcript contract.
-- [ ] Replace role-specific call chains with generic Pending, Resumable,
+- [x] Add and observe failing fixed-capacity call transcript tests.
+- [x] Implement the host-testable no_std transcript contract.
+- [x] Replace role-specific call chains with generic Pending, Resumable,
   Waiting, and Completed CPU ownership states.
-- [ ] Combine dispatch readiness, semantic commit, and guarded physical take.
-- [ ] Implement trusted supplemental Verify authority lookup.
-- [ ] Route all nine ABI V1 operations through one bounded inner call loop.
-- [ ] Drive Prepared, Preempted, WaitingMailbox, and Yielded contexts through
+- [x] Combine dispatch readiness, semantic commit, and guarded physical take.
+- [x] Implement trusted supplemental Verify authority lookup.
+- [x] Route all nine ABI V1 operations through one bounded inner call loop.
+- [x] Drive Prepared, Preempted, WaitingMailbox, and Yielded contexts through
   one outer kernel-selected dispatch loop.
-- [ ] Preserve Capsule bytes, digests, return offsets, and the 84-event trace.
-- [ ] Add the native runtime-loop QEMU marker and update README architecture.
-- [ ] Run formatting, full tests, Supervisor, no_std checks, scoped Clippy,
+- [x] Preserve Capsule bytes, digests, return offsets, and the 84-event trace.
+- [x] Add the native runtime-loop QEMU marker and update README architecture.
+- [x] Run formatting, full tests, Supervisor, no_std checks, scoped Clippy,
   debug/release QEMU, and release disassembly inspection.
-- [ ] Commit, merge, publish main, and close the milestone.
+- [x] Commit, merge, publish main, and close the milestone.
