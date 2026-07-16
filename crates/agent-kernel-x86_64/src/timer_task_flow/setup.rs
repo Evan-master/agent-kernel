@@ -30,8 +30,8 @@ pub(super) fn prepare(
     let second = register_delegated_task(booted, WORKER_B)?;
     let first_image = register_worker_image(booted, first_digest)?;
     let second_image = register_worker_image(booted, second_digest)?;
-    launch_and_enqueue(booted, WORKER_A, first, first_image)?;
     launch_and_enqueue(booted, WORKER_B, second, second_image)?;
+    launch_and_enqueue(booted, WORKER_A, first, first_image)?;
 
     let first = WorkerTask::new(
         WORKER_A,
@@ -149,27 +149,27 @@ fn queued_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: Worke
         && kernel.run_queue()
             == [
                 RunQueueEntry {
-                    task: first.task,
-                    agent: first.agent,
-                },
-                RunQueueEntry {
                     task: second.task,
                     agent: second.agent,
                 },
+                RunQueueEntry {
+                    task: first.task,
+                    agent: first.agent,
+                },
             ]
-        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskQueued && event.task == Some(second.task))
+        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskQueued && event.task == Some(first.task))
 }
 
-pub(super) fn dispatch_first(
+pub(super) fn dispatch_second(
     booted: &mut X86BootedKernel,
     first: WorkerTask,
     second: WorkerTask,
 ) -> Option<()> {
     if booted
         .kernel_mut()
-        .sys_dispatch_next_with_quantum(first.agent, TASK_QUANTUM)
+        .sys_dispatch_next_with_quantum(second.agent, TASK_QUANTUM)
         .ok()?
-        != first.task
+        != second.task
     {
         return None;
     }
@@ -184,27 +184,27 @@ pub(super) fn dispatch_first(
         .execution_contexts()
         .iter()
         .find(|context| context.agent == second.agent)?;
-    (first_task.status == TaskStatus::Running
+    (first_task.status == TaskStatus::Accepted
         && first_task.run_ticks == 0
-        && first_task.quantum_remaining == TASK_QUANTUM
+        && first_task.quantum_remaining == 0
         && first_task.result.is_none()
-        && first_context.state == AgentExecutionState::Running
-        && first_context.task == Some(first.task)
+        && first_context.state == AgentExecutionState::Idle
+        && first_context.task.is_none()
         && first_context.run_ticks == 0
-        && first_context.quantum_remaining == TASK_QUANTUM
-        && second_task.status == TaskStatus::Accepted
+        && first_context.quantum_remaining == 0
+        && second_task.status == TaskStatus::Running
         && second_task.run_ticks == 0
-        && second_task.quantum_remaining == 0
+        && second_task.quantum_remaining == TASK_QUANTUM
         && second_task.result.is_none()
-        && second_context.state == AgentExecutionState::Idle
-        && second_context.task.is_none()
+        && second_context.state == AgentExecutionState::Running
+        && second_context.task == Some(second.task)
         && second_context.run_ticks == 0
-        && second_context.quantum_remaining == 0
+        && second_context.quantum_remaining == TASK_QUANTUM
         && kernel.run_queue()
             == [RunQueueEntry {
-                task: second.task,
-                agent: second.agent,
+                task: first.task,
+                agent: first.agent,
             }]
-        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskDispatched && event.task == Some(first.task)))
+        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskDispatched && event.task == Some(second.task)))
     .then_some(())
 }

@@ -7,6 +7,12 @@
 use crate::{AgentId, Event, ResourceId, TaskId, WaiterId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum WaiterKind {
+    Signal,
+    Mailbox,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SignalKey(u64);
 
 impl SignalKey {
@@ -26,6 +32,7 @@ pub struct WaiterRecord {
     pub agent: AgentId,
     pub resource: ResourceId,
     pub signal: SignalKey,
+    pub kind: WaiterKind,
     pub active: bool,
 }
 
@@ -37,6 +44,7 @@ impl WaiterRecord {
             agent: AgentId::new(0),
             resource: ResourceId::new(0),
             signal: SignalKey::new(0),
+            kind: WaiterKind::Signal,
             active: false,
         }
     }

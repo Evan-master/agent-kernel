@@ -9,16 +9,46 @@ use crate::{
         AcknowledgedMessageSendCpu, AcknowledgedReceiverResultCpu, AcknowledgedSenderResultCpu,
         CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, RequestedMessageAcknowledgementCpu,
         RequestedMessageReceiveCpu, RequestedMessageSendCpu, RequestedReceiverResultCpu,
-        RequestedSenderResultCpu,
+        RequestedSenderResultCpu, WaitingMessageReceiveCpu,
     },
     X86BootedKernel,
 };
 
 use super::{
-    message_transition, result_transition, transitions, CompletedWorkerTasks, FirstMessageSentFlow,
-    FirstResultSubmittedFlow, FirstResumedFlow, SecondMessageAcknowledgedFlow,
-    SecondMessageReceivedFlow, SecondResultSubmittedFlow, SecondResumedFlow,
+    message_transition, result_transition, transitions, wait_transition, CompletedWorkerTasks,
+    FirstMessageSentFlow, FirstResultSubmittedFlow, FirstResumedFlow,
+    SecondMessageAcknowledgedFlow, SecondMessageReceivedFlow, SecondRedispatchedFlow,
+    SecondResultSubmittedFlow, SecondResumedFlow, SecondWaitingFlow,
 };
+
+impl SecondResumedFlow {
+    pub(crate) fn wait_for_first(
+        self,
+        booted: &mut X86BootedKernel,
+        cpu: RequestedMessageReceiveCpu,
+    ) -> Option<(SecondWaitingFlow, WaitingMessageReceiveCpu)> {
+        let (waiter, waiting) = wait_transition::wait(booted, self.second, self.first, cpu)?;
+        Some((
+            SecondWaitingFlow {
+                first: self.first,
+                second: self.second,
+                waiter,
+            },
+            waiting,
+        ))
+    }
+}
+
+impl SecondWaitingFlow {
+    pub(crate) fn dispatch_first(self, booted: &mut X86BootedKernel) -> Option<FirstResumedFlow> {
+        wait_transition::dispatch_sender(booted, self.first, self.second, self.waiter)?;
+        Some(FirstResumedFlow {
+            first: self.first,
+            second: self.second,
+            waiter: self.waiter,
+        })
+    }
+}
 
 impl FirstResumedFlow {
     pub(crate) fn submit_first_result(
@@ -26,12 +56,19 @@ impl FirstResumedFlow {
         booted: &mut X86BootedKernel,
         cpu: RequestedSenderResultCpu,
     ) -> Option<(FirstResultSubmittedFlow, AcknowledgedSenderResultCpu)> {
-        let acknowledged =
-            result_transition::submit(booted, self.first, Some(self.second), None, cpu)?;
+        let acknowledged = result_transition::submit(
+            booted,
+            self.first,
+            None,
+            Some((self.second, self.waiter)),
+            None,
+            cpu,
+        )?;
         Some((
             FirstResultSubmittedFlow {
                 first: self.first,
                 second: self.second,
+                waiter: self.waiter,
             },
             acknowledged,
         ))
@@ -44,11 +81,13 @@ impl FirstResultSubmittedFlow {
         booted: &mut X86BootedKernel,
         cpu: RequestedMessageSendCpu,
     ) -> Option<(FirstMessageSentFlow, AcknowledgedMessageSendCpu)> {
-        let acknowledged = message_transition::send(booted, self.first, self.second, cpu)?;
+        let acknowledged =
+            message_transition::send(booted, self.first, self.second, self.waiter, cpu)?;
         Some((
             FirstMessageSentFlow {
                 first: self.first,
                 second: self.second,
+                waiter: self.waiter,
             },
             acknowledged,
         ))
@@ -60,22 +99,24 @@ impl FirstMessageSentFlow {
         self,
         booted: &mut X86BootedKernel,
         cpu: CompletedMailboxSenderCpu,
-    ) -> Option<SecondResumedFlow> {
+    ) -> Option<SecondRedispatchedFlow> {
         transitions::complete_and_dispatch(booted, self.first, self.second, cpu, 1)?;
-        Some(SecondResumedFlow {
+        Some(SecondRedispatchedFlow {
             first: self.first,
             second: self.second,
+            waiter: self.waiter,
         })
     }
 }
 
-impl SecondResumedFlow {
+impl SecondRedispatchedFlow {
     pub(crate) fn receive_from_first(
         self,
         booted: &mut X86BootedKernel,
-        cpu: RequestedMessageReceiveCpu,
+        cpu: WaitingMessageReceiveCpu,
     ) -> Option<(SecondMessageReceivedFlow, AcknowledgedMessageReceiveCpu)> {
-        let acknowledged = message_transition::receive(booted, self.second, self.first, cpu)?;
+        let acknowledged =
+            message_transition::receive(booted, self.second, self.first, self.waiter, cpu)?;
         Some((
             SecondMessageReceivedFlow {
                 first: self.first,
@@ -113,7 +154,7 @@ impl SecondMessageAcknowledgedFlow {
         cpu: RequestedReceiverResultCpu,
     ) -> Option<(SecondResultSubmittedFlow, AcknowledgedReceiverResultCpu)> {
         let acknowledged =
-            result_transition::submit(booted, self.second, None, Some(self.first), cpu)?;
+            result_transition::submit(booted, self.second, None, None, Some(self.first), cpu)?;
         Some((
             SecondResultSubmittedFlow {
                 first: self.first,

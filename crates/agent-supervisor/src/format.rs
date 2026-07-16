@@ -13,7 +13,10 @@ use crate::format_fault::{
     format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
     format_fault_route_event, format_task_fault_event,
 };
-use crate::format_signal::{format_signal_event, format_task_signal_event};
+use crate::format_signal::{
+    format_mailbox_wait_started_event, format_mailbox_wait_woken_event, format_signal_event,
+    format_task_signal_event,
+};
 
 pub fn format_event(event: &Event) -> String {
     let agent = event.agent.raw();
@@ -157,6 +160,10 @@ pub fn format_event(event: &Event) -> String {
             format_fault_policy_apply_event(event, "fault_policy_applied")
         }
         EventKind::MessageSent => format_message_event(event, "message_sent"),
+        EventKind::MessageWaitStarted => {
+            format_mailbox_wait_started_event(event, "message_wait_started")
+        }
+        EventKind::MessageWaitWoken => format_mailbox_wait_woken_event(event, "message_wait_woken"),
         EventKind::MessageReceived => format_message_event(event, "message_received"),
         EventKind::MessageAcknowledged => format_message_event(event, "message_acknowledged"),
         EventKind::MemoryCellCreated => format_memory_event(event, "memory_cell_created"),

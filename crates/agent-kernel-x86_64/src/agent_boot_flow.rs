@@ -106,33 +106,33 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(verifier_cpu) = cpu_runtime.prepare(verifier_memory, verifier_context) else {
         fatal_boot("AGENT_KERNEL_VERIFIER_CPU_SETUP_ERROR");
     };
-    let Some(timer_flow) = queued_timer_flow.dispatch_first(&mut booted) else {
+    let Some(timer_flow) = queued_timer_flow.dispatch_second(&mut booted) else {
         fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
     };
-    let Some(preempted_a) = agent_a_cpu.run_until_preempted() else {
+    let Some(preempted_b) = agent_b_cpu.run_until_preempted() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
     };
     serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
     serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
-    let Some(second_running_flow) =
-        timer_flow.expire_first_and_dispatch_second(&mut booted, &preempted_a)
+    let Some(first_running_flow) =
+        timer_flow.expire_second_and_dispatch_first(&mut booted, &preempted_b)
     else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
-    let Some(preempted_b) = agent_b_cpu.run_until_preempted() else {
+    let Some(preempted_a) = agent_a_cpu.run_until_preempted() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
     };
-    serial_write_line("AGENT_KERNEL_AGENT_B_PREEMPTION_OK");
-    let Some(first_resumed_flow) =
-        second_running_flow.expire_second_and_dispatch_first(&mut booted, &preempted_b)
+    serial_write_line("AGENT_KERNEL_AGENT_A_PREEMPTION_OK");
+    let Some(second_resumed_flow) =
+        first_running_flow.expire_first_and_dispatch_second(&mut booted, &preempted_a)
     else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
     serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
     let completed_workers = mailbox::run(
         &mut booted,
-        first_resumed_flow,
+        second_resumed_flow,
         preempted_a,
         preempted_b,
         worker_a,

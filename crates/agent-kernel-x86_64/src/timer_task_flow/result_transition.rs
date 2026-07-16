@@ -4,7 +4,9 @@
 //! task-result syscall, validates its event and unchanged scheduler state, and
 //! only then creates a reply-capable CPU token. It performs no ABI decoding.
 
-use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatus};
+use agent_kernel_core::{
+    AgentExecutionState, EventKind, RunQueueEntry, TaskStatus, WaiterId, WaiterKind,
+};
 
 use super::{WorkerTask, TASK_QUANTUM};
 use crate::{
@@ -30,6 +32,7 @@ pub(super) fn submit<E: ResultEvidence>(
     booted: &mut X86BootedKernel,
     running: WorkerTask,
     queued: Option<WorkerTask>,
+    waiting: Option<(WorkerTask, WaiterId)>,
     completed: Option<WorkerTask>,
     cpu: E,
 ) -> Option<E::Acknowledged> {
@@ -57,6 +60,7 @@ pub(super) fn submit<E: ResultEvidence>(
         || event.task_result != Some(running.result)
         || !running_result_valid(booted, running)
         || !queue_valid(booted, queued)
+        || !waiting.is_none_or(|(worker, waiter)| waiting_task_valid(booted, worker, waiter))
         || !completed.is_none_or(|worker| completed_task_valid(booted, worker))
     {
         return None;
@@ -145,6 +149,27 @@ fn idle_task_valid(booted: &X86BootedKernel, worker: WorkerTask) -> bool {
             && context.task.is_none()
             && context.run_ticks == 0
             && context.quantum_remaining == 0)
+}
+
+fn waiting_task_valid(booted: &X86BootedKernel, worker: WorkerTask, waiter: WaiterId) -> bool {
+    let kernel = booted.kernel();
+    let task = kernel.tasks().iter().find(|task| task.id == worker.task);
+    let context = kernel
+        .execution_contexts()
+        .iter()
+        .find(|context| context.agent == worker.agent);
+    let waiter = kernel.waiters().iter().find(|record| record.id == waiter);
+    matches!(task, Some(task) if task.status == TaskStatus::Waiting
+        && task.assignee == Some(worker.agent)
+        && task.delegated_capability == Some(worker.capability)
+        && task.result.is_none()
+        && task.run_ticks == 1)
+        && matches!(context, Some(context) if context.state == AgentExecutionState::Waiting
+            && context.task == Some(worker.task))
+        && matches!(waiter, Some(waiter) if waiter.active
+            && waiter.kind == WaiterKind::Mailbox
+            && waiter.agent == worker.agent
+            && waiter.task == worker.task)
 }
 
 fn completed_task_valid(booted: &X86BootedKernel, worker: WorkerTask) -> bool {

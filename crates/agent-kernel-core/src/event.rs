@@ -74,6 +74,8 @@ pub enum EventKind {
     FaultPolicyInstalled,
     FaultPolicyApplied,
     MessageSent,
+    MessageWaitStarted,
+    MessageWaitWoken,
     MessageReceived,
     MessageAcknowledged,
     MemoryCellCreated,

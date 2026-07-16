@@ -5,7 +5,7 @@
 
 mod completed;
 
-use agent_kernel_core::{MessageId, MessageRecord, TaskResult};
+use agent_kernel_core::{MessageId, MessageRecord, TaskResult, WaiterId};
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use super::MailboxCallSession;
@@ -16,6 +16,11 @@ pub(crate) use completed::CompletedMailboxReceiverCpu;
 pub(crate) struct RequestedMessageReceiveCpu {
     session: MailboxCallSession,
     receive_return_offset: u32,
+}
+
+pub(crate) struct WaitingMessageReceiveCpu {
+    request: RequestedMessageReceiveCpu,
+    waiter: WaiterId,
 }
 
 pub(crate) struct AcknowledgedMessageReceiveCpu {
@@ -72,6 +77,15 @@ impl RequestedMessageReceiveCpu {
         self.receive_return_offset
     }
 
+    pub(crate) fn wait(self, waiter: WaiterId) -> Option<WaitingMessageReceiveCpu> {
+        (waiter.raw() != 0 && self.session.agent_call_is_released()).then_some(
+            WaitingMessageReceiveCpu {
+                request: self,
+                waiter,
+            },
+        )
+    }
+
     pub(crate) fn acknowledge(
         mut self,
         message: MessageRecord,
@@ -85,6 +99,39 @@ impl RequestedMessageReceiveCpu {
             request: self,
             message,
         })
+    }
+}
+
+impl WaitingMessageReceiveCpu {
+    pub(crate) const fn call_count(&self) -> u8 {
+        self.request.call_count()
+    }
+
+    pub(crate) const fn address_space_switch_count(&self) -> u8 {
+        self.request.address_space_switch_count()
+    }
+
+    pub(crate) const fn context(&self) -> AgentCallContext {
+        self.request.context()
+    }
+
+    pub(crate) const fn receive_return_offset(&self) -> u32 {
+        self.request.receive_return_offset()
+    }
+
+    pub(crate) const fn waiter(&self) -> WaiterId {
+        self.waiter
+    }
+
+    pub(crate) fn agent_call_is_released(&self) -> bool {
+        self.request.session.agent_call_is_released()
+    }
+
+    pub(crate) fn acknowledge(
+        self,
+        message: MessageRecord,
+    ) -> Option<AcknowledgedMessageReceiveCpu> {
+        self.request.acknowledge(message)
     }
 }
 

@@ -1,20 +1,21 @@
 //! Mailbox semantic transitions bound to physical Worker CPU evidence.
 //!
 //! Each helper calls only public facade methods, validates the exact message
-//! event and record, and proves that mailbox mutation leaves scheduler state
-//! unchanged before constructing a reply-capable CPU token.
+//! event and record, and proves the matching scheduler transition before
+//! constructing a reply-capable CPU token.
+
+mod state;
 
 use agent_kernel_core::{
-    AgentExecutionState, EventKind, MessageKind, MessagePayload, MessageRecord, MessageStatus,
-    RunQueueEntry, TaskStatus,
+    EventKind, MessageKind, MessagePayload, MessageRecord, MessageStatus, WaiterId,
 };
 
 use super::WorkerTask;
 use crate::{
     agent_cpu::{
         AcknowledgedMessageAcknowledgementCpu, AcknowledgedMessageReceiveCpu,
-        AcknowledgedMessageSendCpu, RequestedMessageAcknowledgementCpu, RequestedMessageReceiveCpu,
-        RequestedMessageSendCpu,
+        AcknowledgedMessageSendCpu, RequestedMessageAcknowledgementCpu, RequestedMessageSendCpu,
+        WaitingMessageReceiveCpu,
     },
     X86BootedKernel,
 };
@@ -23,6 +24,7 @@ pub(super) fn send(
     booted: &mut X86BootedKernel,
     sender: WorkerTask,
     recipient: WorkerTask,
+    waiter: WaiterId,
     cpu: RequestedMessageSendCpu,
 ) -> Option<AcknowledgedMessageSendCpu> {
     let expected_payload = MessagePayload {
@@ -35,6 +37,7 @@ pub(super) fn send(
         || cpu.recipient() != recipient.agent
         || cpu.kind() != MessageKind::Notify
         || cpu.payload() != expected_payload
+        || !state::sender_before_send_valid(booted, sender, recipient, waiter)
     {
         return None;
     }
@@ -48,17 +51,26 @@ pub(super) fn send(
         )
         .ok()?;
     let record = find_message(booted, message)?;
-    let event = booted.kernel().events().last()?;
+    let events = booted.kernel().events();
+    let sent = events.get(events.len().checked_sub(2)?)?;
+    let wake = events.last()?;
     if record.sender != sender.agent
         || record.recipient != recipient.agent
         || record.kind != MessageKind::Notify
         || record.payload != expected_payload
         || record.status != MessageStatus::Pending
-        || event.kind != EventKind::MessageSent
-        || event.agent != sender.agent
-        || event.target_agent != Some(recipient.agent)
-        || event.message != Some(message)
-        || !sender_state_valid(booted, sender, recipient)
+        || sent.kind != EventKind::MessageSent
+        || sent.agent != sender.agent
+        || sent.target_agent != Some(recipient.agent)
+        || sent.message != Some(message)
+        || wake.kind != EventKind::MessageWaitWoken
+        || wake.agent != sender.agent
+        || wake.capability.is_some()
+        || wake.target_agent != Some(recipient.agent)
+        || wake.task != Some(recipient.task)
+        || wake.waiter != Some(waiter)
+        || wake.message != Some(message)
+        || !state::sender_after_wake_valid(booted, sender, recipient, waiter)
     {
         return None;
     }
@@ -69,12 +81,15 @@ pub(super) fn receive(
     booted: &mut X86BootedKernel,
     recipient: WorkerTask,
     sender: WorkerTask,
-    cpu: RequestedMessageReceiveCpu,
+    waiter: WaiterId,
+    cpu: WaitingMessageReceiveCpu,
 ) -> Option<AcknowledgedMessageReceiveCpu> {
     if cpu.call_count() != 2
         || cpu.address_space_switch_count() != 4
         || recipient.call_context() != Some(cpu.context())
-        || !receiver_state_valid(booted, recipient, sender)
+        || cpu.waiter() != waiter
+        || !cpu.agent_call_is_released()
+        || !state::receiver_running_valid(booted, recipient, sender)
     {
         return None;
     }
@@ -89,7 +104,7 @@ pub(super) fn receive(
         || event.agent != recipient.agent
         || event.target_agent != Some(sender.agent)
         || event.message != Some(message)
-        || !receiver_state_valid(booted, recipient, sender)
+        || !state::receiver_running_valid(booted, recipient, sender)
     {
         return None;
     }
@@ -105,7 +120,7 @@ pub(super) fn acknowledge(
     if cpu.call_count() != 3
         || cpu.address_space_switch_count() != 6
         || recipient.call_context() != Some(cpu.context())
-        || !receiver_state_valid(booted, recipient, sender)
+        || !state::receiver_running_valid(booted, recipient, sender)
     {
         return None;
     }
@@ -120,7 +135,7 @@ pub(super) fn acknowledge(
         || event.agent != recipient.agent
         || event.target_agent != Some(sender.agent)
         || event.message != Some(message)
-        || !receiver_state_valid(booted, recipient, sender)
+        || !state::receiver_running_valid(booted, recipient, sender)
     {
         return None;
     }
@@ -154,58 +169,4 @@ fn expected_record(
                 ..MessagePayload::empty()
             }
         && record.status == status
-}
-
-fn sender_state_valid(booted: &X86BootedKernel, sender: WorkerTask, recipient: WorkerTask) -> bool {
-    let kernel = booted.kernel();
-    let sender_task = kernel.tasks().iter().find(|task| task.id == sender.task);
-    let recipient_task = kernel.tasks().iter().find(|task| task.id == recipient.task);
-    let sender_context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == sender.agent);
-    let recipient_context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == recipient.agent);
-    matches!(sender_task, Some(task) if task.status == TaskStatus::Running
-        && task.result == Some(sender.result) && task.run_ticks == 1)
-        && matches!(recipient_task, Some(task) if task.status == TaskStatus::Accepted
-            && task.result.is_none() && task.run_ticks == 1)
-        && matches!(sender_context, Some(context) if context.state == AgentExecutionState::Running
-            && context.task == Some(sender.task))
-        && matches!(recipient_context, Some(context) if context.state == AgentExecutionState::Idle
-            && context.task.is_none())
-        && kernel.run_queue()
-            == [RunQueueEntry {
-                task: recipient.task,
-                agent: recipient.agent,
-            }]
-}
-
-fn receiver_state_valid(
-    booted: &X86BootedKernel,
-    recipient: WorkerTask,
-    sender: WorkerTask,
-) -> bool {
-    let kernel = booted.kernel();
-    let recipient_task = kernel.tasks().iter().find(|task| task.id == recipient.task);
-    let sender_task = kernel.tasks().iter().find(|task| task.id == sender.task);
-    let recipient_context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == recipient.agent);
-    let sender_context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == sender.agent);
-    matches!(recipient_task, Some(task) if task.status == TaskStatus::Running
-        && task.result.is_none() && task.run_ticks == 1)
-        && matches!(sender_task, Some(task) if task.status == TaskStatus::Completed
-            && task.result == Some(sender.result) && task.run_ticks == 1)
-        && matches!(recipient_context, Some(context) if context.state == AgentExecutionState::Running
-            && context.task == Some(recipient.task))
-        && matches!(sender_context, Some(context) if context.state == AgentExecutionState::Idle
-            && context.task.is_none())
-        && kernel.run_queue().is_empty()
 }

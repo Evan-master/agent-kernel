@@ -7,7 +7,7 @@
 
 use crate::{
     AgentId, Event, EventKind, KernelCore, KernelError, MessageId, MessageKind, MessagePayload,
-    MessageRecord, MessageStatus, OperationSet, VerificationRequirement,
+    MessageRecord, MessageStatus,
 };
 
 impl<
@@ -69,6 +69,20 @@ impl<
         self.ensure_agent_active(sender)?;
         self.ensure_agent_active(recipient)?;
         self.ensure_message_capacity()?;
+
+        let waiter_index = self.find_mailbox_waiter_index(recipient);
+        if let Some(waiter_index) = waiter_index {
+            let waiter = self.waiters[waiter_index];
+            self.ensure_agent_admitted_for_task(waiter.agent, waiter.task)?;
+            self.ensure_run_queue_capacity()?;
+            self.ensure_event_slots(2)?;
+
+            let message = self.append_message(sender, recipient, kind, payload);
+            self.record_message_event(EventKind::MessageSent, sender, recipient, message)?;
+            self.wake_mailbox_waiter(waiter_index, sender, message)?;
+            return Ok(message);
+        }
+
         self.ensure_event_slots(1)?;
 
         let message = self.append_message(sender, recipient, kind, payload);
@@ -151,7 +165,7 @@ impl<
         message
     }
 
-    fn oldest_pending_message_index(&self, recipient: AgentId) -> Option<usize> {
+    pub(crate) fn oldest_pending_message_index(&self, recipient: AgentId) -> Option<usize> {
         let mut index = 0;
         while index < self.message_len {
             let message = self.messages[index];
@@ -181,63 +195,5 @@ impl<
         }
 
         Err(KernelError::MessageNotFound)
-    }
-
-    pub(crate) fn record_message_event(
-        &mut self,
-        kind: EventKind,
-        agent: AgentId,
-        target_agent: AgentId,
-        message: MessageId,
-    ) -> Result<Event, KernelError> {
-        self.record(Event {
-            sequence: 0,
-            agent,
-            kind,
-            resource: None,
-            capability: None,
-            source_capability: None,
-            intent: None,
-            intent_kind: None,
-            action: None,
-            observation: None,
-            message: Some(message),
-            memory_cell: None,
-            namespace_entry: None,
-            namespace_key: None,
-            namespace_object: None,
-            operation: None,
-            operations: OperationSet::empty(),
-            verification: VerificationRequirement::Optional,
-            checkpoint: None,
-            task: None,
-            task_result: None,
-            task_ticks: None,
-            task_quantum: None,
-            fault: None,
-            fault_kind: None,
-            fault_detail: None,
-            fault_policy: None,
-            fault_policy_action: None,
-            waiter: None,
-            signal: None,
-            target_agent: Some(target_agent),
-            driver_binding: None,
-            device_event: None,
-            device_event_kind: None,
-            device_event_payload: None,
-            driver_command: None,
-            driver_command_kind: None,
-            driver_command_payload: None,
-            driver_command_result: None,
-            driver_invocation: None,
-            driver_invocation_ticks: None,
-            driver_invocation_quantum: None,
-            agent_image: None,
-            agent_image_kind: None,
-            agent_image_digest: None,
-            agent_image_abi_version: None,
-            agent_image_entry_version: None,
-        })
     }
 }

@@ -41,3 +41,36 @@ pub(crate) fn format_signal_event(event: &Event, label: &str) -> String {
         event.sequence, label, agent, resource, task, waiter, signal, target_agent
     )
 }
+
+pub(crate) fn format_mailbox_wait_started_event(event: &Event, label: &str) -> String {
+    let agent = event.agent.raw();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let task = event.task.map(|task| task.raw()).unwrap_or_default();
+    let waiter = event.waiter.map(|waiter| waiter.raw()).unwrap_or_default();
+
+    format!(
+        "event[{}] {} agent={} resource={} task={} waiter={}",
+        event.sequence, label, agent, resource, task, waiter
+    )
+}
+
+pub(crate) fn format_mailbox_wait_woken_event(event: &Event, label: &str) -> String {
+    let target_agent = event
+        .target_agent
+        .map(|agent| agent.raw())
+        .unwrap_or_default();
+    let message = event
+        .message
+        .map(|message| message.raw())
+        .unwrap_or_default();
+
+    format!(
+        "{} target_agent={} message={}",
+        format_mailbox_wait_started_event(event, label),
+        target_agent,
+        message
+    )
+}

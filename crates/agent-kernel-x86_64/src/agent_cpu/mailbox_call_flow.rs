@@ -18,7 +18,7 @@ use crate::agent_memory::PreparedAgentMemory;
 pub(crate) use receiver::{
     AcknowledgedMessageAcknowledgementCpu, AcknowledgedMessageReceiveCpu,
     AcknowledgedReceiverResultCpu, CompletedMailboxReceiverCpu, RequestedMessageAcknowledgementCpu,
-    RequestedMessageReceiveCpu, RequestedReceiverResultCpu,
+    RequestedMessageReceiveCpu, RequestedReceiverResultCpu, WaitingMessageReceiveCpu,
 };
 pub(crate) use sender::{
     AcknowledgedMessageSendCpu, AcknowledgedSenderResultCpu, CompletedMailboxSenderCpu,
@@ -89,5 +89,9 @@ impl MailboxCallSession {
 
     pub(super) fn frame_mut(&mut self) -> &mut PrivilegeInterruptStackFrame {
         self.frame.frame_mut()
+    }
+
+    pub(super) fn agent_call_is_released(&self) -> bool {
+        self.memory.agent_call_is_released()
     }
 }

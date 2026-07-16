@@ -6,7 +6,8 @@
 
 use crate::{
     AgentId, CapabilityId, EventKind, KernelCore, KernelError, Operation, ResourceId,
-    RunQueueEntry, SignalKey, SignalOutcome, TaskId, TaskStatus, WaiterId, WaiterRecord,
+    RunQueueEntry, SignalKey, SignalOutcome, TaskId, TaskStatus, WaiterId, WaiterKind,
+    WaiterRecord,
 };
 
 impl<
@@ -92,6 +93,7 @@ impl<
             agent,
             resource,
             signal,
+            kind: WaiterKind::Signal,
             active: true,
         };
         self.waiter_len += 1;
@@ -188,7 +190,11 @@ impl<
         let mut index = 0;
         while index < self.waiter_len {
             let waiter = self.waiters[index];
-            if waiter.active && waiter.resource == resource && waiter.signal == signal {
+            if waiter.active
+                && waiter.kind == WaiterKind::Signal
+                && waiter.resource == resource
+                && waiter.signal == signal
+            {
                 if let Ok(task) = self.find_task(waiter.task) {
                     if task.status == TaskStatus::Waiting {
                         return Some(index);

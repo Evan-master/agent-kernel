@@ -55,7 +55,10 @@ mod intent;
 mod intent_event;
 mod intent_store;
 mod lookup;
+mod mailbox_event;
 mod mailbox_store;
+mod mailbox_wait_event;
+mod mailbox_wait_store;
 mod memory;
 mod memory_store;
 mod message;
@@ -109,11 +112,13 @@ pub use id::{
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};
-pub use message::{MessageKind, MessagePayload, MessageRecord, MessageStatus};
+pub use message::{
+    MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageStatus,
+};
 pub use namespace::{NamespaceEntryRecord, NamespaceKey, NamespaceObject};
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceCreateOutcome, ResourceKind, ResourceStatus};
 pub use run_queue::RunQueueEntry;
-pub use signal::{SignalKey, SignalOutcome, WaiterRecord};
+pub use signal::{SignalKey, SignalOutcome, WaiterKind, WaiterRecord};
 pub use task::{Task, TaskResult, TaskStatus};

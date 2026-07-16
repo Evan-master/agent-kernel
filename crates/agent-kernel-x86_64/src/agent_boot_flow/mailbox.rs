@@ -7,13 +7,13 @@ use crate::{
     agent_cpu::PreemptedAgentCpu,
     boot_agent_images::BootAgentImage,
     fatal_boot, serial_write_line,
-    timer_task_flow::{CompletedWorkerTasks, FirstResumedFlow, WORKER_B},
+    timer_task_flow::{CompletedWorkerTasks, SecondResumedFlow, WORKER_B},
     X86BootedKernel,
 };
 
 pub(super) fn run(
     booted: &mut X86BootedKernel,
-    first_resumed_flow: FirstResumedFlow,
+    second_resumed_flow: SecondResumedFlow,
     preempted_a: PreemptedAgentCpu,
     preempted_b: PreemptedAgentCpu,
     worker_a: BootAgentImage,
@@ -28,6 +28,31 @@ pub(super) fn run(
     let Some(expected_offsets_b) = worker_b.expected_receiver_return_offsets() else {
         fatal_boot("AGENT_KERNEL_AGENT_IMAGE_OFFSET_ERROR");
     };
+    let Some(requested_receive) = preempted_b.resume_until_message_receive() else {
+        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
+    };
+    if requested_receive.call_count() != 2
+        || requested_receive.address_space_switch_count() != 4
+        || requested_receive.receive_return_offset() != expected_offsets_b[1]
+    {
+        fatal_boot("AGENT_KERNEL_AGENT_CALL_RECEIVE_MESSAGE_ERROR");
+    }
+    let Some((second_waiting_flow, waiting_receive)) =
+        second_resumed_flow.wait_for_first(booted, requested_receive)
+    else {
+        fatal_boot("AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_ERROR");
+    };
+    if waiting_receive.waiter().raw() != 1
+        || waiting_receive.receive_return_offset() != expected_offsets_b[1]
+        || !waiting_receive.agent_call_is_released()
+    {
+        fatal_boot("AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAIT_OK");
+    let Some(first_resumed_flow) = second_waiting_flow.dispatch_first(booted) else {
+        fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
+    };
     let Some(requested_a) = preempted_a.resume_until_sender_result() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
@@ -38,7 +63,7 @@ pub(super) fn run(
         || requested_a.result() != worker_a.result()
         || requested_a.describe_return_offset() != expected_offsets_a[0]
         || requested_a.result_return_offset() != expected_offsets_a[1]
-        || !preempted_b.signal_is_clear()
+        || !waiting_receive.agent_call_is_released()
     {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
     }
@@ -62,6 +87,7 @@ pub(super) fn run(
         fatal_boot("AGENT_KERNEL_AGENT_CALL_SEND_MESSAGE_ERROR");
     };
     serial_write_line("AGENT_KERNEL_AGENT_CALL_SEND_MESSAGE_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAKE_OK");
     let Some(completed_a) = acknowledged_send.resume_until_completion() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
@@ -72,27 +98,18 @@ pub(super) fn run(
         || completed_a.recipient() != WORKER_B
         || completed_a.message().raw() != 1
         || completed_a.return_offsets() != expected_offsets_a
-        || !preempted_b.signal_is_clear()
+        || !waiting_receive.agent_call_is_released()
     {
         fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
     }
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
-    let Some(second_resumed_flow) =
+    let Some(second_redispatched_flow) =
         first_message_flow.complete_first_and_dispatch_second(booted, completed_a)
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     };
-    let Some(requested_receive) = preempted_b.resume_until_message_receive() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
-    };
-    if requested_receive.call_count() != 2
-        || requested_receive.address_space_switch_count() != 4
-        || requested_receive.receive_return_offset() != expected_offsets_b[1]
-    {
-        fatal_boot("AGENT_KERNEL_AGENT_CALL_RECEIVE_MESSAGE_ERROR");
-    }
     let Some((second_message_flow, acknowledged_receive)) =
-        second_resumed_flow.receive_from_first(booted, requested_receive)
+        second_redispatched_flow.receive_from_first(booted, waiting_receive)
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CALL_RECEIVE_MESSAGE_ERROR");
     };

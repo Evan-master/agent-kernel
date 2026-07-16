@@ -5,7 +5,9 @@
 //! store. It deliberately carries kernel object IDs instead of heap-allocated
 //! bytes or host transport handles.
 
-use crate::{ActionId, AgentId, CapabilityId, FaultId, IntentId, MessageId, ResourceId, TaskId};
+use crate::{
+    ActionId, AgentId, CapabilityId, FaultId, IntentId, MessageId, ResourceId, TaskId, WaiterId,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MessageKind {
@@ -20,6 +22,12 @@ pub enum MessageStatus {
     Pending,
     Received,
     Acknowledged,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MessageReceiveOutcome {
+    Received(MessageId),
+    Waiting(WaiterId),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

@@ -122,6 +122,12 @@ impl PreparedAgentMemory {
         // supervisor physical alias of this Agent's exclusive signal frame.
         unsafe { self.signal_pointer.read_volatile() == 0 }
     }
+
+    pub(crate) fn agent_call_is_released(&self) -> bool {
+        // SAFETY: this is the same exclusive supervisor alias used to release
+        // the Agent once for its complete returning call sequence.
+        unsafe { self.signal_pointer.read_volatile() == 1 }
+    }
 }
 
 fn initialize_content(

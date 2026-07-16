@@ -1,15 +1,10 @@
-//! Mailbox syscall facade.
+//! Native mailbox message event construction.
 //!
-//! This module belongs to `agent-kernel`. It exposes native message IPC as
-//! syscall-style methods while keeping fixed-capacity mailbox mutation inside
-//! `agent-kernel-core`.
+//! This core-layer module builds deterministic fixed-field send, receive, and
+//! acknowledgement events. Message state transitions and capacity checks stay
+//! in the mailbox stores.
 
-use agent_kernel_core::{
-    AgentId, CapabilityId, Event, KernelError, MessageId, MessageKind, MessagePayload,
-    MessageReceiveOutcome, MessageRecord, TaskId,
-};
-
-use crate::AgentKernel;
+use crate::{AgentId, Event, EventKind, KernelCore, KernelError, MessageId};
 
 impl<
         const AGENTS: usize,
@@ -35,7 +30,7 @@ impl<
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
     >
-    AgentKernel<
+    KernelCore<
         AGENTS,
         RESOURCES,
         CAPS,
@@ -60,38 +55,18 @@ impl<
         DRIVER_INVOCATIONS,
     >
 {
-    pub fn sys_send_message(
+    pub(crate) fn record_message_event(
         &mut self,
-        sender: AgentId,
-        recipient: AgentId,
-        kind: MessageKind,
-        payload: MessagePayload,
-    ) -> Result<MessageId, KernelError> {
-        self.core.send_message(sender, recipient, kind, payload)
-    }
-
-    pub fn sys_receive_message(&mut self, agent: AgentId) -> Result<MessageId, KernelError> {
-        self.core.receive_message(agent)
-    }
-
-    pub fn sys_receive_or_wait_message(
-        &mut self,
+        kind: EventKind,
         agent: AgentId,
-        capability: CapabilityId,
-        task: TaskId,
-    ) -> Result<MessageReceiveOutcome, KernelError> {
-        self.core.receive_or_wait_message(agent, capability, task)
-    }
-
-    pub fn sys_acknowledge_message(
-        &mut self,
-        agent: AgentId,
+        target_agent: AgentId,
         message: MessageId,
     ) -> Result<Event, KernelError> {
-        self.core.acknowledge_message(agent, message)
-    }
-
-    pub fn messages(&self) -> &[MessageRecord] {
-        self.core.messages()
+        let mut event = Event::empty();
+        event.agent = agent;
+        event.kind = kind;
+        event.message = Some(message);
+        event.target_agent = Some(target_agent);
+        self.record(event)
     }
 }

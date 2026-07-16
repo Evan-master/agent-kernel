@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE="$("$ROOT_DIR/scripts/build-qemu-image.sh")"
+IMAGE="$("$ROOT_DIR/scripts/build-qemu-image.sh" "$@")"
 
 set +e
 OUTPUT="$(qemu-system-x86_64 \
@@ -36,8 +36,11 @@ for expected in \
   "AGENT_KERNEL_PIT_IRQ_OK" \
   "AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK" \
   "AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK" \
-  "AGENT_KERNEL_AGENT_B_PREEMPTION_OK" \
+  "AGENT_KERNEL_AGENT_A_PREEMPTION_OK" \
   "AGENT_KERNEL_TIMER_PREEMPTION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_OK" \
+  "AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAIT_OK" \
+  "AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAKE_OK" \
   "AGENT_KERNEL_VERIFIER_PREEMPTION_OK" \
   "AGENT_KERNEL_AGENT_CPU_RESUME_OK" \
   "AGENT_KERNEL_AGENT_CALL_ABI_OK" \
@@ -114,32 +117,35 @@ for expected in \
   "event[51] task_dispatched" \
   "event[52] task_quantum_expired" \
   "event[53] task_dispatched" \
-  "event[54] task_result_submitted" \
-  "event[55] message_sent" \
-  "event[56] task_completed" \
-  "event[57] task_dispatched" \
-  "event[58] message_received" \
-  "event[59] message_acknowledged" \
-  "event[60] task_result_submitted" \
-  "event[61] task_completed" \
-  "event[62] task_queued" \
-  "event[63] task_dispatched" \
-  "event[64] task_quantum_expired" \
-  "event[65] task_dispatched" \
-  "event[66] task_result_inspected" \
-  "event[67] task_verified" \
-  "event[68] intent_fulfilled" \
-  "event[69] task_completed" \
-  "event[70] device_event_raised" \
-  "event[71] device_event_delivered" \
-  "event[72] driver_invocation_queued" \
-  "event[73] driver_invocation_dispatched" \
-  "event[74] driver_invocation_ticked" \
-  "event[75] device_event_acknowledged" \
-  "event[76] driver_command_submitted" \
-  "event[77] driver_command_dispatched" \
-  "event[78] driver_command_completed" \
-  "event[79] driver_invocation_completed" \
+  "event[54] message_wait_started" \
+  "event[55] task_dispatched" \
+  "event[56] task_result_submitted" \
+  "event[57] message_sent" \
+  "event[58] message_wait_woken" \
+  "event[59] task_completed" \
+  "event[60] task_dispatched" \
+  "event[61] message_received" \
+  "event[62] message_acknowledged" \
+  "event[63] task_result_submitted" \
+  "event[64] task_completed" \
+  "event[65] task_queued" \
+  "event[66] task_dispatched" \
+  "event[67] task_quantum_expired" \
+  "event[68] task_dispatched" \
+  "event[69] task_result_inspected" \
+  "event[70] task_verified" \
+  "event[71] intent_fulfilled" \
+  "event[72] task_completed" \
+  "event[73] device_event_raised" \
+  "event[74] device_event_delivered" \
+  "event[75] driver_invocation_queued" \
+  "event[76] driver_invocation_dispatched" \
+  "event[77] driver_invocation_ticked" \
+  "event[78] device_event_acknowledged" \
+  "event[79] driver_command_submitted" \
+  "event[80] driver_command_dispatched" \
+  "event[81] driver_command_completed" \
+  "event[82] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -149,7 +155,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 79 ]]; then
-  printf 'expected exactly 79 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 82 ]]; then
+  printf 'expected exactly 82 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

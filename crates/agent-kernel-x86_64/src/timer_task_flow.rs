@@ -11,9 +11,11 @@ mod message_transition;
 mod result_transition;
 mod setup;
 mod transitions;
+mod wait_transition;
 
 use agent_kernel_core::{
     AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId, TaskResult,
+    WaiterId,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
@@ -66,12 +68,7 @@ pub(super) struct TimerTaskFlow {
     second: WorkerTask,
 }
 
-pub(super) struct SecondRunningFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct FirstResumedFlow {
+pub(super) struct FirstRunningFlow {
     first: WorkerTask,
     second: WorkerTask,
 }
@@ -81,14 +78,34 @@ pub(super) struct SecondResumedFlow {
     second: WorkerTask,
 }
 
+pub(super) struct SecondWaitingFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+    waiter: WaiterId,
+}
+
+pub(super) struct FirstResumedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+    waiter: WaiterId,
+}
+
 pub(super) struct FirstResultSubmittedFlow {
     first: WorkerTask,
     second: WorkerTask,
+    waiter: WaiterId,
 }
 
 pub(super) struct FirstMessageSentFlow {
     first: WorkerTask,
     second: WorkerTask,
+    waiter: WaiterId,
+}
+
+pub(super) struct SecondRedispatchedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+    waiter: WaiterId,
 }
 
 pub(super) struct SecondMessageReceivedFlow {
@@ -124,13 +141,13 @@ impl TimerTaskFlow {
         Some(QueuedTimerTaskFlow { first, second })
     }
 
-    pub(super) fn expire_first_and_dispatch_second(
+    pub(super) fn expire_second_and_dispatch_first(
         self,
         booted: &mut X86BootedKernel,
         cpu: &PreemptedAgentCpu,
-    ) -> Option<SecondRunningFlow> {
-        transitions::expire_and_dispatch(booted, self.first, self.second, cpu, 0)?;
-        Some(SecondRunningFlow {
+    ) -> Option<FirstRunningFlow> {
+        transitions::expire_and_dispatch(booted, self.second, self.first, cpu, 0)?;
+        Some(FirstRunningFlow {
             first: self.first,
             second: self.second,
         })
@@ -155,8 +172,8 @@ impl QueuedTimerTaskFlow {
         (first.id != second.id && first.digest != second.digest).then_some((first, second))
     }
 
-    pub(super) fn dispatch_first(self, booted: &mut X86BootedKernel) -> Option<TimerTaskFlow> {
-        setup::dispatch_first(booted, self.first, self.second)?;
+    pub(super) fn dispatch_second(self, booted: &mut X86BootedKernel) -> Option<TimerTaskFlow> {
+        setup::dispatch_second(booted, self.first, self.second)?;
         Some(TimerTaskFlow {
             first: self.first,
             second: self.second,
@@ -164,14 +181,14 @@ impl QueuedTimerTaskFlow {
     }
 }
 
-impl SecondRunningFlow {
-    pub(super) fn expire_second_and_dispatch_first(
+impl FirstRunningFlow {
+    pub(super) fn expire_first_and_dispatch_second(
         self,
         booted: &mut X86BootedKernel,
         cpu: &PreemptedAgentCpu,
-    ) -> Option<FirstResumedFlow> {
-        transitions::expire_and_dispatch(booted, self.second, self.first, cpu, 1)?;
-        Some(FirstResumedFlow {
+    ) -> Option<SecondResumedFlow> {
+        transitions::expire_and_dispatch(booted, self.first, self.second, cpu, 1)?;
+        Some(SecondResumedFlow {
             first: self.first,
             second: self.second,
         })
