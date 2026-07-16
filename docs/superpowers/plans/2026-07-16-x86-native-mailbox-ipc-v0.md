@@ -14,4 +14,4 @@
 - [x] Run formatting, full tests, Supervisor, no_std checks, scoped Clippy,
   debug/release QEMU, and release disassembly inspection.
 - [x] Update README, commit, and merge locally.
-- [ ] Publish local main when GitHub credentials permit.
+- [x] Publish local main when GitHub credentials permit.
