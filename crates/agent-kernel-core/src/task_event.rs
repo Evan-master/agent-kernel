@@ -71,19 +71,13 @@ impl<
 
     pub(crate) fn record_task_result_event(
         &mut self,
+        kind: EventKind,
         agent: AgentId,
         capability: CapabilityId,
         task: TaskId,
         result: TaskResult,
     ) -> Result<Event, KernelError> {
-        self.record_task_event_with_result(
-            EventKind::TaskResultSubmitted,
-            agent,
-            Some(capability),
-            task,
-            None,
-            Some(result),
-        )
+        self.record_task_event_with_result(kind, agent, Some(capability), task, None, Some(result))
     }
 
     fn record_task_event_with_result(

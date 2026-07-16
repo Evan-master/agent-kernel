@@ -5,6 +5,7 @@
 //! FIFO queue state across two expiries, returning result calls, and terminal
 //! completion calls.
 
+mod completed;
 mod result_transition;
 mod setup;
 mod transitions;
@@ -20,6 +21,8 @@ use crate::{
     },
     X86BootedKernel,
 };
+
+pub(super) use completed::{CompletedWorkerTasks, VerificationSubject};
 
 pub(super) const WORKER_A: AgentId = AgentId::new(3);
 pub(super) const WORKER_B: AgentId = AgentId::new(4);
@@ -123,6 +126,10 @@ impl TimerTaskFlow {
 }
 
 impl QueuedTimerTaskFlow {
+    pub(super) const fn verification_subject(&self) -> VerificationSubject {
+        VerificationSubject::new(self.first.task, self.first.result)
+    }
+
     pub(super) fn call_contexts(&self) -> Option<(AgentCallContext, AgentCallContext)> {
         Some((self.first.call_context()?, self.second.call_context()?))
     }
@@ -214,7 +221,8 @@ impl SecondResultSubmittedFlow {
         self,
         booted: &mut X86BootedKernel,
         cpu: CompletedAgentCpu,
-    ) -> bool {
+    ) -> Option<CompletedWorkerTasks> {
         transitions::record_final_completion(booted, self.second, self.first, cpu)
+            .then_some(CompletedWorkerTasks::new(self.first, self.second))
     }
 }

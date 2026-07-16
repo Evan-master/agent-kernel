@@ -20,6 +20,7 @@ pub(crate) const AGENT_IMAGE_MAGIC: &[u8; 8] = b"AGNTIMG\0";
 pub(crate) const AGENT_IMAGE_FORMAT_VERSION: u16 = 1;
 pub(crate) const AGENT_IMAGE_ARCH_X86_64: u16 = 1;
 pub(crate) const AGENT_IMAGE_KIND_WORKER: u16 = 1;
+pub(crate) const AGENT_IMAGE_KIND_VERIFIER: u16 = 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentImageLoadError {

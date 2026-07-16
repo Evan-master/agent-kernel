@@ -19,6 +19,8 @@ pub const AGENT_CALL_DESCRIBE_CONTEXT: u64 = 1;
 pub const AGENT_CALL_YIELD: u64 = 2;
 pub const AGENT_CALL_COMPLETE_TASK: u64 = 3;
 pub const AGENT_CALL_SUBMIT_TASK_RESULT: u64 = 4;
+pub const AGENT_CALL_INSPECT_TASK_RESULT: u64 = 5;
+pub const AGENT_CALL_VERIFY_TASK: u64 = 6;
 pub const AGENT_CALL_STATUS_OK: u64 = 0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -27,6 +29,8 @@ pub enum AgentCallOperation {
     Yield,
     CompleteTask,
     SubmitTaskResult,
+    InspectTaskResult,
+    VerifyTask,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -53,6 +57,20 @@ pub enum AgentCallRequest {
         nonce: u64,
         result: TaskResult,
     },
+    InspectTaskResult {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        target_task: TaskId,
+    },
+    VerifyTask {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        target_task: TaskId,
+    },
 }
 
 impl AgentCallRequest {
@@ -68,6 +86,8 @@ impl AgentCallRequest {
             AGENT_CALL_YIELD => AgentCallOperation::Yield,
             AGENT_CALL_COMPLETE_TASK => AgentCallOperation::CompleteTask,
             AGENT_CALL_SUBMIT_TASK_RESULT => AgentCallOperation::SubmitTaskResult,
+            AGENT_CALL_INSPECT_TASK_RESULT => AgentCallOperation::InspectTaskResult,
+            AGENT_CALL_VERIFY_TASK => AgentCallOperation::VerifyTask,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -116,6 +136,26 @@ impl AgentCallRequest {
                     },
                 })
             }
+            AgentCallOperation::InspectTaskResult => {
+                let (agent, task, image, nonce, target_task) = decode_verifier_payload(frame)?;
+                Ok(Self::InspectTaskResult {
+                    agent,
+                    task,
+                    image,
+                    nonce,
+                    target_task,
+                })
+            }
+            AgentCallOperation::VerifyTask => {
+                let (agent, task, image, nonce, target_task) = decode_verifier_payload(frame)?;
+                Ok(Self::VerifyTask {
+                    agent,
+                    task,
+                    image,
+                    nonce,
+                    target_task,
+                })
+            }
         }
     }
 
@@ -125,6 +165,8 @@ impl AgentCallRequest {
             Self::Yield { .. } => AgentCallOperation::Yield,
             Self::CompleteTask { .. } => AgentCallOperation::CompleteTask,
             Self::SubmitTaskResult { .. } => AgentCallOperation::SubmitTaskResult,
+            Self::InspectTaskResult { .. } => AgentCallOperation::InspectTaskResult,
+            Self::VerifyTask { .. } => AgentCallOperation::VerifyTask,
         }
     }
 }
@@ -160,4 +202,17 @@ fn decode_context_payload(
             frame.r9,
         ))
     }
+}
+
+fn decode_verifier_payload(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<(AgentId, TaskId, AgentImageId, u64, TaskId), AgentCallDecodeError> {
+    if frame.r11 != 0 {
+        return Err(AgentCallDecodeError::ReservedNotZero);
+    }
+    let (agent, task, image, nonce) = decode_context_payload(frame)?;
+    if frame.r10 == 0 {
+        return Err(AgentCallDecodeError::InvalidPayload);
+    }
+    Ok((agent, task, image, nonce, TaskId::new(frame.r10)))
 }

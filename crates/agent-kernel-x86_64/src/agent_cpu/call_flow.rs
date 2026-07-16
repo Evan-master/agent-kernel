@@ -50,7 +50,9 @@ impl PreemptedAgentCpu {
             AgentCallRequest::DescribeContext { nonce } => nonce,
             AgentCallRequest::Yield { .. }
             | AgentCallRequest::CompleteTask { .. }
-            | AgentCallRequest::SubmitTaskResult { .. } => return None,
+            | AgentCallRequest::SubmitTaskResult { .. }
+            | AgentCallRequest::InspectTaskResult { .. }
+            | AgentCallRequest::VerifyTask { .. } => return None,
         };
         let describe_return_offset = describe.return_offset();
         let mut reply_frame = describe.into_frame();

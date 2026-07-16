@@ -51,7 +51,7 @@ fn native_capsule_rejects_unknown_or_noncanonical_header_fields() {
             AgentImageLoadError::UnsupportedArchitecture,
         ),
         (
-            mutated_u16(&valid, 12, 2),
+            mutated_u16(&valid, 12, 3),
             AgentImageLoadError::UnsupportedImageKind,
         ),
         (
@@ -71,6 +71,19 @@ fn native_capsule_rejects_unknown_or_noncanonical_header_fields() {
     for (bytes, expected) in cases {
         assert_eq!(AgentImageCapsule::parse(&bytes), Err(expected));
     }
+}
+
+#[test]
+fn native_verifier_capsule_binds_verifier_metadata() {
+    let bytes = capsule(&[0x90, 0xcd, 0x90], 1, 2, 0, ABI_VERSION, ENTRY_VERSION, 0);
+    let parsed = AgentImageCapsule::parse(&bytes).unwrap();
+    assert_eq!(parsed.header().image_kind(), 2);
+
+    let mut verifier = record(sha256_digest(&bytes), AgentImageStatus::Verified);
+    verifier.kind = AgentImageKind::Verifier;
+    let verified = VerifiedAgentImage::verify(verifier, &bytes).unwrap();
+    assert_eq!(verified.record().kind, AgentImageKind::Verifier);
+    assert_eq!(verified.code(), &[0x90, 0xcd, 0x90]);
 }
 
 #[test]

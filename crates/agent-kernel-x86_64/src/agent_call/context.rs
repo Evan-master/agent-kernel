@@ -7,7 +7,8 @@ use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult}
 
 use super::{
     AgentCallDecodeError, AgentCallRequest, AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION,
-    AGENT_CALL_DESCRIBE_CONTEXT, AGENT_CALL_STATUS_OK, AGENT_CALL_SUBMIT_TASK_RESULT,
+    AGENT_CALL_DESCRIBE_CONTEXT, AGENT_CALL_INSPECT_TASK_RESULT, AGENT_CALL_STATUS_OK,
+    AGENT_CALL_SUBMIT_TASK_RESULT, AGENT_CALL_VERIFY_TASK,
 };
 use crate::context::PrivilegeInterruptStackFrame;
 
@@ -53,6 +54,26 @@ impl AgentCallContext {
         self.encode_reply(frame, nonce, AGENT_CALL_SUBMIT_TASK_RESULT)
     }
 
+    pub fn encode_task_result_inspection_reply(
+        self,
+        frame: &mut PrivilegeInterruptStackFrame,
+        nonce: u64,
+        result: TaskResult,
+    ) -> Result<(), AgentCallDecodeError> {
+        self.encode_reply(frame, nonce, AGENT_CALL_INSPECT_TASK_RESULT)?;
+        frame.r10 = u64::from(result.code);
+        frame.r11 = result.value;
+        Ok(())
+    }
+
+    pub fn encode_task_verification_reply(
+        self,
+        frame: &mut PrivilegeInterruptStackFrame,
+        nonce: u64,
+    ) -> Result<(), AgentCallDecodeError> {
+        self.encode_reply(frame, nonce, AGENT_CALL_VERIFY_TASK)
+    }
+
     pub fn matches_yield(self, request: AgentCallRequest, expected_nonce: u64) -> bool {
         matches!(
             request,
@@ -92,6 +113,44 @@ impl AgentCallContext {
             } if self.matches_identity(agent, task, image, nonce, expected_nonce) => Some(result),
             _ => None,
         }
+    }
+
+    pub fn matches_task_result_inspection(
+        self,
+        request: AgentCallRequest,
+        expected_nonce: u64,
+        expected_target: TaskId,
+    ) -> bool {
+        matches!(
+            request,
+            AgentCallRequest::InspectTaskResult {
+                agent,
+                task,
+                image,
+                nonce,
+                target_task,
+            } if target_task == expected_target
+                && self.matches_identity(agent, task, image, nonce, expected_nonce)
+        )
+    }
+
+    pub fn matches_task_verification(
+        self,
+        request: AgentCallRequest,
+        expected_nonce: u64,
+        expected_target: TaskId,
+    ) -> bool {
+        matches!(
+            request,
+            AgentCallRequest::VerifyTask {
+                agent,
+                task,
+                image,
+                nonce,
+                target_task,
+            } if target_task == expected_target
+                && self.matches_identity(agent, task, image, nonce, expected_nonce)
+        )
     }
 
     pub const fn capability(self) -> CapabilityId {

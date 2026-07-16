@@ -10,6 +10,7 @@ pub enum AgentEntryKind {
     Bootstrap,
     Supervisor,
     Worker,
+    Verifier,
     Driver,
 }
 

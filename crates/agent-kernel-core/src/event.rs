@@ -55,6 +55,7 @@ pub enum EventKind {
     TaskCreated,
     TaskAccepted,
     TaskResultSubmitted,
+    TaskResultInspected,
     TaskCompleted,
     TaskVerified,
     TaskCancelled,

@@ -115,4 +115,36 @@ impl<
         self.ensure_authorized(agent, entry.capability, resource, Operation::Observe)?;
         self.ensure_authorized(agent, entry.capability, resource, Operation::Act)
     }
+
+    pub(crate) fn ensure_agent_admitted_for_verification(
+        &self,
+        agent: AgentId,
+        target: TaskId,
+    ) -> Result<(), KernelError> {
+        let target_record = self.find_task(target)?;
+        let entry = self
+            .find_agent_entry(agent)
+            .map_err(|_| KernelError::AgentNotLaunched)?;
+        if entry.kind != AgentEntryKind::Verifier {
+            return Err(KernelError::AgentEntryKindMismatch);
+        }
+        if entry.resource != target_record.resource {
+            return Err(KernelError::ResourceMismatch);
+        }
+        let execution_task = entry.task.ok_or(KernelError::AgentEntryScopeMismatch)?;
+        let execution = self.find_task(execution_task)?;
+        if execution.status != crate::TaskStatus::Running {
+            return Err(KernelError::TaskStatusMismatch);
+        }
+        if execution.assignee != Some(agent) {
+            return Err(KernelError::TaskAgentMismatch);
+        }
+        self.ensure_authorized_for_task(
+            agent,
+            entry.capability,
+            execution.resource,
+            Operation::Act,
+            execution_task,
+        )
+    }
 }

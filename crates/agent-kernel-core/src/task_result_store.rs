@@ -78,6 +78,35 @@ impl<
         self.ensure_event_slots(1)?;
 
         self.find_task_mut(task)?.result = Some(result);
-        self.record_task_result_event(agent, capability, task, result)
+        self.record_task_result_event(
+            crate::EventKind::TaskResultSubmitted,
+            agent,
+            capability,
+            task,
+            result,
+        )
+    }
+
+    pub fn inspect_task_result(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<Event, KernelError> {
+        self.ensure_agent_active(agent)?;
+        let current = self.find_task(task)?;
+        self.ensure_authorized(agent, capability, current.resource, Operation::Verify)?;
+        ensure_status(current.status, &[TaskStatus::Completed])?;
+        self.ensure_agent_admitted_for_verification(agent, task)?;
+        let result = current.result.ok_or(KernelError::TaskResultMissing)?;
+        self.ensure_event_slots(1)?;
+
+        self.record_task_result_event(
+            crate::EventKind::TaskResultInspected,
+            agent,
+            capability,
+            task,
+            result,
+        )
     }
 }

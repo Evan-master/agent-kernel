@@ -22,6 +22,7 @@ pub enum AgentImageKind {
     Bootstrap,
     Supervisor,
     Worker,
+    Verifier,
     Driver,
 }
 

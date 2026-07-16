@@ -218,6 +218,7 @@ fn image_kind_matches_entry(image: AgentImageKind, entry: AgentEntryKind) -> boo
         (AgentImageKind::Bootstrap, AgentEntryKind::Bootstrap)
             | (AgentImageKind::Supervisor, AgentEntryKind::Supervisor)
             | (AgentImageKind::Worker, AgentEntryKind::Worker)
+            | (AgentImageKind::Verifier, AgentEntryKind::Verifier)
             | (AgentImageKind::Driver, AgentEntryKind::Driver)
     )
 }

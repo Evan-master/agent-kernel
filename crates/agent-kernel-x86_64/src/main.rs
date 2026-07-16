@@ -25,13 +25,14 @@ mod port_driver_flow;
 mod privilege_runtime;
 mod timer_task_flow;
 mod uart_interrupt;
+mod verifier_task_flow;
 
 use boot_config::BOOTLOADER_CONFIG;
 use privilege_runtime::PrivilegeBoundary;
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-pub(crate) type X86BootedKernel = BootedKernel<4, 1, 4, 64, 1, 1, 0, 2, 2, 2, 1, 1, 1, 1>;
+pub(crate) type X86BootedKernel = BootedKernel<5, 1, 6, 80, 1, 1, 0, 3, 3, 2, 1, 1, 1, 1>;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();

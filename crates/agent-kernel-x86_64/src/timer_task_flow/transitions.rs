@@ -5,7 +5,7 @@
 
 use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatus};
 
-use super::{WorkerTask, TASK_QUANTUM};
+use super::{completed::task_valid as completed_task_valid, WorkerTask, TASK_QUANTUM};
 use crate::{
     agent_cpu::{CompletedAgentCpu, PreemptedAgentCpu},
     X86BootedKernel,
@@ -200,21 +200,6 @@ fn idle_task_valid(booted: &X86BootedKernel, worker: WorkerTask, ticks: u64) -> 
         && task.assignee == Some(worker.agent)
         && task.delegated_capability == Some(worker.capability)
         && task.result.is_none()
-        && task.run_ticks == ticks)
-        && matches!(context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none())
-}
-
-fn completed_task_valid(booted: &X86BootedKernel, worker: WorkerTask, ticks: u64) -> bool {
-    let kernel = booted.kernel();
-    let task = kernel.tasks().iter().find(|task| task.id == worker.task);
-    let context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == worker.agent);
-    matches!(task, Some(task) if task.status == TaskStatus::Completed
-        && task.assignee == Some(worker.agent)
-        && task.delegated_capability == Some(worker.capability)
-        && task.result == Some(worker.result)
         && task.run_ticks == ticks)
         && matches!(context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none())
 }

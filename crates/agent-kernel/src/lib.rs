@@ -237,6 +237,15 @@ impl<
             .submit_task_result(agent, capability, task, result)
     }
 
+    pub fn sys_inspect_task_result(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<Event, KernelError> {
+        self.core.inspect_task_result(agent, capability, task)
+    }
+
     pub fn sys_verify_task(
         &mut self,
         agent: AgentId,

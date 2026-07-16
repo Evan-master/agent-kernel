@@ -2,7 +2,10 @@
 
 use agent_kernel_core::{AgentImageKind, AgentImageRecord, AgentImageStatus};
 
-use super::{sha256_digest, AgentImageCapsule, AgentImageLoadError};
+use super::{
+    sha256_digest, AgentImageCapsule, AgentImageLoadError, AGENT_IMAGE_KIND_VERIFIER,
+    AGENT_IMAGE_KIND_WORKER,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedAgentImage<'a> {
@@ -17,7 +20,7 @@ impl<'a> VerifiedAgentImage<'a> {
             return Err(AgentImageLoadError::ImageNotVerified);
         }
         let header = capsule.header();
-        if record.kind != AgentImageKind::Worker
+        if !image_kind_matches(record.kind, header.image_kind())
             || record.abi_version != header.abi_version()
             || record.entry_version != header.entry_version()
         {
@@ -40,4 +43,12 @@ impl<'a> VerifiedAgentImage<'a> {
     pub const fn entry_offset(&self) -> u32 {
         self.capsule.entry_offset()
     }
+}
+
+fn image_kind_matches(record: AgentImageKind, header: u16) -> bool {
+    matches!(
+        (record, header),
+        (AgentImageKind::Worker, AGENT_IMAGE_KIND_WORKER)
+            | (AgentImageKind::Verifier, AGENT_IMAGE_KIND_VERIFIER)
+    )
 }

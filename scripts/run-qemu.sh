@@ -30,23 +30,29 @@ for expected in \
   "AGENT_KERNEL_AGENT_IMAGE_FORMAT_OK" \
   "AGENT_KERNEL_AGENT_IMAGE_DIGEST_OK" \
   "AGENT_KERNEL_AGENT_IMAGE_LOAD_OK" \
+  "AGENT_KERNEL_VERIFIER_IMAGE_OK" \
+  "AGENT_KERNEL_VERIFIER_MEMORY_OK" \
   "AGENT_KERNEL_MULTI_AGENT_MEMORY_OK" \
   "AGENT_KERNEL_PIT_IRQ_OK" \
   "AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK" \
   "AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK" \
   "AGENT_KERNEL_AGENT_B_PREEMPTION_OK" \
   "AGENT_KERNEL_TIMER_PREEMPTION_OK" \
+  "AGENT_KERNEL_VERIFIER_PREEMPTION_OK" \
   "AGENT_KERNEL_AGENT_CPU_RESUME_OK" \
   "AGENT_KERNEL_AGENT_CALL_ABI_OK" \
   "AGENT_KERNEL_AGENT_CALL_RETURN_OK" \
   "AGENT_KERNEL_AGENT_CALL_RESULT_OK" \
   "AGENT_KERNEL_AGENT_CALL_RETURNING_MUTATION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_INSPECT_RESULT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_VERIFY_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
   "AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK" \
   "AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK" \
   "AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK" \
+  "AGENT_KERNEL_NATIVE_VERIFIER_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \
@@ -88,26 +94,45 @@ for expected in \
   "event[35] agent_launched" \
   "event[36] task_accepted" \
   "event[37] task_queued" \
-  "event[38] task_dispatched" \
-  "event[39] task_quantum_expired" \
-  "event[40] task_dispatched" \
-  "event[41] task_quantum_expired" \
-  "event[42] task_dispatched" \
-  "event[43] task_result_submitted" \
-  "event[44] task_completed" \
-  "event[45] task_dispatched" \
-  "event[46] task_result_submitted" \
-  "event[47] task_completed" \
-  "event[48] device_event_raised" \
-  "event[49] device_event_delivered" \
-  "event[50] driver_invocation_queued" \
-  "event[51] driver_invocation_dispatched" \
-  "event[52] driver_invocation_ticked" \
-  "event[53] device_event_acknowledged" \
-  "event[54] driver_command_submitted" \
-  "event[55] driver_command_dispatched" \
-  "event[56] driver_command_completed" \
-  "event[57] driver_invocation_completed" \
+  "event[38] agent_registered" \
+  "event[39] intent_declared" \
+  "event[40] task_created" \
+  "event[41] intent_bound" \
+  "event[42] capability_derived" \
+  "event[43] delegation" \
+  "event[44] capability_derived" \
+  "event[45] agent_image_registered" \
+  "event[46] agent_image_verified" \
+  "event[47] agent_launched" \
+  "event[48] task_accepted" \
+  "event[49] task_dispatched" \
+  "event[50] task_quantum_expired" \
+  "event[51] task_dispatched" \
+  "event[52] task_quantum_expired" \
+  "event[53] task_dispatched" \
+  "event[54] task_result_submitted" \
+  "event[55] task_completed" \
+  "event[56] task_dispatched" \
+  "event[57] task_result_submitted" \
+  "event[58] task_completed" \
+  "event[59] task_queued" \
+  "event[60] task_dispatched" \
+  "event[61] task_quantum_expired" \
+  "event[62] task_dispatched" \
+  "event[63] task_result_inspected" \
+  "event[64] task_verified" \
+  "event[65] intent_fulfilled" \
+  "event[66] task_completed" \
+  "event[67] device_event_raised" \
+  "event[68] device_event_delivered" \
+  "event[69] driver_invocation_queued" \
+  "event[70] driver_invocation_dispatched" \
+  "event[71] driver_invocation_ticked" \
+  "event[72] device_event_acknowledged" \
+  "event[73] driver_command_submitted" \
+  "event[74] driver_command_dispatched" \
+  "event[75] driver_command_completed" \
+  "event[76] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -117,7 +142,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 57 ]]; then
-  printf 'expected exactly 57 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 76 ]]; then
+  printf 'expected exactly 76 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

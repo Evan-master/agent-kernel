@@ -10,6 +10,11 @@ mod call_flow;
 mod runtime;
 mod storage;
 mod validation;
+mod verifier_call_flow;
 
 pub(super) use call_flow::{AcknowledgedTaskResultCpu, CompletedAgentCpu, RequestedTaskResultCpu};
-pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu};
+pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu};
+pub(super) use verifier_call_flow::{
+    AcknowledgedTaskInspectionCpu, AcknowledgedTaskVerificationCpu, CompletedVerifierCpu,
+    RequestedTaskInspectionCpu, RequestedTaskVerificationCpu,
+};

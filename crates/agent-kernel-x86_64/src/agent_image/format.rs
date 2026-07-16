@@ -2,7 +2,8 @@
 
 use super::{
     AgentImageLoadError, AGENT_IMAGE_ARCH_X86_64, AGENT_IMAGE_FORMAT_VERSION,
-    AGENT_IMAGE_HEADER_BYTES, AGENT_IMAGE_KIND_WORKER, AGENT_IMAGE_MAGIC, MAX_AGENT_CODE_BYTES,
+    AGENT_IMAGE_HEADER_BYTES, AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
+    AGENT_IMAGE_MAGIC, MAX_AGENT_CODE_BYTES,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -78,7 +79,10 @@ impl<'a> AgentImageCapsule<'a> {
         if architecture != AGENT_IMAGE_ARCH_X86_64 {
             return Err(AgentImageLoadError::UnsupportedArchitecture);
         }
-        if image_kind != AGENT_IMAGE_KIND_WORKER {
+        if !matches!(
+            image_kind,
+            AGENT_IMAGE_KIND_WORKER | AGENT_IMAGE_KIND_VERIFIER
+        ) {
             return Err(AgentImageLoadError::UnsupportedImageKind);
         }
         if flags != 0 {
