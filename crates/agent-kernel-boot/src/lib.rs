@@ -79,6 +79,7 @@ pub struct BootedKernel<
     const DRIVER_INVOCATIONS: usize = 0,
     const MESSAGES: usize = 0,
     const WAITERS: usize = 0,
+    const FAULTS: usize = 0,
 > {
     kernel: AgentKernel<
         AGENTS,
@@ -94,7 +95,7 @@ pub struct BootedKernel<
         MESSAGES,
         0,
         0,
-        0,
+        FAULTS,
         0,
         0,
         WAITERS,
@@ -124,6 +125,7 @@ impl<
         const DRIVER_INVOCATIONS: usize,
         const MESSAGES: usize,
         const WAITERS: usize,
+        const FAULTS: usize,
     >
     BootedKernel<
         AGENTS,
@@ -142,6 +144,7 @@ impl<
         DRIVER_INVOCATIONS,
         MESSAGES,
         WAITERS,
+        FAULTS,
     >
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
@@ -227,7 +230,7 @@ impl<
         MESSAGES,
         0,
         0,
-        0,
+        FAULTS,
         0,
         0,
         WAITERS,
@@ -256,7 +259,7 @@ impl<
         MESSAGES,
         0,
         0,
-        0,
+        FAULTS,
         0,
         0,
         WAITERS,

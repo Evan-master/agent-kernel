@@ -7,17 +7,18 @@
 mod calls;
 mod state;
 
-use agent_kernel_core::{AgentId, CapabilityId, EventKind};
+use agent_kernel_core::{AgentId, CapabilityId, EventKind, FaultKind};
 use agent_kernel_x86_64::native_runtime::NativeAgentRuntimeStore;
 
 use crate::{
-    agent_cpu::{AgentRunOutcome, CompletedAgentCpu},
+    agent_cpu::{AgentRunOutcome, CompletedAgentCpu, FaultedAgentCpu},
     native_agent_runtime::{NativeAgentContext, NativeAgentRuntime},
     X86BootedKernel,
 };
 
 const NATIVE_TASK_QUANTUM: u64 = 1;
 const COMPLETED_AGENT_CAPACITY: usize = 3;
+const FAULTED_AGENT_CAPACITY: usize = 1;
 
 #[derive(Copy, Clone)]
 pub(crate) struct NativeVerifyAuthority {
@@ -27,6 +28,7 @@ pub(crate) struct NativeVerifyAuthority {
 
 pub(crate) struct NativeExecutionReport {
     completed: NativeAgentRuntimeStore<CompletedAgentCpu, COMPLETED_AGENT_CAPACITY>,
+    faulted: NativeAgentRuntimeStore<FaultedAgentCpu, FAULTED_AGENT_CAPACITY>,
 }
 
 #[derive(Copy, Clone, Default)]
@@ -39,6 +41,7 @@ pub(crate) struct NativeRuntimeEvidence {
     quantum_expiries: u8,
     returning_quantum_expiries: u8,
     returning_quantum_generation: u8,
+    agent_faults: u8,
 }
 
 pub(crate) fn run_until_idle(
@@ -55,8 +58,14 @@ pub(crate) fn run_until_idle(
         match dispatched.into_context() {
             NativeAgentContext::Prepared(cpu) => {
                 evidence.prepared = evidence.prepared.checked_add(1)?;
-                let preempted = cpu.run_until_preempted()?;
-                expire_quantum(booted, runtime, evidence, preempted)?;
+                run_outcome(
+                    booted,
+                    runtime,
+                    report,
+                    evidence,
+                    verify_authority,
+                    cpu.run_until_boundary()?,
+                )?;
             }
             NativeAgentContext::Preempted(cpu) => {
                 evidence.preempted = evidence.preempted.checked_add(1)?;
@@ -113,7 +122,47 @@ fn run_outcome(
             calls::run(booted, runtime, report, evidence, verify_authority, pending)
         }
         AgentRunOutcome::Preempted(cpu) => expire_quantum(booted, runtime, evidence, cpu),
+        AgentRunOutcome::Fault(cpu) => contain_fault(booted, report, evidence, cpu),
     }
+}
+
+pub(super) fn contain_fault(
+    booted: &mut X86BootedKernel,
+    report: &mut NativeExecutionReport,
+    evidence: &mut NativeRuntimeEvidence,
+    cpu: FaultedAgentCpu,
+) -> Option<()> {
+    let context = cpu.context();
+    let fault_kind = FaultKind::ExecutionTrap;
+    let fault_detail = u64::from(cpu.fault().vector());
+    let agent_faults = evidence.agent_faults.checked_add(1)?;
+    if !state::running(booted, context) {
+        return None;
+    }
+    let fault = booted
+        .kernel_mut()
+        .sys_fault_task(context.agent(), context.task(), fault_kind, fault_detail)
+        .ok()?;
+    let record = booted.kernel().faults().last()?;
+    let event = booted.kernel().events().last()?;
+    if record.id != fault
+        || record.agent != context.agent()
+        || record.task != context.task()
+        || record.kind != fault_kind
+        || record.detail != fault_detail
+        || event.kind != EventKind::TaskFaulted
+        || event.agent != context.agent()
+        || event.task != Some(context.task())
+        || event.fault != Some(fault)
+        || event.fault_kind != Some(fault_kind)
+        || event.fault_detail != Some(fault_detail)
+        || !state::faulted(booted, context)
+    {
+        return None;
+    }
+    report.record_faulted(cpu)?;
+    evidence.agent_faults = agent_faults;
+    Some(())
 }
 
 pub(super) fn expire_quantum(
@@ -181,6 +230,7 @@ impl NativeExecutionReport {
     pub(crate) fn new() -> Self {
         Self {
             completed: NativeAgentRuntimeStore::new(),
+            faulted: NativeAgentRuntimeStore::new(),
         }
     }
 
@@ -193,20 +243,34 @@ impl NativeExecutionReport {
         self.completed.get(agent).ok()
     }
 
+    fn record_faulted(&mut self, cpu: FaultedAgentCpu) -> Option<()> {
+        let agent = cpu.context().agent();
+        self.faulted.insert(agent, cpu).ok()
+    }
+
+    pub(crate) fn faulted(&self, agent: AgentId) -> Option<&FaultedAgentCpu> {
+        self.faulted.get(agent).ok()
+    }
+
     pub(crate) const fn len(&self) -> usize {
         self.completed.len()
+    }
+
+    pub(crate) const fn faulted_len(&self) -> usize {
+        self.faulted.len()
     }
 }
 
 impl NativeRuntimeEvidence {
     pub(crate) const fn proves_current_boot(self) -> bool {
-        self.dispatches == 9
-            && self.prepared == 3
-            && self.preempted == 4
+        self.dispatches == 11
+            && self.prepared == 4
+            && self.preempted == 5
             && self.waiting == 1
             && self.yielded == 1
-            && self.quantum_expiries == 4
+            && self.quantum_expiries == 5
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
+            && self.agent_faults == 1
     }
 }

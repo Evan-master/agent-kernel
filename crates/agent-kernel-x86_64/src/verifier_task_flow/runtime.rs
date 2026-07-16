@@ -12,8 +12,13 @@ pub(super) fn queue(
     booted: &mut X86BootedKernel,
     verifier: VerifierTask,
     workers: &CompletedWorkerTasks,
+    predecessor: Option<RunQueueEntry>,
 ) -> Option<()> {
-    if !workers.both_completed(booted) || !booted.kernel().run_queue().is_empty() {
+    let existing_queue_valid = match predecessor {
+        Some(entry) => booted.kernel().run_queue() == [entry],
+        None => booted.kernel().run_queue().is_empty(),
+    };
+    if !workers.both_completed(booted) || !existing_queue_valid {
         return None;
     }
     let event = booted
@@ -23,11 +28,25 @@ pub(super) fn queue(
     (event.kind == EventKind::TaskQueued
         && event.agent == verifier.agent
         && event.task == Some(verifier.task)
-        && booted.kernel().run_queue()
-            == [RunQueueEntry {
-                task: verifier.task,
-                agent: verifier.agent,
-            }])
+        && match predecessor {
+            Some(entry) => {
+                booted.kernel().run_queue()
+                    == [
+                        entry,
+                        RunQueueEntry {
+                            task: verifier.task,
+                            agent: verifier.agent,
+                        },
+                    ]
+            }
+            None => {
+                booted.kernel().run_queue()
+                    == [RunQueueEntry {
+                        task: verifier.task,
+                        agent: verifier.agent,
+                    }]
+            }
+        })
     .then_some(())
 }
 

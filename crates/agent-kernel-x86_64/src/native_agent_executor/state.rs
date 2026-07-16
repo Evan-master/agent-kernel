@@ -96,6 +96,26 @@ pub(super) fn completed(booted: &X86BootedKernel, expected: AgentCallContext) ->
             if context.state == AgentExecutionState::Idle && context.task.is_none())
 }
 
+pub(super) fn faulted(booted: &X86BootedKernel, expected: AgentCallContext) -> bool {
+    let kernel = booted.kernel();
+    let task = kernel
+        .tasks()
+        .iter()
+        .find(|task| task.id == expected.task());
+    let context = kernel
+        .execution_contexts()
+        .iter()
+        .find(|context| context.agent == expected.agent());
+    matches!(task, Some(task)
+        if task.status == TaskStatus::Faulted
+            && task.assignee == Some(expected.agent())
+            && task.delegated_capability == Some(expected.capability())
+            && task.last_fault.is_some())
+        && matches!(context, Some(context)
+            if context.state == AgentExecutionState::Faulted
+                && context.task == Some(expected.task()))
+}
+
 pub(super) fn verified(booted: &X86BootedKernel, task: agent_kernel_core::TaskId) -> bool {
     matches!(
         booted.kernel().tasks().iter().find(|record| record.id == task),

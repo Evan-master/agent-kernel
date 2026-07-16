@@ -11,7 +11,10 @@ use core::{
     sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
 
-use agent_kernel_x86_64::interrupt::{IdtEntry, IdtPointer, PIC_MASTER_OFFSET};
+use agent_kernel_x86_64::{
+    interrupt::{IdtEntry, IdtPointer, PIC_MASTER_OFFSET},
+    native_runtime::INVALID_OPCODE_VECTOR,
+};
 
 const IDT_ENTRY_COUNT: usize = 256;
 const EXCEPTION_VECTOR_COUNT: usize = 32;
@@ -252,6 +255,24 @@ pub unsafe fn install_user_interrupt_gate(
                 handler_address(handler),
                 selector,
             ));
+    }
+    Some(())
+}
+
+pub unsafe fn install_agent_exception_gate(
+    vector: u8,
+    handler: unsafe extern "C" fn(),
+) -> Option<()> {
+    if IDT_READY.load(Ordering::Acquire) != 1 || vector != INVALID_OPCODE_VECTOR {
+        return None;
+    }
+    let selector = unsafe { current_code_selector() };
+    let entries = IDT.entries.get().cast::<IdtEntry>();
+    // SAFETY: the caller holds IF clear during this single-core gate update.
+    unsafe {
+        entries
+            .add(usize::from(vector))
+            .write_volatile(IdtEntry::interrupt_gate(handler_address(handler), selector));
     }
     Some(())
 }

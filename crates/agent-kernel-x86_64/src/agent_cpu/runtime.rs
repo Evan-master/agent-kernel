@@ -15,7 +15,11 @@ use agent_kernel_x86_64::{
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
 };
 
-use super::{assembly, native_call_session::AgentCallProgress, storage, validation};
+use super::{
+    assembly,
+    native_call_session::{AgentCallProgress, AgentRunOutcome},
+    storage, validation, FaultedAgentCpu,
+};
 use crate::{
     agent_memory::PreparedAgentMemory,
     exception_runtime, pit_timer,
@@ -55,6 +59,10 @@ impl AgentCpuRuntime {
         // SAFETY: installation holds IF clear and writes the one bounded DPL3
         // Agent-call gate used by every context on this boot CPU.
         unsafe {
+            exception_runtime::install_agent_exception_gate(
+                agent_kernel_x86_64::native_runtime::INVALID_OPCODE_VECTOR,
+                assembly::agent_kernel_agent_invalid_opcode_stub,
+            )?;
             exception_runtime::install_user_interrupt_gate(
                 AGENT_CALL_VECTOR,
                 assembly::agent_kernel_agent_call_stub,
@@ -91,7 +99,7 @@ impl PreparedAgentCpu {
         self.context
     }
 
-    pub(crate) fn run_until_preempted(self) -> Option<PreemptedAgentCpu> {
+    pub(crate) fn run_until_boundary(self) -> Option<AgentRunOutcome> {
         let roots = self.memory.roots();
         storage::begin_dispatch(roots)?;
         pit_timer::arm(assembly::agent_kernel_agent_timer_irq_stub)?;
@@ -110,13 +118,27 @@ impl PreparedAgentCpu {
         }
         pit_timer::disarm();
 
-        PreemptedAgentCpu::capture(
-            self.memory,
-            self.runtime,
-            self.context,
-            AgentCallProgress::new(),
-            true,
-        )
+        match storage::run_boundary()? {
+            NativeRunBoundary::QuantumExpired => {
+                Some(AgentRunOutcome::Preempted(PreemptedAgentCpu::capture(
+                    self.memory,
+                    self.runtime,
+                    self.context,
+                    AgentCallProgress::new(),
+                    true,
+                )?))
+            }
+            NativeRunBoundary::AgentFault(fault) => {
+                Some(AgentRunOutcome::Fault(FaultedAgentCpu::capture(
+                    self.memory,
+                    self.runtime,
+                    self.context,
+                    AgentCallProgress::new(),
+                    fault,
+                )?))
+            }
+            NativeRunBoundary::AgentCall => None,
+        }
     }
 }
 

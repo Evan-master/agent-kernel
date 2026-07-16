@@ -6,15 +6,22 @@
 
 use core::arch::global_asm;
 
-use agent_kernel_x86_64::context::PRIVILEGE_INTERRUPT_RIP_OFFSET;
+use agent_kernel_x86_64::{
+    context::PRIVILEGE_INTERRUPT_RIP_OFFSET, native_runtime::INVALID_OPCODE_VECTOR,
+};
 
 use crate::pic;
+
+const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX: usize = 16;
 
 global_asm!(
     r#"
     .section .text.agent_kernel_cpu_context,"ax",@progbits
     .macro agent_kernel_push_integer_frame
     push rax
+    agent_kernel_push_integer_frame_after_rax
+    .endm
+    .macro agent_kernel_push_integer_frame_after_rax
     push rbx
     push rcx
     push rdx
@@ -150,6 +157,30 @@ agent_kernel_agent_call_stub:
     mov byte ptr [rip + {call_seen}], 1
     agent_kernel_restore_host
     .size agent_kernel_agent_call_stub, . - agent_kernel_agent_call_stub
+    .global agent_kernel_agent_invalid_opcode_stub
+    .type agent_kernel_agent_invalid_opcode_stub,@function
+agent_kernel_agent_invalid_opcode_stub:
+    push rax
+    mov rax, qword ptr [rsp + {origin_cs_offset}]
+    and eax, 3
+    cmp eax, 3
+    jne .Lagent_kernel_invalid_opcode_fatal
+    agent_kernel_push_integer_frame_after_rax
+    mov r10, cr3
+    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov cr3, rax
+    mov qword ptr [rip + {fault_cr3}], r10
+    mov qword ptr [rip + {fault_rsp}], rsp
+    mov rax, qword ptr [rsp + {rip_offset}]
+    mov qword ptr [rip + {fault_rip}], rax
+    mov byte ptr [rip + {fault_vector}], {invalid_opcode_vector}
+    inc byte ptr [rip + {fault_count}]
+    mov byte ptr [rip + {fault_seen}], 1
+    agent_kernel_restore_host
+.Lagent_kernel_invalid_opcode_fatal:
+    pop rax
+    jmp agent_kernel_exception_6
+    .size agent_kernel_agent_invalid_opcode_stub, . - agent_kernel_agent_invalid_opcode_stub
 "#,
     interrupt_rsp = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP,
     interrupt_rip = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP,
@@ -163,8 +194,16 @@ agent_kernel_agent_call_stub:
     call_count = sym super::storage::AGENT_KERNEL_AGENT_CALL_COUNT,
     call_seen = sym super::storage::AGENT_KERNEL_AGENT_CALL_SEEN,
     call_cr3 = sym super::storage::AGENT_KERNEL_AGENT_CALL_CR3,
+    fault_rsp = sym super::storage::AGENT_KERNEL_AGENT_FAULT_RSP,
+    fault_rip = sym super::storage::AGENT_KERNEL_AGENT_FAULT_RIP,
+    fault_cr3 = sym super::storage::AGENT_KERNEL_AGENT_FAULT_CR3,
+    fault_count = sym super::storage::AGENT_KERNEL_AGENT_FAULT_COUNT,
+    fault_seen = sym super::storage::AGENT_KERNEL_AGENT_FAULT_SEEN,
+    fault_vector = sym super::storage::AGENT_KERNEL_AGENT_FAULT_VECTOR,
     host_context = sym super::storage::AGENT_KERNEL_HOST_CONTEXT_RSP,
     rip_offset = const PRIVILEGE_INTERRUPT_RIP_OFFSET,
+    origin_cs_offset = const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX,
+    invalid_opcode_vector = const INVALID_OPCODE_VECTOR,
     pic_master_data = const pic::PIC_MASTER_DATA,
     pic_master_command = const pic::PIC_MASTER_COMMAND,
     pic_eoi = const pic::PIC_EOI,
@@ -182,6 +221,7 @@ unsafe extern "C" {
     fn agent_kernel_resume_interrupted_user(host_rsp: *mut u64, interrupt_rsp: u64, agent_cr3: u64);
     pub(super) fn agent_kernel_agent_timer_irq_stub();
     pub(super) fn agent_kernel_agent_call_stub();
+    pub(super) fn agent_kernel_agent_invalid_opcode_stub();
 }
 
 pub(super) unsafe fn enter_user(

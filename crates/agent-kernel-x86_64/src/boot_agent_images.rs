@@ -1,8 +1,9 @@
 //! Immutable native Agent capsules used by the BIOS boot proof.
 //!
-//! This x86 boot-layer module owns two Worker payloads and one Verifier payload.
-//! The precomputed digests model manifest input; the runtime loader recomputes
-//! each digest before mapping a private code page.
+//! This x86 boot-layer module owns two normal Worker payloads, one faulting
+//! Worker payload, and one Verifier payload. The precomputed digests model
+//! manifest input; the runtime loader recomputes each digest before mapping a
+//! private code page.
 
 use agent_kernel_core::{AgentImageDigest, TaskResult};
 use agent_kernel_x86_64::agent_call::AgentCallOperation;
@@ -44,6 +45,7 @@ const VERIFIER_DESCRIBE_RETURN_OFFSET: u32 = 46;
 const VERIFIER_INSPECTION_RETURN_OFFSET: u32 = 64;
 const VERIFIER_VERIFICATION_RETURN_OFFSET: u32 = 100;
 const VERIFIER_COMPLETION_RETURN_OFFSET: u32 = 109;
+pub(super) const FAULT_WORKER_INVALID_OPCODE_OFFSET: u32 = 16;
 
 const WORKER_A_CAPSULE: [u8; 180] = [
     b'A', b'G', b'N', b'T', b'I', b'M', b'G', 0, // magic
@@ -92,6 +94,15 @@ const VERIFIER_CAPSULE: [u8; 143] = [
     0x31, 0xdb, 0xcd, 0x90, 0xb9, 0x03, 0x00, 0x00, 0x00, 0x31, 0xd2, 0xcd, 0x90, 0xeb, 0xfe,
 ];
 
+const FAULT_WORKER_CAPSULE: [u8; 50] = [
+    b'A', b'G', b'N', b'T', b'I', b'M', b'G', 0, // magic
+    1, 0, 1, 0, 1, 0, 0, 0, // format, architecture, kind, flags
+    1, 0, 1, 0, 0, 0, 0, 0, // ABI, entry version, entry offset
+    18, 0, 0, 0, 0, 0, 0, 0, // code length, reserved
+    0x48, 0xb8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x80, 0x78, 0x01, 0x01, 0x72, 0xfa,
+    0x0f, 0x0b,
+];
+
 const WORKER_A_DIGEST: AgentImageDigest = AgentImageDigest::new([
     0xf6, 0xbc, 0x58, 0xf1, 0xab, 0xec, 0xfe, 0xdd, 0xe8, 0xab, 0xcc, 0x0b, 0xb5, 0xfb, 0x3d, 0x4a,
     0x9b, 0x4f, 0x2e, 0xe3, 0xff, 0x32, 0x03, 0xc0, 0xcf, 0xa0, 0xad, 0xd3, 0xdb, 0x27, 0xdc, 0xe8,
@@ -105,6 +116,11 @@ const WORKER_B_DIGEST: AgentImageDigest = AgentImageDigest::new([
 const VERIFIER_DIGEST: AgentImageDigest = AgentImageDigest::new([
     0x92, 0x6f, 0x98, 0x1e, 0x71, 0xd6, 0x60, 0xcd, 0x0c, 0x10, 0xbc, 0x07, 0x1a, 0x5b, 0xb3, 0xbd,
     0x1d, 0x0d, 0x56, 0x67, 0xed, 0xe7, 0xd3, 0x43, 0x08, 0x4f, 0xaa, 0xb8, 0xad, 0x25, 0x2e, 0x0a,
+]);
+
+const FAULT_WORKER_DIGEST: AgentImageDigest = AgentImageDigest::new([
+    0x70, 0xd5, 0xa3, 0xfd, 0x08, 0xf7, 0x30, 0xe9, 0xcc, 0xd7, 0x76, 0xa6, 0x7a, 0xc5, 0xa5, 0xf8,
+    0xaf, 0x34, 0xdd, 0xcc, 0x61, 0x80, 0x5e, 0x9a, 0x3c, 0x5e, 0x50, 0xf8, 0x9b, 0x56, 0x5f, 0x47,
 ]);
 
 #[derive(Copy, Clone)]
@@ -124,6 +140,13 @@ pub(super) struct BootVerifierImage {
     nonce: u64,
     target: u64,
     result: TaskResult,
+}
+
+#[derive(Copy, Clone)]
+pub(super) struct BootFaultWorkerImage {
+    bytes: &'static [u8],
+    digest: AgentImageDigest,
+    invalid_opcode_offset: u32,
 }
 
 impl BootAgentImage {
@@ -187,6 +210,20 @@ impl BootVerifierImage {
     }
 }
 
+impl BootFaultWorkerImage {
+    pub(super) const fn bytes(self) -> &'static [u8] {
+        self.bytes
+    }
+
+    pub(super) const fn digest(self) -> AgentImageDigest {
+        self.digest
+    }
+
+    pub(super) const fn invalid_opcode_offset(self) -> u32 {
+        self.invalid_opcode_offset
+    }
+}
+
 pub(super) const fn worker_a() -> BootAgentImage {
     BootAgentImage {
         bytes: &WORKER_A_CAPSULE,
@@ -216,5 +253,13 @@ pub(super) const fn verifier() -> BootVerifierImage {
         nonce: VERIFIER_NONCE,
         target: 1,
         result: WORKER_A_RESULT,
+    }
+}
+
+pub(super) const fn fault_worker() -> BootFaultWorkerImage {
+    BootFaultWorkerImage {
+        bytes: &FAULT_WORKER_CAPSULE,
+        digest: FAULT_WORKER_DIGEST,
+        invalid_opcode_offset: FAULT_WORKER_INVALID_OPCODE_OFFSET,
     }
 }

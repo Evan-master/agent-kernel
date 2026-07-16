@@ -6,11 +6,13 @@
 
 mod assembly;
 mod call;
+mod fault;
 mod native_call_session;
 mod runtime;
 mod storage;
 mod validation;
 
+pub(super) use fault::FaultedAgentCpu;
 pub(super) use native_call_session::{
     AgentRunOutcome, CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu,
 };

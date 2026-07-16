@@ -1,7 +1,7 @@
 use core::mem::{offset_of, size_of};
 
 use agent_kernel_x86_64::{
-    context::PrivilegeInterruptStackFrame,
+    context::{PrivilegeInterruptStackFrame, PRIVILEGE_INTERRUPT_CS_OFFSET},
     interrupt::{IdtEntry, AGENT_CALL_VECTOR, IDT_USER_INTERRUPT_GATE_OPTIONS},
     privilege::{
         gdt_entries, tss_descriptor, GdtPointer, TaskStateSegment64, GDT_ENTRY_COUNT,
@@ -75,6 +75,7 @@ fn privilege_interrupt_frame_matches_hardware_ring_transition() {
     assert_eq!(offset_of!(PrivilegeInterruptStackFrame, rax), 112);
     assert_eq!(offset_of!(PrivilegeInterruptStackFrame, rip), 120);
     assert_eq!(offset_of!(PrivilegeInterruptStackFrame, cs), 128);
+    assert_eq!(PRIVILEGE_INTERRUPT_CS_OFFSET, 128);
     assert_eq!(offset_of!(PrivilegeInterruptStackFrame, rflags), 136);
     assert_eq!(offset_of!(PrivilegeInterruptStackFrame, user_rsp), 144);
     assert_eq!(offset_of!(PrivilegeInterruptStackFrame, user_ss), 152);

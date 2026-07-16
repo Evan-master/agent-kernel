@@ -8,7 +8,7 @@ mod runtime;
 mod setup;
 
 use agent_kernel_core::{
-    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId,
+    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, RunQueueEntry, TaskId,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
@@ -73,8 +73,9 @@ impl PreparedVerifierFlow {
         &self,
         booted: &mut X86BootedKernel,
         workers: &CompletedWorkerTasks,
+        predecessor: Option<RunQueueEntry>,
     ) -> Option<()> {
-        runtime::queue(booted, self.verifier, workers)
+        runtime::queue(booted, self.verifier, workers, predecessor)
     }
 
     pub(super) fn completed_after_runtime(

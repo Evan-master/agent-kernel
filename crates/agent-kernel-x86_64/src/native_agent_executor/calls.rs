@@ -76,6 +76,10 @@ pub(super) fn run(
                 super::expire_quantum(booted, runtime, evidence, cpu)?;
                 return Some(());
             }
+            AgentRunOutcome::Fault(cpu) => {
+                super::contain_fault(booted, report, evidence, cpu)?;
+                return Some(());
+            }
         }
     }
 }

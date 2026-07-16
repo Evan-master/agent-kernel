@@ -13,7 +13,7 @@ use agent_kernel_x86_64::{
     native_runtime::NativeRunBoundary,
 };
 
-use super::{call, runtime::AgentCpuRuntime, storage, PreemptedAgentCpu};
+use super::{call, runtime::AgentCpuRuntime, storage, FaultedAgentCpu, PreemptedAgentCpu};
 use crate::{agent_memory::PreparedAgentMemory, pit_timer};
 
 pub(super) const MAX_AGENT_CALLS: usize = 8;
@@ -53,6 +53,7 @@ pub(crate) struct CompletedAgentCpu {
 pub(crate) enum AgentRunOutcome {
     Call(PendingAgentCallCpu),
     Preempted(PreemptedAgentCpu),
+    Fault(FaultedAgentCpu),
 }
 
 impl PreemptedAgentCpu {
@@ -126,6 +127,15 @@ impl AgentCallSession {
                     self.context,
                     self.progress,
                     false,
+                )?))
+            }
+            NativeRunBoundary::AgentFault(fault) => {
+                Some(AgentRunOutcome::Fault(FaultedAgentCpu::capture(
+                    self.memory,
+                    self.runtime,
+                    self.context,
+                    self.progress,
+                    fault,
                 )?))
             }
         }

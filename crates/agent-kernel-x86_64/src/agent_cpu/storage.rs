@@ -101,6 +101,30 @@ pub(super) static AGENT_KERNEL_AGENT_CALL_SEEN: AtomicU8 = AtomicU8::new(0);
 #[used]
 pub(super) static AGENT_KERNEL_AGENT_CALL_CR3: AtomicU64 = AtomicU64::new(0);
 
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_RSP: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_RIP: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_CR3: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_COUNT: AtomicU8 = AtomicU8::new(0);
+
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_SEEN: AtomicU8 = AtomicU8::new(0);
+
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_VECTOR: AtomicU8 = AtomicU8::new(0);
+
 static AGENT_KERNEL_AGENT_RUNTIME_READY: AtomicU8 = AtomicU8::new(0);
 
 pub(super) fn install(roots: AddressSpaceRoots) -> Option<()> {
@@ -157,9 +181,12 @@ pub(super) fn run_boundary() -> Option<NativeRunBoundary> {
     NativeRunBoundaryEvidence::new(
         AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire),
         AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire),
+        AGENT_KERNEL_AGENT_FAULT_COUNT.load(Ordering::Acquire),
         AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) == 1,
         AGENT_KERNEL_AGENT_IRQ_SEEN.load(Ordering::Acquire) == 1,
         AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) == 1,
+        AGENT_KERNEL_AGENT_FAULT_SEEN.load(Ordering::Acquire) == 1,
+        AGENT_KERNEL_AGENT_FAULT_VECTOR.load(Ordering::Acquire),
     )
     .classify()
     .ok()
@@ -178,4 +205,10 @@ fn reset_mailbox() {
     AGENT_KERNEL_AGENT_CALL_CR3.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_CALL_SEEN.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_RSP.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_RIP.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_CR3.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_COUNT.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_SEEN.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_VECTOR.store(0, Ordering::Release);
 }

@@ -73,6 +73,8 @@ pub struct PrivilegeInterruptStackFrame {
 
 pub const PRIVILEGE_INTERRUPT_RIP_OFFSET: usize =
     core::mem::offset_of!(PrivilegeInterruptStackFrame, rip);
+pub const PRIVILEGE_INTERRUPT_CS_OFFSET: usize =
+    core::mem::offset_of!(PrivilegeInterruptStackFrame, cs);
 pub const PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES: usize =
     core::mem::size_of::<PrivilegeInterruptStackFrame>();
 

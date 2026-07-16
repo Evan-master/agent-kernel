@@ -3,11 +3,13 @@
 //! This module binds immutable Capsule contracts to terminal transcripts while
 //! the executor routes operations independently of Worker or Verifier roles.
 
-use agent_kernel_x86_64::agent_call::AgentCallContext;
+use agent_kernel_core::EventKind;
+use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentFault};
 
 use crate::{
     agent_cpu::CompletedAgentCpu,
-    boot_agent_images::{BootAgentImage, BootVerifierImage},
+    boot_agent_images::{BootAgentImage, BootFaultWorkerImage, BootVerifierImage},
+    fault_task_flow::{PreparedFaultTaskFlow, FAULT_WORKER},
     native_agent_executor::{
         self, NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority,
     },
@@ -25,6 +27,9 @@ pub(super) struct RuntimeLoopPlan {
     worker_contexts: [AgentCallContext; 2],
     verifier_image: BootVerifierImage,
     verifier_context: AgentCallContext,
+    fault: PreparedFaultTaskFlow,
+    fault_image: BootFaultWorkerImage,
+    fault_context: AgentCallContext,
 }
 
 impl RuntimeLoopPlan {
@@ -35,6 +40,9 @@ impl RuntimeLoopPlan {
         worker_contexts: [AgentCallContext; 2],
         verifier_image: BootVerifierImage,
         verifier_context: AgentCallContext,
+        fault: PreparedFaultTaskFlow,
+        fault_image: BootFaultWorkerImage,
+        fault_context: AgentCallContext,
     ) -> Self {
         Self {
             workers,
@@ -43,6 +51,9 @@ impl RuntimeLoopPlan {
             worker_contexts,
             verifier_image,
             verifier_context,
+            fault,
+            fault_image,
+            fault_context,
         }
     }
 }
@@ -59,6 +70,9 @@ pub(super) fn run(
         worker_contexts,
         verifier_image,
         verifier_context,
+        fault,
+        fault_image,
+        fault_context,
     } = plan;
     let authority = verifier.runtime_authority()?;
     let mut report = NativeExecutionReport::new();
@@ -71,8 +85,9 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 1
+    if runtime.len() != 2
         || report.len() != 2
+        || report.faulted_len() != 0
         || !worker_evidence_valid(&report, worker_images, worker_contexts, authority)
     {
         return None;
@@ -80,7 +95,12 @@ pub(super) fn run(
     let completed_workers = workers.completed_after_runtime(booted)?;
     write_worker_markers();
 
-    verifier.queue_after_workers_for_runtime(booted, &completed_workers)?;
+    fault.queue_for_runtime(booted)?;
+    verifier.queue_after_workers_for_runtime(
+        booted,
+        &completed_workers,
+        Some(fault.run_queue_entry()),
+    )?;
     native_agent_executor::run_until_idle(
         booted,
         runtime,
@@ -90,7 +110,9 @@ pub(super) fn run(
     )?;
     if !runtime.is_empty()
         || report.len() != 3
+        || report.faulted_len() != 1
         || !evidence.proves_current_boot()
+        || !fault_evidence_valid(booted, &report, &fault, fault_image, fault_context)
         || !verifier_evidence_valid(
             &report,
             verifier_image,
@@ -159,6 +181,35 @@ fn verifier_evidence_valid(
         && subject.result() == image.result()
 }
 
+fn fault_evidence_valid(
+    booted: &X86BootedKernel,
+    report: &NativeExecutionReport,
+    flow: &PreparedFaultTaskFlow,
+    image: BootFaultWorkerImage,
+    context: AgentCallContext,
+) -> bool {
+    let Some(faulted) = report.faulted(FAULT_WORKER) else {
+        return false;
+    };
+    let fault_event = booted
+        .kernel()
+        .events()
+        .iter()
+        .position(|event| event.kind == EventKind::TaskFaulted && event.agent == FAULT_WORKER);
+    let verifier_continuation = booted
+        .kernel()
+        .events()
+        .iter()
+        .position(|event| event.kind == EventKind::TaskResultInspected);
+    faulted.context() == context
+        && faulted.fault() == NativeAgentFault::InvalidOpcode
+        && faulted.fault_offset() == Some(image.invalid_opcode_offset())
+        && !faulted.had_call_progress()
+        && faulted.physical_quantum_generation() == 1
+        && flow.faulted_after_runtime(booted)
+        && matches!((fault_event, verifier_continuation), (Some(fault), Some(next)) if fault < next)
+}
+
 fn write_worker_markers() {
     serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
@@ -187,6 +238,7 @@ fn write_verifier_markers() {
     serial_write_line("AGENT_KERNEL_AGENT_CALL_VERIFY_OK");
     serial_write_line("AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK");
     serial_write_line("AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK");
