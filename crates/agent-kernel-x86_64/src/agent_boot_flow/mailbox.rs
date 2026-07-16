@@ -55,7 +55,8 @@ pub(super) fn run(
     }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RECEIVE_WAIT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAIT_OK");
-    let Some((first_resumed_flow, dispatched_a)) = second_waiting_flow.dispatch_first(booted)
+    let Some((first_resumed_flow, dispatched_a)) =
+        second_waiting_flow.dispatch_first(booted, runtime)
     else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
@@ -114,7 +115,7 @@ pub(super) fn run(
     }
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
     let Some((second_redispatched_flow, dispatched_b)) =
-        first_message_flow.complete_first_and_dispatch_second(booted, completed_a)
+        first_message_flow.complete_first_and_dispatch_second(booted, completed_a, runtime)
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     };

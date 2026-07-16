@@ -3,7 +3,7 @@
 //! This module belongs to `agent-kernel`. It exposes scheduler operations as
 //! boundary methods while keeping run queue mutation inside `agent-kernel-core`.
 
-use agent_kernel_core::{AgentId, Event, KernelError, RunQueueEntry, TaskId};
+use agent_kernel_core::{AgentId, Event, KernelError, RunQueueEntry, TaskDispatchPermit, TaskId};
 
 use crate::AgentKernel;
 
@@ -77,6 +77,20 @@ impl<
         quantum: u64,
     ) -> Result<RunQueueEntry, KernelError> {
         self.core.dispatch_next_ready_with_quantum(quantum)
+    }
+
+    pub fn sys_prepare_next_ready_dispatch_with_quantum(
+        &self,
+        quantum: u64,
+    ) -> Result<TaskDispatchPermit, KernelError> {
+        self.core.prepare_next_ready_dispatch_with_quantum(quantum)
+    }
+
+    pub fn sys_commit_ready_dispatch(
+        &mut self,
+        permit: TaskDispatchPermit,
+    ) -> Result<RunQueueEntry, KernelError> {
+        self.core.commit_ready_dispatch(permit)
     }
 
     pub fn sys_tick_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {

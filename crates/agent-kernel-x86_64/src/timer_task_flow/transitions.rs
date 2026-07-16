@@ -8,7 +8,7 @@ use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatu
 use super::{completed::task_valid as completed_task_valid, WorkerTask, TASK_QUANTUM};
 use crate::{
     agent_cpu::{CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, PreemptedAgentCpu},
-    native_agent_runtime::NativeAgentRuntime,
+    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
     X86BootedKernel,
 };
 
@@ -26,6 +26,7 @@ pub(super) fn expire_and_dispatch(
     next: WorkerTask,
     cpu: PreemptedAgentCpu,
     runtime: &mut NativeAgentRuntime,
+    next_kind: NativeAgentContextKind,
     next_prior_ticks: u64,
 ) -> Option<RunQueueEntry> {
     if cpu.tick_count() != 1 {
@@ -58,18 +59,11 @@ pub(super) fn expire_and_dispatch(
     if runtime.park_preempted(cpu).is_some() {
         return None;
     }
-    let dispatched = booted
-        .kernel_mut()
-        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
-        .ok()?;
-    if dispatched
-        != (RunQueueEntry {
-            task: next.task,
-            agent: next.agent,
-        })
-    {
-        return None;
-    }
+    let expected = RunQueueEntry {
+        task: next.task,
+        agent: next.agent,
+    };
+    let dispatched = runtime.commit_ready_dispatch(booted, TASK_QUANTUM, expected, next_kind)?;
     running_and_queue_valid(booted, next, running, next_prior_ticks, 1)?;
     Some(dispatched)
 }
@@ -79,6 +73,7 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     running: WorkerTask,
     next: WorkerTask,
     cpu: E,
+    runtime: &NativeAgentRuntime,
     next_prior_ticks: u64,
 ) -> Option<RunQueueEntry> {
     if !completion_evidence_valid(&cpu, running) {
@@ -102,18 +97,16 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     {
         return None;
     }
-    let dispatched = booted
-        .kernel_mut()
-        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
-        .ok()?;
-    if dispatched
-        != (RunQueueEntry {
-            task: next.task,
-            agent: next.agent,
-        })
-    {
-        return None;
-    }
+    let expected = RunQueueEntry {
+        task: next.task,
+        agent: next.agent,
+    };
+    let dispatched = runtime.commit_ready_dispatch(
+        booted,
+        TASK_QUANTUM,
+        expected,
+        NativeAgentContextKind::WaitingMailbox,
+    )?;
     running_after_completion_valid(booted, next, running, next_prior_ticks)?;
     Some(dispatched)
 }

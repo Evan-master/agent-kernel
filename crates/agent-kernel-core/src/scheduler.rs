@@ -73,47 +73,6 @@ impl<
         )
     }
 
-    pub fn dispatch_next(&mut self, agent: AgentId) -> Result<TaskId, KernelError> {
-        self.dispatch_next_with_quantum(agent, 1)
-    }
-
-    pub fn dispatch_next_with_quantum(
-        &mut self,
-        agent: AgentId,
-        quantum: u64,
-    ) -> Result<TaskId, KernelError> {
-        if quantum == 0 {
-            return Err(KernelError::TaskQuantumInvalid);
-        }
-        self.ensure_agent_active(agent)?;
-        if self.run_queue_len == 0 {
-            return Err(KernelError::RunQueueEmpty);
-        }
-
-        let entry = self.run_queue[0];
-        if entry.agent != agent {
-            return Err(KernelError::TaskNotRunnable);
-        }
-        self.dispatch_ready_entry(entry, quantum)?;
-        Ok(entry.task)
-    }
-
-    pub fn dispatch_next_ready_with_quantum(
-        &mut self,
-        quantum: u64,
-    ) -> Result<RunQueueEntry, KernelError> {
-        if quantum == 0 {
-            return Err(KernelError::TaskQuantumInvalid);
-        }
-        if self.run_queue_len == 0 {
-            return Err(KernelError::RunQueueEmpty);
-        }
-
-        let entry = self.run_queue[0];
-        self.dispatch_ready_entry(entry, quantum)?;
-        Ok(entry)
-    }
-
     pub fn yield_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         self.ensure_agent_active(agent)?;
         let task_record = self.find_task(task)?;
@@ -143,7 +102,11 @@ impl<
         &self.run_queue[..self.run_queue_len]
     }
 
-    fn find_runnable_task(&self, agent: AgentId, task: TaskId) -> Result<Task, KernelError> {
+    pub(crate) fn find_runnable_task(
+        &self,
+        agent: AgentId,
+        task: TaskId,
+    ) -> Result<Task, KernelError> {
         let task_record = self.find_task(task)?;
         if task_record.status != TaskStatus::Accepted || task_record.assignee != Some(agent) {
             return Err(KernelError::TaskNotRunnable);
@@ -167,48 +130,5 @@ impl<
         (self.event_len < EVENTS)
             .then_some(())
             .ok_or(KernelError::EventLogFull)
-    }
-
-    fn dispatch_ready_entry(
-        &mut self,
-        entry: RunQueueEntry,
-        quantum: u64,
-    ) -> Result<(), KernelError> {
-        self.ensure_agent_active(entry.agent)?;
-        self.ensure_execution_context_idle(entry.agent)?;
-        let task_record = self.find_runnable_task(entry.agent, entry.task)?;
-        self.ensure_agent_admitted_for_task(entry.agent, entry.task)?;
-        self.ensure_scheduler_event_capacity()?;
-
-        self.shift_run_queue_left();
-        let task = self.find_task_mut(entry.task)?;
-        task.status = TaskStatus::Running;
-        task.quantum_remaining = quantum;
-        self.set_execution_context_running(
-            entry.agent,
-            entry.task,
-            task_record.run_ticks,
-            quantum,
-        )?;
-        self.record_scheduler_event(
-            EventKind::TaskDispatched,
-            entry.agent,
-            entry.task,
-            task_record.resource,
-            None,
-            Some(quantum),
-        )?;
-        Ok(())
-    }
-
-    fn shift_run_queue_left(&mut self) {
-        let last = self.run_queue_len - 1;
-        let mut index = 0;
-        while index < last {
-            self.run_queue[index] = self.run_queue[index + 1];
-            index += 1;
-        }
-        self.run_queue[last] = RunQueueEntry::empty();
-        self.run_queue_len -= 1;
     }
 }

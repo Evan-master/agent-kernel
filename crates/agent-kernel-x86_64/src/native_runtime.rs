@@ -82,6 +82,13 @@ impl<T, const CAPACITY: usize> NativeAgentRuntimeStore<T, CAPACITY> {
         self.take(agent)
     }
 
+    pub fn contains_matching(&self, agent: AgentId, matches: impl FnOnce(&T) -> bool) -> bool {
+        match self.get(agent) {
+            Ok(value) => matches(value),
+            Err(_) => false,
+        }
+    }
+
     pub fn get(&self, agent: AgentId) -> Result<&T, NativeAgentRuntimeError> {
         self.slots[..self.len]
             .iter()

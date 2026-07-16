@@ -105,3 +105,21 @@ fn guarded_take_rejects_context_mismatch_without_transferring_ownership() {
     assert_eq!(store.take(AgentId::new(3)), Ok(OwnedRuntime("preempted-a")));
     assert!(store.is_empty());
 }
+
+#[test]
+fn matching_preflight_is_read_only_for_match_mismatch_and_missing_agent() {
+    let mut store = NativeAgentRuntimeStore::<OwnedRuntime, 2>::new();
+    store
+        .insert(AgentId::new(3), OwnedRuntime("prepared-a"))
+        .unwrap();
+    store
+        .insert(AgentId::new(4), OwnedRuntime("preempted-b"))
+        .unwrap();
+
+    assert!(store.contains_matching(AgentId::new(3), |runtime| runtime.0 == "prepared-a"));
+    assert!(!store.contains_matching(AgentId::new(4), |runtime| runtime.0 == "waiting-b"));
+    assert!(!store.contains_matching(AgentId::new(9), |_| true));
+    assert_eq!(store.len(), 2);
+    assert_eq!(store.take(AgentId::new(3)), Ok(OwnedRuntime("prepared-a")));
+    assert_eq!(store.take(AgentId::new(4)), Ok(OwnedRuntime("preempted-b")));
+}

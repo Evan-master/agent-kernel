@@ -11,7 +11,10 @@ use agent_kernel_core::{
 };
 
 use super::{WorkerTask, TASK_QUANTUM, WORKER_A, WORKER_B};
-use crate::X86BootedKernel;
+use crate::{
+    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
+    X86BootedKernel,
+};
 
 #[derive(Copy, Clone)]
 struct PendingWorker {
@@ -162,21 +165,20 @@ fn queued_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: Worke
 
 pub(super) fn dispatch_second(
     booted: &mut X86BootedKernel,
+    runtime: &NativeAgentRuntime,
     first: WorkerTask,
     second: WorkerTask,
 ) -> Option<RunQueueEntry> {
-    let dispatched = booted
-        .kernel_mut()
-        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
-        .ok()?;
-    if dispatched
-        != (RunQueueEntry {
-            task: second.task,
-            agent: second.agent,
-        })
-    {
-        return None;
-    }
+    let expected = RunQueueEntry {
+        task: second.task,
+        agent: second.agent,
+    };
+    let dispatched = runtime.commit_ready_dispatch(
+        booted,
+        TASK_QUANTUM,
+        expected,
+        NativeAgentContextKind::Prepared,
+    )?;
     let kernel = booted.kernel();
     let first_task = kernel.tasks().iter().find(|task| task.id == first.task)?;
     let first_context = kernel

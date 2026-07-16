@@ -43,9 +43,15 @@ impl SecondWaitingFlow {
     pub(crate) fn dispatch_first(
         self,
         booted: &mut X86BootedKernel,
+        runtime: &crate::native_agent_runtime::NativeAgentRuntime,
     ) -> Option<(FirstResumedFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched =
-            wait_transition::dispatch_sender(booted, self.first, self.second, self.waiter)?;
+        let dispatched = wait_transition::dispatch_sender(
+            booted,
+            self.first,
+            self.second,
+            self.waiter,
+            runtime,
+        )?;
         Some((
             FirstResumedFlow {
                 first: self.first,
@@ -106,9 +112,10 @@ impl FirstMessageSentFlow {
         self,
         booted: &mut X86BootedKernel,
         cpu: CompletedMailboxSenderCpu,
+        runtime: &crate::native_agent_runtime::NativeAgentRuntime,
     ) -> Option<(SecondRedispatchedFlow, agent_kernel_core::RunQueueEntry)> {
         let dispatched =
-            transitions::complete_and_dispatch(booted, self.first, self.second, cpu, 1)?;
+            transitions::complete_and_dispatch(booted, self.first, self.second, cpu, runtime, 1)?;
         Some((
             SecondRedispatchedFlow {
                 first: self.first,

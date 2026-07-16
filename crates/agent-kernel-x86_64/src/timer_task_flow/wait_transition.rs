@@ -12,6 +12,7 @@ use agent_kernel_core::{
 use super::{WorkerTask, TASK_QUANTUM};
 use crate::{
     agent_cpu::{RequestedMessageReceiveCpu, WaitingMessageReceiveCpu},
+    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
     X86BootedKernel,
 };
 
@@ -54,21 +55,22 @@ pub(super) fn dispatch_sender(
     sender: WorkerTask,
     receiver: WorkerTask,
     waiter: WaiterId,
+    runtime: &NativeAgentRuntime,
 ) -> Option<RunQueueEntry> {
     if !receiver_waiting_state_valid(booted, receiver, sender, waiter) {
         return None;
     }
-    let dispatched = booted
-        .kernel_mut()
-        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
-        .ok()?;
-    if dispatched
-        != (RunQueueEntry {
-            task: sender.task,
-            agent: sender.agent,
-        })
-        || !sender_running_receiver_waiting_state_valid(booted, sender, receiver, waiter)
-    {
+    let expected = RunQueueEntry {
+        task: sender.task,
+        agent: sender.agent,
+    };
+    let dispatched = runtime.commit_ready_dispatch(
+        booted,
+        TASK_QUANTUM,
+        expected,
+        NativeAgentContextKind::Preempted,
+    )?;
+    if !sender_running_receiver_waiting_state_valid(booted, sender, receiver, waiter) {
         return None;
     }
     Some(dispatched)

@@ -20,7 +20,9 @@ use agent_kernel_core::{
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use crate::{
-    agent_cpu::PreemptedAgentCpu, native_agent_runtime::NativeAgentRuntime, X86BootedKernel,
+    agent_cpu::PreemptedAgentCpu,
+    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
+    X86BootedKernel,
 };
 
 pub(super) use completed::{CompletedWorkerTasks, VerificationSubject};
@@ -149,8 +151,15 @@ impl TimerTaskFlow {
         cpu: PreemptedAgentCpu,
         runtime: &mut NativeAgentRuntime,
     ) -> Option<(FirstRunningFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched =
-            transitions::expire_and_dispatch(booted, self.second, self.first, cpu, runtime, 0)?;
+        let dispatched = transitions::expire_and_dispatch(
+            booted,
+            self.second,
+            self.first,
+            cpu,
+            runtime,
+            NativeAgentContextKind::Prepared,
+            0,
+        )?;
         Some((
             FirstRunningFlow {
                 first: self.first,
@@ -182,8 +191,9 @@ impl QueuedTimerTaskFlow {
     pub(super) fn dispatch_second(
         self,
         booted: &mut X86BootedKernel,
+        runtime: &NativeAgentRuntime,
     ) -> Option<(TimerTaskFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched = setup::dispatch_second(booted, self.first, self.second)?;
+        let dispatched = setup::dispatch_second(booted, runtime, self.first, self.second)?;
         Some((
             TimerTaskFlow {
                 first: self.first,
@@ -201,8 +211,15 @@ impl FirstRunningFlow {
         cpu: PreemptedAgentCpu,
         runtime: &mut NativeAgentRuntime,
     ) -> Option<(SecondResumedFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched =
-            transitions::expire_and_dispatch(booted, self.first, self.second, cpu, runtime, 1)?;
+        let dispatched = transitions::expire_and_dispatch(
+            booted,
+            self.first,
+            self.second,
+            cpu,
+            runtime,
+            NativeAgentContextKind::Preempted,
+            1,
+        )?;
         Some((
             SecondResumedFlow {
                 first: self.first,

@@ -115,7 +115,9 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     if native_runtime.len() != 3 {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     }
-    let Some((timer_flow, dispatched_b)) = queued_timer_flow.dispatch_second(&mut booted) else {
+    let Some((timer_flow, dispatched_b)) =
+        queued_timer_flow.dispatch_second(&mut booted, &native_runtime)
+    else {
         fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
     };
     let Some(agent_b_cpu) = native_runtime.take_prepared(dispatched_b) else {

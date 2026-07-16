@@ -6,8 +6,10 @@ use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatu
 
 use super::{VerifierTask, VERIFIER_QUANTUM};
 use crate::{
-    agent_cpu::PreemptedAgentCpu, native_agent_runtime::NativeAgentRuntime,
-    timer_task_flow::CompletedWorkerTasks, X86BootedKernel,
+    agent_cpu::PreemptedAgentCpu,
+    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
+    timer_task_flow::CompletedWorkerTasks,
+    X86BootedKernel,
 };
 
 pub(super) use result::{complete, inspect, verify};
@@ -16,6 +18,7 @@ pub(super) fn dispatch(
     booted: &mut X86BootedKernel,
     verifier: VerifierTask,
     workers: &CompletedWorkerTasks,
+    runtime: &NativeAgentRuntime,
 ) -> Option<RunQueueEntry> {
     if workers.subject() != verifier.subject
         || !workers.both_completed(booted)
@@ -37,18 +40,16 @@ pub(super) fn dispatch(
     {
         return None;
     }
-    let dispatched = booted
-        .kernel_mut()
-        .sys_dispatch_next_ready_with_quantum(VERIFIER_QUANTUM)
-        .ok()?;
-    if dispatched
-        != (RunQueueEntry {
-            task: verifier.task,
-            agent: verifier.agent,
-        })
-    {
-        return None;
-    }
+    let expected = RunQueueEntry {
+        task: verifier.task,
+        agent: verifier.agent,
+    };
+    let dispatched = runtime.commit_ready_dispatch(
+        booted,
+        VERIFIER_QUANTUM,
+        expected,
+        NativeAgentContextKind::Prepared,
+    )?;
     running_state_valid(booted, verifier, workers, 0, EventKind::TaskDispatched)?;
     Some(dispatched)
 }
@@ -78,18 +79,16 @@ pub(super) fn expire_and_redispatch(
     if runtime.park_preempted(cpu).is_some() {
         return None;
     }
-    let dispatched = booted
-        .kernel_mut()
-        .sys_dispatch_next_ready_with_quantum(VERIFIER_QUANTUM)
-        .ok()?;
-    if dispatched
-        != (RunQueueEntry {
-            task: verifier.task,
-            agent: verifier.agent,
-        })
-    {
-        return None;
-    }
+    let expected = RunQueueEntry {
+        task: verifier.task,
+        agent: verifier.agent,
+    };
+    let dispatched = runtime.commit_ready_dispatch(
+        booted,
+        VERIFIER_QUANTUM,
+        expected,
+        NativeAgentContextKind::Preempted,
+    )?;
     running_state_valid(booted, verifier, workers, 1, EventKind::TaskDispatched)?;
     Some(dispatched)
 }

@@ -23,7 +23,7 @@ pub(super) fn run(
     {
         return None;
     }
-    let (running, dispatched) = flow.dispatch_after_workers(booted, workers)?;
+    let (running, dispatched) = flow.dispatch_after_workers(booted, workers, runtime)?;
     let cpu = runtime.take_prepared(dispatched)?;
     if !runtime.is_empty() {
         return None;
@@ -83,6 +83,7 @@ pub(super) fn run(
         return None;
     }
     serial_write_line("AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK");
+    serial_write_line("AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     Some(terminal)
 }

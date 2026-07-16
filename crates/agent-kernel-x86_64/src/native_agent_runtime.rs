@@ -1,20 +1,24 @@
 //! Parked x86 Agent CPU ownership selected by kernel dispatch results.
 //!
 //! This bare-metal adapter stores prepared, PIT-preempted, and mailbox-waiting
-//! CPU tokens under the Agent ID in their trusted call context. Every take is
-//! guarded by the kernel-returned Agent/Task identity and expected physical
-//! state. Scheduler policy stays in the core; this module owns only non-running
-//! physical context ownership.
+//! CPU tokens under the Agent ID in their trusted call context. Read-only
+//! readiness checks match the core permit before semantic commit, and every
+//! take is guarded again by the committed Agent/Task identity and expected
+//! physical state. Scheduler policy stays in the core; this module owns only
+//! non-running physical context ownership.
 
-use agent_kernel_core::RunQueueEntry;
+use agent_kernel_core::{RunQueueEntry, TaskDispatchPermit};
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
-use crate::agent_cpu::{PreemptedAgentCpu, PreparedAgentCpu, WaitingMessageReceiveCpu};
+use crate::{
+    agent_cpu::{PreemptedAgentCpu, PreparedAgentCpu, WaitingMessageReceiveCpu},
+    X86BootedKernel,
+};
 
 const NATIVE_AGENT_CAPACITY: usize = 3;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum NativeAgentContextKind {
+pub(crate) enum NativeAgentContextKind {
     Prepared,
     Preempted,
     WaitingMailbox,
@@ -41,6 +45,11 @@ impl NativeAgentContext {
             Self::Preempted(_) => NativeAgentContextKind::Preempted,
             Self::WaitingMailbox(_) => NativeAgentContextKind::WaitingMailbox,
         }
+    }
+
+    fn matches(&self, entry: RunQueueEntry, expected: NativeAgentContextKind) -> bool {
+        let context = self.context();
+        context.agent() == entry.agent && context.task() == entry.task && self.kind() == expected
     }
 }
 
@@ -100,6 +109,24 @@ impl NativeAgentRuntime {
         }
     }
 
+    pub(crate) fn commit_ready_dispatch(
+        &self,
+        booted: &mut X86BootedKernel,
+        quantum: u64,
+        expected_entry: RunQueueEntry,
+        expected_kind: NativeAgentContextKind,
+    ) -> Option<RunQueueEntry> {
+        let permit = booted
+            .kernel()
+            .sys_prepare_next_ready_dispatch_with_quantum(quantum)
+            .ok()?;
+        if permit.entry() != expected_entry || !self.ready_for(permit, expected_kind) {
+            return None;
+        }
+        let dispatched = booted.kernel_mut().sys_commit_ready_dispatch(permit).ok()?;
+        (dispatched == expected_entry).then_some(dispatched)
+    }
+
     pub(crate) const fn len(&self) -> usize {
         self.contexts.len()
     }
@@ -123,11 +150,14 @@ impl NativeAgentRuntime {
     ) -> Option<NativeAgentContext> {
         self.contexts
             .take_matching(dispatched.agent, |parked| {
-                let context = parked.context();
-                context.agent() == dispatched.agent
-                    && context.task() == dispatched.task
-                    && parked.kind() == expected
+                parked.matches(dispatched, expected)
             })
             .ok()
+    }
+
+    fn ready_for(&self, permit: TaskDispatchPermit, expected: NativeAgentContextKind) -> bool {
+        let entry = permit.entry();
+        self.contexts
+            .contains_matching(entry.agent, |parked| parked.matches(entry, expected))
     }
 }

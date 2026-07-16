@@ -78,9 +78,20 @@ fn scheduler_quantum_syscalls_dispatch_tick_and_requeue() {
         .sys_enqueue_task(assignee, task)
         .expect("task should enqueue");
 
+    let permit = kernel
+        .sys_prepare_next_ready_dispatch_with_quantum(2)
+        .expect("kernel should prepare the FIFO head");
+    assert_eq!(
+        permit.entry(),
+        RunQueueEntry {
+            task,
+            agent: assignee
+        }
+    );
+    assert_eq!(permit.quantum(), 2);
     let dispatched = kernel
-        .sys_dispatch_next_ready_with_quantum(2)
-        .expect("kernel should dispatch the FIFO head");
+        .sys_commit_ready_dispatch(permit)
+        .expect("kernel should commit the prepared FIFO head");
     let tick = kernel
         .sys_tick_task(assignee, task)
         .expect("task should tick once");

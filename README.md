@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Worker and Verifier Agent Image Capsule parsing with SHA-256 verification binding, three isolated Agent CR3 roots with same-address private pages, a fixed-capacity prepared/preempted/mailbox-waiting CPU ownership registry selected by kernel dispatch results, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a versioned returning Agent Call ABI, blocking mailbox wait/wake plus Send/Receive/Acknowledge between isolated Workers, audited task-result submission and inspection, target-scoped verification, task completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Worker and Verifier Agent Image Capsule parsing with SHA-256 verification binding, three isolated Agent CR3 roots with same-address private pages, a fixed-capacity prepared/preempted/mailbox-waiting CPU ownership registry selected by a two-phase kernel/native dispatch-readiness handoff, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a versioned returning Agent Call ABI, blocking mailbox wait/wake plus Send/Receive/Acknowledge between isolated Workers, audited task-result submission and inspection, target-scoped verification, task completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -128,7 +128,10 @@ ticks, return to the queue when their quantum expires, and can enter `Waiting`
 until an authorized signal emission or a message send wakes them back into the
 run queue. Kernel-selected dispatch consumes its own FIFO head and returns the
 exact Agent/Task identity made `Running`; architecture code no longer supplies
-the expected Agent as the scheduling decision.
+the expected Agent as the scheduling decision. A read-only core permit first
+validates the complete semantic transition. The x86 adapter commits that permit
+only after its runtime registry proves that the same Agent/Task has the expected
+parked physical state.
 `IntentId`, `TaskId`, and `MessageId` values are allocated by fixed-capacity kernel stores rather than
 invented by the supervisor. `WaiterId` and `MemoryCellId` values are also kernel-allocated, and
 memory recall writes an audit event before returning a value. Delegation derives
@@ -197,8 +200,10 @@ through the supervisor physical alias before mapping. Verifier registration,
 task delegation, its separate resource-scoped Verify capability, image
 verification, launch, and acceptance occupy events 38 through 48. The three
 prepared non-Copy CPU objects first enter a bounded native runtime registry.
-Event 49 then consumes the kernel FIFO head, returns Worker B's Agent/Task
-identity, and only that result can transfer B's CPU object from the registry.
+Before event 49, the core prepares its FIFO-head permit and the registry proves
+that Worker B's matching prepared CPU exists. Committing the permit records the
+dispatch, returns B's Agent/Task identity, and only that result can transfer B's
+CPU object from the registry.
 Every Agent enters its declared offset through a five-word
 `iretq` frame at CPL3. Entry clears all general-purpose registers, selects that
 Agent's CR3, and only then returns to the Agent. PIT IRQ0 performs a hardware
@@ -207,24 +212,26 @@ RIP/CS/RFLAGS/user-RSP/user-SS, records the interrupted CR3, and restores the
 kernel CR3 before touching normal kernel context. The kernel validates the
 complete 160-byte frame, copies it into the preempted Agent context, and
 releases RSP0 for the next Agent. Events 50 through 53 expire B and A in turn,
-park each complete preemption frame, select A's remaining prepared CPU from the
-second dispatch result, and recover B's preempted CPU from the third result with
-queue order preserved.
+park each complete preemption frame, preflight the next permit against A's
+prepared then B's preempted CPU, commit each matching dispatch, and recover the
+guarded context with queue order preserved.
 
 The kernel first releases B's read-only signal through its supervisor alias and
 resumes B through DescribeContext and ReceiveMessage. Because its mailbox is
 empty, event 54 atomically moves B's task and execution context to `Waiting` and
 binds a mailbox waiter to the captured receive frame. The native registry parks
-that waiting frame before event 55 dispatches A and recovers A's preempted frame
-from the dispatch result. Worker A performs four returning calls:
+that waiting frame before A's preempted context passes event 55's permit
+preflight, dispatch commit, and guarded recovery. Worker A performs four
+returning calls:
 DescribeContext, SubmitTaskResult, SendMessage, and CompleteTask. It sends a
 Notify carrying its Task ID to Worker B and compares the returned deterministic
 Message ID before completion. Only an exact scheduler-owned Agent/Task/Image
 identity and nonce echo can mutate task or mailbox state. A's result is event
 56; its send records the message at event 57 and atomically wakes and requeues B
 at event 58; A completes at event 59. B redispatches at event 60, and the kernel
-uses that result to recover B's waiting frame. The kernel receives Message ID 1
-at event 61 before encoding the reply into the original saved frame. B then
+commits only after B's waiting frame matches the prepared permit, then uses the
+result to recover that frame. The kernel receives Message ID 1 at event 61
+before encoding the reply into the original saved frame. B then
 calls AcknowledgeMessage, SubmitTaskResult, and CompleteTask
 at events 62 through 64. Its ring-3 code validates Message ID 1, sender Agent 3,
 Notify kind, and Task ID 1; the kernel independently validates the same record.
@@ -234,9 +241,10 @@ a different nonce, and return offsets 48/57/99/120/129. The terminal mailbox
 record is Acknowledged while both fixed-width task results remain stored.
 
 The kernel then queues and dispatches the Verifier at events 65 and 66. That
-dispatch result transfers the final prepared CPU and leaves the native runtime
-registry empty. The Verifier expires once at event 67, parks its preempted
-frame, and uses event 68's redispatch identity to take that exact frame again.
+permit first matches the Verifier's prepared CPU; its committed result transfers
+that context and leaves the native runtime registry empty. The Verifier expires
+once at event 67, parks its preempted frame, and event 68 commits only after the
+redispatch permit matches that exact frame.
 Its first returning call describes its trusted context. Its second call
 inspects only Worker A's stored result under resource-scoped Verify authority
 and emits the audited
@@ -293,12 +301,12 @@ remains available for system-seeded resources and leaves `owner: None`.
 16. Register a Verifier Agent with its own delegated task capability and a separate resource-scoped Verify capability.
 17. Register and verify two distinct native Worker images plus one native Verifier image, bind each launch to its matching image kind, and accept the Verifier task without initially queuing it.
 18. Parse all three fixed Capsule headers, bind their SHA-256 digests to the verified records, copy/read back all three private code pages, and register their prepared CPU ownership by trusted Agent identity.
-19. Let the kernel consume the FIFO head, use its returned identity to take B's prepared CPU, dispatch B with quantum one, let IRQ0 switch to RSP0, copy and park the validated frame, expire B, and select A from the next kernel dispatch result.
-20. Enter A under its distinct CR3, copy and park its IRQ0 frame, expire A, and use the redispatch result to recover B's preempted frame.
-21. Resume B through DescribeContext and an empty ReceiveMessage, park its owned call frame with the mailbox waiter, then use event 55 to recover A's preempted frame while B is `Waiting`.
-22. Resume A, record its TaskResult, send a typed Notify carrying Task A, atomically wake B, validate the returned Message ID in ring 3, complete A, and use the next dispatch result to recover B's waiting frame.
+19. Prepare the kernel FIFO-head permit, match it to B's prepared CPU, commit and take that exact context, dispatch B with quantum one, let IRQ0 switch to RSP0, copy and park the validated frame, expire B, then preflight and commit A's prepared context.
+20. Enter A under its distinct CR3, copy and park its IRQ0 frame, expire A, then preflight and commit B's matching preempted context before guarded recovery.
+21. Resume B through DescribeContext and an empty ReceiveMessage, park its owned call frame with the mailbox waiter, then preflight and commit A's preempted context at event 55 while B is `Waiting`.
+22. Resume A, record its TaskResult, send a typed Notify carrying Task A, atomically wake B, validate the returned Message ID in ring 3, complete A, then preflight and commit B's waiting context before recovery.
 23. Receive the message for B's retained call, encode its reply into the original frame, then let B validate and acknowledge it, record B's distinct result, complete B, and preserve the Acknowledged message plus both Worker results.
-24. Queue and dispatch the Verifier, preempt and park it once through IRQ0, then use the redispatch result to recover its owned frame under the third Agent CR3.
+24. Queue the Verifier, preflight and commit its prepared context, preempt and park it once through IRQ0, then preflight its redispatch permit before recovering the owned frame under the third Agent CR3.
 25. Return Worker A's result through an audited InspectTaskResult call, compare it in ring 3, verify only A, fulfill A's intent, and complete the Verifier's own task while B remains unverified.
 26. Prove all three execution contexts are Idle and the run queue is empty.
 27. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
@@ -389,6 +397,7 @@ AGENT_KERNEL_VERIFIER_PREEMPTION_OK
 AGENT_KERNEL_AGENT_CALL_INSPECT_RESULT_OK
 AGENT_KERNEL_AGENT_CALL_VERIFY_OK
 AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK
+AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK
 AGENT_KERNEL_NATIVE_VERIFIER_OK
 AGENT_KERNEL_AGENT_CALL_ABI_OK
 AGENT_KERNEL_AGENT_CALL_RETURN_OK
@@ -559,6 +568,11 @@ Completed but unverified.
 demonstrated non-running prepared, PIT-preempted, or mailbox-waiting CPU context
 to be parked under its trusted Agent identity, selected by the exact
 kernel-returned Agent/Task pair, and consumed by the terminal boundary.
+`AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK` additionally requires all seven
+Worker and Verifier handoffs to prepare a read-only core permit, match the
+permit's Agent/Task and expected parked state before semantic commit, and use a
+guarded take only after that commit. Permit preparation emits no event, so the
+ordered trace remains exactly 82 events.
 
 `AGENT_KERNEL_AGENT_CALL_ABI_OK` requires four canonical `AGNTCALL` requests
 from sender A, five from receiver B, and four from the Verifier with version 1,

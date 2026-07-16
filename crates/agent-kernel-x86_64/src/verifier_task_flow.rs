@@ -95,8 +95,9 @@ impl PreparedVerifierFlow {
         self,
         booted: &mut X86BootedKernel,
         workers: CompletedWorkerTasks,
+        runtime: &NativeAgentRuntime,
     ) -> Option<(RunningVerifierFlow, RunQueueEntry)> {
-        let dispatched = transitions::dispatch(booted, self.verifier, &workers)?;
+        let dispatched = transitions::dispatch(booted, self.verifier, &workers, runtime)?;
         Some((
             RunningVerifierFlow {
                 verifier: self.verifier,
