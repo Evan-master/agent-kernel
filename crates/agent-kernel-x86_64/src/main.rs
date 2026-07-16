@@ -19,6 +19,7 @@ mod boot_agent_images;
 mod boot_config;
 mod event_trace;
 mod exception_runtime;
+mod native_agent_runtime;
 mod pic;
 mod pit_timer;
 mod port_driver_flow;

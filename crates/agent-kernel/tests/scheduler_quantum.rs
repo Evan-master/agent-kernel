@@ -78,9 +78,9 @@ fn scheduler_quantum_syscalls_dispatch_tick_and_requeue() {
         .sys_enqueue_task(assignee, task)
         .expect("task should enqueue");
 
-    kernel
-        .sys_dispatch_next_with_quantum(assignee, 2)
-        .expect("task should dispatch with explicit quantum");
+    let dispatched = kernel
+        .sys_dispatch_next_ready_with_quantum(2)
+        .expect("kernel should dispatch the FIFO head");
     let tick = kernel
         .sys_tick_task(assignee, task)
         .expect("task should tick once");
@@ -88,6 +88,13 @@ fn scheduler_quantum_syscalls_dispatch_tick_and_requeue() {
         .sys_tick_task(assignee, task)
         .expect("second tick should expire quantum");
 
+    assert_eq!(
+        dispatched,
+        RunQueueEntry {
+            task,
+            agent: assignee
+        }
+    );
     assert_eq!(tick.kind, EventKind::TaskTicked);
     assert_eq!(tick.task_ticks, Some(1));
     assert_eq!(tick.task_quantum, Some(1));

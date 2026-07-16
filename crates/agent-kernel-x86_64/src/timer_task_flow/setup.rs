@@ -164,12 +164,16 @@ pub(super) fn dispatch_second(
     booted: &mut X86BootedKernel,
     first: WorkerTask,
     second: WorkerTask,
-) -> Option<()> {
-    if booted
+) -> Option<RunQueueEntry> {
+    let dispatched = booted
         .kernel_mut()
-        .sys_dispatch_next_with_quantum(second.agent, TASK_QUANTUM)
-        .ok()?
-        != second.task
+        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
+        .ok()?;
+    if dispatched
+        != (RunQueueEntry {
+            task: second.task,
+            agent: second.agent,
+        })
     {
         return None;
     }
@@ -206,5 +210,5 @@ pub(super) fn dispatch_second(
                 agent: first.agent,
             }]
         && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskDispatched && event.task == Some(second.task)))
-    .then_some(())
+    .then_some(dispatched)
 }

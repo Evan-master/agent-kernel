@@ -72,6 +72,13 @@ impl<
         self.core.dispatch_next_with_quantum(agent, quantum)
     }
 
+    pub fn sys_dispatch_next_ready_with_quantum(
+        &mut self,
+        quantum: u64,
+    ) -> Result<RunQueueEntry, KernelError> {
+        self.core.dispatch_next_ready_with_quantum(quantum)
+    }
+
     pub fn sys_tick_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
         self.core.tick_task(agent, task)
     }

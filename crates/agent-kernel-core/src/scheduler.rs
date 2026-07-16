@@ -1,8 +1,7 @@
 //! Fixed-capacity FIFO task scheduler; tick accounting lives in `scheduler_tick`.
 
 use crate::{
-    AgentId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId, RunQueueEntry,
-    Task, TaskId, TaskStatus, VerificationRequirement,
+    AgentId, Event, EventKind, KernelCore, KernelError, RunQueueEntry, Task, TaskId, TaskStatus,
 };
 
 impl<
@@ -95,25 +94,24 @@ impl<
         if entry.agent != agent {
             return Err(KernelError::TaskNotRunnable);
         }
-        self.ensure_execution_context_idle(agent)?;
-        let task_record = self.find_runnable_task(agent, entry.task)?;
-        self.ensure_agent_admitted_for_task(agent, entry.task)?;
-        self.ensure_scheduler_event_capacity()?;
-
-        self.shift_run_queue_left();
-        let task = self.find_task_mut(entry.task)?;
-        task.status = TaskStatus::Running;
-        task.quantum_remaining = quantum;
-        self.set_execution_context_running(agent, entry.task, task_record.run_ticks, quantum)?;
-        self.record_scheduler_event(
-            EventKind::TaskDispatched,
-            agent,
-            entry.task,
-            task_record.resource,
-            None,
-            Some(quantum),
-        )?;
+        self.dispatch_ready_entry(entry, quantum)?;
         Ok(entry.task)
+    }
+
+    pub fn dispatch_next_ready_with_quantum(
+        &mut self,
+        quantum: u64,
+    ) -> Result<RunQueueEntry, KernelError> {
+        if quantum == 0 {
+            return Err(KernelError::TaskQuantumInvalid);
+        }
+        if self.run_queue_len == 0 {
+            return Err(KernelError::RunQueueEmpty);
+        }
+
+        let entry = self.run_queue[0];
+        self.dispatch_ready_entry(entry, quantum)?;
+        Ok(entry)
     }
 
     pub fn yield_task(&mut self, agent: AgentId, task: TaskId) -> Result<Event, KernelError> {
@@ -171,65 +169,36 @@ impl<
             .ok_or(KernelError::EventLogFull)
     }
 
-    pub(crate) fn record_scheduler_event(
+    fn dispatch_ready_entry(
         &mut self,
-        kind: EventKind,
-        agent: AgentId,
-        task: TaskId,
-        resource: ResourceId,
-        task_ticks: Option<u64>,
-        task_quantum: Option<u64>,
-    ) -> Result<Event, KernelError> {
-        let task_record = self.find_task(task)?;
-        self.record(Event {
-            sequence: self.next_sequence,
-            agent,
-            kind,
-            resource: Some(resource),
-            capability: None,
-            source_capability: None,
-            intent: Some(task_record.intent),
-            intent_kind: None,
-            action: None,
-            observation: None,
-            message: None,
-            memory_cell: None,
-            namespace_entry: None,
-            namespace_key: None,
-            namespace_object: None,
-            operation: None,
-            operations: OperationSet::empty(),
-            verification: VerificationRequirement::Optional,
-            checkpoint: None,
-            task: Some(task),
-            task_result: None,
-            task_ticks,
-            task_quantum,
-            fault: None,
-            fault_kind: None,
-            fault_detail: None,
-            fault_policy: None,
-            fault_policy_action: None,
-            waiter: None,
-            signal: None,
-            target_agent: None,
-            driver_binding: None,
-            device_event: None,
-            device_event_kind: None,
-            device_event_payload: None,
-            driver_command: None,
-            driver_command_kind: None,
-            driver_command_payload: None,
-            driver_command_result: None,
-            driver_invocation: None,
-            driver_invocation_ticks: None,
-            driver_invocation_quantum: None,
-            agent_image: None,
-            agent_image_kind: None,
-            agent_image_digest: None,
-            agent_image_abi_version: None,
-            agent_image_entry_version: None,
-        })
+        entry: RunQueueEntry,
+        quantum: u64,
+    ) -> Result<(), KernelError> {
+        self.ensure_agent_active(entry.agent)?;
+        self.ensure_execution_context_idle(entry.agent)?;
+        let task_record = self.find_runnable_task(entry.agent, entry.task)?;
+        self.ensure_agent_admitted_for_task(entry.agent, entry.task)?;
+        self.ensure_scheduler_event_capacity()?;
+
+        self.shift_run_queue_left();
+        let task = self.find_task_mut(entry.task)?;
+        task.status = TaskStatus::Running;
+        task.quantum_remaining = quantum;
+        self.set_execution_context_running(
+            entry.agent,
+            entry.task,
+            task_record.run_ticks,
+            quantum,
+        )?;
+        self.record_scheduler_event(
+            EventKind::TaskDispatched,
+            entry.agent,
+            entry.task,
+            task_record.resource,
+            None,
+            Some(quantum),
+        )?;
+        Ok(())
     }
 
     fn shift_run_queue_left(&mut self) {

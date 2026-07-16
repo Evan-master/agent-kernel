@@ -1,8 +1,8 @@
 //! Physical four-call execution of the scheduled native Verifier.
 
 use crate::{
-    agent_cpu::PreparedAgentCpu,
     boot_agent_images::BootVerifierImage,
+    native_agent_runtime::NativeAgentRuntime,
     serial_write_line,
     timer_task_flow::CompletedWorkerTasks,
     verifier_task_flow::{CompletedVerifierFlow, PreparedVerifierFlow},
@@ -12,7 +12,7 @@ use crate::{
 pub(super) fn run(
     booted: &mut X86BootedKernel,
     flow: PreparedVerifierFlow,
-    cpu: PreparedAgentCpu,
+    runtime: &mut NativeAgentRuntime,
     image: BootVerifierImage,
     workers: CompletedWorkerTasks,
 ) -> Option<CompletedVerifierFlow> {
@@ -20,7 +20,12 @@ pub(super) fn run(
     if subject.task().raw() != image.target() || subject.result() != image.result() {
         return None;
     }
-    let running = flow.dispatch_after_workers(booted, workers)?;
+    let (running, dispatched) = flow.dispatch_after_workers(booted, workers)?;
+    let cpu = runtime.take_dispatched(dispatched)?;
+    if !runtime.is_empty() {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_STORE_OK");
     let preempted = cpu.run_until_preempted()?;
     serial_write_line("AGENT_KERNEL_VERIFIER_PREEMPTION_OK");
     let resumed = running.expire_and_redispatch(booted, &preempted)?;

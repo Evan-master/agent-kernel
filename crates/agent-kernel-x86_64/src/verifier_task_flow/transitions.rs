@@ -13,7 +13,7 @@ pub(super) fn dispatch(
     booted: &mut X86BootedKernel,
     verifier: VerifierTask,
     workers: &CompletedWorkerTasks,
-) -> Option<()> {
+) -> Option<RunQueueEntry> {
     if workers.subject() != verifier.subject
         || !workers.both_completed(booted)
         || !booted.kernel().run_queue().is_empty()
@@ -34,15 +34,20 @@ pub(super) fn dispatch(
     {
         return None;
     }
-    if booted
+    let dispatched = booted
         .kernel_mut()
-        .sys_dispatch_next_with_quantum(verifier.agent, VERIFIER_QUANTUM)
-        .ok()?
-        != verifier.task
+        .sys_dispatch_next_ready_with_quantum(VERIFIER_QUANTUM)
+        .ok()?;
+    if dispatched
+        != (RunQueueEntry {
+            task: verifier.task,
+            agent: verifier.agent,
+        })
     {
         return None;
     }
-    running_state_valid(booted, verifier, workers, 0, EventKind::TaskDispatched)
+    running_state_valid(booted, verifier, workers, 0, EventKind::TaskDispatched)?;
+    Some(dispatched)
 }
 
 pub(super) fn expire_and_redispatch(
@@ -68,9 +73,12 @@ pub(super) fn expire_and_redispatch(
     }
     if booted
         .kernel_mut()
-        .sys_dispatch_next_with_quantum(verifier.agent, VERIFIER_QUANTUM)
+        .sys_dispatch_next_ready_with_quantum(VERIFIER_QUANTUM)
         .ok()?
-        != verifier.task
+        != (RunQueueEntry {
+            task: verifier.task,
+            agent: verifier.agent,
+        })
     {
         return None;
     }

@@ -113,7 +113,7 @@ fn dispatch_rejects_busy_execution_context_without_mutation() {
     let events_before = core.events().len();
 
     assert_eq!(
-        core.dispatch_next_with_quantum(assignee, 1),
+        core.dispatch_next_ready_with_quantum(1),
         Err(KernelError::ExecutionContextBusy)
     );
 

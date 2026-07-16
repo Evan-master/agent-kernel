@@ -120,6 +120,46 @@ fn dispatch_next_with_quantum_assigns_requested_quantum() {
 }
 
 #[test]
+fn kernel_selected_dispatch_returns_the_fifo_agent_and_task() {
+    let mut core = TestCore::new();
+    let owner = AgentId::new(10);
+    let first_agent = AgentId::new(11);
+    let second_agent = AgentId::new(12);
+    let first = accepted_task(&mut core, owner, first_agent);
+    let second = accepted_task(&mut core, owner, second_agent);
+    core.enqueue_task(second_agent, second.task)
+        .expect("second task should be first in FIFO");
+    core.enqueue_task(first_agent, first.task)
+        .expect("first task should be second in FIFO");
+
+    let dispatched = core
+        .dispatch_next_ready_with_quantum(3)
+        .expect("kernel should select the FIFO head");
+
+    assert_eq!(
+        dispatched,
+        RunQueueEntry {
+            task: second.task,
+            agent: second_agent,
+        }
+    );
+    assert_eq!(core.tasks()[1].status, TaskStatus::Running);
+    assert_eq!(core.tasks()[1].quantum_remaining, 3);
+    assert_eq!(
+        core.run_queue(),
+        &[RunQueueEntry {
+            task: first.task,
+            agent: first_agent,
+        }]
+    );
+    let event = core.events().last().unwrap();
+    assert_eq!(event.kind, EventKind::TaskDispatched);
+    assert_eq!(event.agent, second_agent);
+    assert_eq!(event.task, Some(second.task));
+    assert_eq!(event.task_quantum, Some(3));
+}
+
+#[test]
 fn tick_task_records_progress_while_quantum_remains() {
     let mut core = TestCore::new();
     let owner = AgentId::new(5);

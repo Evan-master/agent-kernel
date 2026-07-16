@@ -25,7 +25,7 @@ pub(super) fn expire_and_dispatch(
     next: WorkerTask,
     cpu: &PreemptedAgentCpu,
     next_prior_ticks: u64,
-) -> Option<()> {
+) -> Option<RunQueueEntry> {
     if cpu.tick_count() != 1 {
         return None;
     }
@@ -53,15 +53,20 @@ pub(super) fn expire_and_dispatch(
     {
         return None;
     }
-    if booted
+    let dispatched = booted
         .kernel_mut()
-        .sys_dispatch_next_with_quantum(next.agent, TASK_QUANTUM)
-        .ok()?
-        != next.task
+        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
+        .ok()?;
+    if dispatched
+        != (RunQueueEntry {
+            task: next.task,
+            agent: next.agent,
+        })
     {
         return None;
     }
-    running_and_queue_valid(booted, next, running, next_prior_ticks, 1)
+    running_and_queue_valid(booted, next, running, next_prior_ticks, 1)?;
+    Some(dispatched)
 }
 
 pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
@@ -92,11 +97,15 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     {
         return None;
     }
-    if booted
+    let dispatched = booted
         .kernel_mut()
-        .sys_dispatch_next_with_quantum(next.agent, TASK_QUANTUM)
-        .ok()?
-        != next.task
+        .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
+        .ok()?;
+    if dispatched
+        != (RunQueueEntry {
+            task: next.task,
+            agent: next.agent,
+        })
     {
         return None;
     }

@@ -58,9 +58,12 @@ pub(super) fn dispatch_sender(
     if !receiver_waiting_state_valid(booted, receiver, sender, waiter)
         || booted
             .kernel_mut()
-            .sys_dispatch_next_with_quantum(sender.agent, TASK_QUANTUM)
+            .sys_dispatch_next_ready_with_quantum(TASK_QUANTUM)
             .ok()?
-            != sender.task
+            != (RunQueueEntry {
+                task: sender.task,
+                agent: sender.agent,
+            })
         || !sender_running_receiver_waiting_state_valid(booted, sender, receiver, waiter)
     {
         return None;

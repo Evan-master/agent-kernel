@@ -145,12 +145,15 @@ impl TimerTaskFlow {
         self,
         booted: &mut X86BootedKernel,
         cpu: &PreemptedAgentCpu,
-    ) -> Option<FirstRunningFlow> {
-        transitions::expire_and_dispatch(booted, self.second, self.first, cpu, 0)?;
-        Some(FirstRunningFlow {
-            first: self.first,
-            second: self.second,
-        })
+    ) -> Option<(FirstRunningFlow, agent_kernel_core::RunQueueEntry)> {
+        let dispatched = transitions::expire_and_dispatch(booted, self.second, self.first, cpu, 0)?;
+        Some((
+            FirstRunningFlow {
+                first: self.first,
+                second: self.second,
+            },
+            dispatched,
+        ))
     }
 }
 
@@ -172,12 +175,18 @@ impl QueuedTimerTaskFlow {
         (first.id != second.id && first.digest != second.digest).then_some((first, second))
     }
 
-    pub(super) fn dispatch_second(self, booted: &mut X86BootedKernel) -> Option<TimerTaskFlow> {
-        setup::dispatch_second(booted, self.first, self.second)?;
-        Some(TimerTaskFlow {
-            first: self.first,
-            second: self.second,
-        })
+    pub(super) fn dispatch_second(
+        self,
+        booted: &mut X86BootedKernel,
+    ) -> Option<(TimerTaskFlow, agent_kernel_core::RunQueueEntry)> {
+        let dispatched = setup::dispatch_second(booted, self.first, self.second)?;
+        Some((
+            TimerTaskFlow {
+                first: self.first,
+                second: self.second,
+            },
+            dispatched,
+        ))
     }
 }
 

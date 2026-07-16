@@ -13,9 +13,9 @@ use bootloader_api::BootInfo;
 
 use crate::{
     agent_cpu::AgentCpuRuntime, agent_memory::PreparedAgentMemory, boot_agent_images, event_trace,
-    exit_qemu, fatal_boot, halt_forever, port_driver_flow::PortDriverSetup,
-    privilege_runtime::PrivilegeBoundary, serial_transmit_empty, serial_write_line,
-    serial_write_str, timer_task_flow::TimerTaskFlow, uart_interrupt,
+    exit_qemu, fatal_boot, halt_forever, native_agent_runtime::NativeAgentRuntime,
+    port_driver_flow::PortDriverSetup, privilege_runtime::PrivilegeBoundary, serial_transmit_empty,
+    serial_write_line, serial_write_str, timer_task_flow::TimerTaskFlow, uart_interrupt,
     verifier_task_flow::VerifierTaskFlow, X86BootedKernel, COM1,
 };
 
@@ -106,20 +106,41 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(verifier_cpu) = cpu_runtime.prepare(verifier_memory, verifier_context) else {
         fatal_boot("AGENT_KERNEL_VERIFIER_CPU_SETUP_ERROR");
     };
-    let Some(timer_flow) = queued_timer_flow.dispatch_second(&mut booted) else {
+    let mut native_runtime = NativeAgentRuntime::new();
+    for cpu in [agent_a_cpu, agent_b_cpu, verifier_cpu] {
+        if native_runtime.register(cpu).is_some() {
+            fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+        }
+    }
+    if native_runtime.len() != 3 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
+    let Some((timer_flow, dispatched_b)) = queued_timer_flow.dispatch_second(&mut booted) else {
         fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
     };
+    let Some(agent_b_cpu) = native_runtime.take_dispatched(dispatched_b) else {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    };
+    if native_runtime.len() != 2 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
     let Some(preempted_b) = agent_b_cpu.run_until_preempted() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
     };
     serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
     serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
-    let Some(first_running_flow) =
+    let Some((first_running_flow, dispatched_a)) =
         timer_flow.expire_second_and_dispatch_first(&mut booted, &preempted_b)
     else {
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
+    let Some(agent_a_cpu) = native_runtime.take_dispatched(dispatched_a) else {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    };
+    if native_runtime.len() != 1 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
     let Some(preempted_a) = agent_a_cpu.run_until_preempted() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
     };
@@ -130,6 +151,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
     serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
+    serial_write_line("AGENT_KERNEL_KERNEL_SELECTED_DISPATCH_OK");
     let completed_workers = mailbox::run(
         &mut booted,
         second_resumed_flow,
@@ -141,7 +163,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(_completed_verifier) = verifier::run(
         &mut booted,
         verifier_flow,
-        verifier_cpu,
+        &mut native_runtime,
         verifier_image,
         completed_workers,
     ) else {

@@ -85,6 +85,10 @@ impl AgentCpuRuntime {
 }
 
 impl PreparedAgentCpu {
+    pub(crate) const fn context(&self) -> AgentCallContext {
+        self.context
+    }
+
     pub(crate) fn run_until_preempted(self) -> Option<PreemptedAgentCpu> {
         let roots = self.memory.roots();
         storage::begin_dispatch(roots)?;

@@ -159,6 +159,18 @@ impl AgentCallContext {
         self.capability
     }
 
+    pub const fn agent(self) -> AgentId {
+        self.agent
+    }
+
+    pub const fn task(self) -> TaskId {
+        self.task
+    }
+
+    pub const fn image(self) -> AgentImageId {
+        self.image
+    }
+
     fn encode_reply(
         self,
         frame: &mut PrivilegeInterruptStackFrame,

@@ -67,6 +67,9 @@ fn complete_task_request_matches_trusted_context_without_capability_in_request()
     assert!(context().matches_completion(request, NONCE));
     assert!(!context().matches_completion(request, 0));
     assert_eq!(context().capability(), CapabilityId::new(7));
+    assert_eq!(context().agent(), AgentId::new(3));
+    assert_eq!(context().task(), TaskId::new(9));
+    assert_eq!(context().image(), AgentImageId::new(4));
     assert_ne!(
         context(),
         AgentCallContext::new(

@@ -7,6 +7,7 @@ use agent_kernel_core::{
 #[derive(Copy, Clone)]
 struct AcceptedTask {
     task: TaskId,
+    capability: agent_kernel_core::CapabilityId,
 }
 
 fn accepted_task<
@@ -86,7 +87,117 @@ fn accepted_task<
     core.accept_task(assignee, task)
         .expect("task should be accepted");
 
-    AcceptedTask { task }
+    AcceptedTask {
+        task,
+        capability: assignee_capability,
+    }
+}
+
+#[test]
+fn kernel_selected_dispatch_rejects_empty_queue() {
+    let mut core = KernelCore::<1, 0, 0, 1, 0, 0, 0, 0, 0, 0>::new();
+
+    assert_eq!(
+        core.dispatch_next_ready_with_quantum(1),
+        Err(KernelError::RunQueueEmpty)
+    );
+    assert!(core.events().is_empty());
+}
+
+#[test]
+fn kernel_selected_dispatch_with_zero_quantum_is_atomic() {
+    let mut core = KernelCore::<2, 1, 2, 16, 0, 0, 0, 1, 1, 1>::new();
+    let owner = AgentId::new(13);
+    let assignee = AgentId::new(14);
+    let accepted = accepted_task(&mut core, owner, assignee);
+    core.enqueue_task(assignee, accepted.task).unwrap();
+    let events_before = core.events().len();
+
+    assert_eq!(
+        core.dispatch_next_ready_with_quantum(0),
+        Err(KernelError::TaskQuantumInvalid)
+    );
+    assert_eq!(core.run_queue()[0].task, accepted.task);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn kernel_selected_dispatch_rejects_inactive_fifo_agent() {
+    let mut core = KernelCore::<2, 1, 2, 20, 0, 0, 0, 1, 1, 1>::new();
+    let owner = AgentId::new(15);
+    let assignee = AgentId::new(16);
+    let accepted = accepted_task(&mut core, owner, assignee);
+    core.enqueue_task(assignee, accepted.task).unwrap();
+    core.suspend_agent(assignee).unwrap();
+    let events_before = core.events().len();
+
+    assert_eq!(
+        core.dispatch_next_ready_with_quantum(1),
+        Err(KernelError::AgentSuspended)
+    );
+    assert_eq!(core.run_queue()[0].task, accepted.task);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn kernel_selected_dispatch_rejects_revoked_admission() {
+    let mut core = KernelCore::<2, 1, 2, 20, 0, 0, 0, 1, 1, 1>::new();
+    let owner = AgentId::new(17);
+    let assignee = AgentId::new(18);
+    let accepted = accepted_task(&mut core, owner, assignee);
+    core.enqueue_task(assignee, accepted.task).unwrap();
+    core.revoke_capability(accepted.capability).unwrap();
+    let events_before = core.events().len();
+
+    assert_eq!(
+        core.dispatch_next_ready_with_quantum(1),
+        Err(KernelError::CapabilityRevoked)
+    );
+    assert_eq!(core.run_queue()[0].task, accepted.task);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
+fn kernel_selected_dispatch_event_capacity_failure_is_atomic() {
+    let mut core = KernelCore::<2, 1, 2, 13, 0, 0, 0, 1, 1, 1>::new();
+    let owner = AgentId::new(22);
+    let assignee = AgentId::new(23);
+    let accepted = accepted_task(&mut core, owner, assignee);
+    core.enqueue_task(assignee, accepted.task)
+        .expect("enqueue should fill the event log");
+
+    assert_eq!(core.events().len(), 13);
+    assert_eq!(
+        core.dispatch_next_ready_with_quantum(1),
+        Err(KernelError::EventLogFull)
+    );
+    assert_eq!(core.run_queue()[0].task, accepted.task);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.tasks()[0].quantum_remaining, 0);
+    assert_eq!(core.events().len(), 13);
+}
+
+#[test]
+fn compatibility_dispatch_rejects_non_head_agent_without_mutation() {
+    let mut core = KernelCore::<3, 1, 2, 20, 0, 0, 0, 1, 1, 1>::new();
+    let owner = AgentId::new(19);
+    let assignee = AgentId::new(20);
+    let other = AgentId::new(21);
+    let accepted = accepted_task(&mut core, owner, assignee);
+    core.register_agent(other).unwrap();
+    core.enqueue_task(assignee, accepted.task).unwrap();
+    let events_before = core.events().len();
+
+    assert_eq!(
+        core.dispatch_next_with_quantum(other, 1),
+        Err(KernelError::TaskNotRunnable)
+    );
+    assert_eq!(core.run_queue()[0].task, accepted.task);
+    assert_eq!(core.tasks()[0].status, TaskStatus::Accepted);
+    assert_eq!(core.events().len(), events_before);
 }
 
 #[test]

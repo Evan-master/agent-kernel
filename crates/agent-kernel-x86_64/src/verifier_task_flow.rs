@@ -8,7 +8,8 @@ mod setup;
 mod transitions;
 
 use agent_kernel_core::{
-    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId, TaskResult,
+    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, RunQueueEntry, TaskId,
+    TaskResult,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
@@ -93,12 +94,15 @@ impl PreparedVerifierFlow {
         self,
         booted: &mut X86BootedKernel,
         workers: CompletedWorkerTasks,
-    ) -> Option<RunningVerifierFlow> {
-        transitions::dispatch(booted, self.verifier, &workers)?;
-        Some(RunningVerifierFlow {
-            verifier: self.verifier,
-            workers,
-        })
+    ) -> Option<(RunningVerifierFlow, RunQueueEntry)> {
+        let dispatched = transitions::dispatch(booted, self.verifier, &workers)?;
+        Some((
+            RunningVerifierFlow {
+                verifier: self.verifier,
+                workers,
+            },
+            dispatched,
+        ))
     }
 }
 

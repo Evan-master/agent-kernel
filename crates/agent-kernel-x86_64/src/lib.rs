@@ -9,6 +9,7 @@ pub mod agent_call;
 pub mod agent_image;
 pub mod context;
 pub mod interrupt;
+pub mod native_runtime;
 pub mod port;
 pub mod privilege;
 pub mod user_memory;

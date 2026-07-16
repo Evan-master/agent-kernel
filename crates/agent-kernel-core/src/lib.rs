@@ -73,6 +73,7 @@ mod resource_ownership;
 mod resource_store;
 mod run_queue;
 mod scheduler;
+mod scheduler_event;
 mod scheduler_tick;
 mod signal;
 mod signal_event;
