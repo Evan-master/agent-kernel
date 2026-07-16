@@ -10,11 +10,8 @@ use agent_kernel_core::{
     VerificationRequirement,
 };
 
-use super::{WorkerTask, TASK_QUANTUM, WORKER_A, WORKER_B};
-use crate::{
-    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
-    X86BootedKernel,
-};
+use super::{WorkerTask, WORKER_A, WORKER_B};
+use crate::X86BootedKernel;
 
 #[derive(Copy, Clone)]
 struct PendingWorker {
@@ -161,56 +158,4 @@ fn queued_state_valid(booted: &X86BootedKernel, first: WorkerTask, second: Worke
                 },
             ]
         && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskQueued && event.task == Some(first.task))
-}
-
-pub(super) fn dispatch_second(
-    booted: &mut X86BootedKernel,
-    runtime: &NativeAgentRuntime,
-    first: WorkerTask,
-    second: WorkerTask,
-) -> Option<RunQueueEntry> {
-    let expected = RunQueueEntry {
-        task: second.task,
-        agent: second.agent,
-    };
-    let dispatched = runtime.commit_ready_dispatch(
-        booted,
-        TASK_QUANTUM,
-        expected,
-        NativeAgentContextKind::Prepared,
-    )?;
-    let kernel = booted.kernel();
-    let first_task = kernel.tasks().iter().find(|task| task.id == first.task)?;
-    let first_context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == first.agent)?;
-    let second_task = kernel.tasks().iter().find(|task| task.id == second.task)?;
-    let second_context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|context| context.agent == second.agent)?;
-    (first_task.status == TaskStatus::Accepted
-        && first_task.run_ticks == 0
-        && first_task.quantum_remaining == 0
-        && first_task.result.is_none()
-        && first_context.state == AgentExecutionState::Idle
-        && first_context.task.is_none()
-        && first_context.run_ticks == 0
-        && first_context.quantum_remaining == 0
-        && second_task.status == TaskStatus::Running
-        && second_task.run_ticks == 0
-        && second_task.quantum_remaining == TASK_QUANTUM
-        && second_task.result.is_none()
-        && second_context.state == AgentExecutionState::Running
-        && second_context.task == Some(second.task)
-        && second_context.run_ticks == 0
-        && second_context.quantum_remaining == TASK_QUANTUM
-        && kernel.run_queue()
-            == [RunQueueEntry {
-                task: first.task,
-                agent: first.agent,
-            }]
-        && matches!(kernel.events().last(), Some(event) if event.kind == EventKind::TaskDispatched && event.task == Some(second.task)))
-    .then_some(dispatched)
 }

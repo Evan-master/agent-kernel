@@ -4,8 +4,7 @@
 //! binds physical evidence to semantic task transitions, then completes the
 //! existing UART Driver flow. All failures terminate through explicit markers.
 
-mod mailbox;
-mod verifier;
+mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
 use agent_kernel_x86_64::agent_image::{AgentImageCapsule, VerifiedAgentImage};
@@ -115,68 +114,17 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     if native_runtime.len() != 3 {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     }
-    let Some((timer_flow, dispatched_b)) =
-        queued_timer_flow.dispatch_second(&mut booted, &native_runtime)
-    else {
-        fatal_boot("AGENT_KERNEL_TIMER_TASK_SETUP_ERROR");
-    };
-    let Some(agent_b_cpu) = native_runtime.take_prepared(dispatched_b) else {
-        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
-    };
-    if native_runtime.len() != 2 {
-        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
-    }
-    let Some(preempted_b) = agent_b_cpu.run_until_preempted() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
-    };
-    serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
-    serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
-    serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
-    let Some((first_running_flow, dispatched_a)) =
-        timer_flow.expire_second_and_dispatch_first(&mut booted, preempted_b, &mut native_runtime)
-    else {
-        fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
-    };
-    let Some(agent_a_cpu) = native_runtime.take_prepared(dispatched_a) else {
-        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
-    };
-    if native_runtime.len() != 2 {
-        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
-    }
-    let Some(preempted_a) = agent_a_cpu.run_until_preempted() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_PREEMPTION_ERROR");
-    };
-    serial_write_line("AGENT_KERNEL_AGENT_A_PREEMPTION_OK");
-    let Some((second_resumed_flow, dispatched_b)) = first_running_flow
-        .expire_first_and_dispatch_second(&mut booted, preempted_a, &mut native_runtime)
-    else {
-        fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
-    };
-    let Some(preempted_b) = native_runtime.take_preempted(dispatched_b) else {
-        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
-    };
-    if native_runtime.len() != 2 {
-        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
-    }
-    serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
-    serial_write_line("AGENT_KERNEL_KERNEL_SELECTED_DISPATCH_OK");
-    let completed_workers = mailbox::run(
-        &mut booted,
-        &mut native_runtime,
-        second_resumed_flow,
-        preempted_b,
-        worker_a,
-        worker_b,
-    );
-    let Some(_completed_verifier) = verifier::run(
-        &mut booted,
+    let runtime_plan = runtime_loop::RuntimeLoopPlan::new(
+        queued_timer_flow,
         verifier_flow,
-        &mut native_runtime,
+        [worker_a, worker_b],
+        [agent_a_context, agent_b_context],
         verifier_image,
-        completed_workers,
-    ) else {
-        fatal_boot("AGENT_KERNEL_NATIVE_VERIFIER_ERROR");
-    };
+        verifier_context,
+    );
+    if runtime_loop::run(&mut booted, &mut native_runtime, runtime_plan).is_none() {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
+    }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURN_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK");

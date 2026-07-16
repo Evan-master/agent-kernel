@@ -1,30 +1,24 @@
-//! Scheduled native Verifier task bound to physical x86 call evidence.
+//! Admission, authority, and terminal evidence for the native Verifier task.
 //!
 //! The Verifier owns task-scoped execution authority and a separate attenuated
-//! resource-scoped Verify capability. Type states prevent inspection,
-//! verification, or completion before the matching ring-3 request exists.
+//! Verify capability. Physical call sequencing belongs to the generic runtime
+//! executor; this module keeps only trusted semantic metadata.
 
+mod runtime;
 mod setup;
-mod transitions;
 
 use agent_kernel_core::{
-    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, RunQueueEntry, TaskId,
-    TaskResult,
+    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use crate::{
-    agent_cpu::{
-        AcknowledgedTaskInspectionCpu, AcknowledgedTaskVerificationCpu, CompletedVerifierCpu,
-        PreemptedAgentCpu, RequestedTaskInspectionCpu, RequestedTaskVerificationCpu,
-    },
-    native_agent_runtime::NativeAgentRuntime,
+    native_agent_executor::NativeVerifyAuthority,
     timer_task_flow::{CompletedWorkerTasks, VerificationSubject},
     X86BootedKernel,
 };
 
 pub(super) const VERIFIER: AgentId = AgentId::new(5);
-pub(super) const VERIFIER_QUANTUM: u64 = 1;
 
 #[derive(Copy, Clone)]
 struct VerifierTask {
@@ -46,26 +40,6 @@ pub(super) struct VerifierTaskFlow;
 
 pub(super) struct PreparedVerifierFlow {
     verifier: VerifierTask,
-}
-
-pub(super) struct RunningVerifierFlow {
-    verifier: VerifierTask,
-    workers: CompletedWorkerTasks,
-}
-
-pub(super) struct ResumedVerifierFlow {
-    verifier: VerifierTask,
-    workers: CompletedWorkerTasks,
-}
-
-pub(super) struct InspectedVerifierFlow {
-    verifier: VerifierTask,
-    workers: CompletedWorkerTasks,
-}
-
-pub(super) struct VerifiedSubjectFlow {
-    verifier: VerifierTask,
-    workers: CompletedWorkerTasks,
 }
 
 pub(super) struct CompletedVerifierFlow;
@@ -91,87 +65,23 @@ impl PreparedVerifierFlow {
         booted.kernel().agent_image(self.verifier.image).ok()
     }
 
-    pub(super) fn dispatch_after_workers(
-        self,
-        booted: &mut X86BootedKernel,
-        workers: CompletedWorkerTasks,
-        runtime: &NativeAgentRuntime,
-    ) -> Option<(RunningVerifierFlow, RunQueueEntry)> {
-        let dispatched = transitions::dispatch(booted, self.verifier, &workers, runtime)?;
-        Some((
-            RunningVerifierFlow {
-                verifier: self.verifier,
-                workers,
-            },
-            dispatched,
-        ))
+    pub(super) fn runtime_authority(&self) -> Option<NativeVerifyAuthority> {
+        NativeVerifyAuthority::new(self.verifier.agent, self.verifier.verify_capability)
     }
-}
 
-impl RunningVerifierFlow {
-    pub(super) fn expire_and_redispatch(
-        self,
+    pub(super) fn queue_after_workers_for_runtime(
+        &self,
         booted: &mut X86BootedKernel,
-        cpu: PreemptedAgentCpu,
-        runtime: &mut NativeAgentRuntime,
-    ) -> Option<(ResumedVerifierFlow, RunQueueEntry)> {
-        let dispatched =
-            transitions::expire_and_redispatch(booted, self.verifier, &self.workers, cpu, runtime)?;
-        Some((
-            ResumedVerifierFlow {
-                verifier: self.verifier,
-                workers: self.workers,
-            },
-            dispatched,
-        ))
+        workers: &CompletedWorkerTasks,
+    ) -> Option<()> {
+        runtime::queue(booted, self.verifier, workers)
     }
-}
 
-impl ResumedVerifierFlow {
-    pub(super) fn inspect_subject(
+    pub(super) fn completed_after_runtime(
         self,
-        booted: &mut X86BootedKernel,
-        cpu: RequestedTaskInspectionCpu,
-    ) -> Option<(InspectedVerifierFlow, AcknowledgedTaskInspectionCpu)> {
-        let acknowledged = transitions::inspect(booted, self.verifier, &self.workers, cpu)?;
-        Some((
-            InspectedVerifierFlow {
-                verifier: self.verifier,
-                workers: self.workers,
-            },
-            acknowledged,
-        ))
-    }
-}
-
-impl InspectedVerifierFlow {
-    pub(super) fn verify_subject(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: RequestedTaskVerificationCpu,
-    ) -> Option<(VerifiedSubjectFlow, AcknowledgedTaskVerificationCpu)> {
-        let acknowledged = transitions::verify(booted, self.verifier, &self.workers, cpu)?;
-        Some((
-            VerifiedSubjectFlow {
-                verifier: self.verifier,
-                workers: self.workers,
-            },
-            acknowledged,
-        ))
-    }
-}
-
-impl VerifiedSubjectFlow {
-    pub(super) fn complete(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: CompletedVerifierCpu,
+        booted: &X86BootedKernel,
+        workers: &CompletedWorkerTasks,
     ) -> Option<CompletedVerifierFlow> {
-        transitions::complete(booted, self.verifier, &self.workers, cpu)?;
-        Some(CompletedVerifierFlow)
+        runtime::completed(booted, self.verifier, workers).then_some(CompletedVerifierFlow)
     }
-}
-
-const fn subject_result(verifier: VerifierTask) -> TaskResult {
-    verifier.subject.result()
 }

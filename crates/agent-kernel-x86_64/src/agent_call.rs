@@ -7,6 +7,7 @@
 
 mod context;
 mod mailbox;
+mod transcript;
 
 use agent_kernel_core::{
     AgentId, AgentImageId, MessageId, MessageKind, MessagePayload, TaskId, TaskResult,
@@ -15,6 +16,7 @@ use agent_kernel_core::{
 use crate::context::PrivilegeInterruptStackFrame;
 
 pub use context::AgentCallContext;
+pub use transcript::{AgentCallTranscript, AgentCallTranscriptError};
 
 pub const AGENT_CALL_ABI_MAGIC: u64 = u64::from_le_bytes(*b"AGNTCALL");
 pub const AGENT_CALL_ABI_VERSION: u64 = 1;

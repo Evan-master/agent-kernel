@@ -1,0 +1,85 @@
+//! Inner role-independent loop for one running native Agent session.
+//!
+//! The current decoded operation selects a public semantic handler. Immediate
+//! replies resume the same owned frame; wait, yield, and completion return
+//! control to the outer scheduler loop.
+
+mod mailbox;
+mod task;
+
+use agent_kernel_x86_64::agent_call::AgentCallRequest;
+
+use super::{NativeExecutionReport, NativeVerifyAuthority};
+use crate::{
+    agent_cpu::{PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu},
+    native_agent_runtime::NativeAgentRuntime,
+    X86BootedKernel,
+};
+
+pub(super) fn run(
+    booted: &mut X86BootedKernel,
+    runtime: &mut NativeAgentRuntime,
+    report: &mut NativeExecutionReport,
+    verify_authority: Option<NativeVerifyAuthority>,
+    mut pending: PendingAgentCallCpu,
+) -> Option<()> {
+    loop {
+        let request = pending.request();
+        let resumable = match request {
+            AgentCallRequest::DescribeContext { .. } => pending.acknowledge_describe()?,
+            AgentCallRequest::SubmitTaskResult { result, .. } => {
+                task::submit_result(booted, pending, result)?
+            }
+            AgentCallRequest::SendMessage {
+                recipient,
+                kind,
+                payload,
+                ..
+            } => mailbox::send(booted, pending, recipient, kind, payload)?,
+            AgentCallRequest::ReceiveMessage { .. } => {
+                match mailbox::receive_or_wait(booted, pending)? {
+                    mailbox::ReceiveDisposition::Continue(cpu) => cpu,
+                    mailbox::ReceiveDisposition::Waiting(cpu) => {
+                        if runtime.park_waiting_call(cpu).is_some() {
+                            return None;
+                        }
+                        return Some(());
+                    }
+                }
+            }
+            AgentCallRequest::AcknowledgeMessage { message, .. } => {
+                mailbox::acknowledge(booted, pending, message)?
+            }
+            AgentCallRequest::Yield { .. } => {
+                let yielded = task::yield_running(booted, pending)?;
+                if runtime.park_yielded_call(yielded).is_some() {
+                    return None;
+                }
+                return Some(());
+            }
+            AgentCallRequest::InspectTaskResult { target_task, .. } => {
+                task::inspect_result(booted, pending, target_task, verify_authority?)?
+            }
+            AgentCallRequest::VerifyTask { target_task, .. } => {
+                task::verify(booted, pending, target_task, verify_authority?)?
+            }
+            AgentCallRequest::CompleteTask { .. } => {
+                let completed = task::complete(booted, pending)?;
+                report.record(completed)?;
+                return Some(());
+            }
+        };
+        pending = resume_next(resumable)?;
+    }
+}
+
+pub(super) fn resume_waiting_receive(
+    booted: &mut X86BootedKernel,
+    waiting: WaitingAgentCallCpu,
+) -> Option<ResumableAgentCpu> {
+    mailbox::resume_waiting(booted, waiting)
+}
+
+fn resume_next(cpu: ResumableAgentCpu) -> Option<PendingAgentCallCpu> {
+    cpu.resume_until_agent_call()
+}

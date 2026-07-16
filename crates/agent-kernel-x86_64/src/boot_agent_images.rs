@@ -5,6 +5,7 @@
 //! each digest before mapping a private code page.
 
 use agent_kernel_core::{AgentImageDigest, TaskResult};
+use agent_kernel_x86_64::agent_call::AgentCallOperation;
 
 const WORKER_A_NONCE: u64 = 0xa11c_e001;
 const WORKER_B_NONCE: u64 = 0xb22c_e002;
@@ -19,6 +20,26 @@ const WORKER_B_RESULT: TaskResult = TaskResult {
 };
 const WORKER_A_RETURN_OFFSETS: [u32; 5] = [46, 67, 94, 112, 127];
 const WORKER_B_RETURN_OFFSETS: [u32; 5] = [48, 57, 99, 120, 129];
+const WORKER_A_OPERATIONS: [AgentCallOperation; 5] = [
+    AgentCallOperation::DescribeContext,
+    AgentCallOperation::SubmitTaskResult,
+    AgentCallOperation::SendMessage,
+    AgentCallOperation::Yield,
+    AgentCallOperation::CompleteTask,
+];
+const WORKER_B_OPERATIONS: [AgentCallOperation; 5] = [
+    AgentCallOperation::DescribeContext,
+    AgentCallOperation::ReceiveMessage,
+    AgentCallOperation::AcknowledgeMessage,
+    AgentCallOperation::SubmitTaskResult,
+    AgentCallOperation::CompleteTask,
+];
+const VERIFIER_OPERATIONS: [AgentCallOperation; 4] = [
+    AgentCallOperation::DescribeContext,
+    AgentCallOperation::InspectTaskResult,
+    AgentCallOperation::VerifyTask,
+    AgentCallOperation::CompleteTask,
+];
 const VERIFIER_DESCRIBE_RETURN_OFFSET: u32 = 46;
 const VERIFIER_INSPECTION_RETURN_OFFSET: u32 = 64;
 const VERIFIER_VERIFICATION_RETURN_OFFSET: u32 = 100;
@@ -91,6 +112,7 @@ pub(super) struct BootAgentImage {
     digest: AgentImageDigest,
     nonce: u64,
     result: TaskResult,
+    expected_operations: [AgentCallOperation; 5],
     expected_return_offsets: [u32; 5],
 }
 
@@ -123,6 +145,10 @@ impl BootAgentImage {
     pub(super) const fn expected_return_offsets(self) -> [u32; 5] {
         self.expected_return_offsets
     }
+
+    pub(super) const fn expected_operations(self) -> [AgentCallOperation; 5] {
+        self.expected_operations
+    }
 }
 
 impl BootVerifierImage {
@@ -154,6 +180,10 @@ impl BootVerifierImage {
             VERIFIER_COMPLETION_RETURN_OFFSET,
         ]
     }
+
+    pub(super) const fn expected_operations(self) -> [AgentCallOperation; 4] {
+        VERIFIER_OPERATIONS
+    }
 }
 
 pub(super) const fn worker_a() -> BootAgentImage {
@@ -162,6 +192,7 @@ pub(super) const fn worker_a() -> BootAgentImage {
         digest: WORKER_A_DIGEST,
         nonce: WORKER_A_NONCE,
         result: WORKER_A_RESULT,
+        expected_operations: WORKER_A_OPERATIONS,
         expected_return_offsets: WORKER_A_RETURN_OFFSETS,
     }
 }
@@ -172,6 +203,7 @@ pub(super) const fn worker_b() -> BootAgentImage {
         digest: WORKER_B_DIGEST,
         nonce: WORKER_B_NONCE,
         result: WORKER_B_RESULT,
+        expected_operations: WORKER_B_OPERATIONS,
         expected_return_offsets: WORKER_B_RETURN_OFFSETS,
     }
 }

@@ -1,37 +1,25 @@
 //! Parked x86 Agent CPU ownership selected by kernel dispatch results.
 //!
 //! This bare-metal adapter stores prepared, PIT-preempted, mailbox-waiting, and
-//! cooperatively yielded CPU tokens under their trusted Agent ID. Read-only
-//! readiness checks match the core permit before semantic commit, and every
-//! take is guarded again by the committed Agent/Task identity and expected
-//! physical state. Scheduler policy stays in the core; this module owns only
-//! non-running physical context ownership.
+//! cooperatively yielded contexts under trusted Agent identity. Scheduler policy
+//! remains in the core; the registry owns only non-running physical state.
 
-use agent_kernel_core::{RunQueueEntry, TaskDispatchPermit};
+mod dispatch;
+
+use agent_kernel_core::RunQueueEntry;
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
-use crate::{
-    agent_cpu::{
-        PreemptedAgentCpu, PreparedAgentCpu, WaitingMessageReceiveCpu, YieldedMailboxSenderCpu,
-    },
-    X86BootedKernel,
+use crate::agent_cpu::{
+    PreemptedAgentCpu, PreparedAgentCpu, ResumableAgentCpu, WaitingAgentCallCpu,
 };
 
 const NATIVE_AGENT_CAPACITY: usize = 3;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub(crate) enum NativeAgentContextKind {
-    Prepared,
-    Preempted,
-    WaitingMailbox,
-    Yielded,
-}
-
 pub(crate) enum NativeAgentContext {
     Prepared(PreparedAgentCpu),
     Preempted(PreemptedAgentCpu),
-    WaitingMailbox(WaitingMessageReceiveCpu),
-    Yielded(YieldedMailboxSenderCpu),
+    WaitingCall(WaitingAgentCallCpu),
+    YieldedCall(ResumableAgentCpu),
 }
 
 impl NativeAgentContext {
@@ -39,23 +27,14 @@ impl NativeAgentContext {
         match self {
             Self::Prepared(cpu) => cpu.context(),
             Self::Preempted(cpu) => cpu.context(),
-            Self::WaitingMailbox(cpu) => cpu.context(),
-            Self::Yielded(cpu) => cpu.context(),
+            Self::WaitingCall(cpu) => cpu.context(),
+            Self::YieldedCall(cpu) => cpu.context(),
         }
     }
 
-    const fn kind(&self) -> NativeAgentContextKind {
-        match self {
-            Self::Prepared(_) => NativeAgentContextKind::Prepared,
-            Self::Preempted(_) => NativeAgentContextKind::Preempted,
-            Self::WaitingMailbox(_) => NativeAgentContextKind::WaitingMailbox,
-            Self::Yielded(_) => NativeAgentContextKind::Yielded,
-        }
-    }
-
-    fn matches(&self, entry: RunQueueEntry, expected: NativeAgentContextKind) -> bool {
+    fn matches_entry(&self, entry: RunQueueEntry) -> bool {
         let context = self.context();
-        context.agent() == entry.agent && context.task() == entry.task && self.kind() == expected
+        context.agent() == entry.agent && context.task() == entry.task
     }
 }
 
@@ -81,73 +60,18 @@ impl NativeAgentRuntime {
         self.park(NativeAgentContext::Preempted(cpu))
     }
 
-    pub(crate) fn park_waiting_mailbox(
+    pub(crate) fn park_waiting_call(
         &mut self,
-        cpu: WaitingMessageReceiveCpu,
+        cpu: WaitingAgentCallCpu,
     ) -> Option<NativeAgentContext> {
-        self.park(NativeAgentContext::WaitingMailbox(cpu))
+        self.park(NativeAgentContext::WaitingCall(cpu))
     }
 
-    pub(crate) fn park_yielded(
+    pub(crate) fn park_yielded_call(
         &mut self,
-        cpu: YieldedMailboxSenderCpu,
+        cpu: ResumableAgentCpu,
     ) -> Option<NativeAgentContext> {
-        self.park(NativeAgentContext::Yielded(cpu))
-    }
-
-    pub(crate) fn take_prepared(&mut self, dispatched: RunQueueEntry) -> Option<PreparedAgentCpu> {
-        match self.take(dispatched, NativeAgentContextKind::Prepared)? {
-            NativeAgentContext::Prepared(cpu) => Some(cpu),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn take_preempted(
-        &mut self,
-        dispatched: RunQueueEntry,
-    ) -> Option<PreemptedAgentCpu> {
-        match self.take(dispatched, NativeAgentContextKind::Preempted)? {
-            NativeAgentContext::Preempted(cpu) => Some(cpu),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn take_waiting_mailbox(
-        &mut self,
-        dispatched: RunQueueEntry,
-    ) -> Option<WaitingMessageReceiveCpu> {
-        match self.take(dispatched, NativeAgentContextKind::WaitingMailbox)? {
-            NativeAgentContext::WaitingMailbox(cpu) => Some(cpu),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn take_yielded(
-        &mut self,
-        dispatched: RunQueueEntry,
-    ) -> Option<YieldedMailboxSenderCpu> {
-        match self.take(dispatched, NativeAgentContextKind::Yielded)? {
-            NativeAgentContext::Yielded(cpu) => Some(cpu),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn commit_ready_dispatch(
-        &self,
-        booted: &mut X86BootedKernel,
-        quantum: u64,
-        expected_entry: RunQueueEntry,
-        expected_kind: NativeAgentContextKind,
-    ) -> Option<RunQueueEntry> {
-        let permit = booted
-            .kernel()
-            .sys_prepare_next_ready_dispatch_with_quantum(quantum)
-            .ok()?;
-        if permit.entry() != expected_entry || !self.ready_for(permit, expected_kind) {
-            return None;
-        }
-        let dispatched = booted.kernel_mut().sys_commit_ready_dispatch(permit).ok()?;
-        (dispatched == expected_entry).then_some(dispatched)
+        self.park(NativeAgentContext::YieldedCall(cpu))
     }
 
     pub(crate) const fn len(&self) -> usize {
@@ -164,23 +88,5 @@ impl NativeAgentRuntime {
             Ok(()) => None,
             Err((_error, rejected)) => Some(rejected),
         }
-    }
-
-    fn take(
-        &mut self,
-        dispatched: RunQueueEntry,
-        expected: NativeAgentContextKind,
-    ) -> Option<NativeAgentContext> {
-        self.contexts
-            .take_matching(dispatched.agent, |parked| {
-                parked.matches(dispatched, expected)
-            })
-            .ok()
-    }
-
-    fn ready_for(&self, permit: TaskDispatchPermit, expected: NativeAgentContextKind) -> bool {
-        let entry = permit.entry();
-        self.contexts
-            .contains_matching(entry.agent, |parked| parked.matches(entry, expected))
     }
 }

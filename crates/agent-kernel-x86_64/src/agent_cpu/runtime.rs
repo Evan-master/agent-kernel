@@ -146,8 +146,4 @@ impl PreemptedAgentCpu {
     pub(crate) const fn context(&self) -> AgentCallContext {
         self.context
     }
-
-    pub(crate) fn signal_is_clear(&self) -> bool {
-        self.memory.signal_is_clear()
-    }
 }

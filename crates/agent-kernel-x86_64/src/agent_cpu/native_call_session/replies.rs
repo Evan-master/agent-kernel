@@ -1,0 +1,152 @@
+//! Operation-specific acknowledgements for a generic native call session.
+//!
+//! Each conversion authenticates the pending request and writes only the reply
+//! associated with that operation. Scheduler and mailbox mutations must have
+//! completed before callers invoke these methods.
+
+use agent_kernel_core::{MessageId, MessageRecord, TaskResult, WaiterId};
+use agent_kernel_x86_64::agent_call::AgentCallRequest;
+
+use super::{CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu};
+
+impl PendingAgentCallCpu {
+    pub(crate) fn acknowledge_describe(mut self) -> Option<ResumableAgentCpu> {
+        let AgentCallRequest::DescribeContext { nonce } = self.request else {
+            return None;
+        };
+        if self.session.nonce.is_some() || self.call_count() != 1 {
+            return None;
+        }
+        self.session
+            .context
+            .encode_describe_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        self.session.nonce = Some(nonce);
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_task_result(mut self) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::SubmitTaskResult { .. })
+        })?;
+        self.session
+            .context
+            .encode_task_result_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_yield(mut self) -> Option<ResumableAgentCpu> {
+        let nonce = self
+            .authenticated_nonce_for(|request| matches!(request, AgentCallRequest::Yield { .. }))?;
+        self.session
+            .context
+            .encode_yield_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_task_inspection(
+        mut self,
+        result: TaskResult,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::InspectTaskResult { .. })
+        })?;
+        self.session
+            .context
+            .encode_task_result_inspection_reply(self.session.frame.frame_mut(), nonce, result)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_task_verification(mut self) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::VerifyTask { .. })
+        })?;
+        self.session
+            .context
+            .encode_task_verification_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_message_send(
+        mut self,
+        message: MessageId,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::SendMessage { .. })
+        })?;
+        self.session
+            .context
+            .encode_message_send_reply(self.session.frame.frame_mut(), nonce, message)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_message_receive(
+        mut self,
+        message: MessageRecord,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::ReceiveMessage { .. })
+        })?;
+        self.session
+            .context
+            .encode_message_receive_reply(self.session.frame.frame_mut(), nonce, message)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_message(mut self) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::AcknowledgeMessage { .. })
+        })?;
+        self.session
+            .context
+            .encode_message_acknowledgement_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn wait(self, waiter: WaiterId) -> Option<WaitingAgentCallCpu> {
+        (waiter.raw() != 0
+            && self
+                .authenticated_request()
+                .is_some_and(|request| matches!(request, AgentCallRequest::ReceiveMessage { .. }))
+            && self.session.memory.agent_call_is_released())
+        .then_some(WaitingAgentCallCpu {
+            pending: self,
+            waiter,
+        })
+    }
+
+    pub(crate) fn complete(self) -> Option<CompletedAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::CompleteTask { .. })
+        })?;
+        Some(CompletedAgentCpu {
+            context: self.session.context,
+            nonce,
+            transcript: self.session.transcript,
+        })
+    }
+
+    fn authenticated_nonce_for(
+        &self,
+        matches_operation: impl FnOnce(AgentCallRequest) -> bool,
+    ) -> Option<u64> {
+        let request = self.authenticated_request()?;
+        matches_operation(request).then_some(self.session.nonce?)
+    }
+}
+
+impl WaitingAgentCallCpu {
+    pub(crate) fn acknowledge_message_receive(
+        self,
+        message: MessageRecord,
+    ) -> Option<ResumableAgentCpu> {
+        self.pending.acknowledge_message_receive(message)
+    }
+}

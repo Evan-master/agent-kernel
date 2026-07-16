@@ -96,6 +96,65 @@ impl AgentCallContext {
         )
     }
 
+    pub fn authenticates(self, request: AgentCallRequest, expected_nonce: u64) -> bool {
+        match request {
+            AgentCallRequest::DescribeContext { .. } => false,
+            AgentCallRequest::Yield {
+                agent,
+                task,
+                image,
+                nonce,
+            }
+            | AgentCallRequest::CompleteTask {
+                agent,
+                task,
+                image,
+                nonce,
+            }
+            | AgentCallRequest::SubmitTaskResult {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::InspectTaskResult {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::VerifyTask {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::SendMessage {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::ReceiveMessage {
+                agent,
+                task,
+                image,
+                nonce,
+            }
+            | AgentCallRequest::AcknowledgeMessage {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            } => self.matches_identity(agent, task, image, nonce, expected_nonce),
+        }
+    }
+
     pub fn matches_completion(self, request: AgentCallRequest, expected_nonce: u64) -> bool {
         matches!(
             request,

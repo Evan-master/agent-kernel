@@ -1,36 +1,23 @@
-//! Two-Worker semantic schedule for physical x86 context rotation.
+//! Admission and terminal evidence for the two native Worker tasks.
 //!
-//! This boot adapter owns only type-state ordering between architecture evidence
-//! and public task syscalls. Setup admits both Workers; transition helpers prove
-//! FIFO queue state across two expiries, returning calls, a cooperative Yield,
-//! and terminal completion calls.
+//! Setup owns deterministic Agent/task/image creation. Physical scheduling and
+//! Agent Call routing belong to the generic runtime executor; this module keeps
+//! only trusted Worker metadata and final semantic predicates.
 
 mod completed;
-mod mailbox;
-mod message_transition;
-mod result_transition;
 mod setup;
-mod transitions;
-mod wait_transition;
-mod yield_transition;
 
 use agent_kernel_core::{
     AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId, TaskResult,
-    WaiterId,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
-use crate::{
-    agent_cpu::PreemptedAgentCpu,
-    native_agent_runtime::{NativeAgentContextKind, NativeAgentRuntime},
-    X86BootedKernel,
-};
+use crate::X86BootedKernel;
 
 pub(super) use completed::{CompletedWorkerTasks, VerificationSubject};
 
 pub(super) const WORKER_A: AgentId = AgentId::new(3);
 pub(super) const WORKER_B: AgentId = AgentId::new(4);
-pub(super) const TASK_QUANTUM: u64 = 1;
 
 #[derive(Copy, Clone)]
 pub(super) struct WorkerTask {
@@ -68,70 +55,7 @@ pub(super) struct QueuedTimerTaskFlow {
     second: WorkerTask,
 }
 
-pub(super) struct TimerTaskFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct FirstRunningFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct SecondResumedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct SecondWaitingFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-    waiter: WaiterId,
-}
-
-pub(super) struct FirstResumedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-    waiter: WaiterId,
-}
-
-pub(super) struct FirstResultSubmittedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-    waiter: WaiterId,
-}
-
-pub(super) struct FirstMessageSentFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-    waiter: WaiterId,
-}
-
-pub(super) struct SecondRedispatchedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-    waiter: WaiterId,
-}
-
-pub(super) struct SecondMessageReceivedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct SecondMessageAcknowledgedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct SecondResultSubmittedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
-
-pub(super) struct FirstYieldRedispatchedFlow {
-    first: WorkerTask,
-    second: WorkerTask,
-}
+pub(super) struct TimerTaskFlow;
 
 impl TimerTaskFlow {
     pub(super) fn prepare(
@@ -149,30 +73,6 @@ impl TimerTaskFlow {
             second_result,
         )?;
         Some(QueuedTimerTaskFlow { first, second })
-    }
-
-    pub(super) fn expire_second_and_dispatch_first(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: PreemptedAgentCpu,
-        runtime: &mut NativeAgentRuntime,
-    ) -> Option<(FirstRunningFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched = transitions::expire_and_dispatch(
-            booted,
-            self.second,
-            self.first,
-            cpu,
-            runtime,
-            NativeAgentContextKind::Prepared,
-            0,
-        )?;
-        Some((
-            FirstRunningFlow {
-                first: self.first,
-                second: self.second,
-            },
-            dispatched,
-        ))
     }
 }
 
@@ -194,44 +94,11 @@ impl QueuedTimerTaskFlow {
         (first.id != second.id && first.digest != second.digest).then_some((first, second))
     }
 
-    pub(super) fn dispatch_second(
+    pub(super) fn completed_after_runtime(
         self,
-        booted: &mut X86BootedKernel,
-        runtime: &NativeAgentRuntime,
-    ) -> Option<(TimerTaskFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched = setup::dispatch_second(booted, runtime, self.first, self.second)?;
-        Some((
-            TimerTaskFlow {
-                first: self.first,
-                second: self.second,
-            },
-            dispatched,
-        ))
-    }
-}
-
-impl FirstRunningFlow {
-    pub(super) fn expire_first_and_dispatch_second(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: PreemptedAgentCpu,
-        runtime: &mut NativeAgentRuntime,
-    ) -> Option<(SecondResumedFlow, agent_kernel_core::RunQueueEntry)> {
-        let dispatched = transitions::expire_and_dispatch(
-            booted,
-            self.first,
-            self.second,
-            cpu,
-            runtime,
-            NativeAgentContextKind::Preempted,
-            1,
-        )?;
-        Some((
-            SecondResumedFlow {
-                first: self.first,
-                second: self.second,
-            },
-            dispatched,
-        ))
+        booted: &X86BootedKernel,
+    ) -> Option<CompletedWorkerTasks> {
+        let completed = CompletedWorkerTasks::new(self.first, self.second);
+        completed.both_completed(booted).then_some(completed)
     }
 }
