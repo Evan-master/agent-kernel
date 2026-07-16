@@ -1,22 +1,23 @@
-//! Semantic state and immutable transcript proof for Fault Worker recovery.
+//! Shared semantic state and immutable transcript proof for Fault Worker recovery.
 //!
-//! This boot-adapter evidence child validates task/context states, all three
-//! ordered execution-trap records, and the final recovery/completion sequence.
-//! It reads only public kernel state and relies on the parent restart module for
-//! the fixed page-fault contract; it performs no physical or semantic mutation.
+//! This boot-adapter child validates task/context states, all four ordered
+//! execution-trap records, and the final recovery/completion sequence. Restart
+//! and page-repair siblings perform mutations; this module reads only public
+//! kernel state and fixed Fault Worker contracts.
 
 use agent_kernel_core::{AgentExecutionState, EventKind, FaultId, FaultKind, TaskStatus};
 use agent_kernel_x86_64::native_runtime::{NativeAgentFault, INVALID_OPCODE_VECTOR};
 
-use super::{expected_page_fault, PreparedFaultTaskFlow, FAULT_WORKER};
+use super::{expected_lazy_page_fault, expected_page_fault, PreparedFaultTaskFlow, FAULT_WORKER};
 use crate::X86BootedKernel;
 
 const GENERAL_PROTECTION_DETAIL: u64 =
     NativeAgentFault::GeneralProtection { error_code: 0 }.detail();
 const PAGE_FAULT_DETAIL: u64 = expected_page_fault().detail();
+const LAZY_PAGE_FAULT_DETAIL: u64 = expected_lazy_page_fault().detail();
 
 impl PreparedFaultTaskFlow {
-    pub(crate) fn completed_after_restarts(&self, booted: &X86BootedKernel) -> bool {
+    pub(crate) fn completed_after_fault_recovery(&self, booted: &X86BootedKernel) -> bool {
         let kernel = booted.kernel();
         let task = kernel
             .tasks()
@@ -41,7 +42,7 @@ impl PreparedFaultTaskFlow {
                     && context.task.is_none()
                     && context.run_ticks == 0
                     && context.quantum_remaining == 0)
-            && self.fault_history_valid(booted, 3)
+            && self.fault_history_valid(booted, 4)
             && kernel
                 .faults()
                 .last()
@@ -124,6 +125,7 @@ impl PreparedFaultTaskFlow {
             u64::from(INVALID_OPCODE_VECTOR),
             GENERAL_PROTECTION_DETAIL,
             PAGE_FAULT_DETAIL,
+            LAZY_PAGE_FAULT_DETAIL,
         ];
         records.len() == expected_records
             && expected_records <= expected_details.len()
@@ -137,6 +139,9 @@ impl PreparedFaultTaskFlow {
 
     fn completion_events_ordered(&self, booted: &X86BootedKernel) -> bool {
         let expected = [
+            EventKind::TaskFaulted,
+            EventKind::TaskFaultRecovered,
+            EventKind::TaskQueued,
             EventKind::TaskFaulted,
             EventKind::TaskFaultRecovered,
             EventKind::TaskQueued,

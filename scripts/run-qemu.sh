@@ -64,6 +64,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_PAGE_FAULT_OK" \
+  "AGENT_KERNEL_NATIVE_AGENT_DEMAND_PAGE_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
@@ -183,17 +184,21 @@ for expected in \
   "event[106] task_dispatched" \
   "event[107] task_quantum_expired" \
   "event[108] task_dispatched" \
-  "event[109] task_completed" \
-  "event[110] device_event_raised" \
-  "event[111] device_event_delivered" \
-  "event[112] driver_invocation_queued" \
-  "event[113] driver_invocation_dispatched" \
-  "event[114] driver_invocation_ticked" \
-  "event[115] device_event_acknowledged" \
-  "event[116] driver_command_submitted" \
-  "event[117] driver_command_dispatched" \
-  "event[118] driver_command_completed" \
-  "event[119] driver_invocation_completed" \
+  "event[109] task_faulted" \
+  "event[110] task_fault_recovered" \
+  "event[111] task_queued" \
+  "event[112] task_dispatched" \
+  "event[113] task_completed" \
+  "event[114] device_event_raised" \
+  "event[115] device_event_delivered" \
+  "event[116] driver_invocation_queued" \
+  "event[117] driver_invocation_dispatched" \
+  "event[118] driver_invocation_ticked" \
+  "event[119] device_event_acknowledged" \
+  "event[120] driver_command_submitted" \
+  "event[121] driver_command_dispatched" \
+  "event[122] driver_command_completed" \
+  "event[123] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -203,7 +208,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 119 ]]; then
-  printf 'expected exactly 119 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 123 ]]; then
+  printf 'expected exactly 123 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

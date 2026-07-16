@@ -5,6 +5,8 @@
 //! exception capture and physical restart; semantic mutation uses only public
 //! kernel records and syscalls.
 
+mod evidence;
+mod page_repair;
 mod restart;
 
 use agent_kernel_core::{
@@ -21,11 +23,20 @@ use crate::X86BootedKernel;
 pub(super) const FAULT_WORKER: AgentId = AgentId::new(6);
 const FAULT_WORKER_PAGE_FAULT_ERROR_CODE: u16 = 7;
 const FAULT_WORKER_PAGE_FAULT_ADDRESS: u64 = UserMemoryLayout::fixed().signal_start();
+const FAULT_WORKER_LAZY_FAULT_ERROR_CODE: u16 = 6;
+const FAULT_WORKER_LAZY_FAULT_ADDRESS: u64 = UserMemoryLayout::fixed().lazy_data_start();
 
 pub(crate) const fn expected_page_fault() -> NativeAgentFault {
     NativeAgentFault::PageFault {
         error_code: FAULT_WORKER_PAGE_FAULT_ERROR_CODE,
         address: FAULT_WORKER_PAGE_FAULT_ADDRESS,
+    }
+}
+
+pub(crate) const fn expected_lazy_page_fault() -> NativeAgentFault {
+    NativeAgentFault::PageFault {
+        error_code: FAULT_WORKER_LAZY_FAULT_ERROR_CODE,
+        address: FAULT_WORKER_LAZY_FAULT_ADDRESS,
     }
 }
 

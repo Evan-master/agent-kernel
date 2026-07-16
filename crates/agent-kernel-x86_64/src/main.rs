@@ -35,7 +35,7 @@ use privilege_runtime::PrivilegeBoundary;
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-pub(crate) type X86BootedKernel = BootedKernel<6, 1, 7, 119, 1, 1, 0, 4, 4, 2, 1, 1, 1, 1, 1, 1, 3>;
+pub(crate) type X86BootedKernel = BootedKernel<6, 1, 7, 123, 1, 1, 0, 4, 4, 2, 1, 1, 1, 1, 1, 1, 4>;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();

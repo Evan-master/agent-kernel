@@ -86,6 +86,34 @@ fn page_fault_preserves_error_address_and_packed_semantic_detail() {
 }
 
 #[test]
+fn not_present_lazy_write_has_distinct_error_address_and_detail() {
+    let address = UserMemoryLayout::fixed().lazy_data_start();
+    let fault = NativeAgentFault::PageFault {
+        error_code: 6,
+        address,
+    };
+    let evidence = NativeRunBoundaryEvidence::new(
+        0,
+        0,
+        1,
+        false,
+        false,
+        false,
+        true,
+        PAGE_FAULT_VECTOR,
+        6,
+        address,
+    );
+
+    assert_eq!(
+        evidence.classify(),
+        Ok(NativeRunBoundary::AgentFault(fault))
+    );
+    assert_eq!(fault.detail(), 0xe006_4000_0000_7000);
+    assert_ne!(fault.detail(), 0xe007_4000_0000_1000);
+}
+
+#[test]
 fn empty_mixed_repeated_inconsistent_and_unsupported_evidence_is_rejected() {
     let invalid = [
         NativeRunBoundaryEvidence::new(0, 0, 0, false, false, false, false, 0, 0, 0),

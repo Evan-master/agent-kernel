@@ -49,6 +49,7 @@ pub(crate) struct CompletedAgentCpu {
     transcript: AgentCallTranscript<MAX_AGENT_CALLS>,
     physical_quantum_generation: u8,
     restart_generation: u8,
+    lazy_data_byte: u8,
 }
 
 pub(crate) enum AgentRunOutcome {
@@ -166,6 +167,22 @@ impl PendingAgentCallCpu {
 }
 
 impl ResumableAgentCpu {
+    pub(super) fn from_repaired_fault(
+        memory: PreparedAgentMemory,
+        runtime: AgentCpuRuntime,
+        frame: SavedAgentFrame,
+        context: AgentCallContext,
+        progress: AgentCallProgress,
+    ) -> Self {
+        Self(AgentCallSession {
+            memory,
+            runtime,
+            frame,
+            context,
+            progress,
+        })
+    }
+
     pub(crate) const fn context(&self) -> AgentCallContext {
         self.0.context
     }
@@ -216,5 +233,9 @@ impl CompletedAgentCpu {
 
     pub(crate) const fn restart_generation(&self) -> u8 {
         self.restart_generation
+    }
+
+    pub(crate) const fn lazy_data_byte(&self) -> u8 {
+        self.lazy_data_byte
     }
 }

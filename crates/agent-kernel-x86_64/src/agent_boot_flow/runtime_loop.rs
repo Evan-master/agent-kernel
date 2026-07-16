@@ -3,27 +3,24 @@
 //! This module binds immutable Capsule contracts to terminal transcripts while
 //! the executor routes operations independently of Worker or Verifier roles.
 
-use agent_kernel_core::EventKind;
-use agent_kernel_x86_64::{
-    agent_call::AgentCallContext,
-    native_runtime::NativeAgentFault,
-    user_memory::{
-        FIRST_AGENT_RESTART_GENERATION, SECOND_AGENT_RESTART_GENERATION,
-        THIRD_AGENT_RESTART_GENERATION,
-    },
+mod evidence;
+
+use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentFault};
+
+use self::evidence::{
+    fault_recovery_evidence_valid, general_protection_evidence_valid,
+    invalid_opcode_evidence_valid, lazy_page_fault_evidence_valid, page_fault_evidence_valid,
+    verifier_evidence_valid, worker_evidence_valid,
 };
 
 use crate::{
-    agent_cpu::CompletedAgentCpu,
     boot_agent_images::{BootAgentImage, BootFaultWorkerImage, BootVerifierImage},
-    fault_task_flow::{expected_page_fault, PreparedFaultTaskFlow, FAULT_WORKER},
-    native_agent_executor::{
-        self, NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority,
-    },
+    fault_task_flow::{expected_page_fault, PreparedFaultTaskFlow},
+    native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
     native_agent_runtime::NativeAgentRuntime,
     serial_write_line,
-    timer_task_flow::{QueuedTimerTaskFlow, WORKER_A, WORKER_B},
-    verifier_task_flow::{PreparedVerifierFlow, VERIFIER},
+    timer_task_flow::QueuedTimerTaskFlow,
+    verifier_task_flow::PreparedVerifierFlow,
     X86BootedKernel,
 };
 
@@ -189,163 +186,36 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
+    if !runtime.is_empty()
+        || report.len() != 3
+        || report.faulted_len() != 1
+        || !evidence.proves_lazy_page_fault_phase()
+        || !lazy_page_fault_evidence_valid(booted, &report, &fault, fault_image, fault_context)
+    {
+        return None;
+    }
+    fault.repair_page_for_runtime(booted, runtime, &mut report)?;
+    if runtime.len() != 1 || report.faulted_len() != 0 {
+        return None;
+    }
+    native_agent_executor::run_until_idle(
+        booted,
+        runtime,
+        &mut report,
+        &mut evidence,
+        Some(authority),
+    )?;
     if !runtime.is_empty() || report.len() != 4 || report.faulted_len() != 0 {
         return None;
     }
     if !evidence.proves_current_boot() {
         return None;
     }
-    if !fault_restarts_evidence_valid(booted, &report, &fault, fault_image, fault_context) {
+    if !fault_recovery_evidence_valid(booted, &report, &fault, fault_image, fault_context) {
         return None;
     }
     write_verifier_markers();
     Some(())
-}
-
-fn worker_evidence_valid(
-    report: &NativeExecutionReport,
-    images: [BootAgentImage; 2],
-    contexts: [AgentCallContext; 2],
-    authority: NativeVerifyAuthority,
-) -> bool {
-    let Some(first) = report.completed(WORKER_A) else {
-        return false;
-    };
-    let Some(second) = report.completed(WORKER_B) else {
-        return false;
-    };
-    completed_matches_worker(first, images[0], contexts[0], 2)
-        && completed_matches_worker(second, images[1], contexts[1], 1)
-        && first.nonce() != second.nonce()
-        && authority.resolve(first.context().agent()).is_none()
-        && authority.resolve(second.context().agent()).is_none()
-}
-
-fn completed_matches_worker(
-    completed: &CompletedAgentCpu,
-    image: BootAgentImage,
-    context: AgentCallContext,
-    physical_quantum_generation: u8,
-) -> bool {
-    completed.context() == context
-        && completed.nonce() == image.nonce()
-        && completed.call_count() == 5
-        && completed.address_space_switch_count() == 10
-        && completed.operations() == image.expected_operations()
-        && completed.return_offsets() == image.expected_return_offsets()
-        && completed.physical_quantum_generation() == physical_quantum_generation
-        && completed.restart_generation() == 0
-}
-
-fn verifier_evidence_valid(
-    report: &NativeExecutionReport,
-    image: BootVerifierImage,
-    context: AgentCallContext,
-    subject: crate::timer_task_flow::VerificationSubject,
-) -> bool {
-    let Some(completed) = report.completed(VERIFIER) else {
-        return false;
-    };
-    completed.context() == context
-        && completed.nonce() == image.nonce()
-        && completed.call_count() == 4
-        && completed.address_space_switch_count() == 8
-        && completed.operations() == image.expected_operations()
-        && completed.return_offsets() == image.expected_return_offsets()
-        && completed.physical_quantum_generation() == 1
-        && completed.restart_generation() == 0
-        && subject.task().raw() == image.target()
-        && subject.result() == image.result()
-}
-
-fn invalid_opcode_evidence_valid(
-    booted: &X86BootedKernel,
-    report: &NativeExecutionReport,
-    flow: &PreparedFaultTaskFlow,
-    image: BootFaultWorkerImage,
-    context: AgentCallContext,
-) -> bool {
-    let Some(faulted) = report.faulted(FAULT_WORKER) else {
-        return false;
-    };
-    let fault_event = booted
-        .kernel()
-        .events()
-        .iter()
-        .position(|event| event.kind == EventKind::TaskFaulted && event.agent == FAULT_WORKER);
-    let verifier_continuation = booted
-        .kernel()
-        .events()
-        .iter()
-        .position(|event| event.kind == EventKind::TaskResultInspected);
-    faulted.context() == context
-        && faulted.fault() == NativeAgentFault::InvalidOpcode
-        && faulted.fault_offset() == Some(image.invalid_opcode_offset())
-        && !faulted.had_call_progress()
-        && faulted.physical_quantum_generation() == 1
-        && faulted.restart_generation() == 0
-        && flow.invalid_opcode_faulted_after_runtime(booted)
-        && matches!((fault_event, verifier_continuation), (Some(fault), Some(next)) if fault < next)
-}
-
-fn general_protection_evidence_valid(
-    booted: &X86BootedKernel,
-    report: &NativeExecutionReport,
-    flow: &PreparedFaultTaskFlow,
-    image: BootFaultWorkerImage,
-    context: AgentCallContext,
-) -> bool {
-    let Some(faulted) = report.faulted(FAULT_WORKER) else {
-        return false;
-    };
-    faulted.context() == context
-        && faulted.fault() == NativeAgentFault::GeneralProtection { error_code: 0 }
-        && faulted.fault_offset() == Some(image.general_protection_offset())
-        && !faulted.had_call_progress()
-        && faulted.physical_quantum_generation() == 1
-        && faulted.restart_generation() == FIRST_AGENT_RESTART_GENERATION
-        && flow.general_protection_faulted_after_runtime(booted)
-}
-
-fn fault_restarts_evidence_valid(
-    booted: &X86BootedKernel,
-    report: &NativeExecutionReport,
-    flow: &PreparedFaultTaskFlow,
-    image: BootFaultWorkerImage,
-    context: AgentCallContext,
-) -> bool {
-    let Some(completed) = report.completed(FAULT_WORKER) else {
-        return false;
-    };
-    completed.context() == context
-        && completed.nonce() == image.nonce()
-        && completed.call_count() == 2
-        && completed.address_space_switch_count() == 4
-        && completed.operations() == image.expected_operations()
-        && completed.return_offsets() == image.expected_return_offsets()
-        && completed.physical_quantum_generation() == 1
-        && completed.restart_generation() == THIRD_AGENT_RESTART_GENERATION
-        && flow.completed_after_restarts(booted)
-}
-
-fn page_fault_evidence_valid(
-    booted: &X86BootedKernel,
-    report: &NativeExecutionReport,
-    flow: &PreparedFaultTaskFlow,
-    image: BootFaultWorkerImage,
-    context: AgentCallContext,
-) -> bool {
-    let Some(faulted) = report.faulted(FAULT_WORKER) else {
-        return false;
-    };
-    let expected_fault = expected_page_fault();
-    faulted.context() == context
-        && faulted.fault() == expected_fault
-        && faulted.fault_offset() == Some(image.page_fault_offset())
-        && !faulted.had_call_progress()
-        && faulted.physical_quantum_generation() == 1
-        && faulted.restart_generation() == SECOND_AGENT_RESTART_GENERATION
-        && flow.page_faulted_after_runtime(booted)
 }
 
 fn write_worker_markers() {
@@ -380,6 +250,7 @@ fn write_verifier_markers() {
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_PAGE_FAULT_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_DEMAND_PAGE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK");

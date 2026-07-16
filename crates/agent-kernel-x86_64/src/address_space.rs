@@ -6,7 +6,7 @@
 
 pub const PAGE_TABLE_BYTES: u64 = 4096;
 pub const P4_ENTRY_COUNT: usize = 512;
-pub const AGENT_CONTENT_FRAME_COUNT: usize = 6;
+pub const AGENT_CONTENT_FRAME_COUNT: usize = 7;
 pub const AGENT_REGION_BASE: u64 = 0x0000_4000_0000_0000;
 pub const AGENT_P4_INDEX: usize = p4_index(AGENT_REGION_BASE);
 

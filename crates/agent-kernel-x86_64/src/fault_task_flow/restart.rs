@@ -6,8 +6,6 @@
 //! checks live in the `evidence` child; exception capture stays in the CPU
 //! layer.
 
-mod evidence;
-
 use agent_kernel_core::{EventKind, FaultKind};
 use agent_kernel_x86_64::native_runtime::NativeAgentFault;
 

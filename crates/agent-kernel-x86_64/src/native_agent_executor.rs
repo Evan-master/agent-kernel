@@ -38,6 +38,7 @@ pub(crate) struct NativeRuntimeEvidence {
     preempted: u8,
     waiting: u8,
     yielded: u8,
+    recovered_faults: u8,
     quantum_expiries: u8,
     returning_quantum_expiries: u8,
     returning_quantum_generation: u8,
@@ -92,6 +93,17 @@ pub(crate) fn run_until_idle(
             }
             NativeAgentContext::YieldedCall(resumable) => {
                 evidence.yielded = evidence.yielded.checked_add(1)?;
+                run_outcome(
+                    booted,
+                    runtime,
+                    report,
+                    evidence,
+                    verify_authority,
+                    resumable.resume_until_boundary()?,
+                )?;
+            }
+            NativeAgentContext::RecoveredFault(resumable) => {
+                evidence.recovered_faults = evidence.recovered_faults.checked_add(1)?;
                 run_outcome(
                     booted,
                     runtime,
@@ -272,6 +284,7 @@ impl NativeRuntimeEvidence {
             && self.preempted == 5
             && self.waiting == 1
             && self.yielded == 1
+            && self.recovered_faults == 0
             && self.quantum_expiries == 5
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
@@ -279,15 +292,16 @@ impl NativeRuntimeEvidence {
     }
 
     pub(crate) const fn proves_current_boot(self) -> bool {
-        self.dispatches == 17
+        self.dispatches == 18
             && self.prepared == 7
             && self.preempted == 8
             && self.waiting == 1
             && self.yielded == 1
+            && self.recovered_faults == 1
             && self.quantum_expiries == 8
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
-            && self.agent_faults == 3
+            && self.agent_faults == 4
     }
 
     pub(crate) const fn proves_general_protection_phase(self) -> bool {
@@ -296,6 +310,7 @@ impl NativeRuntimeEvidence {
             && self.preempted == 6
             && self.waiting == 1
             && self.yielded == 1
+            && self.recovered_faults == 0
             && self.quantum_expiries == 6
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
@@ -308,9 +323,23 @@ impl NativeRuntimeEvidence {
             && self.preempted == 7
             && self.waiting == 1
             && self.yielded == 1
+            && self.recovered_faults == 0
             && self.quantum_expiries == 7
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
             && self.agent_faults == 3
+    }
+
+    pub(crate) const fn proves_lazy_page_fault_phase(self) -> bool {
+        self.dispatches == 17
+            && self.prepared == 7
+            && self.preempted == 8
+            && self.waiting == 1
+            && self.yielded == 1
+            && self.recovered_faults == 0
+            && self.quantum_expiries == 8
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 4
     }
 }

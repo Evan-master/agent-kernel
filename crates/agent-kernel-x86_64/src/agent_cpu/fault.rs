@@ -15,7 +15,7 @@ use agent_kernel_x86_64::{
 };
 
 use super::{
-    native_call_session::AgentCallProgress,
+    native_call_session::{AgentCallProgress, ResumableAgentCpu},
     runtime::{AgentCpuRuntime, PreparedAgentCpu},
     storage, validation,
 };
@@ -27,7 +27,7 @@ pub(crate) struct FaultedAgentCpu {
     frame: SavedAgentFrame,
     context: AgentCallContext,
     fault: NativeAgentFault,
-    had_call_progress: bool,
+    progress: AgentCallProgress,
 }
 
 impl FaultedAgentCpu {
@@ -76,7 +76,7 @@ impl FaultedAgentCpu {
             frame: SavedAgentFrame::new(frame),
             context,
             fault: expected_fault,
-            had_call_progress: !progress.is_empty(),
+            progress,
         })
     }
 
@@ -97,8 +97,8 @@ impl FaultedAgentCpu {
         u32::try_from(offset).ok()
     }
 
-    pub(crate) const fn had_call_progress(&self) -> bool {
-        self.had_call_progress
+    pub(crate) fn had_call_progress(&self) -> bool {
+        !self.progress.is_empty()
     }
 
     pub(crate) fn physical_quantum_generation(&self) -> u8 {
@@ -118,5 +118,27 @@ impl FaultedAgentCpu {
         } = self;
         let (memory, restart_generation) = memory.reset_for_next_restart()?;
         runtime.prepare_restarted(memory, context, restart_generation)
+    }
+
+    pub(crate) fn repair_lazy_page(self) -> Option<ResumableAgentCpu> {
+        let Self {
+            mut memory,
+            runtime,
+            frame,
+            context,
+            fault,
+            progress,
+        } = self;
+        let NativeAgentFault::PageFault {
+            error_code: 6,
+            address,
+        } = fault
+        else {
+            return None;
+        };
+        memory.activate_lazy_data_page(address)?;
+        Some(ResumableAgentCpu::from_repaired_fault(
+            memory, runtime, frame, context, progress,
+        ))
     }
 }

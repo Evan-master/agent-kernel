@@ -1,8 +1,9 @@
 //! Parked x86 Agent CPU ownership selected by kernel dispatch results.
 //!
-//! This bare-metal adapter stores prepared, PIT-preempted, mailbox-waiting, and
-//! cooperatively yielded contexts under trusted Agent identity. Scheduler policy
-//! remains in the core; the registry owns only non-running physical state.
+//! This bare-metal adapter stores prepared, PIT-preempted, mailbox-waiting,
+//! cooperatively yielded, and repaired-fault contexts under trusted Agent
+//! identity. Scheduler policy remains in the core; the registry owns only
+//! non-running physical state.
 
 mod dispatch;
 
@@ -20,6 +21,7 @@ pub(crate) enum NativeAgentContext {
     Preempted(PreemptedAgentCpu),
     WaitingCall(WaitingAgentCallCpu),
     YieldedCall(ResumableAgentCpu),
+    RecoveredFault(ResumableAgentCpu),
 }
 
 impl NativeAgentContext {
@@ -29,6 +31,7 @@ impl NativeAgentContext {
             Self::Preempted(cpu) => cpu.context(),
             Self::WaitingCall(cpu) => cpu.context(),
             Self::YieldedCall(cpu) => cpu.context(),
+            Self::RecoveredFault(cpu) => cpu.context(),
         }
     }
 
@@ -72,6 +75,13 @@ impl NativeAgentRuntime {
         cpu: ResumableAgentCpu,
     ) -> Option<NativeAgentContext> {
         self.park(NativeAgentContext::YieldedCall(cpu))
+    }
+
+    pub(crate) fn park_recovered_fault(
+        &mut self,
+        cpu: ResumableAgentCpu,
+    ) -> Option<NativeAgentContext> {
+        self.park(NativeAgentContext::RecoveredFault(cpu))
     }
 
     pub(crate) const fn len(&self) -> usize {

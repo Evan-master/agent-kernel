@@ -28,6 +28,7 @@ pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
 pub(crate) struct PreparedAgentMemory {
     layout: UserMemoryLayout,
     signal_pointer: *mut u8,
+    lazy_data_pointer: *mut u8,
     roots: AddressSpaceRoots,
     identity: AgentMemoryIdentity,
     entry_rip: u64,
@@ -47,12 +48,14 @@ impl PreparedAgentMemory {
         for frame in &mut stack_frames {
             *frame = allocator.allocate()?;
         }
+        let lazy_data_frame = allocator.allocate()?;
 
-        let signal_pointer = initialize_content(
+        let (signal_pointer, lazy_data_pointer) = initialize_content(
             physical_offset,
             code_frame,
             signal_frame,
             &stack_frames,
+            lazy_data_frame,
             image.code(),
         )?;
         let layout = UserMemoryLayout::fixed();
@@ -69,6 +72,7 @@ impl PreparedAgentMemory {
             code_frame,
             signal_frame,
             &stack_frames,
+            lazy_data_frame,
         )?;
         if !page_tables::kernel_is_active(roots) {
             return None;
@@ -79,11 +83,13 @@ impl PreparedAgentMemory {
         for (index, frame) in stack_frames.iter().enumerate() {
             content_frames[index + 2] = frame.start_address().as_u64();
         }
+        content_frames[STACK_PAGE_COUNT + 2] = lazy_data_frame.start_address().as_u64();
         let identity = AgentMemoryIdentity::new(roots.agent_root(), content_frames)?;
 
         Some(Self {
             layout,
             signal_pointer,
+            lazy_data_pointer,
             roots,
             identity,
             entry_rip,
@@ -173,6 +179,27 @@ impl PreparedAgentMemory {
         }
     }
 
+    pub(crate) fn lazy_data_byte(&self) -> u8 {
+        // SAFETY: this pointer is the supervisor alias of the retained private
+        // frame, whether or not the Agent leaf mapping has been activated.
+        unsafe { self.lazy_data_pointer.read_volatile() }
+    }
+
+    pub(crate) fn activate_lazy_data_page(&mut self, fault_address: u64) -> Option<()> {
+        if !self.kernel_address_space_active()
+            || fault_address != self.layout.lazy_data_start()
+            || self.lazy_data_byte() != 0
+        {
+            return None;
+        }
+        let frame_address = self.identity.content_frames()[STACK_PAGE_COUNT + 2];
+        let frame = PhysFrame::from_start_address(PhysAddr::new(frame_address)).ok()?;
+        if physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)? != self.lazy_data_pointer {
+            return None;
+        }
+        page_tables::activate_lazy_data(PHYSICAL_MEMORY_OFFSET, self.roots, self.layout, frame)
+    }
+
     pub(crate) fn reset_for_next_restart(self) -> Option<(Self, u8)> {
         if !self.kernel_address_space_active() {
             return None;
@@ -238,13 +265,15 @@ fn initialize_content(
     code_frame: PhysFrame,
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
+    lazy_data_frame: PhysFrame,
     code: &[u8],
-) -> Option<*mut u8> {
+) -> Option<(*mut u8, *mut u8)> {
     if code.is_empty() || code.len() > PAGE_BYTES as usize {
         return None;
     }
     let code_pointer = physical_pointer(physical_offset, code_frame)?;
     let signal_pointer = physical_pointer(physical_offset, signal_frame)?;
+    let lazy_data_pointer = physical_pointer(physical_offset, lazy_data_frame)?;
     // SAFETY: all frames were just removed from Usable memory and are
     // exclusively owned by this preparation operation.
     unsafe {
@@ -255,6 +284,7 @@ fn initialize_content(
         for frame in stack_frames {
             physical_pointer(physical_offset, *frame)?.write_bytes(0, PAGE_BYTES as usize);
         }
+        lazy_data_pointer.write_bytes(0, PAGE_BYTES as usize);
     }
     for (offset, expected) in code.iter().copied().enumerate() {
         // SAFETY: the code frame remains exclusively owned and supervisor-mapped.
@@ -262,7 +292,7 @@ fn initialize_content(
             return None;
         }
     }
-    Some(signal_pointer)
+    Some((signal_pointer, lazy_data_pointer))
 }
 
 pub(super) fn physical_pointer(offset: u64, frame: PhysFrame) -> Option<*mut u8> {
