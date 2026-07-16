@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented and validated locally on 2026-07-16; publication is pending.
+Implemented, validated, and published on 2026-07-16 in `a89781a`.
 
 ## Purpose
 
