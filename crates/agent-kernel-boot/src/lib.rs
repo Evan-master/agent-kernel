@@ -77,6 +77,7 @@ pub struct BootedKernel<
     const DEVICE_EVENTS: usize = 0,
     const DRIVER_COMMANDS: usize = 0,
     const DRIVER_INVOCATIONS: usize = 0,
+    const MESSAGES: usize = 0,
 > {
     kernel: AgentKernel<
         AGENTS,
@@ -89,7 +90,7 @@ pub struct BootedKernel<
         INTENTS,
         TASKS,
         RUN_QUEUE,
-        0,
+        MESSAGES,
         0,
         0,
         0,
@@ -120,6 +121,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const MESSAGES: usize,
     >
     BootedKernel<
         AGENTS,
@@ -136,6 +138,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        MESSAGES,
     >
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
@@ -218,7 +221,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
-        0,
+        MESSAGES,
         0,
         0,
         0,
@@ -247,7 +250,7 @@ impl<
         INTENTS,
         TASKS,
         RUN_QUEUE,
-        0,
+        MESSAGES,
         0,
         0,
         0,

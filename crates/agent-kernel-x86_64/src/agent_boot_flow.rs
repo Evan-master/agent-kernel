@@ -4,6 +4,7 @@
 //! binds physical evidence to semantic task transitions, then completes the
 //! existing UART Driver flow. All failures terminate through explicit markers.
 
+mod mailbox;
 mod verifier;
 
 use agent_kernel_boot::BootConfig;
@@ -129,95 +130,14 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fatal_boot("AGENT_KERNEL_TIMER_PREEMPTION_ERROR");
     };
     serial_write_line("AGENT_KERNEL_TIMER_PREEMPTION_OK");
-    if !preempted_a.signal_is_clear() || !preempted_b.signal_is_clear() {
-        fatal_boot("AGENT_KERNEL_MULTI_AGENT_ISOLATION_ERROR");
-    }
-    let Some(requested_a) = preempted_a.resume_until_task_result() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
-    };
-    let describe_return_a = requested_a.describe_return_offset();
-    let result_return_a = requested_a.result_return_offset();
-    let nonce_a = requested_a.nonce();
-    if requested_a.call_count() != 2
-        || requested_a.address_space_switch_count() != 4
-        || nonce_a != worker_a.nonce()
-        || requested_a.result() != worker_a.result()
-        || describe_return_a != worker_a.expected_describe_return_offset()
-        || result_return_a != worker_a.expected_result_return_offset()
-        || !preempted_b.signal_is_clear()
-    {
-        fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
-    }
-    let Some((first_result_flow, acknowledged_a)) =
-        first_resumed_flow.submit_first_result(&mut booted, requested_a)
-    else {
-        fatal_boot("AGENT_KERNEL_AGENT_CALL_RESULT_ERROR");
-    };
-    let Some(completed_a) = acknowledged_a.resume_until_completion() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
-    };
-    let completion_return_a = completed_a.completion_return_offset();
-    if completed_a.call_count() != 3
-        || completed_a.address_space_switch_count() != 6
-        || completed_a.nonce() != nonce_a
-        || completed_a.describe_return_offset() != describe_return_a
-        || completed_a.result_return_offset() != result_return_a
-        || completion_return_a != worker_a.expected_completion_return_offset()
-        || !preempted_b.signal_is_clear()
-    {
-        fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
-    }
-    serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
-    let Some(second_resumed_flow) =
-        first_result_flow.complete_first_and_dispatch_second(&mut booted, completed_a)
-    else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
-    };
-    let Some(requested_b) = preempted_b.resume_until_task_result() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
-    };
-    let describe_return_b = requested_b.describe_return_offset();
-    let result_return_b = requested_b.result_return_offset();
-    let nonce_b = requested_b.nonce();
-    if requested_b.call_count() != 2
-        || requested_b.address_space_switch_count() != 4
-        || nonce_b != worker_b.nonce()
-        || nonce_a == nonce_b
-        || requested_b.result() != worker_b.result()
-        || describe_return_b != worker_b.expected_describe_return_offset()
-        || result_return_b != worker_b.expected_result_return_offset()
-        || describe_return_a == describe_return_b
-        || result_return_a == result_return_b
-    {
-        fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
-    }
-    let Some((second_result_flow, acknowledged_b)) =
-        second_resumed_flow.submit_second_result(&mut booted, requested_b)
-    else {
-        fatal_boot("AGENT_KERNEL_AGENT_CALL_RESULT_ERROR");
-    };
-    let Some(completed_b) = acknowledged_b.resume_until_completion() else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
-    };
-    let completion_return_b = completed_b.completion_return_offset();
-    if completed_b.call_count() != 3
-        || completed_b.address_space_switch_count() != 6
-        || completed_b.nonce() != nonce_b
-        || completed_b.describe_return_offset() != describe_return_b
-        || completed_b.result_return_offset() != result_return_b
-        || completion_return_b != worker_b.expected_completion_return_offset()
-        || completion_return_a == completion_return_b
-    {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
-    }
-    let Some(completed_workers) =
-        second_result_flow.record_second_completion(&mut booted, completed_b)
-    else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
-    };
-    serial_write_line("AGENT_KERNEL_AGENT_CPU_RESUME_OK");
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_RESULT_OK");
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURNING_MUTATION_OK");
+    let completed_workers = mailbox::run(
+        &mut booted,
+        first_resumed_flow,
+        preempted_a,
+        preempted_b,
+        worker_a,
+        worker_b,
+    );
     let Some(_completed_verifier) = verifier::run(
         &mut booted,
         verifier_flow,

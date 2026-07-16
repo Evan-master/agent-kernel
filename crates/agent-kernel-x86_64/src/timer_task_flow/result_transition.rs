@@ -8,19 +8,33 @@ use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatu
 
 use super::{WorkerTask, TASK_QUANTUM};
 use crate::{
-    agent_cpu::{AcknowledgedTaskResultCpu, RequestedTaskResultCpu},
+    agent_cpu::{
+        AcknowledgedReceiverResultCpu, AcknowledgedSenderResultCpu, RequestedReceiverResultCpu,
+        RequestedSenderResultCpu,
+    },
     X86BootedKernel,
 };
 
-pub(super) fn submit(
+pub(super) trait ResultEvidence: Sized {
+    type Acknowledged;
+    const EXPECTED_CALLS: u8;
+
+    fn call_count(&self) -> u8;
+    fn address_space_switch_count(&self) -> u8;
+    fn context(&self) -> agent_kernel_x86_64::agent_call::AgentCallContext;
+    fn result(&self) -> agent_kernel_core::TaskResult;
+    fn acknowledge(self) -> Option<Self::Acknowledged>;
+}
+
+pub(super) fn submit<E: ResultEvidence>(
     booted: &mut X86BootedKernel,
     running: WorkerTask,
     queued: Option<WorkerTask>,
     completed: Option<WorkerTask>,
-    cpu: RequestedTaskResultCpu,
-) -> Option<AcknowledgedTaskResultCpu> {
-    if cpu.call_count() != 2
-        || cpu.address_space_switch_count() != 4
+    cpu: E,
+) -> Option<E::Acknowledged> {
+    if cpu.call_count() != E::EXPECTED_CALLS
+        || cpu.address_space_switch_count() != E::EXPECTED_CALLS * 2
         || running.call_context() != Some(cpu.context())
         || cpu.result() != running.result
     {
@@ -49,6 +63,38 @@ pub(super) fn submit(
     }
     cpu.acknowledge()
 }
+
+macro_rules! impl_result_evidence {
+    ($requested:ty, $acknowledged:ty, $calls:expr) => {
+        impl ResultEvidence for $requested {
+            type Acknowledged = $acknowledged;
+            const EXPECTED_CALLS: u8 = $calls;
+
+            fn call_count(&self) -> u8 {
+                self.call_count()
+            }
+
+            fn address_space_switch_count(&self) -> u8 {
+                self.address_space_switch_count()
+            }
+
+            fn context(&self) -> agent_kernel_x86_64::agent_call::AgentCallContext {
+                self.context()
+            }
+
+            fn result(&self) -> agent_kernel_core::TaskResult {
+                self.result()
+            }
+
+            fn acknowledge(self) -> Option<Self::Acknowledged> {
+                self.acknowledge()
+            }
+        }
+    };
+}
+
+impl_result_evidence!(RequestedSenderResultCpu, AcknowledgedSenderResultCpu, 2);
+impl_result_evidence!(RequestedReceiverResultCpu, AcknowledgedReceiverResultCpu, 4);
 
 fn running_result_valid(booted: &X86BootedKernel, worker: WorkerTask) -> bool {
     let kernel = booted.kernel();

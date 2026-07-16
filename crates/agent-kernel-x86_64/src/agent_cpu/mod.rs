@@ -6,13 +6,19 @@
 
 mod assembly;
 mod call;
-mod call_flow;
+mod mailbox_call_flow;
 mod runtime;
 mod storage;
 mod validation;
 mod verifier_call_flow;
 
-pub(super) use call_flow::{AcknowledgedTaskResultCpu, CompletedAgentCpu, RequestedTaskResultCpu};
+pub(super) use mailbox_call_flow::{
+    AcknowledgedMessageAcknowledgementCpu, AcknowledgedMessageReceiveCpu,
+    AcknowledgedMessageSendCpu, AcknowledgedReceiverResultCpu, AcknowledgedSenderResultCpu,
+    CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, RequestedMessageAcknowledgementCpu,
+    RequestedMessageReceiveCpu, RequestedMessageSendCpu, RequestedReceiverResultCpu,
+    RequestedSenderResultCpu,
+};
 pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu};
 pub(super) use verifier_call_flow::{
     AcknowledgedTaskInspectionCpu, AcknowledgedTaskVerificationCpu, CompletedVerifierCpu,

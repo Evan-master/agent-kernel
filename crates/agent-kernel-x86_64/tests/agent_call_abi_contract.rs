@@ -105,6 +105,8 @@ fn call_request_rejects_unknown_common_header_fields() {
     bad_r10.r10 = 1;
     let mut bad_r11 = valid;
     bad_r11.r11 = 1;
+    let mut bad_r12 = valid;
+    bad_r12.r12 = 1;
 
     let cases = [
         (bad_magic, AgentCallDecodeError::InvalidMagic),
@@ -113,6 +115,7 @@ fn call_request_rejects_unknown_common_header_fields() {
         (bad_flags, AgentCallDecodeError::UnsupportedFlags),
         (bad_r10, AgentCallDecodeError::ReservedNotZero),
         (bad_r11, AgentCallDecodeError::ReservedNotZero),
+        (bad_r12, AgentCallDecodeError::ReservedNotZero),
     ];
     for (frame, expected) in cases {
         assert_eq!(AgentCallRequest::decode(&frame), Err(expected));

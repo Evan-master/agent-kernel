@@ -7,9 +7,17 @@ use agent_kernel_core::{AgentExecutionState, EventKind, RunQueueEntry, TaskStatu
 
 use super::{completed::task_valid as completed_task_valid, WorkerTask, TASK_QUANTUM};
 use crate::{
-    agent_cpu::{CompletedAgentCpu, PreemptedAgentCpu},
+    agent_cpu::{CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, PreemptedAgentCpu},
     X86BootedKernel,
 };
+
+pub(super) trait CompletionEvidence {
+    const EXPECTED_CALLS: u8;
+
+    fn call_count(&self) -> u8;
+    fn address_space_switch_count(&self) -> u8;
+    fn context(&self) -> agent_kernel_x86_64::agent_call::AgentCallContext;
+}
 
 pub(super) fn expire_and_dispatch(
     booted: &mut X86BootedKernel,
@@ -56,11 +64,11 @@ pub(super) fn expire_and_dispatch(
     running_and_queue_valid(booted, next, running, next_prior_ticks, 1)
 }
 
-pub(super) fn complete_and_dispatch(
+pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     booted: &mut X86BootedKernel,
     running: WorkerTask,
     next: WorkerTask,
-    cpu: CompletedAgentCpu,
+    cpu: E,
     next_prior_ticks: u64,
 ) -> Option<()> {
     if !completion_evidence_valid(&cpu, running) {
@@ -95,11 +103,11 @@ pub(super) fn complete_and_dispatch(
     running_after_completion_valid(booted, next, running, next_prior_ticks)
 }
 
-pub(super) fn record_final_completion(
+pub(super) fn record_final_completion<E: CompletionEvidence>(
     booted: &mut X86BootedKernel,
     running: WorkerTask,
     completed: WorkerTask,
-    cpu: CompletedAgentCpu,
+    cpu: E,
 ) -> bool {
     if !completion_evidence_valid(&cpu, running) {
         return false;
@@ -118,11 +126,34 @@ pub(super) fn record_final_completion(
         && completed_task_valid(booted, completed, 1)
 }
 
-fn completion_evidence_valid(cpu: &CompletedAgentCpu, running: WorkerTask) -> bool {
-    cpu.call_count() == 3
-        && cpu.address_space_switch_count() == 6
+fn completion_evidence_valid<E: CompletionEvidence>(cpu: &E, running: WorkerTask) -> bool {
+    cpu.call_count() == E::EXPECTED_CALLS
+        && cpu.address_space_switch_count() == E::EXPECTED_CALLS * 2
         && running.call_context() == Some(cpu.context())
 }
+
+macro_rules! impl_completion_evidence {
+    ($completed:ty, $calls:expr) => {
+        impl CompletionEvidence for $completed {
+            const EXPECTED_CALLS: u8 = $calls;
+
+            fn call_count(&self) -> u8 {
+                self.call_count()
+            }
+
+            fn address_space_switch_count(&self) -> u8 {
+                self.address_space_switch_count()
+            }
+
+            fn context(&self) -> agent_kernel_x86_64::agent_call::AgentCallContext {
+                self.context()
+            }
+        }
+    };
+}
+
+impl_completion_evidence!(CompletedMailboxSenderCpu, 4);
+impl_completion_evidence!(CompletedMailboxReceiverCpu, 5);
 
 fn running_after_completion_valid(
     booted: &X86BootedKernel,

@@ -3,6 +3,8 @@
 //! Replies expose only Agent, Task, Image, and nonce. The delegated capability
 //! remains private to trusted kernel code and participates in context equality.
 
+mod mailbox;
+
 use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult};
 
 use super::{
@@ -176,6 +178,11 @@ impl AgentCallContext {
         frame.r9 = nonce;
         frame.r10 = 0;
         frame.r11 = 0;
+        frame.r12 = 0;
+        frame.r13 = 0;
+        frame.r14 = 0;
+        frame.r15 = 0;
+        frame.rbp = 0;
         Ok(())
     }
 

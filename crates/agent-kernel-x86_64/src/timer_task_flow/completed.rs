@@ -3,7 +3,9 @@
 //! This boot-layer token keeps Worker identities private while allowing the
 //! Verifier adapter to prove its subject and peer remain in terminal state.
 
-use agent_kernel_core::{AgentExecutionState, TaskId, TaskResult, TaskStatus};
+use agent_kernel_core::{
+    AgentExecutionState, MessageKind, MessagePayload, MessageStatus, TaskId, TaskResult, TaskStatus,
+};
 
 use super::WorkerTask;
 use crate::X86BootedKernel;
@@ -43,11 +45,25 @@ impl CompletedWorkerTasks {
     }
 
     pub(crate) fn both_completed(&self, booted: &X86BootedKernel) -> bool {
-        task_valid(booted, self.first, 1) && task_valid(booted, self.second, 1)
+        task_valid(booted, self.first, 1)
+            && task_valid(booted, self.second, 1)
+            && self.mailbox_acknowledged(booted)
     }
 
     pub(crate) fn peer_completed(&self, booted: &X86BootedKernel) -> bool {
-        task_valid(booted, self.second, 1)
+        task_valid(booted, self.second, 1) && self.mailbox_acknowledged(booted)
+    }
+
+    pub(crate) fn mailbox_acknowledged(&self, booted: &X86BootedKernel) -> bool {
+        matches!(booted.kernel().messages(), [message]
+            if message.sender == self.first.agent
+                && message.recipient == self.second.agent
+                && message.kind == MessageKind::Notify
+                && message.payload == MessagePayload {
+                    task: Some(self.first.task),
+                    ..MessagePayload::empty()
+                }
+                && message.status == MessageStatus::Acknowledged)
     }
 }
 

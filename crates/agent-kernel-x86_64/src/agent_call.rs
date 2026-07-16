@@ -6,8 +6,11 @@
 //! scheduler-owned `AgentCallContext`.
 
 mod context;
+mod mailbox;
 
-use agent_kernel_core::{AgentId, AgentImageId, TaskId, TaskResult};
+use agent_kernel_core::{
+    AgentId, AgentImageId, MessageId, MessageKind, MessagePayload, TaskId, TaskResult,
+};
 
 use crate::context::PrivilegeInterruptStackFrame;
 
@@ -21,6 +24,13 @@ pub const AGENT_CALL_COMPLETE_TASK: u64 = 3;
 pub const AGENT_CALL_SUBMIT_TASK_RESULT: u64 = 4;
 pub const AGENT_CALL_INSPECT_TASK_RESULT: u64 = 5;
 pub const AGENT_CALL_VERIFY_TASK: u64 = 6;
+pub const AGENT_CALL_SEND_MESSAGE: u64 = 7;
+pub const AGENT_CALL_RECEIVE_MESSAGE: u64 = 8;
+pub const AGENT_CALL_ACKNOWLEDGE_MESSAGE: u64 = 9;
+pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
+pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
+pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
+pub const AGENT_CALL_MESSAGE_FAULT: u64 = 4;
 pub const AGENT_CALL_STATUS_OK: u64 = 0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -31,6 +41,9 @@ pub enum AgentCallOperation {
     SubmitTaskResult,
     InspectTaskResult,
     VerifyTask,
+    SendMessage,
+    ReceiveMessage,
+    AcknowledgeMessage,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -71,6 +84,28 @@ pub enum AgentCallRequest {
         nonce: u64,
         target_task: TaskId,
     },
+    SendMessage {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        recipient: AgentId,
+        kind: MessageKind,
+        payload: MessagePayload,
+    },
+    ReceiveMessage {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+    },
+    AcknowledgeMessage {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        message: MessageId,
+    },
 }
 
 impl AgentCallRequest {
@@ -88,6 +123,9 @@ impl AgentCallRequest {
             AGENT_CALL_SUBMIT_TASK_RESULT => AgentCallOperation::SubmitTaskResult,
             AGENT_CALL_INSPECT_TASK_RESULT => AgentCallOperation::InspectTaskResult,
             AGENT_CALL_VERIFY_TASK => AgentCallOperation::VerifyTask,
+            AGENT_CALL_SEND_MESSAGE => AgentCallOperation::SendMessage,
+            AGENT_CALL_RECEIVE_MESSAGE => AgentCallOperation::ReceiveMessage,
+            AGENT_CALL_ACKNOWLEDGE_MESSAGE => AgentCallOperation::AcknowledgeMessage,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -122,6 +160,7 @@ impl AgentCallRequest {
                 })
             }
             AgentCallOperation::SubmitTaskResult => {
+                ensure_extended_reserved_zero(frame)?;
                 let (agent, task, image, nonce) = decode_context_payload(frame)?;
                 let code =
                     u16::try_from(frame.r10).map_err(|_| AgentCallDecodeError::InvalidPayload)?;
@@ -156,6 +195,9 @@ impl AgentCallRequest {
                     target_task,
                 })
             }
+            AgentCallOperation::SendMessage => mailbox::decode_send(frame),
+            AgentCallOperation::ReceiveMessage => mailbox::decode_receive(frame),
+            AgentCallOperation::AcknowledgeMessage => mailbox::decode_acknowledgement(frame),
         }
     }
 
@@ -167,6 +209,9 @@ impl AgentCallRequest {
             Self::SubmitTaskResult { .. } => AgentCallOperation::SubmitTaskResult,
             Self::InspectTaskResult { .. } => AgentCallOperation::InspectTaskResult,
             Self::VerifyTask { .. } => AgentCallOperation::VerifyTask,
+            Self::SendMessage { .. } => AgentCallOperation::SendMessage,
+            Self::ReceiveMessage { .. } => AgentCallOperation::ReceiveMessage,
+            Self::AcknowledgeMessage { .. } => AgentCallOperation::AcknowledgeMessage,
         }
     }
 }
@@ -183,6 +228,16 @@ pub enum AgentCallDecodeError {
 
 fn ensure_reserved_zero(frame: &PrivilegeInterruptStackFrame) -> Result<(), AgentCallDecodeError> {
     if frame.r10 == 0 && frame.r11 == 0 {
+        ensure_extended_reserved_zero(frame)
+    } else {
+        Err(AgentCallDecodeError::ReservedNotZero)
+    }
+}
+
+fn ensure_extended_reserved_zero(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<(), AgentCallDecodeError> {
+    if frame.r12 == 0 && frame.r13 == 0 && frame.r14 == 0 && frame.r15 == 0 && frame.rbp == 0 {
         Ok(())
     } else {
         Err(AgentCallDecodeError::ReservedNotZero)
@@ -210,6 +265,7 @@ fn decode_verifier_payload(
     if frame.r11 != 0 {
         return Err(AgentCallDecodeError::ReservedNotZero);
     }
+    ensure_extended_reserved_zero(frame)?;
     let (agent, task, image, nonce) = decode_context_payload(frame)?;
     if frame.r10 == 0 {
         return Err(AgentCallDecodeError::InvalidPayload);

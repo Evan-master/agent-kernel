@@ -6,6 +6,8 @@
 //! completion calls.
 
 mod completed;
+mod mailbox;
+mod message_transition;
 mod result_transition;
 mod setup;
 mod transitions;
@@ -15,12 +17,7 @@ use agent_kernel_core::{
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
-use crate::{
-    agent_cpu::{
-        AcknowledgedTaskResultCpu, CompletedAgentCpu, PreemptedAgentCpu, RequestedTaskResultCpu,
-    },
-    X86BootedKernel,
-};
+use crate::{agent_cpu::PreemptedAgentCpu, X86BootedKernel};
 
 pub(super) use completed::{CompletedWorkerTasks, VerificationSubject};
 
@@ -85,6 +82,21 @@ pub(super) struct SecondResumedFlow {
 }
 
 pub(super) struct FirstResultSubmittedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+}
+
+pub(super) struct FirstMessageSentFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+}
+
+pub(super) struct SecondMessageReceivedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+}
+
+pub(super) struct SecondMessageAcknowledgedFlow {
     first: WorkerTask,
     second: WorkerTask,
 }
@@ -163,66 +175,5 @@ impl SecondRunningFlow {
             first: self.first,
             second: self.second,
         })
-    }
-}
-
-impl FirstResumedFlow {
-    pub(super) fn submit_first_result(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: RequestedTaskResultCpu,
-    ) -> Option<(FirstResultSubmittedFlow, AcknowledgedTaskResultCpu)> {
-        let acknowledged =
-            result_transition::submit(booted, self.first, Some(self.second), None, cpu)?;
-        Some((
-            FirstResultSubmittedFlow {
-                first: self.first,
-                second: self.second,
-            },
-            acknowledged,
-        ))
-    }
-}
-
-impl FirstResultSubmittedFlow {
-    pub(super) fn complete_first_and_dispatch_second(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: CompletedAgentCpu,
-    ) -> Option<SecondResumedFlow> {
-        transitions::complete_and_dispatch(booted, self.first, self.second, cpu, 1)?;
-        Some(SecondResumedFlow {
-            first: self.first,
-            second: self.second,
-        })
-    }
-}
-
-impl SecondResumedFlow {
-    pub(super) fn submit_second_result(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: RequestedTaskResultCpu,
-    ) -> Option<(SecondResultSubmittedFlow, AcknowledgedTaskResultCpu)> {
-        let acknowledged =
-            result_transition::submit(booted, self.second, None, Some(self.first), cpu)?;
-        Some((
-            SecondResultSubmittedFlow {
-                first: self.first,
-                second: self.second,
-            },
-            acknowledged,
-        ))
-    }
-}
-
-impl SecondResultSubmittedFlow {
-    pub(super) fn record_second_completion(
-        self,
-        booted: &mut X86BootedKernel,
-        cpu: CompletedAgentCpu,
-    ) -> Option<CompletedWorkerTasks> {
-        transitions::record_final_completion(booted, self.second, self.first, cpu)
-            .then_some(CompletedWorkerTasks::new(self.first, self.second))
     }
 }
