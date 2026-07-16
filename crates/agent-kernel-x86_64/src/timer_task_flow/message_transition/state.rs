@@ -99,7 +99,7 @@ pub(super) fn receiver_running_valid(
     let waiter = kernel.waiters().first();
     matches!(recipient_task, Some(task) if task.status == TaskStatus::Running
         && task.result.is_none() && task.run_ticks == 1)
-        && matches!(sender_task, Some(task) if task.status == TaskStatus::Completed
+        && matches!(sender_task, Some(task) if task.status == TaskStatus::Accepted
             && task.result == Some(sender.result) && task.run_ticks == 1)
         && matches!(recipient_context, Some(context) if context.state == AgentExecutionState::Running
             && context.task == Some(recipient.task))
@@ -109,5 +109,9 @@ pub(super) fn receiver_running_valid(
             && record.kind == WaiterKind::Mailbox
             && record.agent == recipient.agent
             && record.task == recipient.task)
-        && kernel.run_queue().is_empty()
+        && kernel.run_queue()
+            == [RunQueueEntry {
+                task: sender.task,
+                agent: sender.agent,
+            }]
 }

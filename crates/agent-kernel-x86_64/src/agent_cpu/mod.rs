@@ -17,7 +17,8 @@ pub(super) use mailbox_call_flow::{
     AcknowledgedMessageSendCpu, AcknowledgedReceiverResultCpu, AcknowledgedSenderResultCpu,
     CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, RequestedMessageAcknowledgementCpu,
     RequestedMessageReceiveCpu, RequestedMessageSendCpu, RequestedReceiverResultCpu,
-    RequestedSenderResultCpu, WaitingMessageReceiveCpu,
+    RequestedSenderResultCpu, RequestedSenderYieldCpu, WaitingMessageReceiveCpu,
+    YieldedMailboxSenderCpu,
 };
 pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu};
 pub(super) use verifier_call_flow::{

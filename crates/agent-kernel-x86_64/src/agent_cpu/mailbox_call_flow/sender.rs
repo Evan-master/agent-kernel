@@ -1,13 +1,19 @@
-//! Four-call CPU type states for the native mailbox sender Worker.
+//! Five-call CPU type states for the native mailbox sender Worker.
 //!
-//! This CPU-layer child preserves the owned frame across result, send, and
-//! completion calls. Semantic task and mailbox mutation stays outside it.
+//! This CPU-layer child preserves the owned frame across result, send, yield,
+//! and completion calls. Semantic task and mailbox mutation stays outside it.
+
+mod yielded;
 
 use agent_kernel_core::{AgentId, MessageId, MessageKind, MessagePayload, TaskResult};
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use super::MailboxCallSession;
 use crate::agent_cpu::PreemptedAgentCpu;
+
+pub(crate) use yielded::{
+    CompletedMailboxSenderCpu, RequestedSenderYieldCpu, YieldedMailboxSenderCpu,
+};
 
 pub(crate) struct RequestedSenderResultCpu {
     session: MailboxCallSession,
@@ -28,15 +34,6 @@ pub(crate) struct RequestedMessageSendCpu {
 pub(crate) struct AcknowledgedMessageSendCpu {
     request: RequestedMessageSendCpu,
     message: MessageId,
-}
-
-pub(crate) struct CompletedMailboxSenderCpu {
-    context: AgentCallContext,
-    nonce: u64,
-    result: TaskResult,
-    recipient: AgentId,
-    message: MessageId,
-    return_offsets: [u32; 4],
 }
 
 impl PreemptedAgentCpu {
@@ -156,65 +153,5 @@ impl RequestedMessageSendCpu {
             request: self,
             message,
         })
-    }
-}
-
-impl AcknowledgedMessageSendCpu {
-    pub(crate) fn resume_until_completion(self) -> Option<CompletedMailboxSenderCpu> {
-        let (session, request, completion_return_offset) =
-            self.request.result.session.resume_next()?;
-        if !session
-            .context()
-            .matches_completion(request, session.nonce())
-        {
-            return None;
-        }
-        Some(CompletedMailboxSenderCpu {
-            context: session.context(),
-            nonce: session.nonce(),
-            result: self.request.result.result,
-            recipient: self.request.recipient,
-            message: self.message,
-            return_offsets: [
-                session.describe_return_offset(),
-                self.request.result.result_return_offset,
-                self.request.send_return_offset,
-                completion_return_offset,
-            ],
-        })
-    }
-}
-
-impl CompletedMailboxSenderCpu {
-    pub(crate) const fn call_count(&self) -> u8 {
-        4
-    }
-
-    pub(crate) const fn address_space_switch_count(&self) -> u8 {
-        8
-    }
-
-    pub(crate) const fn context(&self) -> AgentCallContext {
-        self.context
-    }
-
-    pub(crate) const fn nonce(&self) -> u64 {
-        self.nonce
-    }
-
-    pub(crate) const fn result(&self) -> TaskResult {
-        self.result
-    }
-
-    pub(crate) const fn recipient(&self) -> AgentId {
-        self.recipient
-    }
-
-    pub(crate) const fn message(&self) -> MessageId {
-        self.message
-    }
-
-    pub(crate) const fn return_offsets(&self) -> [u32; 4] {
-        self.return_offsets
     }
 }

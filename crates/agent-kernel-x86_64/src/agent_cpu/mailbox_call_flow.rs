@@ -22,7 +22,8 @@ pub(crate) use receiver::{
 };
 pub(crate) use sender::{
     AcknowledgedMessageSendCpu, AcknowledgedSenderResultCpu, CompletedMailboxSenderCpu,
-    RequestedMessageSendCpu, RequestedSenderResultCpu,
+    RequestedMessageSendCpu, RequestedSenderResultCpu, RequestedSenderYieldCpu,
+    YieldedMailboxSenderCpu,
 };
 
 pub(super) struct MailboxCallSession {

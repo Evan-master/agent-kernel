@@ -1,7 +1,7 @@
 //! Parked x86 Agent CPU ownership selected by kernel dispatch results.
 //!
-//! This bare-metal adapter stores prepared, PIT-preempted, and mailbox-waiting
-//! CPU tokens under the Agent ID in their trusted call context. Read-only
+//! This bare-metal adapter stores prepared, PIT-preempted, mailbox-waiting, and
+//! cooperatively yielded CPU tokens under their trusted Agent ID. Read-only
 //! readiness checks match the core permit before semantic commit, and every
 //! take is guarded again by the committed Agent/Task identity and expected
 //! physical state. Scheduler policy stays in the core; this module owns only
@@ -11,7 +11,9 @@ use agent_kernel_core::{RunQueueEntry, TaskDispatchPermit};
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
 use crate::{
-    agent_cpu::{PreemptedAgentCpu, PreparedAgentCpu, WaitingMessageReceiveCpu},
+    agent_cpu::{
+        PreemptedAgentCpu, PreparedAgentCpu, WaitingMessageReceiveCpu, YieldedMailboxSenderCpu,
+    },
     X86BootedKernel,
 };
 
@@ -22,12 +24,14 @@ pub(crate) enum NativeAgentContextKind {
     Prepared,
     Preempted,
     WaitingMailbox,
+    Yielded,
 }
 
 pub(crate) enum NativeAgentContext {
     Prepared(PreparedAgentCpu),
     Preempted(PreemptedAgentCpu),
     WaitingMailbox(WaitingMessageReceiveCpu),
+    Yielded(YieldedMailboxSenderCpu),
 }
 
 impl NativeAgentContext {
@@ -36,6 +40,7 @@ impl NativeAgentContext {
             Self::Prepared(cpu) => cpu.context(),
             Self::Preempted(cpu) => cpu.context(),
             Self::WaitingMailbox(cpu) => cpu.context(),
+            Self::Yielded(cpu) => cpu.context(),
         }
     }
 
@@ -44,6 +49,7 @@ impl NativeAgentContext {
             Self::Prepared(_) => NativeAgentContextKind::Prepared,
             Self::Preempted(_) => NativeAgentContextKind::Preempted,
             Self::WaitingMailbox(_) => NativeAgentContextKind::WaitingMailbox,
+            Self::Yielded(_) => NativeAgentContextKind::Yielded,
         }
     }
 
@@ -82,6 +88,13 @@ impl NativeAgentRuntime {
         self.park(NativeAgentContext::WaitingMailbox(cpu))
     }
 
+    pub(crate) fn park_yielded(
+        &mut self,
+        cpu: YieldedMailboxSenderCpu,
+    ) -> Option<NativeAgentContext> {
+        self.park(NativeAgentContext::Yielded(cpu))
+    }
+
     pub(crate) fn take_prepared(&mut self, dispatched: RunQueueEntry) -> Option<PreparedAgentCpu> {
         match self.take(dispatched, NativeAgentContextKind::Prepared)? {
             NativeAgentContext::Prepared(cpu) => Some(cpu),
@@ -105,6 +118,16 @@ impl NativeAgentRuntime {
     ) -> Option<WaitingMessageReceiveCpu> {
         match self.take(dispatched, NativeAgentContextKind::WaitingMailbox)? {
             NativeAgentContext::WaitingMailbox(cpu) => Some(cpu),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn take_yielded(
+        &mut self,
+        dispatched: RunQueueEntry,
+    ) -> Option<YieldedMailboxSenderCpu> {
+        match self.take(dispatched, NativeAgentContextKind::Yielded)? {
+            NativeAgentContext::Yielded(cpu) => Some(cpu),
             _ => None,
         }
     }

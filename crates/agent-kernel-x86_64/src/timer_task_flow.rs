@@ -2,8 +2,8 @@
 //!
 //! This boot adapter owns only type-state ordering between architecture evidence
 //! and public task syscalls. Setup admits both Workers; transition helpers prove
-//! FIFO queue state across two expiries, returning result calls, and terminal
-//! completion calls.
+//! FIFO queue state across two expiries, returning calls, a cooperative Yield,
+//! and terminal completion calls.
 
 mod completed;
 mod mailbox;
@@ -12,6 +12,7 @@ mod result_transition;
 mod setup;
 mod transitions;
 mod wait_transition;
+mod yield_transition;
 
 use agent_kernel_core::{
     AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, TaskId, TaskResult,
@@ -123,6 +124,11 @@ pub(super) struct SecondMessageAcknowledgedFlow {
 }
 
 pub(super) struct SecondResultSubmittedFlow {
+    first: WorkerTask,
+    second: WorkerTask,
+}
+
+pub(super) struct FirstYieldRedispatchedFlow {
     first: WorkerTask,
     second: WorkerTask,
 }

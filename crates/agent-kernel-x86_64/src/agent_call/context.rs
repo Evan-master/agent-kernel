@@ -10,7 +10,7 @@ use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult}
 use super::{
     AgentCallDecodeError, AgentCallRequest, AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION,
     AGENT_CALL_DESCRIBE_CONTEXT, AGENT_CALL_INSPECT_TASK_RESULT, AGENT_CALL_STATUS_OK,
-    AGENT_CALL_SUBMIT_TASK_RESULT, AGENT_CALL_VERIFY_TASK,
+    AGENT_CALL_SUBMIT_TASK_RESULT, AGENT_CALL_VERIFY_TASK, AGENT_CALL_YIELD,
 };
 use crate::context::PrivilegeInterruptStackFrame;
 
@@ -54,6 +54,14 @@ impl AgentCallContext {
         nonce: u64,
     ) -> Result<(), AgentCallDecodeError> {
         self.encode_reply(frame, nonce, AGENT_CALL_SUBMIT_TASK_RESULT)
+    }
+
+    pub fn encode_yield_reply(
+        self,
+        frame: &mut PrivilegeInterruptStackFrame,
+        nonce: u64,
+    ) -> Result<(), AgentCallDecodeError> {
+        self.encode_reply(frame, nonce, AGENT_CALL_YIELD)
     }
 
     pub fn encode_task_result_inspection_reply(

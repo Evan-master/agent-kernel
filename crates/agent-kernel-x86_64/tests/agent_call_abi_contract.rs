@@ -190,6 +190,52 @@ fn describe_reply_encodes_trusted_context_without_changing_control_frame() {
 }
 
 #[test]
+fn yield_reply_encodes_trusted_context_and_clears_reserved_registers() {
+    let context = context();
+    let mut frame = request_frame(AGENT_CALL_YIELD, [3, 9, 4, NONCE]);
+    frame.r10 = 10;
+    frame.r11 = 11;
+    frame.r12 = 12;
+    frame.r13 = 13;
+    frame.r14 = 14;
+    frame.r15 = 15;
+    frame.rbp = 16;
+    let control = (
+        frame.rip,
+        frame.cs,
+        frame.rflags,
+        frame.user_rsp,
+        frame.user_ss,
+    );
+
+    context.encode_yield_reply(&mut frame, NONCE).unwrap();
+
+    assert_eq!(frame.rax, AGENT_CALL_ABI_MAGIC);
+    assert_eq!(frame.rbx, AGENT_CALL_ABI_VERSION);
+    assert_eq!(frame.rcx, AGENT_CALL_STATUS_OK);
+    assert_eq!(frame.rdx, AGENT_CALL_YIELD);
+    assert_eq!([frame.rsi, frame.rdi, frame.r8, frame.r9], [3, 9, 4, NONCE]);
+    assert_eq!(
+        [frame.r10, frame.r11, frame.r12, frame.r13, frame.r14, frame.r15, frame.rbp,],
+        [0; 7]
+    );
+    assert_eq!(
+        (
+            frame.rip,
+            frame.cs,
+            frame.rflags,
+            frame.user_rsp,
+            frame.user_ss,
+        ),
+        control
+    );
+    assert_eq!(
+        context.encode_yield_reply(&mut frame, 0),
+        Err(AgentCallDecodeError::InvalidPayload)
+    );
+}
+
+#[test]
 fn trusted_call_context_rejects_zero_identifiers() {
     assert_eq!(
         AgentCallContext::new(

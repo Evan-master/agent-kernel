@@ -74,6 +74,8 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
     next: WorkerTask,
     cpu: E,
     runtime: &NativeAgentRuntime,
+    next_kind: NativeAgentContextKind,
+    next_result: Option<agent_kernel_core::TaskResult>,
     next_prior_ticks: u64,
 ) -> Option<RunQueueEntry> {
     if !completion_evidence_valid(&cpu, running) {
@@ -88,7 +90,7 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
         || completed.task != Some(running.task)
         || completed.capability != Some(running.capability)
         || !completed_task_valid(booted, running, 1)
-        || !idle_task_valid(booted, next, next_prior_ticks)
+        || !idle_task_result_valid(booted, next, next_prior_ticks, next_result)
         || booted.kernel().run_queue()
             != [RunQueueEntry {
                 task: next.task,
@@ -101,13 +103,8 @@ pub(super) fn complete_and_dispatch<E: CompletionEvidence>(
         task: next.task,
         agent: next.agent,
     };
-    let dispatched = runtime.commit_ready_dispatch(
-        booted,
-        TASK_QUANTUM,
-        expected,
-        NativeAgentContextKind::WaitingMailbox,
-    )?;
-    running_after_completion_valid(booted, next, running, next_prior_ticks)?;
+    let dispatched = runtime.commit_ready_dispatch(booted, TASK_QUANTUM, expected, next_kind)?;
+    running_after_completion_valid(booted, next, running, next_result, next_prior_ticks)?;
     Some(dispatched)
 }
 
@@ -160,13 +157,14 @@ macro_rules! impl_completion_evidence {
     };
 }
 
-impl_completion_evidence!(CompletedMailboxSenderCpu, 4);
+impl_completion_evidence!(CompletedMailboxSenderCpu, 5);
 impl_completion_evidence!(CompletedMailboxReceiverCpu, 5);
 
 fn running_after_completion_valid(
     booted: &X86BootedKernel,
     running: WorkerTask,
     completed: WorkerTask,
+    running_result: Option<agent_kernel_core::TaskResult>,
     running_prior_ticks: u64,
 ) -> Option<()> {
     let kernel = booted.kernel();
@@ -179,7 +177,7 @@ fn running_after_completion_valid(
     (task.status == TaskStatus::Running
         && task.assignee == Some(running.agent)
         && task.delegated_capability == Some(running.capability)
-        && task.result.is_none()
+        && task.result == running_result
         && task.run_ticks == running_prior_ticks
         && task.quantum_remaining == TASK_QUANTUM
         && context.state == AgentExecutionState::Running
@@ -229,6 +227,15 @@ fn running_and_queue_valid(
 }
 
 fn idle_task_valid(booted: &X86BootedKernel, worker: WorkerTask, ticks: u64) -> bool {
+    idle_task_result_valid(booted, worker, ticks, None)
+}
+
+fn idle_task_result_valid(
+    booted: &X86BootedKernel,
+    worker: WorkerTask,
+    ticks: u64,
+    result: Option<agent_kernel_core::TaskResult>,
+) -> bool {
     let kernel = booted.kernel();
     let task = kernel.tasks().iter().find(|task| task.id == worker.task);
     let context = kernel
@@ -238,7 +245,7 @@ fn idle_task_valid(booted: &X86BootedKernel, worker: WorkerTask, ticks: u64) -> 
     matches!(task, Some(task) if task.status == TaskStatus::Accepted
         && task.assignee == Some(worker.agent)
         && task.delegated_capability == Some(worker.capability)
-        && task.result.is_none()
+        && task.result == result
         && task.run_ticks == ticks)
         && matches!(context, Some(context) if context.state == AgentExecutionState::Idle && context.task.is_none())
 }

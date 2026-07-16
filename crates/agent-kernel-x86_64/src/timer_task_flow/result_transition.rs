@@ -143,7 +143,7 @@ fn idle_task_valid(booted: &X86BootedKernel, worker: WorkerTask) -> bool {
     matches!(task, Some(task) if task.status == TaskStatus::Accepted
         && task.assignee == Some(worker.agent)
         && task.delegated_capability == Some(worker.capability)
-        && task.result.is_none()
+        && task.result == Some(worker.result)
         && task.run_ticks == 1)
         && matches!(context, Some(context) if context.state == AgentExecutionState::Idle
             && context.task.is_none()

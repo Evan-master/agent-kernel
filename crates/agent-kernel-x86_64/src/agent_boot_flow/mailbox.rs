@@ -24,12 +24,8 @@ pub(super) fn run(
     if !preempted_b.signal_is_clear() || runtime.len() != 2 {
         fatal_boot("AGENT_KERNEL_MULTI_AGENT_ISOLATION_ERROR");
     }
-    let Some(expected_offsets_a) = worker_a.expected_sender_return_offsets() else {
-        fatal_boot("AGENT_KERNEL_AGENT_IMAGE_OFFSET_ERROR");
-    };
-    let Some(expected_offsets_b) = worker_b.expected_receiver_return_offsets() else {
-        fatal_boot("AGENT_KERNEL_AGENT_IMAGE_OFFSET_ERROR");
-    };
+    let expected_offsets_a = worker_a.expected_return_offsets();
+    let expected_offsets_b = worker_b.expected_return_offsets();
     let Some(requested_receive) = preempted_b.resume_until_message_receive() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
@@ -100,31 +96,28 @@ pub(super) fn run(
     };
     serial_write_line("AGENT_KERNEL_AGENT_CALL_SEND_MESSAGE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_BLOCKING_MAILBOX_WAKE_OK");
-    let Some(completed_a) = acknowledged_send.resume_until_completion() else {
+    let Some(requested_yield) = acknowledged_send.resume_until_yield() else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
     };
-    if completed_a.call_count() != 4
-        || completed_a.address_space_switch_count() != 8
-        || completed_a.nonce() != nonce_a
-        || completed_a.result() != worker_a.result()
-        || completed_a.recipient() != WORKER_B
-        || completed_a.message().raw() != 1
-        || completed_a.return_offsets() != expected_offsets_a
+    if requested_yield.call_count() != 4
+        || requested_yield.address_space_switch_count() != 8
+        || requested_yield.message().raw() != 1
+        || requested_yield.yield_return_offset() != expected_offsets_a[3]
     {
-        fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
+        fatal_boot("AGENT_KERNEL_AGENT_CALL_YIELD_ERROR");
     }
-    serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
     let Some((second_redispatched_flow, dispatched_b)) =
-        first_message_flow.complete_first_and_dispatch_second(booted, completed_a, runtime)
+        first_message_flow.yield_first_and_dispatch_second(booted, requested_yield, runtime)
     else {
-        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
+        fatal_boot("AGENT_KERNEL_AGENT_CALL_YIELD_ERROR");
     };
     let Some(waiting_receive) = runtime.take_waiting_mailbox(dispatched_b) else {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     };
-    if runtime.len() != 1 {
+    if runtime.len() != 2 {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     }
+    serial_write_line("AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK");
     let Some((second_message_flow, acknowledged_receive)) =
         second_redispatched_flow.receive_from_first(booted, waiting_receive)
     else {
@@ -176,7 +169,32 @@ pub(super) fn run(
     {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     }
-    let Some(completed_workers) = second_result_flow.record_second_completion(booted, completed_b)
+    let Some((first_redispatched_flow, dispatched_a)) =
+        second_result_flow.complete_second_and_dispatch_first(booted, completed_b, runtime)
+    else {
+        fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
+    };
+    let Some(yielded_a) = runtime.take_yielded(dispatched_a) else {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    };
+    if runtime.len() != 1 {
+        fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
+    }
+    let Some(completed_a) = yielded_a.resume_until_completion() else {
+        fatal_boot("AGENT_KERNEL_AGENT_CPU_RESUME_ERROR");
+    };
+    if completed_a.call_count() != 5
+        || completed_a.address_space_switch_count() != 10
+        || completed_a.nonce() != nonce_a
+        || completed_a.result() != worker_a.result()
+        || completed_a.recipient() != WORKER_B
+        || completed_a.message().raw() != 1
+        || completed_a.return_offsets() != expected_offsets_a
+    {
+        fatal_boot("AGENT_KERNEL_AGENT_CR3_SWITCH_ERROR");
+    }
+    let Some(completed_workers) =
+        first_redispatched_flow.record_first_completion(booted, completed_a)
     else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_COMPLETION_ERROR");
     };
@@ -187,5 +205,6 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RESULT_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURNING_MUTATION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MAILBOX_IPC_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_YIELD_OK");
     completed_workers
 }

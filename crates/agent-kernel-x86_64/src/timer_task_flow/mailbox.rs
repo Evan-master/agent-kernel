@@ -9,16 +9,16 @@ use crate::{
         AcknowledgedMessageSendCpu, AcknowledgedReceiverResultCpu, AcknowledgedSenderResultCpu,
         CompletedMailboxReceiverCpu, CompletedMailboxSenderCpu, RequestedMessageAcknowledgementCpu,
         RequestedMessageReceiveCpu, RequestedMessageSendCpu, RequestedReceiverResultCpu,
-        RequestedSenderResultCpu, WaitingMessageReceiveCpu,
+        RequestedSenderResultCpu, RequestedSenderYieldCpu, WaitingMessageReceiveCpu,
     },
     X86BootedKernel,
 };
 
 use super::{
-    message_transition, result_transition, transitions, wait_transition, CompletedWorkerTasks,
-    FirstMessageSentFlow, FirstResultSubmittedFlow, FirstResumedFlow,
-    SecondMessageAcknowledgedFlow, SecondMessageReceivedFlow, SecondRedispatchedFlow,
-    SecondResultSubmittedFlow, SecondResumedFlow, SecondWaitingFlow,
+    message_transition, result_transition, transitions, wait_transition, yield_transition,
+    CompletedWorkerTasks, FirstMessageSentFlow, FirstResultSubmittedFlow, FirstResumedFlow,
+    FirstYieldRedispatchedFlow, SecondMessageAcknowledgedFlow, SecondMessageReceivedFlow,
+    SecondRedispatchedFlow, SecondResultSubmittedFlow, SecondResumedFlow, SecondWaitingFlow,
 };
 
 impl SecondResumedFlow {
@@ -108,14 +108,14 @@ impl FirstResultSubmittedFlow {
 }
 
 impl FirstMessageSentFlow {
-    pub(crate) fn complete_first_and_dispatch_second(
+    pub(crate) fn yield_first_and_dispatch_second(
         self,
         booted: &mut X86BootedKernel,
-        cpu: CompletedMailboxSenderCpu,
-        runtime: &crate::native_agent_runtime::NativeAgentRuntime,
+        cpu: RequestedSenderYieldCpu,
+        runtime: &mut crate::native_agent_runtime::NativeAgentRuntime,
     ) -> Option<(SecondRedispatchedFlow, agent_kernel_core::RunQueueEntry)> {
         let dispatched =
-            transitions::complete_and_dispatch(booted, self.first, self.second, cpu, runtime, 1)?;
+            yield_transition::yield_and_dispatch(booted, self.first, self.second, cpu, runtime)?;
         Some((
             SecondRedispatchedFlow {
                 first: self.first,
@@ -172,7 +172,7 @@ impl SecondMessageAcknowledgedFlow {
         cpu: RequestedReceiverResultCpu,
     ) -> Option<(SecondResultSubmittedFlow, AcknowledgedReceiverResultCpu)> {
         let acknowledged =
-            result_transition::submit(booted, self.second, None, None, Some(self.first), cpu)?;
+            result_transition::submit(booted, self.second, Some(self.first), None, None, cpu)?;
         Some((
             SecondResultSubmittedFlow {
                 first: self.first,
@@ -184,12 +184,39 @@ impl SecondMessageAcknowledgedFlow {
 }
 
 impl SecondResultSubmittedFlow {
-    pub(crate) fn record_second_completion(
+    pub(crate) fn complete_second_and_dispatch_first(
         self,
         booted: &mut X86BootedKernel,
         cpu: CompletedMailboxReceiverCpu,
+        runtime: &crate::native_agent_runtime::NativeAgentRuntime,
+    ) -> Option<(FirstYieldRedispatchedFlow, agent_kernel_core::RunQueueEntry)> {
+        let dispatched = transitions::complete_and_dispatch(
+            booted,
+            self.second,
+            self.first,
+            cpu,
+            runtime,
+            crate::native_agent_runtime::NativeAgentContextKind::Yielded,
+            Some(self.first.result),
+            1,
+        )?;
+        Some((
+            FirstYieldRedispatchedFlow {
+                first: self.first,
+                second: self.second,
+            },
+            dispatched,
+        ))
+    }
+}
+
+impl FirstYieldRedispatchedFlow {
+    pub(crate) fn record_first_completion(
+        self,
+        booted: &mut X86BootedKernel,
+        cpu: CompletedMailboxSenderCpu,
     ) -> Option<CompletedWorkerTasks> {
-        transitions::record_final_completion(booted, self.second, self.first, cpu)
+        transitions::record_final_completion(booted, self.first, self.second, cpu)
             .then_some(CompletedWorkerTasks::new(self.first, self.second))
     }
 }
