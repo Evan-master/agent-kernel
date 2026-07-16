@@ -1,10 +1,10 @@
 //! Terminal ownership for one validated ring-3 Agent exception.
 //!
-//! This CPU-layer module copies a supported #UD or #GP frame from RSP0, binds it
-//! to the owning Agent address space and call session, validates any CPU error
-//! code, and makes the captured context non-resumable. A restart consumes and
-//! discards that frame before constructing a fresh entry context. Semantic
-//! mutation remains in the executor.
+//! This CPU-layer module copies a supported #UD, #GP, or #PF frame from RSP0,
+//! binds it to the owning Agent address space and call session, validates CPU
+//! error and fault-address evidence, and makes the captured context
+//! non-resumable. A restart consumes and discards that frame before constructing
+//! a fresh entry context. Semantic mutation remains in the executor.
 
 use core::sync::atomic::Ordering;
 
@@ -43,11 +43,12 @@ impl FaultedAgentCpu {
         let frame_rsp = storage::AGENT_KERNEL_AGENT_FAULT_RSP.load(Ordering::Acquire);
         let frame_rip = storage::AGENT_KERNEL_AGENT_FAULT_RIP.load(Ordering::Acquire);
         let expected_error_code = u64::from(expected_fault.error_code());
+        let expected_address = expected_fault.fault_address().unwrap_or(0);
         let frame = match expected_fault {
             NativeAgentFault::InvalidOpcode => {
                 validation::read_frame(frame_rsp, runtime.kernel_stack)?
             }
-            NativeAgentFault::GeneralProtection { .. } => {
+            NativeAgentFault::GeneralProtection { .. } | NativeAgentFault::PageFault { .. } => {
                 let frame = validation::read_error_code_frame(frame_rsp, runtime.kernel_stack)?;
                 if frame.error_code() != expected_error_code {
                     return None;
@@ -60,6 +61,7 @@ impl FaultedAgentCpu {
             || storage::AGENT_KERNEL_AGENT_FAULT_CR3.load(Ordering::Acquire) != roots.agent_cr3()
             || storage::AGENT_KERNEL_AGENT_FAULT_ERROR_CODE.load(Ordering::Acquire)
                 != expected_error_code
+            || storage::AGENT_KERNEL_AGENT_FAULT_ADDRESS.load(Ordering::Acquire) != expected_address
             || frame.rip != frame_rip
             || !validation::user_frame_valid(&frame, layout)
             || !validation::kernel_boundary_valid(runtime.kernel_stack, runtime.kernel_cr3)

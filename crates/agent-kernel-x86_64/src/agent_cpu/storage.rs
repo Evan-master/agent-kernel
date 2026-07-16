@@ -129,6 +129,10 @@ pub(super) static AGENT_KERNEL_AGENT_FAULT_VECTOR: AtomicU8 = AtomicU8::new(0);
 #[used]
 pub(super) static AGENT_KERNEL_AGENT_FAULT_ERROR_CODE: AtomicU64 = AtomicU64::new(0);
 
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_ADDRESS: AtomicU64 = AtomicU64::new(0);
+
 static AGENT_KERNEL_AGENT_RUNTIME_READY: AtomicU8 = AtomicU8::new(0);
 
 pub(super) fn install(roots: AddressSpaceRoots) -> Option<()> {
@@ -192,6 +196,7 @@ pub(super) fn run_boundary() -> Option<NativeRunBoundary> {
         AGENT_KERNEL_AGENT_FAULT_SEEN.load(Ordering::Acquire) == 1,
         AGENT_KERNEL_AGENT_FAULT_VECTOR.load(Ordering::Acquire),
         AGENT_KERNEL_AGENT_FAULT_ERROR_CODE.load(Ordering::Acquire),
+        AGENT_KERNEL_AGENT_FAULT_ADDRESS.load(Ordering::Acquire),
     )
     .classify()
     .ok()
@@ -217,4 +222,5 @@ fn reset_mailbox() {
     AGENT_KERNEL_AGENT_FAULT_SEEN.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_FAULT_VECTOR.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_FAULT_ERROR_CODE.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_ADDRESS.store(0, Ordering::Release);
 }

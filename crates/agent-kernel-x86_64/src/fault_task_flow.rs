@@ -12,11 +12,22 @@ use agent_kernel_core::{
     AgentImageRecord, CapabilityId, EventKind, IntentKind, RunQueueEntry, TaskId, TaskStatus,
     VerificationRequirement,
 };
-use agent_kernel_x86_64::agent_call::AgentCallContext;
+use agent_kernel_x86_64::{
+    agent_call::AgentCallContext, native_runtime::NativeAgentFault, user_memory::UserMemoryLayout,
+};
 
 use crate::X86BootedKernel;
 
 pub(super) const FAULT_WORKER: AgentId = AgentId::new(6);
+const FAULT_WORKER_PAGE_FAULT_ERROR_CODE: u16 = 7;
+const FAULT_WORKER_PAGE_FAULT_ADDRESS: u64 = UserMemoryLayout::fixed().signal_start();
+
+pub(crate) const fn expected_page_fault() -> NativeAgentFault {
+    NativeAgentFault::PageFault {
+        error_code: FAULT_WORKER_PAGE_FAULT_ERROR_CODE,
+        address: FAULT_WORKER_PAGE_FAULT_ADDRESS,
+    }
+}
 
 #[derive(Copy, Clone)]
 struct FaultWorkerTask {

@@ -279,15 +279,15 @@ impl NativeRuntimeEvidence {
     }
 
     pub(crate) const fn proves_current_boot(self) -> bool {
-        self.dispatches == 15
-            && self.prepared == 6
-            && self.preempted == 7
+        self.dispatches == 17
+            && self.prepared == 7
+            && self.preempted == 8
             && self.waiting == 1
             && self.yielded == 1
-            && self.quantum_expiries == 7
+            && self.quantum_expiries == 8
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
-            && self.agent_faults == 2
+            && self.agent_faults == 3
     }
 
     pub(crate) const fn proves_general_protection_phase(self) -> bool {
@@ -300,5 +300,17 @@ impl NativeRuntimeEvidence {
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
             && self.agent_faults == 2
+    }
+
+    pub(crate) const fn proves_page_fault_phase(self) -> bool {
+        self.dispatches == 15
+            && self.prepared == 6
+            && self.preempted == 7
+            && self.waiting == 1
+            && self.yielded == 1
+            && self.quantum_expiries == 7
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 3
     }
 }

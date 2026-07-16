@@ -67,6 +67,10 @@ impl AgentCpuRuntime {
                 agent_kernel_x86_64::native_runtime::GENERAL_PROTECTION_VECTOR,
                 assembly::agent_kernel_agent_general_protection_stub,
             )?;
+            exception_runtime::install_agent_exception_gate(
+                agent_kernel_x86_64::native_runtime::PAGE_FAULT_VECTOR,
+                assembly::agent_kernel_agent_page_fault_stub,
+            )?;
             exception_runtime::install_user_interrupt_gate(
                 AGENT_CALL_VECTOR,
                 assembly::agent_kernel_agent_call_stub,

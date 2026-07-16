@@ -11,7 +11,7 @@ use agent_kernel_x86_64::{
         PRIVILEGE_ERROR_CODE_OFFSET, PRIVILEGE_ERROR_CODE_RIP_OFFSET,
         PRIVILEGE_INTERRUPT_RIP_OFFSET,
     },
-    native_runtime::{GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR},
+    native_runtime::{GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR, PAGE_FAULT_VECTOR},
 };
 
 use crate::pic;
@@ -212,6 +212,34 @@ agent_kernel_agent_general_protection_stub:
     pop rax
     jmp agent_kernel_exception_13
     .size agent_kernel_agent_general_protection_stub, . - agent_kernel_agent_general_protection_stub
+    .global agent_kernel_agent_page_fault_stub
+    .type agent_kernel_agent_page_fault_stub,@function
+agent_kernel_agent_page_fault_stub:
+    push rax
+    mov rax, qword ptr [rsp + {error_origin_cs_offset}]
+    and eax, 3
+    cmp eax, 3
+    jne .Lagent_kernel_page_fault_fatal
+    agent_kernel_push_integer_frame_after_rax
+    mov r11, cr2
+    mov r10, cr3
+    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov cr3, rax
+    mov qword ptr [rip + {fault_address}], r11
+    mov qword ptr [rip + {fault_cr3}], r10
+    mov qword ptr [rip + {fault_rsp}], rsp
+    mov rax, qword ptr [rsp + {error_code_offset}]
+    mov qword ptr [rip + {fault_error_code}], rax
+    mov rax, qword ptr [rsp + {error_rip_offset}]
+    mov qword ptr [rip + {fault_rip}], rax
+    mov byte ptr [rip + {fault_vector}], {page_fault_vector}
+    inc byte ptr [rip + {fault_count}]
+    mov byte ptr [rip + {fault_seen}], 1
+    agent_kernel_restore_host
+.Lagent_kernel_page_fault_fatal:
+    pop rax
+    jmp agent_kernel_exception_14
+    .size agent_kernel_agent_page_fault_stub, . - agent_kernel_agent_page_fault_stub
 "#,
     interrupt_rsp = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP,
     interrupt_rip = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP,
@@ -232,6 +260,7 @@ agent_kernel_agent_general_protection_stub:
     fault_seen = sym super::storage::AGENT_KERNEL_AGENT_FAULT_SEEN,
     fault_vector = sym super::storage::AGENT_KERNEL_AGENT_FAULT_VECTOR,
     fault_error_code = sym super::storage::AGENT_KERNEL_AGENT_FAULT_ERROR_CODE,
+    fault_address = sym super::storage::AGENT_KERNEL_AGENT_FAULT_ADDRESS,
     host_context = sym super::storage::AGENT_KERNEL_HOST_CONTEXT_RSP,
     rip_offset = const PRIVILEGE_INTERRUPT_RIP_OFFSET,
     origin_cs_offset = const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX,
@@ -240,6 +269,7 @@ agent_kernel_agent_general_protection_stub:
     error_rip_offset = const PRIVILEGE_ERROR_CODE_RIP_OFFSET,
     invalid_opcode_vector = const INVALID_OPCODE_VECTOR,
     general_protection_vector = const GENERAL_PROTECTION_VECTOR,
+    page_fault_vector = const PAGE_FAULT_VECTOR,
     pic_master_data = const pic::PIC_MASTER_DATA,
     pic_master_command = const pic::PIC_MASTER_COMMAND,
     pic_eoi = const pic::PIC_EOI,
@@ -259,6 +289,7 @@ unsafe extern "C" {
     pub(super) fn agent_kernel_agent_call_stub();
     pub(super) fn agent_kernel_agent_invalid_opcode_stub();
     pub(super) fn agent_kernel_agent_general_protection_stub();
+    pub(super) fn agent_kernel_agent_page_fault_stub();
 }
 
 pub(super) unsafe fn enter_user(

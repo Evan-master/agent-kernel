@@ -13,7 +13,8 @@ use agent_kernel_core::AgentId;
 
 pub use boundary::{
     NativeAgentFault, NativeRunBoundary, NativeRunBoundaryError, NativeRunBoundaryEvidence,
-    GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR,
+    GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR, LOWER_CANONICAL_USER_MAX,
+    PAGE_FAULT_MAX_ERROR_CODE, PAGE_FAULT_VECTOR,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

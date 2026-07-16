@@ -63,6 +63,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK" \
+  "AGENT_KERNEL_NATIVE_AGENT_PAGE_FAULT_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
@@ -176,17 +177,23 @@ for expected in \
   "event[100] task_dispatched" \
   "event[101] task_quantum_expired" \
   "event[102] task_dispatched" \
-  "event[103] task_completed" \
-  "event[104] device_event_raised" \
-  "event[105] device_event_delivered" \
-  "event[106] driver_invocation_queued" \
-  "event[107] driver_invocation_dispatched" \
-  "event[108] driver_invocation_ticked" \
-  "event[109] device_event_acknowledged" \
-  "event[110] driver_command_submitted" \
-  "event[111] driver_command_dispatched" \
-  "event[112] driver_command_completed" \
-  "event[113] driver_invocation_completed" \
+  "event[103] task_faulted" \
+  "event[104] task_fault_recovered" \
+  "event[105] task_queued" \
+  "event[106] task_dispatched" \
+  "event[107] task_quantum_expired" \
+  "event[108] task_dispatched" \
+  "event[109] task_completed" \
+  "event[110] device_event_raised" \
+  "event[111] device_event_delivered" \
+  "event[112] driver_invocation_queued" \
+  "event[113] driver_invocation_dispatched" \
+  "event[114] driver_invocation_ticked" \
+  "event[115] device_event_acknowledged" \
+  "event[116] driver_command_submitted" \
+  "event[117] driver_command_dispatched" \
+  "event[118] driver_command_completed" \
+  "event[119] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -196,7 +203,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 113 ]]; then
-  printf 'expected exactly 113 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 119 ]]; then
+  printf 'expected exactly 119 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

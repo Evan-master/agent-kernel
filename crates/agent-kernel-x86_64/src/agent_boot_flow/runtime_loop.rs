@@ -7,13 +7,16 @@ use agent_kernel_core::EventKind;
 use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
     native_runtime::NativeAgentFault,
-    user_memory::{FIRST_AGENT_RESTART_GENERATION, SECOND_AGENT_RESTART_GENERATION},
+    user_memory::{
+        FIRST_AGENT_RESTART_GENERATION, SECOND_AGENT_RESTART_GENERATION,
+        THIRD_AGENT_RESTART_GENERATION,
+    },
 };
 
 use crate::{
     agent_cpu::CompletedAgentCpu,
     boot_agent_images::{BootAgentImage, BootFaultWorkerImage, BootVerifierImage},
-    fault_task_flow::{PreparedFaultTaskFlow, FAULT_WORKER},
+    fault_task_flow::{expected_page_fault, PreparedFaultTaskFlow, FAULT_WORKER},
     native_agent_executor::{
         self, NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority,
     },
@@ -167,6 +170,25 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
+    if !runtime.is_empty()
+        || report.len() != 3
+        || report.faulted_len() != 1
+        || !evidence.proves_page_fault_phase()
+        || !page_fault_evidence_valid(booted, &report, &fault, fault_image, fault_context)
+    {
+        return None;
+    }
+    fault.restart_for_runtime(booted, runtime, &mut report, expected_page_fault())?;
+    if runtime.len() != 1 || report.faulted_len() != 0 {
+        return None;
+    }
+    native_agent_executor::run_until_idle(
+        booted,
+        runtime,
+        &mut report,
+        &mut evidence,
+        Some(authority),
+    )?;
     if !runtime.is_empty() || report.len() != 4 || report.faulted_len() != 0 {
         return None;
     }
@@ -302,8 +324,28 @@ fn fault_restarts_evidence_valid(
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
-        && completed.restart_generation() == SECOND_AGENT_RESTART_GENERATION
+        && completed.restart_generation() == THIRD_AGENT_RESTART_GENERATION
         && flow.completed_after_restarts(booted)
+}
+
+fn page_fault_evidence_valid(
+    booted: &X86BootedKernel,
+    report: &NativeExecutionReport,
+    flow: &PreparedFaultTaskFlow,
+    image: BootFaultWorkerImage,
+    context: AgentCallContext,
+) -> bool {
+    let Some(faulted) = report.faulted(FAULT_WORKER) else {
+        return false;
+    };
+    let expected_fault = expected_page_fault();
+    faulted.context() == context
+        && faulted.fault() == expected_fault
+        && faulted.fault_offset() == Some(image.page_fault_offset())
+        && !faulted.had_call_progress()
+        && faulted.physical_quantum_generation() == 1
+        && faulted.restart_generation() == SECOND_AGENT_RESTART_GENERATION
+        && flow.page_faulted_after_runtime(booted)
 }
 
 fn write_worker_markers() {
@@ -337,6 +379,7 @@ fn write_verifier_markers() {
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_PAGE_FAULT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK");
