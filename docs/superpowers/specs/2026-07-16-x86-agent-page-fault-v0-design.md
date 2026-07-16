@@ -2,7 +2,8 @@
 
 ## Status
 
-Implementation and validation complete on 2026-07-16; publication pending.
+Implemented, validated, merged, and published on 2026-07-16 in feature commit
+`9e77d77`.
 
 ## Purpose
 
