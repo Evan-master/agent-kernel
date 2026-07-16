@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for autonomous implementation on 2026-07-16.
+Implemented, validated, merged, and published on 2026-07-16.
 
 ## Purpose
 
