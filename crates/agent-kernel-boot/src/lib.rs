@@ -158,7 +158,8 @@ impl<
                 .with(Operation::Observe)
                 .with(Operation::Act)
                 .with(Operation::Verify)
-                .with(Operation::Delegate),
+                .with(Operation::Delegate)
+                .with(Operation::Rollback),
         )?;
         let image = kernel.sys_register_agent_image(
             config.bootstrap_agent,

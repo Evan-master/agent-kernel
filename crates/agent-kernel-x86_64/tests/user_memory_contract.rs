@@ -1,5 +1,6 @@
 use agent_kernel_x86_64::user_memory::{
-    UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
+    UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_RESTART_GENERATION_OFFSET,
+    FIRST_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
     STACK_PAGE_COUNT,
 };
 
@@ -28,4 +29,16 @@ fn signal_page_separates_call_release_from_physical_quantum_generation() {
         PHYSICAL_QUANTUM_GENERATION_OFFSET
     );
     assert!(PHYSICAL_QUANTUM_GENERATION_OFFSET < PAGE_BYTES as usize);
+}
+
+#[test]
+fn signal_page_reserves_an_independent_restart_generation() {
+    assert_eq!(AGENT_RESTART_GENERATION_OFFSET, 2);
+    assert_eq!(FIRST_AGENT_RESTART_GENERATION, 1);
+    assert_ne!(AGENT_RESTART_GENERATION_OFFSET, AGENT_CALL_RELEASE_OFFSET);
+    assert_ne!(
+        AGENT_RESTART_GENERATION_OFFSET,
+        PHYSICAL_QUANTUM_GENERATION_OFFSET
+    );
+    assert!(AGENT_RESTART_GENERATION_OFFSET < PAGE_BYTES as usize);
 }

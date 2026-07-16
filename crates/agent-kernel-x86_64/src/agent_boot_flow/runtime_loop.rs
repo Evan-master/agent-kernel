@@ -4,7 +4,10 @@
 //! the executor routes operations independently of Worker or Verifier roles.
 
 use agent_kernel_core::EventKind;
-use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentFault};
+use agent_kernel_x86_64::{
+    agent_call::AgentCallContext, native_runtime::NativeAgentFault,
+    user_memory::FIRST_AGENT_RESTART_GENERATION,
+};
 
 use crate::{
     agent_cpu::CompletedAgentCpu,
@@ -111,7 +114,7 @@ pub(super) fn run(
     if !runtime.is_empty()
         || report.len() != 3
         || report.faulted_len() != 1
-        || !evidence.proves_current_boot()
+        || !evidence.proves_fault_containment_phase()
         || !fault_evidence_valid(booted, &report, &fault, fault_image, fault_context)
         || !verifier_evidence_valid(
             &report,
@@ -123,6 +126,26 @@ pub(super) fn run(
         return None;
     }
     verifier.completed_after_runtime(booted, &completed_workers)?;
+    fault.restart_for_runtime(booted, runtime, &mut report)?;
+    if runtime.len() != 1 || report.faulted_len() != 0 {
+        return None;
+    }
+    native_agent_executor::run_until_idle(
+        booted,
+        runtime,
+        &mut report,
+        &mut evidence,
+        Some(authority),
+    )?;
+    if !runtime.is_empty() || report.len() != 4 || report.faulted_len() != 0 {
+        return None;
+    }
+    if !evidence.proves_current_boot() {
+        return None;
+    }
+    if !fault_restart_evidence_valid(booted, &report, &fault, fault_image, fault_context) {
+        return None;
+    }
     write_verifier_markers();
     Some(())
 }
@@ -159,6 +182,7 @@ fn completed_matches_worker(
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == physical_quantum_generation
+        && completed.restart_generation() == 0
 }
 
 fn verifier_evidence_valid(
@@ -177,6 +201,7 @@ fn verifier_evidence_valid(
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
+        && completed.restart_generation() == 0
         && subject.task().raw() == image.target()
         && subject.result() == image.result()
 }
@@ -206,8 +231,30 @@ fn fault_evidence_valid(
         && faulted.fault_offset() == Some(image.invalid_opcode_offset())
         && !faulted.had_call_progress()
         && faulted.physical_quantum_generation() == 1
+        && faulted.restart_generation() == 0
         && flow.faulted_after_runtime(booted)
         && matches!((fault_event, verifier_continuation), (Some(fault), Some(next)) if fault < next)
+}
+
+fn fault_restart_evidence_valid(
+    booted: &X86BootedKernel,
+    report: &NativeExecutionReport,
+    flow: &PreparedFaultTaskFlow,
+    image: BootFaultWorkerImage,
+    context: AgentCallContext,
+) -> bool {
+    let Some(completed) = report.completed(FAULT_WORKER) else {
+        return false;
+    };
+    completed.context() == context
+        && completed.nonce() == image.nonce()
+        && completed.call_count() == 2
+        && completed.address_space_switch_count() == 4
+        && completed.operations() == image.expected_operations()
+        && completed.return_offsets() == image.expected_return_offsets()
+        && completed.physical_quantum_generation() == 1
+        && completed.restart_generation() == FIRST_AGENT_RESTART_GENERATION
+        && flow.completed_after_restart(booted)
 }
 
 fn write_worker_markers() {
@@ -239,6 +286,7 @@ fn write_verifier_markers() {
     serial_write_line("AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK");
     serial_write_line("AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK");

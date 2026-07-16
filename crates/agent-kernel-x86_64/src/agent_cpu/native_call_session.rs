@@ -48,6 +48,7 @@ pub(crate) struct CompletedAgentCpu {
     nonce: u64,
     transcript: AgentCallTranscript<MAX_AGENT_CALLS>,
     physical_quantum_generation: u8,
+    restart_generation: u8,
 }
 
 pub(crate) enum AgentRunOutcome {
@@ -211,5 +212,9 @@ impl CompletedAgentCpu {
 
     pub(crate) const fn physical_quantum_generation(&self) -> u8 {
         self.physical_quantum_generation
+    }
+
+    pub(crate) const fn restart_generation(&self) -> u8 {
+        self.restart_generation
     }
 }

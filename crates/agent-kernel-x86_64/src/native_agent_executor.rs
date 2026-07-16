@@ -17,7 +17,7 @@ use crate::{
 };
 
 const NATIVE_TASK_QUANTUM: u64 = 1;
-const COMPLETED_AGENT_CAPACITY: usize = 3;
+const COMPLETED_AGENT_CAPACITY: usize = 4;
 const FAULTED_AGENT_CAPACITY: usize = 1;
 
 #[derive(Copy, Clone)]
@@ -252,6 +252,10 @@ impl NativeExecutionReport {
         self.faulted.get(agent).ok()
     }
 
+    pub(crate) fn take_faulted(&mut self, agent: AgentId) -> Option<FaultedAgentCpu> {
+        self.faulted.take(agent).ok()
+    }
+
     pub(crate) const fn len(&self) -> usize {
         self.completed.len()
     }
@@ -262,13 +266,25 @@ impl NativeExecutionReport {
 }
 
 impl NativeRuntimeEvidence {
-    pub(crate) const fn proves_current_boot(self) -> bool {
+    pub(crate) const fn proves_fault_containment_phase(self) -> bool {
         self.dispatches == 11
             && self.prepared == 4
             && self.preempted == 5
             && self.waiting == 1
             && self.yielded == 1
             && self.quantum_expiries == 5
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 1
+    }
+
+    pub(crate) const fn proves_current_boot(self) -> bool {
+        self.dispatches == 13
+            && self.prepared == 5
+            && self.preempted == 6
+            && self.waiting == 1
+            && self.yielded == 1
+            && self.quantum_expiries == 6
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
             && self.agent_faults == 1

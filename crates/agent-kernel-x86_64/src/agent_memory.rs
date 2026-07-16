@@ -15,8 +15,9 @@ use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
     user_memory::{
-        UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, PAGE_BYTES,
-        PHYSICAL_QUANTUM_GENERATION_OFFSET, STACK_PAGE_COUNT,
+        UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_RESTART_GENERATION_OFFSET,
+        FIRST_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
+        STACK_PAGE_COUNT,
     },
 };
 
@@ -125,6 +126,10 @@ impl PreparedAgentMemory {
     pub(crate) fn signal_is_clear(&self) -> bool {
         // SAFETY: callers run at CPL0 under the kernel CR3; this pointer is the
         // supervisor physical alias of this Agent's exclusive signal frame.
+        self.dispatch_signals_are_clear() && self.restart_generation() == 0
+    }
+
+    pub(crate) fn dispatch_signals_are_clear(&self) -> bool {
         self.agent_call_release_is_clear() && self.physical_quantum_generation() == 0
     }
 
@@ -159,6 +164,44 @@ impl PreparedAgentMemory {
         }
     }
 
+    pub(crate) fn restart_generation(&self) -> u8 {
+        // SAFETY: this fixed offset is inside the exclusive signal frame.
+        unsafe {
+            self.signal_pointer
+                .add(AGENT_RESTART_GENERATION_OFFSET)
+                .read_volatile()
+        }
+    }
+
+    pub(crate) fn reset_for_first_restart(self) -> Option<Self> {
+        if !self.kernel_address_space_active() || self.restart_generation() != 0 {
+            return None;
+        }
+        let frames = self.identity.content_frames();
+        let signal_frame = PhysFrame::from_start_address(PhysAddr::new(frames[1])).ok()?;
+        if physical_pointer(PHYSICAL_MEMORY_OFFSET, signal_frame)? != self.signal_pointer
+            || !clear_page(self.signal_pointer)
+        {
+            return None;
+        }
+        for frame_address in &frames[2..] {
+            let frame = PhysFrame::from_start_address(PhysAddr::new(*frame_address)).ok()?;
+            if !clear_page(physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)?) {
+                return None;
+            }
+        }
+        // SAFETY: reset retained exclusive ownership of the signal frame and
+        // ring 3 maps it read-only.
+        unsafe {
+            self.signal_pointer
+                .add(AGENT_RESTART_GENERATION_OFFSET)
+                .write_volatile(FIRST_AGENT_RESTART_GENERATION);
+        }
+        (self.dispatch_signals_are_clear()
+            && self.restart_generation() == FIRST_AGENT_RESTART_GENERATION)
+            .then_some(self)
+    }
+
     fn agent_call_release_is_clear(&self) -> bool {
         // SAFETY: this fixed offset is inside the exclusive signal frame.
         unsafe {
@@ -168,6 +211,23 @@ impl PreparedAgentMemory {
                 == 0
         }
     }
+}
+
+fn clear_page(pointer: *mut u8) -> bool {
+    // SAFETY: callers pass a supervisor alias for an exclusively owned Agent
+    // signal or stack frame while the kernel address space is active.
+    unsafe {
+        pointer.write_bytes(0, PAGE_BYTES as usize);
+    }
+    let mut offset = 0;
+    while offset < PAGE_BYTES as usize {
+        // SAFETY: `offset` remains inside the same exclusive page.
+        if unsafe { pointer.add(offset).read_volatile() } != 0 {
+            return false;
+        }
+        offset += 1;
+    }
+    true
 }
 
 fn initialize_content(

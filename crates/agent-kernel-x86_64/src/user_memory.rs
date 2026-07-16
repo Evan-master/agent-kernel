@@ -10,6 +10,8 @@ pub const PAGE_BYTES: u64 = 4096;
 pub const STACK_PAGE_COUNT: usize = 4;
 pub const AGENT_CALL_RELEASE_OFFSET: usize = 0;
 pub const PHYSICAL_QUANTUM_GENERATION_OFFSET: usize = 1;
+pub const AGENT_RESTART_GENERATION_OFFSET: usize = 2;
+pub const FIRST_AGENT_RESTART_GENERATION: u8 = 1;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {

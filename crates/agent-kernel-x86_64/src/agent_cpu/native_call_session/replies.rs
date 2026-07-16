@@ -131,6 +131,7 @@ impl PendingAgentCallCpu {
             nonce,
             transcript: self.session.progress.transcript,
             physical_quantum_generation: self.session.memory.physical_quantum_generation(),
+            restart_generation: self.session.memory.restart_generation(),
         })
     }
 

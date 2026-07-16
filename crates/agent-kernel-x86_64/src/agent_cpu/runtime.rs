@@ -79,9 +79,31 @@ impl AgentCpuRuntime {
         memory: PreparedAgentMemory,
         context: AgentCallContext,
     ) -> Option<PreparedAgentCpu> {
+        self.prepare_with_restart_generation(memory, context, 0)
+    }
+
+    pub(super) fn prepare_restarted(
+        &self,
+        memory: PreparedAgentMemory,
+        context: AgentCallContext,
+    ) -> Option<PreparedAgentCpu> {
+        self.prepare_with_restart_generation(
+            memory,
+            context,
+            agent_kernel_x86_64::user_memory::FIRST_AGENT_RESTART_GENERATION,
+        )
+    }
+
+    fn prepare_with_restart_generation(
+        &self,
+        memory: PreparedAgentMemory,
+        context: AgentCallContext,
+        expected_restart_generation: u8,
+    ) -> Option<PreparedAgentCpu> {
         if memory.roots().kernel_cr3() != self.kernel_cr3
             || !memory.kernel_address_space_active()
-            || !memory.signal_is_clear()
+            || !memory.dispatch_signals_are_clear()
+            || memory.restart_generation() != expected_restart_generation
             || !stack_canary_valid(self.kernel_stack)
         {
             return None;

@@ -11,6 +11,7 @@ use agent_kernel_x86_64::agent_call::AgentCallOperation;
 const WORKER_A_NONCE: u64 = 0xa11c_e001;
 const WORKER_B_NONCE: u64 = 0xb22c_e002;
 const VERIFIER_NONCE: u64 = 0xc33c_e003;
+const FAULT_WORKER_NONCE: u64 = 0xd44c_e004;
 const WORKER_A_RESULT: TaskResult = TaskResult {
     code: 0x0a01,
     value: 0xa11c_0001,
@@ -41,11 +42,16 @@ const VERIFIER_OPERATIONS: [AgentCallOperation; 4] = [
     AgentCallOperation::VerifyTask,
     AgentCallOperation::CompleteTask,
 ];
+const FAULT_WORKER_OPERATIONS: [AgentCallOperation; 2] = [
+    AgentCallOperation::DescribeContext,
+    AgentCallOperation::CompleteTask,
+];
+const FAULT_WORKER_RETURN_OFFSETS: [u32; 2] = [53, 62];
 const VERIFIER_DESCRIBE_RETURN_OFFSET: u32 = 46;
 const VERIFIER_INSPECTION_RETURN_OFFSET: u32 = 64;
 const VERIFIER_VERIFICATION_RETURN_OFFSET: u32 = 100;
 const VERIFIER_COMPLETION_RETURN_OFFSET: u32 = 109;
-pub(super) const FAULT_WORKER_INVALID_OPCODE_OFFSET: u32 = 16;
+pub(super) const FAULT_WORKER_INVALID_OPCODE_OFFSET: u32 = 22;
 
 const WORKER_A_CAPSULE: [u8; 180] = [
     b'A', b'G', b'N', b'T', b'I', b'M', b'G', 0, // magic
@@ -94,13 +100,15 @@ const VERIFIER_CAPSULE: [u8; 143] = [
     0x31, 0xdb, 0xcd, 0x90, 0xb9, 0x03, 0x00, 0x00, 0x00, 0x31, 0xd2, 0xcd, 0x90, 0xeb, 0xfe,
 ];
 
-const FAULT_WORKER_CAPSULE: [u8; 50] = [
+const FAULT_WORKER_CAPSULE: [u8; 96] = [
     b'A', b'G', b'N', b'T', b'I', b'M', b'G', 0, // magic
     1, 0, 1, 0, 1, 0, 0, 0, // format, architecture, kind, flags
     1, 0, 1, 0, 0, 0, 0, 0, // ABI, entry version, entry offset
-    18, 0, 0, 0, 0, 0, 0, 0, // code length, reserved
+    64, 0, 0, 0, 0, 0, 0, 0, // code length, reserved
     0x48, 0xb8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x80, 0x78, 0x01, 0x01, 0x72, 0xfa,
-    0x0f, 0x0b,
+    0x80, 0x78, 0x02, 0x01, 0x74, 0x02, 0x0f, 0x0b, 0x48, 0xb8, 0x41, 0x47, 0x4e, 0x54, 0x43, 0x41,
+    0x4c, 0x4c, 0xbb, 0x01, 0x00, 0x00, 0x00, 0xb9, 0x01, 0x00, 0x00, 0x00, 0x31, 0xd2, 0xbe, 0x04,
+    0xe0, 0x4c, 0xd4, 0xcd, 0x90, 0xb9, 0x03, 0x00, 0x00, 0x00, 0x31, 0xd2, 0xcd, 0x90, 0xeb, 0xfe,
 ];
 
 const WORKER_A_DIGEST: AgentImageDigest = AgentImageDigest::new([
@@ -119,8 +127,8 @@ const VERIFIER_DIGEST: AgentImageDigest = AgentImageDigest::new([
 ]);
 
 const FAULT_WORKER_DIGEST: AgentImageDigest = AgentImageDigest::new([
-    0x70, 0xd5, 0xa3, 0xfd, 0x08, 0xf7, 0x30, 0xe9, 0xcc, 0xd7, 0x76, 0xa6, 0x7a, 0xc5, 0xa5, 0xf8,
-    0xaf, 0x34, 0xdd, 0xcc, 0x61, 0x80, 0x5e, 0x9a, 0x3c, 0x5e, 0x50, 0xf8, 0x9b, 0x56, 0x5f, 0x47,
+    0x78, 0x14, 0x55, 0xef, 0x86, 0xd3, 0xc0, 0xca, 0x38, 0x6b, 0x83, 0x65, 0xc8, 0x7b, 0xfa, 0x39,
+    0x22, 0x53, 0x3b, 0xfa, 0x09, 0x67, 0x1e, 0xce, 0xc0, 0xbc, 0x00, 0x25, 0xc8, 0xe8, 0x25, 0x01,
 ]);
 
 #[derive(Copy, Clone)]
@@ -146,7 +154,10 @@ pub(super) struct BootVerifierImage {
 pub(super) struct BootFaultWorkerImage {
     bytes: &'static [u8],
     digest: AgentImageDigest,
+    nonce: u64,
     invalid_opcode_offset: u32,
+    expected_operations: [AgentCallOperation; 2],
+    expected_return_offsets: [u32; 2],
 }
 
 impl BootAgentImage {
@@ -219,8 +230,20 @@ impl BootFaultWorkerImage {
         self.digest
     }
 
+    pub(super) const fn nonce(self) -> u64 {
+        self.nonce
+    }
+
     pub(super) const fn invalid_opcode_offset(self) -> u32 {
         self.invalid_opcode_offset
+    }
+
+    pub(super) const fn expected_operations(self) -> [AgentCallOperation; 2] {
+        self.expected_operations
+    }
+
+    pub(super) const fn expected_return_offsets(self) -> [u32; 2] {
+        self.expected_return_offsets
     }
 }
 
@@ -260,6 +283,9 @@ pub(super) const fn fault_worker() -> BootFaultWorkerImage {
     BootFaultWorkerImage {
         bytes: &FAULT_WORKER_CAPSULE,
         digest: FAULT_WORKER_DIGEST,
+        nonce: FAULT_WORKER_NONCE,
         invalid_opcode_offset: FAULT_WORKER_INVALID_OPCODE_OFFSET,
+        expected_operations: FAULT_WORKER_OPERATIONS,
+        expected_return_offsets: FAULT_WORKER_RETURN_OFFSETS,
     }
 }

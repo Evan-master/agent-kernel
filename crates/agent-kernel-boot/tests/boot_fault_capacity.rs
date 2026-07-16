@@ -7,7 +7,7 @@ use agent_kernel_core::{
 type FaultBoot = BootedKernel<2, 1, 2, 24, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1>;
 
 #[test]
-fn booted_kernel_exposes_optional_fault_capacity_to_the_public_facade() {
+fn booted_kernel_exposes_fault_and_owner_recovery_to_the_public_facade() {
     let mut booted = FaultBoot::boot(BootConfig::default()).unwrap();
     let report = *booted.report();
     let worker = AgentId::new(3);
@@ -78,4 +78,18 @@ fn booted_kernel_exposes_optional_fault_capacity_to_the_public_facade() {
     assert_eq!(event.fault, Some(fault));
     assert_eq!(event.fault_kind, Some(FaultKind::ExecutionTrap));
     assert_eq!(event.fault_detail, Some(6));
+
+    let recovered = kernel
+        .sys_recover_faulted_task(report.bootstrap_agent, report.bootstrap_capability, task)
+        .unwrap();
+    assert_eq!(recovered.kind, EventKind::TaskFaultRecovered);
+    assert_eq!(recovered.fault, Some(fault));
+    assert_eq!(kernel.tasks()[0].status, TaskStatus::Accepted);
+    let context = kernel
+        .execution_contexts()
+        .iter()
+        .find(|context| context.agent == worker)
+        .unwrap();
+    assert_eq!(context.state, AgentExecutionState::Idle);
+    assert_eq!(context.task, None);
 }

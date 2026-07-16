@@ -1,8 +1,9 @@
 //! Terminal ownership for one validated ring-3 Agent exception.
 //!
 //! This CPU-layer module copies the no-error-code #UD frame from RSP0, binds
-//! it to the owning Agent address space and call session, and makes the context
-//! non-resumable. Semantic `TaskFaulted` mutation remains in the executor.
+//! it to the owning Agent address space and call session, and makes the captured
+//! context non-resumable. A restart consumes and discards that frame before
+//! constructing a fresh entry context. Semantic mutation remains in the executor.
 
 use core::sync::atomic::Ordering;
 
@@ -13,12 +14,15 @@ use agent_kernel_x86_64::{
 };
 
 use super::{
-    native_call_session::AgentCallProgress, runtime::AgentCpuRuntime, storage, validation,
+    native_call_session::AgentCallProgress,
+    runtime::{AgentCpuRuntime, PreparedAgentCpu},
+    storage, validation,
 };
 use crate::agent_memory::PreparedAgentMemory;
 
 pub(crate) struct FaultedAgentCpu {
     memory: PreparedAgentMemory,
+    runtime: AgentCpuRuntime,
     frame: SavedAgentFrame,
     context: AgentCallContext,
     fault: NativeAgentFault,
@@ -51,6 +55,7 @@ impl FaultedAgentCpu {
 
         Some(Self {
             memory,
+            runtime,
             frame: SavedAgentFrame::new(frame),
             context,
             fault: expected_fault,
@@ -81,5 +86,19 @@ impl FaultedAgentCpu {
 
     pub(crate) fn physical_quantum_generation(&self) -> u8 {
         self.memory.physical_quantum_generation()
+    }
+
+    pub(crate) fn restart_generation(&self) -> u8 {
+        self.memory.restart_generation()
+    }
+
+    pub(crate) fn restart(self) -> Option<PreparedAgentCpu> {
+        let Self {
+            memory,
+            runtime,
+            context,
+            ..
+        } = self;
+        runtime.prepare_restarted(memory.reset_for_first_restart()?, context)
     }
 }
