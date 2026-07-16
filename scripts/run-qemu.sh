@@ -54,6 +54,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_MAILBOX_IPC_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_YIELD_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_STORE_OK" \
   "AGENT_KERNEL_AGENT_CALL_INSPECT_RESULT_OK" \
   "AGENT_KERNEL_AGENT_CALL_VERIFY_OK" \
@@ -128,32 +129,34 @@ for expected in \
   "event[56] task_result_submitted" \
   "event[57] message_sent" \
   "event[58] message_wait_woken" \
-  "event[59] task_yielded" \
+  "event[59] task_quantum_expired" \
   "event[60] task_dispatched" \
   "event[61] message_received" \
   "event[62] message_acknowledged" \
   "event[63] task_result_submitted" \
   "event[64] task_completed" \
   "event[65] task_dispatched" \
-  "event[66] task_completed" \
-  "event[67] task_queued" \
-  "event[68] task_dispatched" \
-  "event[69] task_quantum_expired" \
+  "event[66] task_yielded" \
+  "event[67] task_dispatched" \
+  "event[68] task_completed" \
+  "event[69] task_queued" \
   "event[70] task_dispatched" \
-  "event[71] task_result_inspected" \
-  "event[72] task_verified" \
-  "event[73] intent_fulfilled" \
-  "event[74] task_completed" \
-  "event[75] device_event_raised" \
-  "event[76] device_event_delivered" \
-  "event[77] driver_invocation_queued" \
-  "event[78] driver_invocation_dispatched" \
-  "event[79] driver_invocation_ticked" \
-  "event[80] device_event_acknowledged" \
-  "event[81] driver_command_submitted" \
-  "event[82] driver_command_dispatched" \
-  "event[83] driver_command_completed" \
-  "event[84] driver_invocation_completed" \
+  "event[71] task_quantum_expired" \
+  "event[72] task_dispatched" \
+  "event[73] task_result_inspected" \
+  "event[74] task_verified" \
+  "event[75] intent_fulfilled" \
+  "event[76] task_completed" \
+  "event[77] device_event_raised" \
+  "event[78] device_event_delivered" \
+  "event[79] driver_invocation_queued" \
+  "event[80] driver_invocation_dispatched" \
+  "event[81] driver_invocation_ticked" \
+  "event[82] device_event_acknowledged" \
+  "event[83] driver_command_submitted" \
+  "event[84] driver_command_dispatched" \
+  "event[85] driver_command_completed" \
+  "event[86] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -163,7 +166,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 84 ]]; then
-  printf 'expected exactly 84 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 86 ]]; then
+  printf 'expected exactly 86 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

@@ -7,7 +7,11 @@
 //! value so callers never lose an unregistered CPU or address-space ownership
 //! token.
 
+mod boundary;
+
 use agent_kernel_core::AgentId;
+
+pub use boundary::{NativeRunBoundary, NativeRunBoundaryError, NativeRunBoundaryEvidence};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum NativeAgentRuntimeError {

@@ -14,14 +14,14 @@ impl PendingAgentCallCpu {
         let AgentCallRequest::DescribeContext { nonce } = self.request else {
             return None;
         };
-        if self.session.nonce.is_some() || self.call_count() != 1 {
+        if self.session.progress.nonce.is_some() || self.call_count() != 1 {
             return None;
         }
         self.session
             .context
             .encode_describe_reply(self.session.frame.frame_mut(), nonce)
             .ok()?;
-        self.session.nonce = Some(nonce);
+        self.session.progress.nonce = Some(nonce);
         Some(ResumableAgentCpu(self.session))
     }
 
@@ -129,7 +129,8 @@ impl PendingAgentCallCpu {
         Some(CompletedAgentCpu {
             context: self.session.context,
             nonce,
-            transcript: self.session.transcript,
+            transcript: self.session.progress.transcript,
+            physical_quantum_generation: self.session.memory.physical_quantum_generation(),
         })
     }
 
@@ -138,7 +139,7 @@ impl PendingAgentCallCpu {
         matches_operation: impl FnOnce(AgentCallRequest) -> bool,
     ) -> Option<u64> {
         let request = self.authenticated_request()?;
-        matches_operation(request).then_some(self.session.nonce?)
+        matches_operation(request).then_some(self.session.progress.nonce?)
     }
 }
 

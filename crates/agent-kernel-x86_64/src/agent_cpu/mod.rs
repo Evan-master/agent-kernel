@@ -12,6 +12,6 @@ mod storage;
 mod validation;
 
 pub(super) use native_call_session::{
-    CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu,
+    AgentRunOutcome, CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu,
 };
 pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu};

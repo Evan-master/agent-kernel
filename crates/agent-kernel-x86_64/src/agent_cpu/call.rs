@@ -8,7 +8,7 @@ use core::sync::atomic::Ordering;
 
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots, agent_call::AgentCallRequest, context::SavedAgentFrame,
-    user_memory::UserMemoryLayout,
+    native_runtime::NativeRunBoundary, user_memory::UserMemoryLayout,
 };
 
 use super::{assembly, storage, validation};
@@ -42,11 +42,7 @@ pub(super) fn capture(
     let frame_rsp = storage::AGENT_KERNEL_AGENT_CALL_RSP.load(Ordering::Acquire);
     let frame_rip = storage::AGENT_KERNEL_AGENT_CALL_RIP.load(Ordering::Acquire);
     let frame = validation::read_frame(frame_rsp, stack)?;
-    if storage::AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire) != 1
-        || storage::AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) != 1
-        || storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 0
-        || storage::AGENT_KERNEL_AGENT_IRQ_SEEN.load(Ordering::Acquire) != 0
-        || storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) != 0
+    if storage::run_boundary()? != NativeRunBoundary::AgentCall
         || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
         || storage::AGENT_KERNEL_AGENT_CALL_CR3.load(Ordering::Acquire) != roots.agent_cr3()
         || frame.rip != frame_rip

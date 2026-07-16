@@ -10,6 +10,13 @@ use agent_kernel_x86_64::agent_call::AgentCallContext;
 use crate::X86BootedKernel;
 
 pub(super) fn running(booted: &X86BootedKernel, expected: AgentCallContext) -> bool {
+    running_progress(booted, expected).is_some()
+}
+
+pub(super) fn running_progress(
+    booted: &X86BootedKernel,
+    expected: AgentCallContext,
+) -> Option<(u64, u64)> {
     let kernel = booted.kernel();
     let task = kernel
         .tasks()
@@ -19,13 +26,15 @@ pub(super) fn running(booted: &X86BootedKernel, expected: AgentCallContext) -> b
         .execution_contexts()
         .iter()
         .find(|context| context.agent == expected.agent());
-    matches!(task, Some(task)
-        if task.status == TaskStatus::Running
+    let task = task.filter(|task| {
+        task.status == TaskStatus::Running
             && task.assignee == Some(expected.agent())
-            && task.delegated_capability == Some(expected.capability()))
-        && matches!(context, Some(context)
+            && task.delegated_capability == Some(expected.capability())
+    })?;
+    matches!(context, Some(context)
             if context.state == AgentExecutionState::Running
                 && context.task == Some(expected.task()))
+    .then_some((task.run_ticks, task.quantum_remaining))
 }
 
 pub(super) fn queued(booted: &X86BootedKernel, expected: AgentCallContext) -> bool {

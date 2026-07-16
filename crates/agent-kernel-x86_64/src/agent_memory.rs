@@ -1,8 +1,9 @@
 //! Physical memory and isolated address-space preparation for one Agent.
 //!
 //! This architecture-binary module owns Agent content frames and the kernel's
-//! supervisor alias for the signal page. Its page-table child creates the
-//! distinct CR3 root and proves that Agent virtual pages are kernel-unmapped.
+//! supervisor alias for the read-only call-release and quantum-generation
+//! signal page. Its page-table child creates the distinct CR3 root and proves
+//! that Agent virtual pages are kernel-unmapped.
 
 mod frame_allocator;
 mod page_tables;
@@ -13,7 +14,10 @@ use x86_64::{structures::paging::PhysFrame, PhysAddr};
 use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
-    user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
+    user_memory::{
+        UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, PAGE_BYTES,
+        PHYSICAL_QUANTUM_GENERATION_OFFSET, STACK_PAGE_COUNT,
+    },
 };
 
 use self::frame_allocator::BootFrameAllocator;
@@ -108,25 +112,61 @@ impl PreparedAgentMemory {
     pub(crate) fn release_for_agent_call(&mut self) -> bool {
         // SAFETY: the kernel is active and owns this supervisor physical alias
         // of the exclusively allocated signal frame.
-        if !self.signal_is_clear() {
+        if !self.agent_call_release_is_clear() {
             return false;
         }
         unsafe {
-            self.signal_pointer.write_volatile(1);
-            self.signal_pointer.read_volatile() == 1
+            let release = self.signal_pointer.add(AGENT_CALL_RELEASE_OFFSET);
+            release.write_volatile(1);
+            release.read_volatile() == 1
         }
     }
 
     pub(crate) fn signal_is_clear(&self) -> bool {
         // SAFETY: callers run at CPL0 under the kernel CR3; this pointer is the
         // supervisor physical alias of this Agent's exclusive signal frame.
-        unsafe { self.signal_pointer.read_volatile() == 0 }
+        self.agent_call_release_is_clear() && self.physical_quantum_generation() == 0
     }
 
     pub(crate) fn agent_call_is_released(&self) -> bool {
         // SAFETY: this is the same exclusive supervisor alias used to release
         // the Agent once for its complete returning call sequence.
-        unsafe { self.signal_pointer.read_volatile() == 1 }
+        unsafe {
+            self.signal_pointer
+                .add(AGENT_CALL_RELEASE_OFFSET)
+                .read_volatile()
+                == 1
+        }
+    }
+
+    pub(crate) fn record_physical_quantum_expiry(&mut self) -> Option<u8> {
+        let generation = self.physical_quantum_generation().checked_add(1)?;
+        // SAFETY: this byte is inside the exclusive signal frame and only the
+        // single-core kernel writes it after validating an IRQ0 frame.
+        unsafe {
+            let pointer = self.signal_pointer.add(PHYSICAL_QUANTUM_GENERATION_OFFSET);
+            pointer.write_volatile(generation);
+            (pointer.read_volatile() == generation).then_some(generation)
+        }
+    }
+
+    pub(crate) fn physical_quantum_generation(&self) -> u8 {
+        // SAFETY: this fixed offset is inside the exclusive signal frame.
+        unsafe {
+            self.signal_pointer
+                .add(PHYSICAL_QUANTUM_GENERATION_OFFSET)
+                .read_volatile()
+        }
+    }
+
+    fn agent_call_release_is_clear(&self) -> bool {
+        // SAFETY: this fixed offset is inside the exclusive signal frame.
+        unsafe {
+            self.signal_pointer
+                .add(AGENT_CALL_RELEASE_OFFSET)
+                .read_volatile()
+                == 0
+        }
     }
 }
 

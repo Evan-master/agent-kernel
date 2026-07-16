@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow and exposes trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Worker and Verifier Agent Image Capsule parsing with SHA-256 verification binding, three isolated Agent CR3 roots with same-address private pages, a fixed-capacity prepared/preempted/mailbox-waiting/yielded CPU ownership registry consumed by a kernel-selected dispatch-and-take runtime loop, owned suspended CPU frames, physical PIT IRQ0 preemption/resume through a shared RSP0 stack, a versioned returning Agent Call ABI whose role-independent inner loop routes all nine v1 operations and records fixed-capacity call transcripts, cooperative Yield, blocking mailbox wait/wake plus Send/Receive/Acknowledge between isolated Workers, audited task-result submission and inspection, target-scoped verification, task completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Worker and Verifier Agent Image Capsule parsing with SHA-256 verification binding, three isolated Agent CR3 roots with same-address private pages, a fixed-capacity prepared/preempted/mailbox-waiting/yielded CPU ownership registry consumed by a kernel-selected dispatch-and-take runtime loop, owned suspended CPU frames, PIT IRQ0 quanta re-armed before every ring-3 entry or resume through a shared RSP0 stack, strict AgentCall/QuantumExpired physical boundary classification, a read-only per-Agent quantum generation, a versioned returning Agent Call ABI whose role-independent inner loop routes all nine v1 operations and records fixed-capacity call transcripts, cooperative Yield, blocking mailbox wait/wake plus Send/Receive/Acknowledge between isolated Workers, audited task-result submission and inspection, target-scoped verification, task completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -221,6 +221,12 @@ complete 160-byte frame, copies it into the preempted Agent context, and
 releases RSP0 for the next Agent. Events 50 through 53 expire B and A in turn,
 park each complete preemption frame, and let successive outer-loop iterations
 select A's prepared then B's preempted CPU while preserving queue order.
+Every later return to ring 3 also starts a fresh PIT quantum. A reset physical
+mailbox must classify as exactly one Agent Call or one timer expiry; mixed or
+repeated evidence fails closed. A validated expiry increments byte 1 of that
+Agent's read-only signal page without replacing the public semantic task tick.
+Nonce, transcript, private memory, and the complete frame remain owned when a
+live call session becomes Preempted.
 
 The kernel first releases B's read-only signal through its supervisor alias and
 resumes B through DescribeContext and ReceiveMessage. Because its mailbox is
@@ -234,34 +240,38 @@ sends a Notify carrying its Task ID to Worker B and compares the returned
 deterministic Message ID before yielding. Only an exact scheduler-owned
 Agent/Task/Image identity and nonce echo can mutate task or mailbox state. A's result is event
 56; its send records the message at event 57 and atomically wakes and requeues B
-at event 58. Event 59 yields A behind B and parks A's acknowledged call frame as
-Yielded. B redispatches at event 60 only after its waiting frame matches the
-prepared permit. The kernel receives Message ID 1 at event 61 before encoding
+at event 58. After the Send reply, A waits for its read-only physical quantum
+generation to advance from 1 to 2. The re-armed PIT captures that live session,
+event 59 expires A's second semantic quantum, and the FIFO becomes `[B, A]`
+without adding a transcript entry. B redispatches at event 60 only after its
+waiting frame matches the prepared permit. The kernel receives Message ID 1 at event 61 before encoding
 the reply into B's original saved frame. B then
 calls AcknowledgeMessage, SubmitTaskResult, and CompleteTask
 at events 62 through 64. Its ring-3 code validates Message ID 1, sender Agent 3,
 Notify kind, and Task ID 1; the kernel independently validates the same record.
-A redispatches at event 65 only after the same yielded Agent/Task frame passes
-readiness; its ring-3 code validates the Yield reply operation before completing
-at event 66. A uses a 129-byte image with return offsets 46/67/94/112/127. B
+A redispatches at event 65 only after the same session-preserving preempted
+Agent/Task frame passes readiness. It exits the generation wait, validates the
+Send reply, yields at event 66, resumes that acknowledged Yield frame at event
+67, validates the Yield reply, and completes at event 68. A uses a 148-byte
+image with return offsets 46/67/94/131/146. B
 uses a 131-byte image with a two-NOP prefix, a different nonce, and return
 offsets 48/57/99/120/129. The terminal mailbox record is Acknowledged while both
 fixed-width task results remain stored.
 
-The kernel then queues and dispatches the Verifier at events 67 and 68. That
+The kernel then queues and dispatches the Verifier at events 69 and 70. That
 permit first matches the Verifier's prepared CPU; its committed result transfers
 that context and leaves the native runtime registry empty. The Verifier expires
-once at event 69, parks its preempted frame, and event 70 commits only after the
+once at event 71, parks its preempted frame, and event 72 commits only after the
 redispatch permit matches that exact frame.
 Its first returning call describes its trusted context. Its second call
 inspects only Worker A's stored result under resource-scoped Verify authority
 and emits the audited
-`TaskResultInspected` event 71 without mutating scheduler state. Ring-3 machine
+`TaskResultInspected` event 73 without mutating scheduler state. Ring-3 machine
 code compares the returned words with `0x0a01` and `0xa11c0001`; a mismatch
 enters a terminal loop. Reaching its third call therefore proves that the
-comparison succeeded before Worker A becomes Verified at event 72 and its
-intent becomes Fulfilled at event 73. The fourth call completes the Verifier's
-own task at event 74. Worker B remains Completed with its different result and
+comparison succeeded before Worker A becomes Verified at event 74 and its
+intent becomes Fulfilled at event 75. The fourth call completes the Verifier's
+own task at event 76. Worker B remains Completed with its different result and
 bound intent as a target-scoping control. The Verifier uses a 111-byte image
 with DescribeContext/InspectTaskResult/VerifyTask/CompleteTask return offsets
 46/64/100/109. All three execution contexts finish Idle and the run queue is
@@ -278,8 +288,8 @@ exception, hardware-enforced ring-3 Agent execution, asynchronous
 preemption/resume, a returning Agent call protocol, and one-shot device interrupt
 ingress. Multi-page images, writable data segments, relocations, dynamic linking,
 signatures, persistent image sources, pointer-bearing calls, asynchronous call
-completion, re-armed quanta between arbitrary returning calls, dynamic Agent
-admission, page-table teardown, PCIDs, SMP execution, context migration, fatal
+completion, variable hardware quantum lengths, dynamic Agent admission,
+page-table teardown, PCIDs, SMP execution, context migration, fatal
 exception recovery, error-code decoding, double-fault IST, a general IRQ
 registry, APIC/IOAPIC, MMIO drivers, wider port operations, and DMA policy remain
 future work.
@@ -312,11 +322,11 @@ remains available for system-seeded resources and leaves `owner: None`.
 19. Let the kernel-selected outer loop dispatch B and A from their prepared states, expire each admission quantum through IRQ0, and park both validated preemption frames.
 20. Redispatch B from its preempted state and enter the generic inner loop through DescribeContext.
 21. Route B's empty ReceiveMessage into a retained waiting call, then let the outer loop select A's preempted state while B remains `Waiting`.
-22. Route A's result submission and typed Notify send, atomically wake B, then park A's acknowledged Yield call and let the outer loop select B's waiting state.
-23. Resume B's retained ReceiveMessage, route its acknowledgement, result, and completion, then select A's yielded state and route A's completion.
-24. Match both Worker transcripts against their immutable Capsule nonces, operation sequences, and return offsets, with the run queue empty.
+22. Route A's result submission and typed Notify send, atomically wake B, then re-arm PIT before A observes its read-only quantum generation and capture the live call session at generation 2.
+23. Expire A's second semantic quantum behind B, resume B's retained ReceiveMessage, and route B's acknowledgement, result, and completion.
+24. Redispatch A's session-preserving preempted frame, route its Yield, redispatch the acknowledged Yield frame, complete A, and match both Worker transcripts and quantum generations.
 25. Queue the Verifier and use the same outer and inner loops for its admission preemption, DescribeContext, InspectTaskResult, VerifyTask, and CompleteTask calls while B remains unverified.
-26. Match the Verifier transcript and prove all three execution contexts are Idle with both semantic and physical queues empty.
+26. Match the Verifier transcript, prove nine kernel-selected dispatches and four physical quantum expiries, and leave all three execution contexts Idle with both queues empty.
 27. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
 28. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
 29. Acknowledge the event and dispatch a causally linked COM1 write request.
@@ -331,7 +341,7 @@ The handoff now runs inside QEMU through the x86_64 BIOS image path.
 - POSIX compatibility.
 - Linux syscall compatibility.
 - A filesystem, network stack, dynamic/SMP multi-Agent scheduler, or complete physical hardware driver stack.
-- Re-arming the PIT quantum between arbitrary returning Agent calls.
+- Dynamic per-task PIT frequencies or multi-tick hardware quantum lengths.
 - Running an LLM inside kernel space.
 
 ## Commands
@@ -410,6 +420,7 @@ AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK
 AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK
 AGENT_KERNEL_NATIVE_VERIFIER_OK
 AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK
+AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK
 AGENT_KERNEL_AGENT_CALL_ABI_OK
 AGENT_KERNEL_AGENT_CALL_RETURN_OK
 AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK
@@ -479,32 +490,34 @@ event[55] task_dispatched
 event[56] task_result_submitted
 event[57] message_sent
 event[58] message_wait_woken
-event[59] task_yielded
+event[59] task_quantum_expired
 event[60] task_dispatched
 event[61] message_received
 event[62] message_acknowledged
 event[63] task_result_submitted
 event[64] task_completed
 event[65] task_dispatched
-event[66] task_completed
-event[67] task_queued
-event[68] task_dispatched
-event[69] task_quantum_expired
+event[66] task_yielded
+event[67] task_dispatched
+event[68] task_completed
+event[69] task_queued
 event[70] task_dispatched
-event[71] task_result_inspected
-event[72] task_verified
-event[73] intent_fulfilled
-event[74] task_completed
-event[75] device_event_raised
-event[76] device_event_delivered
-event[77] driver_invocation_queued
-event[78] driver_invocation_dispatched
-event[79] driver_invocation_ticked
-event[80] device_event_acknowledged
-event[81] driver_command_submitted
-event[82] driver_command_dispatched
-event[83] driver_command_completed
-event[84] driver_invocation_completed
+event[71] task_quantum_expired
+event[72] task_dispatched
+event[73] task_result_inspected
+event[74] task_verified
+event[75] intent_fulfilled
+event[76] task_completed
+event[77] device_event_raised
+event[78] device_event_delivered
+event[79] driver_invocation_queued
+event[80] driver_invocation_dispatched
+event[81] driver_invocation_ticked
+event[82] device_event_acknowledged
+event[83] driver_command_submitted
+event[84] driver_command_dispatched
+event[85] driver_command_completed
+event[86] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -529,14 +542,16 @@ virtual layout and a common kernel root. `AGENT_KERNEL_AGENT_IMAGE_LOAD_OK`
 additionally requires all three private code frames to match their verified
 payload byte-for-byte before event 49 dispatches B.
 `AGENT_KERNEL_PIT_IRQ_OK` requires the shared IDT's IRQ0 assembly entry to
-capture exactly one PIT channel 0 interrupt after hardware switched from CPL3
-to TSS RSP0. `AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK` requires a complete
+capture each programmed PIT channel 0 quantum after hardware switched from
+CPL3 to TSS RSP0. `AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK` requires a complete
 160-byte integer/privilege frame and a successful switch back to CPL0.
 `AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK` additionally requires exact user
 selectors, in-range user RIP/RSP, IF set, IOPL clear, and an intact RSP0 canary.
 `AGENT_KERNEL_AGENT_A_PREEMPTION_OK` additionally requires a second CR3 and a
 second owned frame after RSP0 has been reused. `AGENT_KERNEL_TIMER_PREEMPTION_OK`
-requires events 50 through 53 to preserve `[A, B]` then `[B, A]` FIFO rotation.
+requires events 50 through 53 to preserve `[A, B]` then `[B, A]` FIFO rotation,
+and event 59 to expire A's second quantum with cumulative run ticks 2 behind
+the already-woken B.
 `AGENT_KERNEL_KERNEL_SELECTED_DISPATCH_OK` additionally requires events 49, 51,
 and 53 to return exact B, A, and B Agent/Task identities from the core without
 an architecture-supplied Agent argument. The first two results must transfer
@@ -549,8 +564,9 @@ recover A's preempted context while B's task and execution context remain
 events 57 and 58 atomically, deactivate that waiter, and append B to the run
 queue without returning from B's receive call early; event 60 must recover the
 same waiting receive frame.
-`AGENT_KERNEL_AGENT_CPU_RESUME_OK` requires both Worker PIT frames and A's
-yielded call frame to resume at their captured CPL3 RIP.
+`AGENT_KERNEL_AGENT_CPU_RESUME_OK` requires both admission PIT frames, A's
+session-preserving post-call PIT frame, and A's yielded call frame to resume at
+their captured CPL3 RIP.
 `AGENT_KERNEL_AGENT_CALL_RESULT_OK` requires A and B to
 persist `{0x0a01, 0xa11c0001}` and `{0x0b02, 0xb22c0002}` in events 56 and 63
 without leaving `Running`. `AGENT_KERNEL_AGENT_CALL_RETURNING_MUTATION_OK`
@@ -565,38 +581,44 @@ event 62. `AGENT_KERNEL_NATIVE_MAILBOX_IPC_OK` additionally requires the final
 message payload to reference Task A, both results to remain stored, and all
 three IPC mutations to preserve the expected scheduler state.
 `AGENT_KERNEL_NATIVE_AGENT_YIELD_OK` requires A's operation 2 request to emit
-event 59, preserve its owned frame as Yielded behind B, let B complete at event
-64, pass an Agent/Task/Yielded readiness check at event 65, return a canonical
-Yield reply in ring 3, and complete A at event 66.
+event 66 after its post-Send quantum expiry and B's event 64 completion,
+preserve its owned frame as Yielded, pass an Agent/Task/Yielded readiness check
+at event 67, return a canonical Yield reply in ring 3, and complete A at event
+68.
 
-`AGENT_KERNEL_NATIVE_RUNTIME_STORE_OK` requires event 68 to return the
+`AGENT_KERNEL_NATIVE_RUNTIME_STORE_OK` requires event 70 to return the
 Verifier's exact Agent/Task identity, transfer the final non-Copy prepared CPU,
 and leave the fixed-capacity registry empty at that prepared-context boundary.
 `AGENT_KERNEL_VERIFIER_PREEMPTION_OK` requires the third Agent CR3 to survive a
-PIT expiry and redispatch at events 69 and 70. The inspection marker requires
+PIT expiry and redispatch at events 71 and 72. The inspection marker requires
 operation 5 to echo the Verifier's scheduler-owned context and target Worker A,
-emit event 71, return the stored result in R10/R11, and leave both tasks and the
+emit event 73, return the stored result in R10/R11, and leave both tasks and the
 run queue unchanged. `AGENT_KERNEL_AGENT_CALL_VERIFY_OK` requires ring-3 code to
-compare those words before operation 6 can verify only A and emit events 72 and
-73. `AGENT_KERNEL_NATIVE_VERIFIER_OK` requires the fourth call to complete the
-Verifier's own task at event 74, with all three contexts Idle and Worker B still
+compare those words before operation 6 can verify only A and emit events 74 and
+75. `AGENT_KERNEL_NATIVE_VERIFIER_OK` requires the fourth call to complete the
+Verifier's own task at event 76, with all three contexts Idle and Worker B still
 Completed but unverified. `AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK` additionally
 requires one role-independent runtime loop to process all 14 calls, cross
 prepared, preempted, mailbox-waiting, and yielded physical states, match every
 terminal transcript to its Capsule nonce, operation sequence, and return
 offsets, and finish with empty semantic and physical queues.
+`AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK` additionally requires every ring-3
+resume to start a fresh PIT quantum, the physical mailbox to classify each
+return as exactly AgentCall or QuantumExpired, A's generation to advance from 1
+to 2 while preserving its nonce and three-call transcript, event 60 to dispatch
+B before A, and all terminal generation counts to match their Capsules.
 
 `AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK` additionally requires every
 demonstrated non-running prepared, PIT-preempted, mailbox-waiting, or yielded CPU
 context to be parked under its trusted Agent identity, selected by the exact
 kernel-returned Agent/Task pair, and consumed by the terminal boundary.
-`AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK` additionally requires all eight
+`AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK` additionally requires all nine
 Worker and Verifier handoffs to use the same mutable dispatch-and-take
 operation. That operation prepares a read-only core permit, finds a parked CPU
 state from the permit's Agent/Task identity, commits the semantic transition,
 and consumes the guarded context. No caller supplies an expected Agent or
 physical kind. Permit preparation emits no event, so the ordered trace remains
-exactly 84 events.
+exactly 86 events.
 
 `AGENT_KERNEL_AGENT_CALL_ABI_OK` requires five canonical `AGNTCALL` requests
 from sender A, five from receiver B, and four from the Verifier with version 1,
@@ -609,22 +631,24 @@ terminal CompleteTask request.
 the scheduler context and kernel-held capability appropriate to that operation;
 the Verifier's resource Verify capability never appears in ring-3 registers.
 `AGENT_KERNEL_AGENT_CALL_COMPLETE_OK` requires core authorization to accept
-those capabilities, produce Worker completion events 64 and 66 plus Verifier
-completion event 74, and leave all three tasks in their expected terminal
+those capabilities, produce Worker completion events 64 and 68 plus Verifier
+completion event 76, and leave all three tasks in their expected terminal
 states with an empty run queue. `AGENT_KERNEL_AGENT_CR3_SWITCH_OK` requires each
 Agent's PIT and Agent-call entry to observe its private CR3 and every return to
 normal context to restore the kernel CR3.
 `AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK` requires B's retained receive frame,
-released signal page, and A's yielded frame to remain intact across the opposite
-Worker's execution. `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` requires ten physical
-Agent-call CR3 transitions for A, ten for B, eight for the Verifier, and all
-terminal scheduler states. `AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK`
+the read-only signal pages, and A's preempted then yielded frames to remain
+intact across the opposite Worker's execution.
+`AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` requires ten Agent-call CR3
+transitions for A, ten for B, eight for the Verifier, plus four PIT round trips
+including A's live call session, and all terminal scheduler states.
+`AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK`
 requires the two different Worker call sequences and the Verifier call sequence
 to return at their verified offsets with different nonces.
 `AGENT_KERNEL_UART_IRQ_OK` requires IRQ4 to capture one THRE interrupt and normal
-context to validate its IIR/LSR mailbox. That signal causes event 75 and the
+context to validate its IIR/LSR mailbox. That signal causes event 77 and the
 running Driver Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is
-emitted by the immutable causal request at event 82 through the registered COM1
+emitted by the immutable causal request at event 84 through the registered COM1
 endpoint and `PortIoBackend`; the surrounding text uses the existing boot
 serial writer. The remaining success markers are printed only after the write
 and Driver Invocation terminal records are verified as `Completed` and the

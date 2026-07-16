@@ -1,7 +1,8 @@
 //! Role-independent owned session for decoded native Agent calls.
 //!
-//! This CPU-layer module resumes one validated ring-3 frame at a time, captures
-//! the next call, and appends physical transcript evidence. Semantic mutation
+//! This CPU-layer module runs one validated ring-3 frame for a fresh PIT
+//! quantum, then captures either the next call or a complete preemption frame.
+//! Session nonce and transcript survive the timer boundary; semantic mutation
 //! and reply choice remain outside the session.
 
 mod replies;
@@ -9,10 +10,11 @@ mod replies;
 use agent_kernel_x86_64::{
     agent_call::{AgentCallContext, AgentCallRequest, AgentCallTranscript},
     context::SavedAgentFrame,
+    native_runtime::NativeRunBoundary,
 };
 
 use super::{call, runtime::AgentCpuRuntime, storage, PreemptedAgentCpu};
-use crate::agent_memory::PreparedAgentMemory;
+use crate::{agent_memory::PreparedAgentMemory, pit_timer};
 
 pub(super) const MAX_AGENT_CALLS: usize = 8;
 
@@ -21,6 +23,10 @@ struct AgentCallSession {
     runtime: AgentCpuRuntime,
     frame: SavedAgentFrame,
     context: AgentCallContext,
+    progress: AgentCallProgress,
+}
+
+pub(super) struct AgentCallProgress {
     nonce: Option<u64>,
     transcript: AgentCallTranscript<MAX_AGENT_CALLS>,
 }
@@ -41,29 +47,40 @@ pub(crate) struct CompletedAgentCpu {
     context: AgentCallContext,
     nonce: u64,
     transcript: AgentCallTranscript<MAX_AGENT_CALLS>,
+    physical_quantum_generation: u8,
+}
+
+pub(crate) enum AgentRunOutcome {
+    Call(PendingAgentCallCpu),
+    Preempted(PreemptedAgentCpu),
 }
 
 impl PreemptedAgentCpu {
-    pub(crate) fn resume_until_agent_call(mut self) -> Option<PendingAgentCallCpu> {
-        let roots = self.memory.roots();
-        let layout = self.memory.layout();
-        storage::begin_dispatch(roots)?;
-        if !self.memory.release_for_agent_call() {
+    pub(crate) fn resume_until_boundary(mut self) -> Option<AgentRunOutcome> {
+        if !self.memory.agent_call_is_released() && !self.memory.release_for_agent_call() {
             return None;
         }
-        call::resume_owned(&mut self.frame, roots, layout)?;
-        let captured = call::capture(self.runtime.kernel_stack, roots, layout)?;
-        let request = captured.request();
-        let return_offset = captured.return_offset();
         AgentCallSession {
             memory: self.memory,
             runtime: self.runtime,
-            frame: captured.into_frame(),
+            frame: self.frame,
             context: self.context,
+            progress: self.progress,
+        }
+        .resume_until_boundary()
+    }
+}
+
+impl AgentCallProgress {
+    pub(super) const fn new() -> Self {
+        Self {
             nonce: None,
             transcript: AgentCallTranscript::new(),
         }
-        .with_request(request, return_offset)
+    }
+
+    pub(super) const fn is_empty(&self) -> bool {
+        self.transcript.is_empty()
     }
 }
 
@@ -73,7 +90,8 @@ impl AgentCallSession {
         request: AgentCallRequest,
         return_offset: u32,
     ) -> Option<PendingAgentCallCpu> {
-        self.transcript
+        self.progress
+            .transcript
             .record(request.operation(), return_offset)
             .ok()?;
         Some(PendingAgentCallCpu {
@@ -82,16 +100,35 @@ impl AgentCallSession {
         })
     }
 
-    fn resume_next(mut self) -> Option<PendingAgentCallCpu> {
+    fn resume_until_boundary(mut self) -> Option<AgentRunOutcome> {
         let roots = self.memory.roots();
         let layout = self.memory.layout();
         storage::begin_dispatch(roots)?;
-        call::resume_owned(&mut self.frame, roots, layout)?;
-        let captured = call::capture(self.runtime.kernel_stack, roots, layout)?;
-        let request = captured.request();
-        let return_offset = captured.return_offset();
-        self.frame = captured.into_frame();
-        self.with_request(request, return_offset)
+        pit_timer::arm(super::assembly::agent_kernel_agent_timer_irq_stub)?;
+        let resumed = call::resume_owned(&mut self.frame, roots, layout);
+        pit_timer::disarm();
+        resumed?;
+
+        match storage::run_boundary()? {
+            NativeRunBoundary::AgentCall => {
+                let captured = call::capture(self.runtime.kernel_stack, roots, layout)?;
+                let request = captured.request();
+                let return_offset = captured.return_offset();
+                self.frame = captured.into_frame();
+                Some(AgentRunOutcome::Call(
+                    self.with_request(request, return_offset)?,
+                ))
+            }
+            NativeRunBoundary::QuantumExpired => {
+                Some(AgentRunOutcome::Preempted(PreemptedAgentCpu::capture(
+                    self.memory,
+                    self.runtime,
+                    self.context,
+                    self.progress,
+                    false,
+                )?))
+            }
+        }
     }
 }
 
@@ -105,11 +142,11 @@ impl PendingAgentCallCpu {
     }
 
     pub(crate) const fn call_count(&self) -> usize {
-        self.session.transcript.call_count()
+        self.session.progress.transcript.call_count()
     }
 
     pub(crate) fn authenticated_request(&self) -> Option<AgentCallRequest> {
-        let nonce = self.session.nonce?;
+        let nonce = self.session.progress.nonce?;
         self.session
             .context
             .authenticates(self.request, nonce)
@@ -122,8 +159,8 @@ impl ResumableAgentCpu {
         self.0.context
     }
 
-    pub(crate) fn resume_until_agent_call(self) -> Option<PendingAgentCallCpu> {
-        self.0.resume_next()
+    pub(crate) fn resume_until_boundary(self) -> Option<AgentRunOutcome> {
+        self.0.resume_until_boundary()
     }
 }
 
@@ -160,5 +197,9 @@ impl CompletedAgentCpu {
 
     pub(crate) fn return_offsets(&self) -> &[u32] {
         self.transcript.return_offsets()
+    }
+
+    pub(crate) const fn physical_quantum_generation(&self) -> u8 {
+        self.physical_quantum_generation
     }
 }

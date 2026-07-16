@@ -45,7 +45,7 @@ impl CompletedWorkerTasks {
     }
 
     pub(crate) fn both_completed(&self, booted: &X86BootedKernel) -> bool {
-        task_valid(booted, self.first, 1)
+        task_valid(booted, self.first, 2)
             && task_valid(booted, self.second, 1)
             && self.mailbox_acknowledged(booted)
     }

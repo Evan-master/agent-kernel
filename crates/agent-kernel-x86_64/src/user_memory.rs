@@ -8,6 +8,8 @@ use crate::address_space::{p4_index, AGENT_REGION_BASE};
 
 pub const PAGE_BYTES: u64 = 4096;
 pub const STACK_PAGE_COUNT: usize = 4;
+pub const AGENT_CALL_RELEASE_OFFSET: usize = 0;
+pub const PHYSICAL_QUANTUM_GENERATION_OFFSET: usize = 1;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {

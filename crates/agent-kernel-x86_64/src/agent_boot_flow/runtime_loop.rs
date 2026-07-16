@@ -117,8 +117,8 @@ fn worker_evidence_valid(
     let Some(second) = report.completed(WORKER_B) else {
         return false;
     };
-    completed_matches_worker(first, images[0], contexts[0])
-        && completed_matches_worker(second, images[1], contexts[1])
+    completed_matches_worker(first, images[0], contexts[0], 2)
+        && completed_matches_worker(second, images[1], contexts[1], 1)
         && first.nonce() != second.nonce()
         && authority.resolve(first.context().agent()).is_none()
         && authority.resolve(second.context().agent()).is_none()
@@ -128,6 +128,7 @@ fn completed_matches_worker(
     completed: &CompletedAgentCpu,
     image: BootAgentImage,
     context: AgentCallContext,
+    physical_quantum_generation: u8,
 ) -> bool {
     completed.context() == context
         && completed.nonce() == image.nonce()
@@ -135,6 +136,7 @@ fn completed_matches_worker(
         && completed.address_space_switch_count() == 10
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
+        && completed.physical_quantum_generation() == physical_quantum_generation
 }
 
 fn verifier_evidence_valid(
@@ -152,6 +154,7 @@ fn verifier_evidence_valid(
         && completed.address_space_switch_count() == 8
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
+        && completed.physical_quantum_generation() == 1
         && subject.task().raw() == image.target()
         && subject.result() == image.result()
 }
@@ -186,4 +189,5 @@ fn write_verifier_markers() {
     serial_write_line("AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK");
 }

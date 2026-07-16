@@ -9,9 +9,9 @@ mod task;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
-use super::{NativeExecutionReport, NativeVerifyAuthority};
+use super::{NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority};
 use crate::{
-    agent_cpu::{PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu},
+    agent_cpu::{AgentRunOutcome, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu},
     native_agent_runtime::NativeAgentRuntime,
     X86BootedKernel,
 };
@@ -20,6 +20,7 @@ pub(super) fn run(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
     report: &mut NativeExecutionReport,
+    evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
     mut pending: PendingAgentCallCpu,
 ) -> Option<()> {
@@ -69,7 +70,13 @@ pub(super) fn run(
                 return Some(());
             }
         };
-        pending = resume_next(resumable)?;
+        match resume_next(resumable)? {
+            AgentRunOutcome::Call(next) => pending = next,
+            AgentRunOutcome::Preempted(cpu) => {
+                super::expire_quantum(booted, runtime, evidence, cpu)?;
+                return Some(());
+            }
+        }
     }
 }
 
@@ -80,6 +87,6 @@ pub(super) fn resume_waiting_receive(
     mailbox::resume_waiting(booted, waiting)
 }
 
-fn resume_next(cpu: ResumableAgentCpu) -> Option<PendingAgentCallCpu> {
-    cpu.resume_until_agent_call()
+fn resume_next(cpu: ResumableAgentCpu) -> Option<AgentRunOutcome> {
+    cpu.resume_until_boundary()
 }

@@ -11,10 +11,11 @@ use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
     context::SavedAgentFrame,
     interrupt::AGENT_CALL_VECTOR,
+    native_runtime::NativeRunBoundary,
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
 };
 
-use super::{assembly, storage, validation};
+use super::{assembly, native_call_session::AgentCallProgress, storage, validation};
 use crate::{
     agent_memory::PreparedAgentMemory,
     exception_runtime, pit_timer,
@@ -40,6 +41,7 @@ pub(crate) struct PreemptedAgentCpu {
     pub(super) runtime: AgentCpuRuntime,
     pub(super) frame: SavedAgentFrame,
     pub(super) context: AgentCallContext,
+    pub(super) progress: AgentCallProgress,
     ticks: u8,
 }
 
@@ -108,42 +110,66 @@ impl PreparedAgentCpu {
         }
         pit_timer::disarm();
 
+        PreemptedAgentCpu::capture(
+            self.memory,
+            self.runtime,
+            self.context,
+            AgentCallProgress::new(),
+            true,
+        )
+    }
+}
+
+impl PreemptedAgentCpu {
+    pub(super) fn capture(
+        mut memory: PreparedAgentMemory,
+        runtime: AgentCpuRuntime,
+        context: AgentCallContext,
+        progress: AgentCallProgress,
+        require_initial_registers: bool,
+    ) -> Option<Self> {
+        let roots = memory.roots();
+        let layout = memory.layout();
         let frame_rsp = storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP.load(Ordering::Acquire);
         let frame_rip = storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP.load(Ordering::Acquire);
-        let frame = validation::read_frame(frame_rsp, self.runtime.kernel_stack)?;
-        if storage::AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire) != 1
-            || storage::AGENT_KERNEL_AGENT_IRQ_SEEN.load(Ordering::Acquire) != 1
-            || storage::AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) != 1
+        let frame = validation::read_frame(frame_rsp, runtime.kernel_stack)?;
+        if storage::run_boundary()? != NativeRunBoundary::QuantumExpired
             || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
             || storage::AGENT_KERNEL_AGENT_INTERRUPT_CR3.load(Ordering::Acquire)
                 != roots.agent_cr3()
             || frame.rip != frame_rip
             || !validation::user_frame_valid(&frame, layout)
-            || !validation::initial_registers_sanitized(&frame, layout)
-            || !validation::kernel_boundary_valid(
-                self.runtime.kernel_stack,
-                self.runtime.kernel_cr3,
-            )
+            || (require_initial_registers
+                && !validation::initial_registers_sanitized(&frame, layout))
+            || !validation::kernel_boundary_valid(runtime.kernel_stack, runtime.kernel_cr3)
         {
             return None;
         }
+        memory.record_physical_quantum_expiry()?;
 
-        Some(PreemptedAgentCpu {
-            memory: self.memory,
-            runtime: self.runtime,
+        Some(Self {
+            memory,
+            runtime,
             frame: SavedAgentFrame::new(frame),
-            context: self.context,
+            context,
+            progress,
             ticks: 1,
         })
     }
-}
 
-impl PreemptedAgentCpu {
     pub(crate) const fn tick_count(&self) -> u8 {
         self.ticks
     }
 
     pub(crate) const fn context(&self) -> AgentCallContext {
         self.context
+    }
+
+    pub(crate) const fn has_call_progress(&self) -> bool {
+        !self.progress.is_empty()
+    }
+
+    pub(crate) fn physical_quantum_generation(&self) -> u8 {
+        self.memory.physical_quantum_generation()
     }
 }

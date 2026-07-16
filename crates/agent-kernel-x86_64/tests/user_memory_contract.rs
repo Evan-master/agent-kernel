@@ -1,4 +1,7 @@
-use agent_kernel_x86_64::user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT};
+use agent_kernel_x86_64::user_memory::{
+    UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
+    STACK_PAGE_COUNT,
+};
 
 #[test]
 fn user_region_has_code_signal_guard_and_four_stack_pages() {
@@ -14,4 +17,15 @@ fn user_region_has_code_signal_guard_and_four_stack_pages() {
     assert!(layout.contains_code(layout.code_start()));
     assert!(layout.contains_stack(layout.stack_top() - 8));
     assert!(!layout.contains_stack(layout.guard_start()));
+}
+
+#[test]
+fn signal_page_separates_call_release_from_physical_quantum_generation() {
+    assert_eq!(AGENT_CALL_RELEASE_OFFSET, 0);
+    assert_eq!(PHYSICAL_QUANTUM_GENERATION_OFFSET, 1);
+    assert_ne!(
+        AGENT_CALL_RELEASE_OFFSET,
+        PHYSICAL_QUANTUM_GENERATION_OFFSET
+    );
+    assert!(PHYSICAL_QUANTUM_GENERATION_OFFSET < PAGE_BYTES as usize);
 }

@@ -10,7 +10,10 @@ use core::{
     sync::atomic::{AtomicU64, AtomicU8, Ordering},
 };
 
-use agent_kernel_x86_64::address_space::AddressSpaceRoots;
+use agent_kernel_x86_64::{
+    address_space::AddressSpaceRoots,
+    native_runtime::{NativeRunBoundary, NativeRunBoundaryEvidence},
+};
 
 pub(super) const RFLAGS_INTERRUPT_ENABLE: u64 = 1 << 9;
 
@@ -148,6 +151,18 @@ pub(super) fn interrupts_are_clear() -> bool {
         asm!("pushfq", "pop {}", out(reg) rflags, options(nomem, preserves_flags));
     }
     rflags & RFLAGS_INTERRUPT_ENABLE == 0
+}
+
+pub(super) fn run_boundary() -> Option<NativeRunBoundary> {
+    NativeRunBoundaryEvidence::new(
+        AGENT_KERNEL_AGENT_CALL_COUNT.load(Ordering::Acquire),
+        AGENT_KERNEL_AGENT_IRQ_COUNT.load(Ordering::Acquire),
+        AGENT_KERNEL_AGENT_CALL_SEEN.load(Ordering::Acquire) == 1,
+        AGENT_KERNEL_AGENT_IRQ_SEEN.load(Ordering::Acquire) == 1,
+        AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) == 1,
+    )
+    .classify()
+    .ok()
 }
 
 fn reset_mailbox() {

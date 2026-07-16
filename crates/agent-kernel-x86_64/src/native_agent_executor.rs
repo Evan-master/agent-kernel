@@ -11,7 +11,7 @@ use agent_kernel_core::{AgentId, CapabilityId, EventKind};
 use agent_kernel_x86_64::native_runtime::NativeAgentRuntimeStore;
 
 use crate::{
-    agent_cpu::CompletedAgentCpu,
+    agent_cpu::{AgentRunOutcome, CompletedAgentCpu},
     native_agent_runtime::{NativeAgentContext, NativeAgentRuntime},
     X86BootedKernel,
 };
@@ -36,6 +36,9 @@ pub(crate) struct NativeRuntimeEvidence {
     preempted: u8,
     waiting: u8,
     yielded: u8,
+    quantum_expiries: u8,
+    returning_quantum_expiries: u8,
+    returning_quantum_generation: u8,
 }
 
 pub(crate) fn run_until_idle(
@@ -53,23 +56,41 @@ pub(crate) fn run_until_idle(
             NativeAgentContext::Prepared(cpu) => {
                 evidence.prepared = evidence.prepared.checked_add(1)?;
                 let preempted = cpu.run_until_preempted()?;
-                expire_quantum(booted, runtime, preempted)?;
+                expire_quantum(booted, runtime, evidence, preempted)?;
             }
             NativeAgentContext::Preempted(cpu) => {
                 evidence.preempted = evidence.preempted.checked_add(1)?;
-                let pending = cpu.resume_until_agent_call()?;
-                calls::run(booted, runtime, report, verify_authority, pending)?;
+                run_outcome(
+                    booted,
+                    runtime,
+                    report,
+                    evidence,
+                    verify_authority,
+                    cpu.resume_until_boundary()?,
+                )?;
             }
             NativeAgentContext::WaitingCall(waiting) => {
                 evidence.waiting = evidence.waiting.checked_add(1)?;
                 let resumable = calls::resume_waiting_receive(booted, waiting)?;
-                let pending = resumable.resume_until_agent_call()?;
-                calls::run(booted, runtime, report, verify_authority, pending)?;
+                run_outcome(
+                    booted,
+                    runtime,
+                    report,
+                    evidence,
+                    verify_authority,
+                    resumable.resume_until_boundary()?,
+                )?;
             }
             NativeAgentContext::YieldedCall(resumable) => {
                 evidence.yielded = evidence.yielded.checked_add(1)?;
-                let pending = resumable.resume_until_agent_call()?;
-                calls::run(booted, runtime, report, verify_authority, pending)?;
+                run_outcome(
+                    booted,
+                    runtime,
+                    report,
+                    evidence,
+                    verify_authority,
+                    resumable.resume_until_boundary()?,
+                )?;
             }
         }
         if entry.agent.raw() == 0 || entry.task.raw() == 0 {
@@ -79,13 +100,43 @@ pub(crate) fn run_until_idle(
     Some(())
 }
 
-fn expire_quantum(
+fn run_outcome(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
+    report: &mut NativeExecutionReport,
+    evidence: &mut NativeRuntimeEvidence,
+    verify_authority: Option<NativeVerifyAuthority>,
+    outcome: AgentRunOutcome,
+) -> Option<()> {
+    match outcome {
+        AgentRunOutcome::Call(pending) => {
+            calls::run(booted, runtime, report, evidence, verify_authority, pending)
+        }
+        AgentRunOutcome::Preempted(cpu) => expire_quantum(booted, runtime, evidence, cpu),
+    }
+}
+
+pub(super) fn expire_quantum(
+    booted: &mut X86BootedKernel,
+    runtime: &mut NativeAgentRuntime,
+    evidence: &mut NativeRuntimeEvidence,
     cpu: crate::agent_cpu::PreemptedAgentCpu,
 ) -> Option<()> {
     let context = cpu.context();
-    if cpu.tick_count() != 1 || !state::running(booted, context) {
+    let quantum_expiries = evidence.quantum_expiries.checked_add(1)?;
+    let returning_quantum_expiries = if cpu.has_call_progress() {
+        evidence.returning_quantum_expiries.checked_add(1)?
+    } else {
+        evidence.returning_quantum_expiries
+    };
+    let returning_quantum_generation = if cpu.has_call_progress() {
+        cpu.physical_quantum_generation()
+    } else {
+        evidence.returning_quantum_generation
+    };
+    let (run_ticks, quantum_remaining) = state::running_progress(booted, context)?;
+    let expected_ticks = run_ticks.checked_add(1)?;
+    if cpu.tick_count() != 1 || quantum_remaining != 1 {
         return None;
     }
     let event = booted
@@ -95,13 +146,16 @@ fn expire_quantum(
     if event.kind != EventKind::TaskQuantumExpired
         || event.agent != context.agent()
         || event.task != Some(context.task())
-        || event.task_ticks != Some(1)
+        || event.task_ticks != Some(expected_ticks)
         || event.task_quantum != Some(0)
         || !state::queued(booted, context)
         || runtime.park_preempted(cpu).is_some()
     {
         return None;
     }
+    evidence.quantum_expiries = quantum_expiries;
+    evidence.returning_quantum_expiries = returning_quantum_expiries;
+    evidence.returning_quantum_generation = returning_quantum_generation;
     Some(())
 }
 
@@ -146,10 +200,13 @@ impl NativeExecutionReport {
 
 impl NativeRuntimeEvidence {
     pub(crate) const fn proves_current_boot(self) -> bool {
-        self.dispatches == 8
+        self.dispatches == 9
             && self.prepared == 3
-            && self.preempted == 3
+            && self.preempted == 4
             && self.waiting == 1
             && self.yielded == 1
+            && self.quantum_expiries == 4
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
     }
 }
