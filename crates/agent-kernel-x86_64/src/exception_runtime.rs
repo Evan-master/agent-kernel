@@ -13,7 +13,7 @@ use core::{
 
 use agent_kernel_x86_64::{
     interrupt::{IdtEntry, IdtPointer, PIC_MASTER_OFFSET},
-    native_runtime::INVALID_OPCODE_VECTOR,
+    native_runtime::{GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR},
 };
 
 const IDT_ENTRY_COUNT: usize = 256;
@@ -263,7 +263,9 @@ pub unsafe fn install_agent_exception_gate(
     vector: u8,
     handler: unsafe extern "C" fn(),
 ) -> Option<()> {
-    if IDT_READY.load(Ordering::Acquire) != 1 || vector != INVALID_OPCODE_VECTOR {
+    if IDT_READY.load(Ordering::Acquire) != 1
+        || (vector != INVALID_OPCODE_VECTOR && vector != GENERAL_PROTECTION_VECTOR)
+    {
         return None;
     }
     let selector = unsafe { current_code_selector() };

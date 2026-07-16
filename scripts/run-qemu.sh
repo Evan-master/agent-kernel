@@ -62,6 +62,7 @@ for expected in \
   "AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK" \
+  "AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
@@ -169,17 +170,23 @@ for expected in \
   "event[94] task_dispatched" \
   "event[95] task_quantum_expired" \
   "event[96] task_dispatched" \
-  "event[97] task_completed" \
-  "event[98] device_event_raised" \
-  "event[99] device_event_delivered" \
-  "event[100] driver_invocation_queued" \
-  "event[101] driver_invocation_dispatched" \
-  "event[102] driver_invocation_ticked" \
-  "event[103] device_event_acknowledged" \
-  "event[104] driver_command_submitted" \
-  "event[105] driver_command_dispatched" \
-  "event[106] driver_command_completed" \
-  "event[107] driver_invocation_completed" \
+  "event[97] task_faulted" \
+  "event[98] task_fault_recovered" \
+  "event[99] task_queued" \
+  "event[100] task_dispatched" \
+  "event[101] task_quantum_expired" \
+  "event[102] task_dispatched" \
+  "event[103] task_completed" \
+  "event[104] device_event_raised" \
+  "event[105] device_event_delivered" \
+  "event[106] driver_invocation_queued" \
+  "event[107] driver_invocation_dispatched" \
+  "event[108] driver_invocation_ticked" \
+  "event[109] device_event_acknowledged" \
+  "event[110] driver_command_submitted" \
+  "event[111] driver_command_dispatched" \
+  "event[112] driver_command_completed" \
+  "event[113] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -189,7 +196,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 107 ]]; then
-  printf 'expected exactly 107 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 113 ]]; then
+  printf 'expected exactly 113 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

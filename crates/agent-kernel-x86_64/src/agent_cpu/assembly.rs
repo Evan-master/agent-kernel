@@ -1,4 +1,4 @@
-//! Ring-3 entry, resume, PIT, and Agent-call assembly.
+//! Ring-3 entry, resume, PIT, Agent-call, and contained-exception assembly.
 //!
 //! This child module owns only register and privilege-frame mechanics. It never
 //! calls Rust while a user frame is active; the parent validates all recorded
@@ -7,12 +7,17 @@
 use core::arch::global_asm;
 
 use agent_kernel_x86_64::{
-    context::PRIVILEGE_INTERRUPT_RIP_OFFSET, native_runtime::INVALID_OPCODE_VECTOR,
+    context::{
+        PRIVILEGE_ERROR_CODE_OFFSET, PRIVILEGE_ERROR_CODE_RIP_OFFSET,
+        PRIVILEGE_INTERRUPT_RIP_OFFSET,
+    },
+    native_runtime::{GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR},
 };
 
 use crate::pic;
 
 const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX: usize = 16;
+const ERROR_CODE_ORIGIN_CS_OFFSET_AFTER_RAX: usize = 24;
 
 global_asm!(
     r#"
@@ -181,6 +186,32 @@ agent_kernel_agent_invalid_opcode_stub:
     pop rax
     jmp agent_kernel_exception_6
     .size agent_kernel_agent_invalid_opcode_stub, . - agent_kernel_agent_invalid_opcode_stub
+    .global agent_kernel_agent_general_protection_stub
+    .type agent_kernel_agent_general_protection_stub,@function
+agent_kernel_agent_general_protection_stub:
+    push rax
+    mov rax, qword ptr [rsp + {error_origin_cs_offset}]
+    and eax, 3
+    cmp eax, 3
+    jne .Lagent_kernel_general_protection_fatal
+    agent_kernel_push_integer_frame_after_rax
+    mov r10, cr3
+    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov cr3, rax
+    mov qword ptr [rip + {fault_cr3}], r10
+    mov qword ptr [rip + {fault_rsp}], rsp
+    mov rax, qword ptr [rsp + {error_code_offset}]
+    mov qword ptr [rip + {fault_error_code}], rax
+    mov rax, qword ptr [rsp + {error_rip_offset}]
+    mov qword ptr [rip + {fault_rip}], rax
+    mov byte ptr [rip + {fault_vector}], {general_protection_vector}
+    inc byte ptr [rip + {fault_count}]
+    mov byte ptr [rip + {fault_seen}], 1
+    agent_kernel_restore_host
+.Lagent_kernel_general_protection_fatal:
+    pop rax
+    jmp agent_kernel_exception_13
+    .size agent_kernel_agent_general_protection_stub, . - agent_kernel_agent_general_protection_stub
 "#,
     interrupt_rsp = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP,
     interrupt_rip = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP,
@@ -200,10 +231,15 @@ agent_kernel_agent_invalid_opcode_stub:
     fault_count = sym super::storage::AGENT_KERNEL_AGENT_FAULT_COUNT,
     fault_seen = sym super::storage::AGENT_KERNEL_AGENT_FAULT_SEEN,
     fault_vector = sym super::storage::AGENT_KERNEL_AGENT_FAULT_VECTOR,
+    fault_error_code = sym super::storage::AGENT_KERNEL_AGENT_FAULT_ERROR_CODE,
     host_context = sym super::storage::AGENT_KERNEL_HOST_CONTEXT_RSP,
     rip_offset = const PRIVILEGE_INTERRUPT_RIP_OFFSET,
     origin_cs_offset = const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX,
+    error_origin_cs_offset = const ERROR_CODE_ORIGIN_CS_OFFSET_AFTER_RAX,
+    error_code_offset = const PRIVILEGE_ERROR_CODE_OFFSET,
+    error_rip_offset = const PRIVILEGE_ERROR_CODE_RIP_OFFSET,
     invalid_opcode_vector = const INVALID_OPCODE_VECTOR,
+    general_protection_vector = const GENERAL_PROTECTION_VECTOR,
     pic_master_data = const pic::PIC_MASTER_DATA,
     pic_master_command = const pic::PIC_MASTER_COMMAND,
     pic_eoi = const pic::PIC_EOI,
@@ -222,6 +258,7 @@ unsafe extern "C" {
     pub(super) fn agent_kernel_agent_timer_irq_stub();
     pub(super) fn agent_kernel_agent_call_stub();
     pub(super) fn agent_kernel_agent_invalid_opcode_stub();
+    pub(super) fn agent_kernel_agent_general_protection_stub();
 }
 
 pub(super) unsafe fn enter_user(

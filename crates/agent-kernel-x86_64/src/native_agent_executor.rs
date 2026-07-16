@@ -134,7 +134,7 @@ pub(super) fn contain_fault(
 ) -> Option<()> {
     let context = cpu.context();
     let fault_kind = FaultKind::ExecutionTrap;
-    let fault_detail = u64::from(cpu.fault().vector());
+    let fault_detail = cpu.fault().detail();
     let agent_faults = evidence.agent_faults.checked_add(1)?;
     if !state::running(booted, context) {
         return None;
@@ -279,6 +279,18 @@ impl NativeRuntimeEvidence {
     }
 
     pub(crate) const fn proves_current_boot(self) -> bool {
+        self.dispatches == 15
+            && self.prepared == 6
+            && self.preempted == 7
+            && self.waiting == 1
+            && self.yielded == 1
+            && self.quantum_expiries == 7
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 2
+    }
+
+    pub(crate) const fn proves_general_protection_phase(self) -> bool {
         self.dispatches == 13
             && self.prepared == 5
             && self.preempted == 6
@@ -287,6 +299,6 @@ impl NativeRuntimeEvidence {
             && self.quantum_expiries == 6
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
-            && self.agent_faults == 1
+            && self.agent_faults == 2
     }
 }

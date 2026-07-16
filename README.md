@@ -19,7 +19,7 @@ event logs.
 - `agent-kernel`: no_std kernel facade with syscall-style methods over the core model.
 - `agent-kernel-hal`: no_std device backend contract for executing immutable, kernel-authorized driver requests.
 - `agent-kernel-boot`: no_std boot handoff boundary that seeds the kernel with a deterministic bootstrap flow, explicit owner rollback authority, and trusted mutable architecture initialization.
-- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Worker and Verifier Agent Image Capsule parsing with SHA-256 verification binding, four isolated Agent CR3 roots with same-address private pages, a fixed-capacity prepared/preempted/mailbox-waiting/yielded CPU ownership registry consumed by a kernel-selected dispatch-and-take runtime loop, owned suspended CPU frames, PIT IRQ0 quanta re-armed before every ring-3 entry or resume through a shared RSP0 stack, strict AgentCall/QuantumExpired/AgentFault physical boundary classification, CPL-aware invalid-opcode containment into kernel `ExecutionTrap` state, consuming fault-to-fresh-entry restart with signal/stack scrubbing, a read-only per-Agent call-release/quantum/restart signal page, a versioned returning Agent Call ABI whose role-independent inner loop routes all nine v1 operations and records fixed-capacity call transcripts, cooperative Yield, blocking mailbox wait/wake plus Send/Receive/Acknowledge between isolated Workers, audited task-result submission and inspection, target-scoped verification, task completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
+- `agent-kernel-x86_64`: no_std x86_64 bootloader entry, native one-page Worker and Verifier Agent Image Capsule parsing with SHA-256 verification binding, four isolated Agent CR3 roots with same-address private pages, a fixed-capacity prepared/preempted/mailbox-waiting/yielded CPU ownership registry consumed by a kernel-selected dispatch-and-take runtime loop, owned suspended CPU frames, PIT IRQ0 quanta re-armed before every ring-3 entry or resume through a shared RSP0 stack, strict AgentCall/QuantumExpired/AgentFault physical boundary classification, CPL-aware #UD and error-code-bearing #GP containment into kernel `ExecutionTrap` state, two consuming fault-to-fresh-entry restarts with signal/stack scrubbing, a read-only per-Agent call-release/quantum/restart signal page, a versioned returning Agent Call ABI whose role-independent inner loop routes all nine v1 operations and records fixed-capacity call transcripts, cooperative Yield, blocking mailbox wait/wake plus Send/Receive/Acknowledge between isolated Workers, audited task-result submission and inspection, target-scoped verification, task completion, one-shot UART IRQ4 ingress, and byte-wide Port I/O behind the privileged Driver boundary.
 - `agent-kernel-image`: host-side BIOS image builder and QEMU argument helper.
 - `agent-supervisor`: host-side user-space simulator that drives the prototype and executes a stateful virtual register device backend.
 
@@ -179,9 +179,10 @@ architecture backend now executes byte-wide `Read` and `Write` commands against
 bounded `Port` endpoints, treating `opcode` only as a relative offset. Its QEMU
 boot path first installs a persistent 256-entry IDT with explicit gates for CPU
 exception vectors 0 through 31. A returning breakpoint stub captures and
-validates the exact CPU return RIP. Vector 6 is later replaced by a CPL-aware
-Agent gate: kernel-origin #UD still reaches its deterministic fatal stub, while
-ring-3 #UD captures a complete Agent frame and returns to trusted kernel
+validates the exact CPU return RIP. Vectors 6 and 13 are later replaced by
+CPL-aware Agent gates: kernel-origin #UD/#GP still reach deterministic fatal
+stubs, while ring-3 #UD captures a 160-byte frame and ring-3 #GP captures a
+168-byte frame plus its CPU error code before returning to trusted kernel
 context. All remaining exception gates lead to vector-specific deterministic
 failure stubs. Before that IDT becomes active,
 the kernel installs a permanent GDT with ring-0/ring-3 segments and a long-mode
@@ -232,7 +233,7 @@ mailbox must classify as exactly one Agent Call, one timer expiry, or one
 supported Agent fault; mixed or repeated evidence fails closed. A validated
 expiry increments byte 1 of that Agent's read-only signal page without
 replacing the public semantic task tick. Byte 2 is reserved for a
-kernel-authored restart generation and starts at zero.
+kernel-authored restart generation, starts at zero, and is bounded at two.
 Nonce, transcript, private memory, and the complete frame remain owned when a
 live call session becomes Preempted.
 
@@ -270,9 +271,9 @@ The kernel then queues the Fault Worker and Verifier at events 79 and 80. The
 Fault Worker dispatches first, expires its admission quantum at event 82, and
 rotates behind the Verifier. The Verifier dispatches and expires at events 83
 and 84, restoring the FIFO to `[Fault Worker, Verifier]`. Event 85 resumes the
-Fault Worker's exact saved frame. Its 64-byte code observes physical quantum
+Fault Worker's exact saved frame. Its 81-byte code observes physical quantum
 generation 1 and, while restart generation is zero, executes `ud2` at code
-offset 22. The vector-6 gate verifies CPL3 origin, saves every integer register
+offset 36. The vector-6 gate verifies CPL3 origin, saves every integer register
 and the privilege frame, switches back to kernel CR3, and classifies the return
 as `AgentFault(InvalidOpcode)`. Event 86 records `ExecutionTrap` detail 6 and
 leaves only that task and execution context `Faulted`.
@@ -301,10 +302,20 @@ prepared-entry validator. The saved exception frame is dropped and cannot be
 used as a resume source. Event 92 records bootstrap-authorized
 `TaskFaultRecovered`; event 93 requeues the recovered task under its assigned
 Agent. A fresh entry dispatch at event 94 expires through PIT at event 95, and
-event 96 resumes that new admission frame. The Capsule now observes restart
-generation 1, authenticates DescribeContext with nonce `0xd44ce004`, and
-completes through the ordinary Agent Call path at event 97. The immutable fault
-record remains attached to the audit history while the task becomes Completed.
+event 96 resumes that new admission frame. The Capsule observes restart
+generation 1 and executes privileged `cli` at code offset 38. The vector-13
+gate validates CPL3 origin, captures its 168-byte frame and CPU error code zero,
+restores kernel CR3, and classifies `GeneralProtection { error_code: 0 }`.
+Event 97 records a second immutable `ExecutionTrap`, now with detail 13.
+
+That second non-resumable fault object is consumed through the same scrubbed
+fresh-entry transition, which writes restart generation 2. Event 98 performs a
+second bootstrap-authorized recovery and event 99 requeues the task. Events 100
+and 101 prove another fresh entry and PIT admission; event 102 resumes only the
+new preemption frame. At generation 2 the Capsule authenticates DescribeContext
+with nonce `0xd44ce004` and completes through the ordinary Agent Call path at
+event 103. Both fault records remain attached to the audit history while the
+task becomes Completed.
 All four Agent execution contexts finish Idle, and semantic and physical queues
 are empty. This is an Agent-native image format, call ABI, scheduler, fault and
 restart lifecycle, and verification lifecycle, not a POSIX process or syscall
@@ -322,9 +333,9 @@ ingress. Multi-page images, writable data segments, relocations, dynamic linking
 signatures, persistent image sources, pointer-bearing calls, asynchronous call
 completion, variable hardware quantum lengths, dynamic Agent admission,
 page-table teardown, PCIDs, SMP execution, context migration, automatic or
-multi-generation restart policy, replacement-page allocation, checkpoint data
-restoration, containment of exceptions other than #UD, error-code
-decoding, double-fault IST, a general IRQ
+unbounded restart policy, replacement-page allocation, checkpoint data
+restoration, containment of page faults or exceptions other than #UD/#GP,
+double-fault IST, a general IRQ
 registry, APIC/IOAPIC, MMIO drivers, wider port operations, and DMA policy remain
 future work.
 Owner-aware resource creation assigns `owner: Some(agent)` and creates the
@@ -354,7 +365,7 @@ remains available for system-seeded resources and leaves `owner: None`.
 17. Register a Fault Worker with its own delegated task and keep it accepted but initially unqueued.
 18. Register and verify two normal Worker images, one Fault Worker image, and one Verifier image, binding every launch to its matching image kind.
 19. Parse all four fixed Capsule headers, bind their SHA-256 digests to the verified records, copy/read back all four private code pages, and register their prepared CPU ownership by trusted Agent identity.
-20. Replace IDT vector 6 with the CPL-aware Agent #UD gate while retaining its original CPL0 fatal fallback.
+20. Replace IDT vectors 6 and 13 with CPL-aware Agent #UD/#GP gates while retaining both original CPL0 fatal fallbacks.
 21. Let the kernel-selected outer loop dispatch B and A from their prepared states, expire each admission quantum through IRQ0, and park both validated preemption frames.
 22. Redispatch B from its preempted state and enter the generic inner loop through DescribeContext.
 23. Route B's empty ReceiveMessage into a retained waiting call, then let the outer loop select A's preempted state while B remains `Waiting`.
@@ -364,13 +375,15 @@ remains available for system-seeded resources and leaves `owner: None`.
 27. Queue Fault Worker before Verifier, expire both admission quanta, and restore FIFO order with Fault Worker first.
 28. Resume Fault Worker, capture its exact `ud2` frame as `AgentFault(InvalidOpcode)`, and commit one `ExecutionTrap` without parking a resumable context.
 29. Redispatch Verifier after the fault and route DescribeContext, InspectTaskResult, VerifyTask, and CompleteTask while B remains unverified.
-30. Consume the terminal fault object, clear its private signal and stack pages, set restart generation 1, and construct a fresh prepared CPU context without resuming the exception frame.
-31. Recover through bootstrap rollback authority, requeue Fault Worker, expire its fresh admission quantum, and complete through authenticated DescribeContext/CompleteTask calls.
-32. Match all terminal evidence, prove thirteen kernel-selected dispatches, six physical quantum expiries, one contained Agent fault, four completed Idle contexts, no faulted physical context, and empty queues.
-33. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
-34. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
-35. Acknowledge the event and dispatch a causally linked COM1 write request.
-36. Record the write result, complete the Driver Invocation, and mark supervisor handoff ready.
+30. Consume the #UD object, scrub its signal and stack pages, set restart generation 1, recover through bootstrap rollback authority, and requeue a fresh prepared context.
+31. Expire that fresh admission quantum, execute privileged `cli`, decode the vector-13 CPU error code, and commit a second immutable `ExecutionTrap` without retaining a resumable context.
+32. Consume the #GP object, scrub mutable pages again, set restart generation 2, perform a second authorized recovery, and requeue another fresh prepared context.
+33. Expire that admission quantum and complete through authenticated DescribeContext/CompleteTask calls while retaining both fault records.
+34. Match all terminal evidence, prove fifteen kernel-selected dispatches, seven physical quantum expiries, two contained Agent faults, four completed Idle contexts, no faulted physical context, and empty queues.
+35. Install IRQ4 in the persistent IDT, remap the PIC, arm COM1 THRE, and receive the hardware interrupt.
+36. Validate the interrupt mailbox, raise and deliver an Interrupt Device Event, then dispatch and tick its Driver Invocation.
+37. Acknowledge the event and dispatch a causally linked COM1 write request.
+38. Record the write result, complete the Driver Invocation, and mark supervisor handoff ready.
 
 The handoff now runs inside QEMU through the x86_64 BIOS image path.
 
@@ -382,7 +395,7 @@ The handoff now runs inside QEMU through the x86_64 BIOS image path.
 - Linux syscall compatibility.
 - A filesystem, network stack, dynamic/SMP multi-Agent scheduler, or complete physical hardware driver stack.
 - Dynamic per-task PIT frequencies or multi-tick hardware quantum lengths.
-- Automatic retry policy, multiple fault restarts, replacement address spaces, or containment of CPU exceptions other than ring-3 #UD.
+- Automatic retry/crash-loop policy, more than two fault restarts, replacement address spaces, or containment of CPU exceptions other than ring-3 #UD/#GP.
 - Running an LLM inside kernel space.
 
 ## Commands
@@ -461,6 +474,7 @@ AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK
 AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK
 AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK
 AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK
+AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK
 AGENT_KERNEL_NATIVE_VERIFIER_OK
 AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK
 AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK
@@ -571,17 +585,23 @@ event[93] task_queued
 event[94] task_dispatched
 event[95] task_quantum_expired
 event[96] task_dispatched
-event[97] task_completed
-event[98] device_event_raised
-event[99] device_event_delivered
-event[100] driver_invocation_queued
-event[101] driver_invocation_dispatched
-event[102] driver_invocation_ticked
-event[103] device_event_acknowledged
-event[104] driver_command_submitted
-event[105] driver_command_dispatched
-event[106] driver_command_completed
-event[107] driver_invocation_completed
+event[97] task_faulted
+event[98] task_fault_recovered
+event[99] task_queued
+event[100] task_dispatched
+event[101] task_quantum_expired
+event[102] task_dispatched
+event[103] task_completed
+event[104] device_event_raised
+event[105] device_event_delivered
+event[106] driver_invocation_queued
+event[107] driver_invocation_dispatched
+event[108] driver_invocation_ticked
+event[109] device_event_acknowledged
+event[110] driver_command_submitted
+event[111] driver_command_dispatched
+event[112] driver_command_completed
+event[113] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -652,9 +672,9 @@ at event 77, return a canonical Yield reply in ring 3, and complete A at event
 78.
 
 `AGENT_KERNEL_NATIVE_RUNTIME_STORE_OK` requires all four initial non-Copy CPU
-contexts plus the consumed fault-to-prepared replacement to transfer only
+contexts plus both consumed fault-to-prepared replacements to transfer only
 through kernel-returned Agent/Task identities and leave the bounded registry
-empty after event 97. `AGENT_KERNEL_VERIFIER_PREEMPTION_OK`
+empty after event 103. `AGENT_KERNEL_VERIFIER_PREEMPTION_OK`
 requires the Verifier's private CR3 to survive PIT expiry at event 84 and
 redispatch after the contained fault at event 87. The inspection marker
 requires operation 5 to echo the Verifier's scheduler-owned context and target
@@ -666,7 +686,7 @@ complete the Verifier's own task at event 91, with three normal contexts Idle,
 the Fault Worker context Faulted at that intermediate boundary, and Worker B
 still Completed but unverified.
 `AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK` additionally requires one role-independent
-runtime loop to process all 16 calls plus the fault boundary, cross prepared,
+runtime loop to process all 16 calls plus two fault boundaries, cross prepared,
 preempted, mailbox-waiting, and yielded physical states, match every terminal
 transcript to its Capsule nonce, operation sequence, and return offsets, and
 finish with empty semantic and physical queues.
@@ -680,8 +700,8 @@ Capsules.
 `AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK` requires event 81 to dispatch
 the Fault Worker's prepared context, event 82 to give it physical generation 1,
 and event 85 to resume the same owned frame. The vector-6 stub must distinguish
-CPL3 from CPL0 using saved CS, capture `ud2` at Capsule offset 22 under the
-Fault Worker's CR3, restore kernel CR3, and produce the sole valid
+CPL3 from CPL0 using saved CS, capture `ud2` at Capsule offset 36 under the
+Fault Worker's CR3, restore kernel CR3, and produce a valid
 `AgentFault(InvalidOpcode)` mailbox. Public `sys_fault_task` must then record
 event 86 as `ExecutionTrap` detail 6, leave no resumable Fault Worker context,
 and allow event 87 to dispatch the Verifier. A kernel-origin #UD remains fatal.
@@ -693,21 +713,30 @@ Idle. The physical transition must consume `FaultedAgentCpu`, clear the signal
 and all writable stack pages, set restart generation 1, and create a
 `PreparedAgentCpu` at the immutable Capsule entry instead of resuming the saved
 exception frame. Events 94 and 95 must prove a fresh entry and PIT admission;
-event 96 must recover that new preemption frame before the Fault Worker issues
-authenticated DescribeContext/CompleteTask calls and completes at event 97.
-The sole original fault record remains queryable after completion.
+event 96 must recover that new preemption frame before the generation-1 Capsule
+executes `cli` at offset 38 and faults again at event 97.
+
+`AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK` requires the vector-13 stub
+to identify CPL3 from saved CS, read the CPU-pushed error code at frame offset
+120, capture RIP at offset 128, restore kernel CR3, and classify exactly
+`GeneralProtection { error_code: 0 }`. The semantic detail must be 13. Event 98
+then performs a second authorized recovery, event 99 requeues only after the
+execution context is Idle, and mutable pages are scrubbed before generation 2
+is visible. Events 100 through 102 prove a second fresh entry and admission;
+authenticated DescribeContext/CompleteTask completes at event 103. Both fault
+records remain queryable, and a kernel-origin #GP remains fatal.
 
 `AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK` additionally requires every
 demonstrated non-running prepared, PIT-preempted, mailbox-waiting, or yielded CPU
 context to be parked under its trusted Agent identity, selected by the exact
 kernel-returned Agent/Task pair, and consumed by the terminal boundary.
-`AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK` additionally requires all thirteen
+`AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK` additionally requires all fifteen
 Worker, Fault Worker, and Verifier handoffs to use the same mutable dispatch-and-take
 operation. That operation prepares a read-only core permit, finds a parked CPU
 state from the permit's Agent/Task identity, commits the semantic transition,
 and consumes the guarded context. No caller supplies an expected Agent or
 physical kind. Permit preparation emits no event, so the ordered trace remains
-exactly 107 events.
+exactly 113 events.
 
 `AGENT_KERNEL_AGENT_CALL_ABI_OK` requires five canonical `AGNTCALL` requests
 from sender A, five from receiver B, four from the Verifier, and two from the
@@ -722,33 +751,33 @@ the scheduler context and kernel-held capability appropriate to that operation;
 the Verifier's resource Verify capability never appears in ring-3 registers.
 `AGENT_KERNEL_AGENT_CALL_COMPLETE_OK` requires core authorization to accept
 those capabilities, produce Worker completion events 74 and 78, Verifier
-completion event 91, and recovered Fault Worker completion event 97, leaving
+completion event 91, and twice-recovered Fault Worker completion event 103, leaving
 all four task execution contexts Idle with an empty run queue.
-`AGENT_KERNEL_AGENT_CR3_SWITCH_OK` requires every PIT, Agent-call, and #UD entry
-to observe its private Agent CR3 and every return to normal context to restore
-the kernel CR3.
+`AGENT_KERNEL_AGENT_CR3_SWITCH_OK` requires every PIT, Agent-call, #UD, and #GP
+entry to observe its private Agent CR3 and every return to normal context to
+restore the kernel CR3.
 `AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK` requires B's retained receive frame,
 the read-only signal pages, and A's preempted then yielded frames to remain
 intact across the opposite Worker's execution.
 `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` requires ten Agent-call CR3
 transitions for A, ten for B, eight for the Verifier, and four for the restarted
-Fault Worker; six PIT round trips include A's live call session plus both Fault
-Worker generations, followed by one Fault Worker #UD return, with all terminal
-scheduler states.
+Fault Worker; seven PIT round trips include A's live call session, the Verifier,
+and all three Fault Worker generations, followed by Fault Worker #UD and #GP
+returns, with all terminal scheduler states.
 `AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK`
 requires the two different Worker call sequences, the Verifier sequence, and
 the restarted Fault Worker sequence to return at their verified offsets with
 different nonces.
 `AGENT_KERNEL_UART_IRQ_OK` requires IRQ4 to capture one THRE interrupt and normal
-context to validate its IIR/LSR mailbox. That signal causes event 98 and the
+context to validate its IIR/LSR mailbox. That signal causes event 104 and the
 running Driver Invocation. The `O` in `AGENT_KERNEL_PORT_IO_BACKEND_OK` is
-emitted by the immutable causal request at event 105 through the registered COM1
+emitted by the immutable causal request at event 111 through the registered COM1
 endpoint and `PortIoBackend`; the surrounding text uses the existing boot
 serial writer. The remaining success markers are printed only after the write
 and Driver Invocation terminal records are verified as `Completed` and the
 Driver execution context is `Idle`.
 
-The x86 entry configures a 512 KiB kernel stack plus a separate 32 KiB TSS RSP0
+The x86 entry configures a 1 MiB kernel stack plus a separate 32 KiB TSS RSP0
 stack. The fixed-capacity kernel state
 and its by-value boot construction exceed the bootloader's default 80 KiB stack
 in unoptimized QEMU builds; the explicit size keeps the guard page effective

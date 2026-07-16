@@ -6,7 +6,8 @@
 
 use agent_kernel_x86_64::{
     context::{
-        PrivilegeInterruptStackFrame, SavedAgentFrame, PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES,
+        PrivilegeErrorCodeStackFrame, PrivilegeInterruptStackFrame, SavedAgentFrame,
+        PRIVILEGE_ERROR_CODE_STACK_FRAME_BYTES, PRIVILEGE_INTERRUPT_STACK_FRAME_BYTES,
     },
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
     user_memory::UserMemoryLayout,
@@ -32,6 +33,20 @@ pub(super) fn read_frame(
     // SAFETY: the complete range lies in the kernel-owned RSP0 stack while CPL3
     // is suspended and cannot modify it.
     Some(unsafe { (frame_rsp as *const PrivilegeInterruptStackFrame).read_volatile() })
+}
+
+pub(super) fn read_error_code_frame(
+    frame_rsp: u64,
+    stack: PrivilegedStackBounds,
+) -> Option<PrivilegeErrorCodeStackFrame> {
+    let frame_start = usize::try_from(frame_rsp).ok()?;
+    let frame_end = frame_start.checked_add(PRIVILEGE_ERROR_CODE_STACK_FRAME_BYTES)?;
+    if frame_start < stack.start || frame_end > stack.end {
+        return None;
+    }
+    // SAFETY: the full error-code frame lies in the kernel-owned RSP0 stack
+    // while the originating CPL3 context is suspended.
+    Some(unsafe { (frame_rsp as *const PrivilegeErrorCodeStackFrame).read_volatile() })
 }
 
 pub(super) fn user_frame_valid(

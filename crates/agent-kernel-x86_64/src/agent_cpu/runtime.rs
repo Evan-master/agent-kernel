@@ -63,6 +63,10 @@ impl AgentCpuRuntime {
                 agent_kernel_x86_64::native_runtime::INVALID_OPCODE_VECTOR,
                 assembly::agent_kernel_agent_invalid_opcode_stub,
             )?;
+            exception_runtime::install_agent_exception_gate(
+                agent_kernel_x86_64::native_runtime::GENERAL_PROTECTION_VECTOR,
+                assembly::agent_kernel_agent_general_protection_stub,
+            )?;
             exception_runtime::install_user_interrupt_gate(
                 AGENT_CALL_VECTOR,
                 assembly::agent_kernel_agent_call_stub,
@@ -86,12 +90,15 @@ impl AgentCpuRuntime {
         &self,
         memory: PreparedAgentMemory,
         context: AgentCallContext,
+        expected_restart_generation: u8,
     ) -> Option<PreparedAgentCpu> {
-        self.prepare_with_restart_generation(
-            memory,
-            context,
-            agent_kernel_x86_64::user_memory::FIRST_AGENT_RESTART_GENERATION,
-        )
+        if expected_restart_generation == 0
+            || expected_restart_generation
+                > agent_kernel_x86_64::user_memory::MAX_AGENT_RESTART_GENERATION
+        {
+            return None;
+        }
+        self.prepare_with_restart_generation(memory, context, expected_restart_generation)
     }
 
     fn prepare_with_restart_generation(

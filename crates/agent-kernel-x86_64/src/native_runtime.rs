@@ -13,7 +13,7 @@ use agent_kernel_core::AgentId;
 
 pub use boundary::{
     NativeAgentFault, NativeRunBoundary, NativeRunBoundaryError, NativeRunBoundaryEvidence,
-    INVALID_OPCODE_VECTOR,
+    GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

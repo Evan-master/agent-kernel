@@ -1,6 +1,6 @@
 //! Single-core evidence storage shared by ring-3 Agent contexts.
 //!
-//! Entry, PIT, and Agent-call assembly share one saved host context plus fixed
+//! Entry, PIT, Agent-call, and exception assembly share one saved host context plus fixed
 //! per-dispatch atomic mailboxes. Rust reads them only after assembly has
 //! returned at CPL0 with IF clear.
 
@@ -125,6 +125,10 @@ pub(super) static AGENT_KERNEL_AGENT_FAULT_SEEN: AtomicU8 = AtomicU8::new(0);
 #[used]
 pub(super) static AGENT_KERNEL_AGENT_FAULT_VECTOR: AtomicU8 = AtomicU8::new(0);
 
+#[no_mangle]
+#[used]
+pub(super) static AGENT_KERNEL_AGENT_FAULT_ERROR_CODE: AtomicU64 = AtomicU64::new(0);
+
 static AGENT_KERNEL_AGENT_RUNTIME_READY: AtomicU8 = AtomicU8::new(0);
 
 pub(super) fn install(roots: AddressSpaceRoots) -> Option<()> {
@@ -187,6 +191,7 @@ pub(super) fn run_boundary() -> Option<NativeRunBoundary> {
         AGENT_KERNEL_AGENT_PREEMPTED.load(Ordering::Acquire) == 1,
         AGENT_KERNEL_AGENT_FAULT_SEEN.load(Ordering::Acquire) == 1,
         AGENT_KERNEL_AGENT_FAULT_VECTOR.load(Ordering::Acquire),
+        AGENT_KERNEL_AGENT_FAULT_ERROR_CODE.load(Ordering::Acquire),
     )
     .classify()
     .ok()
@@ -211,4 +216,5 @@ fn reset_mailbox() {
     AGENT_KERNEL_AGENT_FAULT_COUNT.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_FAULT_SEEN.store(0, Ordering::Release);
     AGENT_KERNEL_AGENT_FAULT_VECTOR.store(0, Ordering::Release);
+    AGENT_KERNEL_AGENT_FAULT_ERROR_CODE.store(0, Ordering::Release);
 }

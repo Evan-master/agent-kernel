@@ -12,6 +12,8 @@ pub const AGENT_CALL_RELEASE_OFFSET: usize = 0;
 pub const PHYSICAL_QUANTUM_GENERATION_OFFSET: usize = 1;
 pub const AGENT_RESTART_GENERATION_OFFSET: usize = 2;
 pub const FIRST_AGENT_RESTART_GENERATION: u8 = 1;
+pub const SECOND_AGENT_RESTART_GENERATION: u8 = 2;
+pub const MAX_AGENT_RESTART_GENERATION: u8 = SECOND_AGENT_RESTART_GENERATION;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {

@@ -5,8 +5,9 @@
 
 use agent_kernel_core::EventKind;
 use agent_kernel_x86_64::{
-    agent_call::AgentCallContext, native_runtime::NativeAgentFault,
-    user_memory::FIRST_AGENT_RESTART_GENERATION,
+    agent_call::AgentCallContext,
+    native_runtime::NativeAgentFault,
+    user_memory::{FIRST_AGENT_RESTART_GENERATION, SECOND_AGENT_RESTART_GENERATION},
 };
 
 use crate::{
@@ -115,7 +116,7 @@ pub(super) fn run(
         || report.len() != 3
         || report.faulted_len() != 1
         || !evidence.proves_fault_containment_phase()
-        || !fault_evidence_valid(booted, &report, &fault, fault_image, fault_context)
+        || !invalid_opcode_evidence_valid(booted, &report, &fault, fault_image, fault_context)
         || !verifier_evidence_valid(
             &report,
             verifier_image,
@@ -126,7 +127,36 @@ pub(super) fn run(
         return None;
     }
     verifier.completed_after_runtime(booted, &completed_workers)?;
-    fault.restart_for_runtime(booted, runtime, &mut report)?;
+    fault.restart_for_runtime(
+        booted,
+        runtime,
+        &mut report,
+        NativeAgentFault::InvalidOpcode,
+    )?;
+    if runtime.len() != 1 || report.faulted_len() != 0 {
+        return None;
+    }
+    native_agent_executor::run_until_idle(
+        booted,
+        runtime,
+        &mut report,
+        &mut evidence,
+        Some(authority),
+    )?;
+    if !runtime.is_empty()
+        || report.len() != 3
+        || report.faulted_len() != 1
+        || !evidence.proves_general_protection_phase()
+        || !general_protection_evidence_valid(booted, &report, &fault, fault_image, fault_context)
+    {
+        return None;
+    }
+    fault.restart_for_runtime(
+        booted,
+        runtime,
+        &mut report,
+        NativeAgentFault::GeneralProtection { error_code: 0 },
+    )?;
     if runtime.len() != 1 || report.faulted_len() != 0 {
         return None;
     }
@@ -143,7 +173,7 @@ pub(super) fn run(
     if !evidence.proves_current_boot() {
         return None;
     }
-    if !fault_restart_evidence_valid(booted, &report, &fault, fault_image, fault_context) {
+    if !fault_restarts_evidence_valid(booted, &report, &fault, fault_image, fault_context) {
         return None;
     }
     write_verifier_markers();
@@ -206,7 +236,7 @@ fn verifier_evidence_valid(
         && subject.result() == image.result()
 }
 
-fn fault_evidence_valid(
+fn invalid_opcode_evidence_valid(
     booted: &X86BootedKernel,
     report: &NativeExecutionReport,
     flow: &PreparedFaultTaskFlow,
@@ -232,11 +262,30 @@ fn fault_evidence_valid(
         && !faulted.had_call_progress()
         && faulted.physical_quantum_generation() == 1
         && faulted.restart_generation() == 0
-        && flow.faulted_after_runtime(booted)
+        && flow.invalid_opcode_faulted_after_runtime(booted)
         && matches!((fault_event, verifier_continuation), (Some(fault), Some(next)) if fault < next)
 }
 
-fn fault_restart_evidence_valid(
+fn general_protection_evidence_valid(
+    booted: &X86BootedKernel,
+    report: &NativeExecutionReport,
+    flow: &PreparedFaultTaskFlow,
+    image: BootFaultWorkerImage,
+    context: AgentCallContext,
+) -> bool {
+    let Some(faulted) = report.faulted(FAULT_WORKER) else {
+        return false;
+    };
+    faulted.context() == context
+        && faulted.fault() == NativeAgentFault::GeneralProtection { error_code: 0 }
+        && faulted.fault_offset() == Some(image.general_protection_offset())
+        && !faulted.had_call_progress()
+        && faulted.physical_quantum_generation() == 1
+        && faulted.restart_generation() == FIRST_AGENT_RESTART_GENERATION
+        && flow.general_protection_faulted_after_runtime(booted)
+}
+
+fn fault_restarts_evidence_valid(
     booted: &X86BootedKernel,
     report: &NativeExecutionReport,
     flow: &PreparedFaultTaskFlow,
@@ -253,8 +302,8 @@ fn fault_restart_evidence_valid(
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
-        && completed.restart_generation() == FIRST_AGENT_RESTART_GENERATION
-        && flow.completed_after_restart(booted)
+        && completed.restart_generation() == SECOND_AGENT_RESTART_GENERATION
+        && flow.completed_after_restarts(booted)
 }
 
 fn write_worker_markers() {
@@ -287,6 +336,7 @@ fn write_verifier_markers() {
     serial_write_line("AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_VERIFIER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_QUANTUM_OK");

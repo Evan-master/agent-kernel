@@ -1,9 +1,9 @@
 //! Physical memory and isolated address-space preparation for one Agent.
 //!
 //! This architecture-binary module owns Agent content frames and the kernel's
-//! supervisor alias for the read-only call-release and quantum-generation
-//! signal page. Its page-table child creates the distinct CR3 root and proves
-//! that Agent virtual pages are kernel-unmapped.
+//! supervisor alias for the read-only call-release, quantum-generation, and
+//! restart-generation signal page. Its page-table child creates the distinct
+//! CR3 root and proves that Agent virtual pages are kernel-unmapped.
 
 mod frame_allocator;
 mod page_tables;
@@ -16,7 +16,7 @@ use agent_kernel_x86_64::{
     agent_image::VerifiedAgentImage,
     user_memory::{
         UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_RESTART_GENERATION_OFFSET,
-        FIRST_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
+        MAX_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
         STACK_PAGE_COUNT,
     },
 };
@@ -173,8 +173,12 @@ impl PreparedAgentMemory {
         }
     }
 
-    pub(crate) fn reset_for_first_restart(self) -> Option<Self> {
-        if !self.kernel_address_space_active() || self.restart_generation() != 0 {
+    pub(crate) fn reset_for_next_restart(self) -> Option<(Self, u8)> {
+        if !self.kernel_address_space_active() {
+            return None;
+        }
+        let next_generation = self.restart_generation().checked_add(1)?;
+        if next_generation > MAX_AGENT_RESTART_GENERATION {
             return None;
         }
         let frames = self.identity.content_frames();
@@ -195,11 +199,10 @@ impl PreparedAgentMemory {
         unsafe {
             self.signal_pointer
                 .add(AGENT_RESTART_GENERATION_OFFSET)
-                .write_volatile(FIRST_AGENT_RESTART_GENERATION);
+                .write_volatile(next_generation);
         }
-        (self.dispatch_signals_are_clear()
-            && self.restart_generation() == FIRST_AGENT_RESTART_GENERATION)
-            .then_some(self)
+        (self.dispatch_signals_are_clear() && self.restart_generation() == next_generation)
+            .then_some((self, next_generation))
     }
 
     fn agent_call_release_is_clear(&self) -> bool {
