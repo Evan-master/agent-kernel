@@ -5,8 +5,12 @@
 //! manifest input; the runtime loader recomputes each digest before mapping a
 //! private code page.
 
+mod fault_handler;
+
 use agent_kernel_core::{AgentImageDigest, TaskResult};
 use agent_kernel_x86_64::agent_call::AgentCallOperation;
+
+pub(crate) use fault_handler::{fault_handler, BootFaultHandlerImage};
 
 const WORKER_A_NONCE: u64 = 0xa11c_e001;
 const WORKER_B_NONCE: u64 = 0xb22c_e002;

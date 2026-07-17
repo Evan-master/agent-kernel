@@ -12,8 +12,8 @@ use bootloader_api::BootInfo;
 
 use crate::{
     agent_cpu::AgentCpuRuntime, agent_memory::PreparedAgentMemory, boot_agent_images, event_trace,
-    exit_qemu, fatal_boot, fault_task_flow::FaultTaskFlow, halt_forever,
-    native_agent_runtime::NativeAgentRuntime, port_driver_flow::PortDriverSetup,
+    exit_qemu, fatal_boot, fault_handler_flow::FaultHandlerFlow, fault_task_flow::FaultTaskFlow,
+    halt_forever, native_agent_runtime::NativeAgentRuntime, port_driver_flow::PortDriverSetup,
     privilege_runtime::PrivilegeBoundary, serial_transmit_empty, serial_write_line,
     serial_write_str, timer_task_flow::TimerTaskFlow, uart_interrupt,
     verifier_task_flow::VerifierTaskFlow, X86BootedKernel, COM1,
@@ -24,6 +24,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let worker_b = boot_agent_images::worker_b();
     let verifier_image = boot_agent_images::verifier();
     let fault_image = boot_agent_images::fault_worker();
+    let fault_handler_image = boot_agent_images::fault_handler();
     let Ok(mut booted) = X86BootedKernel::boot(BootConfig::default()) else {
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
@@ -53,6 +54,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(fault_flow) = FaultTaskFlow::prepare(&mut booted, fault_image.digest()) else {
         fatal_boot("AGENT_KERNEL_FAULT_TASK_SETUP_ERROR");
     };
+    let Some(fault_handler_flow) =
+        FaultHandlerFlow::prepare(&mut booted, fault_handler_image.digest())
+    else {
+        fatal_boot("AGENT_KERNEL_FAULT_HANDLER_SETUP_ERROR");
+    };
     let Some((agent_a_record, agent_b_record)) = queued_timer_flow.image_records(&booted) else {
         fatal_boot("AGENT_KERNEL_AGENT_IMAGE_RECORD_ERROR");
     };
@@ -71,10 +77,17 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(fault_context) = fault_flow.call_context() else {
         fatal_boot("AGENT_KERNEL_FAULT_CALL_CONTEXT_ERROR");
     };
+    let Some(fault_handler_record) = fault_handler_flow.image_record(&booted) else {
+        fatal_boot("AGENT_KERNEL_FAULT_HANDLER_IMAGE_RECORD_ERROR");
+    };
+    let Some(fault_handler_context) = fault_handler_flow.call_context() else {
+        fatal_boot("AGENT_KERNEL_FAULT_HANDLER_CALL_CONTEXT_ERROR");
+    };
     if AgentImageCapsule::parse(worker_a.bytes()).is_err()
         || AgentImageCapsule::parse(worker_b.bytes()).is_err()
         || AgentImageCapsule::parse(verifier_image.bytes()).is_err()
         || AgentImageCapsule::parse(fault_image.bytes()).is_err()
+        || AgentImageCapsule::parse(fault_handler_image.bytes()).is_err()
     {
         fatal_boot("AGENT_KERNEL_AGENT_IMAGE_FORMAT_ERROR");
     }
@@ -94,6 +107,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     else {
         fatal_boot("AGENT_KERNEL_FAULT_IMAGE_DIGEST_ERROR");
     };
+    let Ok(fault_handler_verified_image) =
+        VerifiedAgentImage::verify(fault_handler_record, fault_handler_image.bytes())
+    else {
+        fatal_boot("AGENT_KERNEL_FAULT_HANDLER_IMAGE_DIGEST_ERROR");
+    };
     serial_write_line("AGENT_KERNEL_AGENT_IMAGE_DIGEST_OK");
     serial_write_line("AGENT_KERNEL_VERIFIER_IMAGE_OK");
     let Some(agent_a_memory) = PreparedAgentMemory::prepare(boot_info, agent_a_image) else {
@@ -109,11 +127,17 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(fault_memory) = PreparedAgentMemory::prepare(boot_info, fault_verified_image) else {
         fatal_boot("AGENT_KERNEL_FAULT_USER_MEMORY_ERROR");
     };
+    let Some(fault_handler_memory) =
+        PreparedAgentMemory::prepare(boot_info, fault_handler_verified_image)
+    else {
+        fatal_boot("AGENT_KERNEL_FAULT_HANDLER_USER_MEMORY_ERROR");
+    };
     validate_agent_memory(
         &agent_a_memory,
         &agent_b_memory,
         &verifier_memory,
         &fault_memory,
+        &fault_handler_memory,
     );
     serial_write_line("AGENT_KERNEL_AGENT_IMAGE_LOAD_OK");
     let Some(cpu_runtime) = AgentCpuRuntime::install(&privilege_boundary, agent_a_memory.roots())
@@ -132,13 +156,23 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Some(fault_cpu) = cpu_runtime.prepare(fault_memory, fault_context) else {
         fatal_boot("AGENT_KERNEL_FAULT_CPU_SETUP_ERROR");
     };
+    let Some(fault_handler_cpu) = cpu_runtime.prepare(fault_handler_memory, fault_handler_context)
+    else {
+        fatal_boot("AGENT_KERNEL_FAULT_HANDLER_CPU_SETUP_ERROR");
+    };
     let mut native_runtime = NativeAgentRuntime::new();
-    for cpu in [agent_a_cpu, agent_b_cpu, verifier_cpu, fault_cpu] {
+    for cpu in [
+        agent_a_cpu,
+        agent_b_cpu,
+        verifier_cpu,
+        fault_cpu,
+        fault_handler_cpu,
+    ] {
         if native_runtime.register_prepared(cpu).is_some() {
             fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
         }
     }
-    if native_runtime.len() != 4 {
+    if native_runtime.len() != 5 {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_STORE_ERROR");
     }
     let runtime_plan = runtime_loop::RuntimeLoopPlan::new(
@@ -151,6 +185,8 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fault_flow,
         fault_image,
         fault_context,
+        fault_handler_flow,
+        fault_handler_image,
     );
     if runtime_loop::run(&mut booted, &mut native_runtime, runtime_plan).is_none() {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
@@ -174,15 +210,18 @@ fn validate_agent_memory(
     second: &PreparedAgentMemory,
     verifier: &PreparedAgentMemory,
     fault: &PreparedAgentMemory,
+    fault_handler: &PreparedAgentMemory,
 ) {
     serial_write_line("AGENT_KERNEL_AGENT_USER_MEMORY_OK");
     if !first.kernel_address_space_active()
         || !second.kernel_address_space_active()
         || !verifier.kernel_address_space_active()
         || !fault.kernel_address_space_active()
+        || !fault_handler.kernel_address_space_active()
         || first.roots().kernel_cr3() != second.roots().kernel_cr3()
         || first.roots().kernel_cr3() != verifier.roots().kernel_cr3()
         || first.roots().kernel_cr3() != fault.roots().kernel_cr3()
+        || first.roots().kernel_cr3() != fault_handler.roots().kernel_cr3()
     {
         fatal_boot("AGENT_KERNEL_AGENT_ADDRESS_SPACE_ERROR");
     }
@@ -193,14 +232,20 @@ fn validate_agent_memory(
         || !first.is_disjoint_from(fault)
         || !second.is_disjoint_from(fault)
         || !verifier.is_disjoint_from(fault)
+        || !first.is_disjoint_from(fault_handler)
+        || !second.is_disjoint_from(fault_handler)
+        || !verifier.is_disjoint_from(fault_handler)
+        || !fault.is_disjoint_from(fault_handler)
         || !first.signal_is_clear()
         || !second.signal_is_clear()
         || !verifier.signal_is_clear()
         || !fault.signal_is_clear()
+        || !fault_handler.signal_is_clear()
     {
         fatal_boot("AGENT_KERNEL_MULTI_AGENT_MEMORY_ERROR");
     }
     serial_write_line("AGENT_KERNEL_VERIFIER_MEMORY_OK");
+    serial_write_line("AGENT_KERNEL_FAULT_HANDLER_MEMORY_OK");
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_MEMORY_OK");
 }
 

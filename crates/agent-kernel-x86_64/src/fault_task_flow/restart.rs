@@ -46,12 +46,12 @@ impl PreparedFaultTaskFlow {
         expected_fault: NativeAgentFault,
     ) -> Option<()> {
         let expected_generation = expected_restart_generation(expected_fault)?;
-        if !runtime.is_empty()
-            || report.faulted_len() != 1
+        if report.faulted_len() != 1
             || !self.faulted_state_valid(booted, expected_fault, expected_generation)
         {
             return None;
         }
+        let parked_before = runtime.len();
         let context = self.call_context()?;
         let fault = booted
             .kernel()
@@ -87,6 +87,7 @@ impl PreparedFaultTaskFlow {
             || event.fault_detail != Some(expected_fault.detail())
             || !self.recovered_state_valid(booted, fault, expected_ticks, expected_records)
             || runtime.register_prepared(prepared).is_some()
+            || runtime.len() != parked_before.checked_add(1)?
         {
             return None;
         }

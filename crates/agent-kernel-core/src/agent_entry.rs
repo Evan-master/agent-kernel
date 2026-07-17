@@ -11,6 +11,7 @@ pub enum AgentEntryKind {
     Supervisor,
     Worker,
     Verifier,
+    FaultHandler,
     Driver,
 }
 

@@ -1,6 +1,6 @@
 use agent_kernel_core::{
-    AgentId, AgentImageId, CapabilityId, MessageId, MessageKind, MessagePayload, MessageRecord,
-    MessageStatus, TaskId,
+    AgentId, AgentImageId, CapabilityId, FaultId, IntentId, MessageId, MessageKind, MessagePayload,
+    MessageRecord, MessageStatus, ResourceId, TaskId,
 };
 use agent_kernel_x86_64::{
     agent_call::{
@@ -199,6 +199,71 @@ fn mailbox_replies_preserve_context_and_return_bounded_records() {
         ],
         [0; 7]
     );
+}
+
+#[test]
+fn mailbox_receive_reply_exposes_bounded_fault_route_payload() {
+    let record = MessageRecord {
+        id: MessageId::new(2),
+        sender: AgentId::new(1),
+        recipient: RECIPIENT,
+        kind: MessageKind::Fault,
+        payload: MessagePayload {
+            resource: Some(ResourceId::new(1)),
+            capability: None,
+            intent: Some(IntentId::new(4)),
+            task: Some(TaskId::new(4)),
+            action: None,
+            fault: Some(FaultId::new(4)),
+        },
+        status: MessageStatus::Received,
+    };
+    let mut receive = receive_frame();
+
+    receiver_context()
+        .encode_message_receive_reply(&mut receive, NONCE, record)
+        .expect("fault route payload should fit the bounded reply");
+
+    assert_common_reply(&receive, AGENT_CALL_RECEIVE_MESSAGE, [4, 2, 4, NONCE]);
+    assert_eq!(
+        [
+            receive.r10,
+            receive.r11,
+            receive.r12,
+            receive.r13,
+            receive.r14,
+            receive.r15,
+            receive.rbp,
+        ],
+        [2, 1, AGENT_CALL_MESSAGE_FAULT, 4, 1, 4, 4]
+    );
+
+    for invalid in [
+        MessagePayload {
+            fault: Some(FaultId::new(0)),
+            ..record.payload
+        },
+        MessagePayload {
+            resource: Some(ResourceId::new(0)),
+            ..record.payload
+        },
+        MessagePayload {
+            intent: Some(IntentId::new(0)),
+            ..record.payload
+        },
+    ] {
+        assert_eq!(
+            receiver_context().encode_message_receive_reply(
+                &mut receive,
+                NONCE,
+                MessageRecord {
+                    payload: invalid,
+                    ..record
+                }
+            ),
+            Err(AgentCallDecodeError::InvalidPayload)
+        );
+    }
 }
 
 fn context() -> AgentCallContext {

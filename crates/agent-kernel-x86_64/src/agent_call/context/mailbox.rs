@@ -4,7 +4,8 @@
 //! emits only the fixed message fields supported by physical V0 Agents.
 
 use agent_kernel_core::{
-    AgentId, MessageId, MessageKind, MessagePayload, MessageRecord, MessageStatus, TaskId,
+    AgentId, FaultId, IntentId, MessageId, MessageKind, MessagePayload, MessageRecord,
+    MessageStatus, ResourceId, TaskId,
 };
 
 use super::AgentCallContext;
@@ -50,6 +51,9 @@ impl AgentCallContext {
         frame.r11 = message.sender.raw();
         frame.r12 = encode_message_kind(message.kind);
         frame.r13 = message.payload.task.map_or(0, TaskId::raw);
+        frame.r14 = message.payload.resource.map_or(0, ResourceId::raw);
+        frame.r15 = message.payload.fault.map_or(0, FaultId::raw);
+        frame.rbp = message.payload.intent.map_or(0, IntentId::raw);
         Ok(())
     }
 
@@ -119,9 +123,10 @@ impl AgentCallContext {
 
 const fn native_message_payload_supported(payload: MessagePayload) -> bool {
     (payload.task.is_none() || matches!(payload.task, Some(task) if task.raw() != 0))
-        && payload.resource.is_none()
+        && (payload.resource.is_none()
+            || matches!(payload.resource, Some(resource) if resource.raw() != 0))
+        && (payload.intent.is_none() || matches!(payload.intent, Some(intent) if intent.raw() != 0))
+        && (payload.fault.is_none() || matches!(payload.fault, Some(fault) if fault.raw() != 0))
         && payload.capability.is_none()
-        && payload.intent.is_none()
         && payload.action.is_none()
-        && payload.fault.is_none()
 }

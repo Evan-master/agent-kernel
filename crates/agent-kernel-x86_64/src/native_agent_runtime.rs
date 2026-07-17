@@ -14,7 +14,7 @@ use crate::agent_cpu::{
     PreemptedAgentCpu, PreparedAgentCpu, ResumableAgentCpu, WaitingAgentCallCpu,
 };
 
-const NATIVE_AGENT_CAPACITY: usize = 4;
+const NATIVE_AGENT_CAPACITY: usize = 5;
 
 pub(crate) enum NativeAgentContext {
     Prepared(PreparedAgentCpu),

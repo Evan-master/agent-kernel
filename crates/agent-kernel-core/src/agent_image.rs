@@ -23,6 +23,7 @@ pub enum AgentImageKind {
     Supervisor,
     Worker,
     Verifier,
+    FaultHandler,
     Driver,
 }
 

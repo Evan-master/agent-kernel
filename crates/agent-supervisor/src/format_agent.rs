@@ -83,6 +83,7 @@ fn image_kind_label(kind: AgentImageKind) -> &'static str {
         AgentImageKind::Supervisor => "supervisor",
         AgentImageKind::Worker => "worker",
         AgentImageKind::Verifier => "verifier",
+        AgentImageKind::FaultHandler => "fault_handler",
         AgentImageKind::Driver => "driver",
     }
 }

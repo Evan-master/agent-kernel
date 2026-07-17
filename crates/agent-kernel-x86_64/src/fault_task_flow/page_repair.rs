@@ -9,8 +9,8 @@ use agent_kernel_core::{EventKind, FaultKind};
 
 use super::{expected_lazy_page_fault, PreparedFaultTaskFlow, FAULT_WORKER};
 use crate::{
-    native_agent_executor::NativeExecutionReport, native_agent_runtime::NativeAgentRuntime,
-    X86BootedKernel,
+    fault_handler_flow::ApprovedFaultRepair, native_agent_executor::NativeExecutionReport,
+    native_agent_runtime::NativeAgentRuntime, X86BootedKernel,
 };
 
 impl PreparedFaultTaskFlow {
@@ -23,6 +23,7 @@ impl PreparedFaultTaskFlow {
         booted: &mut X86BootedKernel,
         runtime: &mut NativeAgentRuntime,
         report: &mut NativeExecutionReport,
+        approval: ApprovedFaultRepair,
     ) -> Option<()> {
         let expected_fault = expected_lazy_page_fault();
         if !runtime.is_empty()
@@ -38,6 +39,9 @@ impl PreparedFaultTaskFlow {
             .iter()
             .find(|task| task.id == self.worker.task)?
             .last_fault?;
+        if approval.fault() != fault {
+            return None;
+        }
         let faulted = report.take_faulted(FAULT_WORKER)?;
         if faulted.context() != context
             || faulted.fault() != expected_fault

@@ -6,6 +6,7 @@
 //! kernel records and syscalls.
 
 mod evidence;
+mod handler_route;
 mod page_repair;
 mod restart;
 
@@ -52,6 +53,8 @@ pub(super) struct FaultTaskFlow;
 pub(super) struct PreparedFaultTaskFlow {
     worker: FaultWorkerTask,
 }
+
+pub(crate) use handler_route::RoutedFault;
 
 impl FaultTaskFlow {
     pub(super) fn prepare(

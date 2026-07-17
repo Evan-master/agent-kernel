@@ -78,6 +78,40 @@ fn launch_agent_records_entry_and_event() {
 }
 
 #[test]
+fn fault_handler_image_launches_only_as_first_class_fault_handler_entry() {
+    let mut core = TestCore::new();
+    let (agent, capability, resource) = prepare_agent(&mut core);
+    let image = core
+        .register_agent_image(
+            agent,
+            capability,
+            resource,
+            AgentImageKind::FaultHandler,
+            digest(0xf0),
+            1,
+            1,
+        )
+        .expect("fault handler image should register");
+    core.verify_agent_image(agent, capability, image)
+        .expect("fault handler image should verify");
+
+    core.launch_agent(
+        agent,
+        capability,
+        resource,
+        image,
+        AgentEntryKind::FaultHandler,
+        None,
+    )
+    .expect("matching fault handler entry should launch");
+
+    assert_eq!(
+        core.agent_entry(agent).expect("entry should exist").kind,
+        AgentEntryKind::FaultHandler
+    );
+}
+
+#[test]
 fn launch_agent_accepts_declared_action_intent() {
     let mut core = TestCore::new();
     let (agent, capability, resource) = prepare_agent(&mut core);

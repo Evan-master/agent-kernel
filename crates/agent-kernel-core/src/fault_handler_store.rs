@@ -121,7 +121,14 @@ impl<
         let handler = self.find_fault_handler(fault_record.resource, fault_record.kind)?;
         self.ensure_agent_active(handler.handler)?;
         self.ensure_message_capacity()?;
-        self.ensure_event_slots(2)?;
+        let waiter_index = self.find_mailbox_waiter_index(handler.handler);
+        if let Some(waiter_index) = waiter_index {
+            let waiter = self.waiters[waiter_index];
+            self.ensure_agent_admitted_for_task(waiter.agent, waiter.task)?;
+            self.ensure_not_queued(waiter.task)?;
+            self.ensure_run_queue_capacity()?;
+        }
+        self.ensure_event_slots(2 + usize::from(waiter_index.is_some()))?;
 
         let message = self.append_message(
             agent,
@@ -137,6 +144,9 @@ impl<
             },
         );
         self.record_message_event(EventKind::MessageSent, agent, handler.handler, message)?;
+        if let Some(waiter_index) = waiter_index {
+            self.wake_mailbox_waiter(waiter_index, agent, message)?;
+        }
         self.record_fault_route_event(agent, capability, fault_record, handler.handler, message)?;
         Ok(message)
     }

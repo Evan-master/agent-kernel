@@ -17,7 +17,7 @@ use crate::{
 };
 
 const NATIVE_TASK_QUANTUM: u64 = 1;
-const COMPLETED_AGENT_CAPACITY: usize = 4;
+const COMPLETED_AGENT_CAPACITY: usize = 5;
 const FAULTED_AGENT_CAPACITY: usize = 1;
 
 #[derive(Copy, Clone)]
@@ -279,32 +279,6 @@ impl NativeExecutionReport {
 
 impl NativeRuntimeEvidence {
     pub(crate) const fn proves_fault_containment_phase(self) -> bool {
-        self.dispatches == 11
-            && self.prepared == 4
-            && self.preempted == 5
-            && self.waiting == 1
-            && self.yielded == 1
-            && self.recovered_faults == 0
-            && self.quantum_expiries == 5
-            && self.returning_quantum_expiries == 1
-            && self.returning_quantum_generation == 2
-            && self.agent_faults == 1
-    }
-
-    pub(crate) const fn proves_current_boot(self) -> bool {
-        self.dispatches == 18
-            && self.prepared == 7
-            && self.preempted == 8
-            && self.waiting == 1
-            && self.yielded == 1
-            && self.recovered_faults == 1
-            && self.quantum_expiries == 8
-            && self.returning_quantum_expiries == 1
-            && self.returning_quantum_generation == 2
-            && self.agent_faults == 4
-    }
-
-    pub(crate) const fn proves_general_protection_phase(self) -> bool {
         self.dispatches == 13
             && self.prepared == 5
             && self.preempted == 6
@@ -314,10 +288,23 @@ impl NativeRuntimeEvidence {
             && self.quantum_expiries == 6
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
-            && self.agent_faults == 2
+            && self.agent_faults == 1
     }
 
-    pub(crate) const fn proves_page_fault_phase(self) -> bool {
+    pub(crate) const fn proves_current_boot(self) -> bool {
+        self.dispatches == 21
+            && self.prepared == 8
+            && self.preempted == 9
+            && self.waiting == 2
+            && self.yielded == 1
+            && self.recovered_faults == 1
+            && self.quantum_expiries == 9
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 4
+    }
+
+    pub(crate) const fn proves_general_protection_phase(self) -> bool {
         self.dispatches == 15
             && self.prepared == 6
             && self.preempted == 7
@@ -327,10 +314,10 @@ impl NativeRuntimeEvidence {
             && self.quantum_expiries == 7
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
-            && self.agent_faults == 3
+            && self.agent_faults == 2
     }
 
-    pub(crate) const fn proves_lazy_page_fault_phase(self) -> bool {
+    pub(crate) const fn proves_page_fault_phase(self) -> bool {
         self.dispatches == 17
             && self.prepared == 7
             && self.preempted == 8
@@ -338,6 +325,32 @@ impl NativeRuntimeEvidence {
             && self.yielded == 1
             && self.recovered_faults == 0
             && self.quantum_expiries == 8
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 3
+    }
+
+    pub(crate) const fn proves_lazy_page_fault_phase(self) -> bool {
+        self.dispatches == 19
+            && self.prepared == 8
+            && self.preempted == 9
+            && self.waiting == 1
+            && self.yielded == 1
+            && self.recovered_faults == 0
+            && self.quantum_expiries == 9
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 4
+    }
+
+    pub(crate) const fn proves_fault_handler_decision_phase(self) -> bool {
+        self.dispatches == 20
+            && self.prepared == 8
+            && self.preempted == 9
+            && self.waiting == 2
+            && self.yielded == 1
+            && self.recovered_faults == 0
+            && self.quantum_expiries == 9
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
             && self.agent_faults == 4
