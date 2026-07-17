@@ -15,5 +15,5 @@
   compatibility/non-goal documentation.
 - [x] Run formatting, full tests, Supervisor, no-std checks, scoped Clippy,
   debug/release QEMU, and release disassembly inspection.
-- [ ] Commit, merge, publish main, clean the feature branch, and close only this
+- [x] Commit, merge, publish main, clean the feature branch, and close only this
   milestone while keeping the complete Agent Kernel goal active.

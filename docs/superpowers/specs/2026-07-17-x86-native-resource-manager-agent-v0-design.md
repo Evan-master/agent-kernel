@@ -2,7 +2,8 @@
 
 ## Status
 
-Implemented and validated locally on 2026-07-17; publication is pending.
+Implemented, validated, and published to the public `main` branch on
+2026-07-17 in commit `7c453a0`.
 
 ## Purpose
 
