@@ -1,7 +1,7 @@
 //! Read-only semantic, authority, event, and physical proof for Resource Manager V0.
 
 use agent_kernel_core::{
-    EventKind, Operation, OperationSet, ResourceKind, ResourceStatus, TaskStatus,
+    EventKind, KernelError, Operation, OperationSet, ResourceKind, ResourceStatus, TaskStatus,
 };
 
 use super::{ResourceManagerTask, RESOURCE_MANAGER};
@@ -36,17 +36,21 @@ pub(super) fn completed(
     let Ok(capability) = kernel.capability(image.capability()) else {
         return false;
     };
+    let Ok(derived) = kernel.capability(image.derived_capability()) else {
+        return false;
+    };
     let Ok(authority) = kernel.capability(manager.resource_authority) else {
         return false;
     };
     let child_operations = OperationSet::only(Operation::Observe)
         .with(Operation::Act)
+        .with(Operation::Delegate)
         .with(Operation::Rollback);
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 5
-        && completed.address_space_switch_count() == 10
+        && completed.call_count() == 7
+        && completed.address_space_switch_count() == 14
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -67,6 +71,12 @@ pub(super) fn completed(
         && !capability.revoked
         && capability.task.is_none()
         && capability.parent.is_none()
+        && derived.agent == image.target_agent()
+        && derived.resource == image.resource()
+        && derived.operations == OperationSet::only(Operation::Observe)
+        && derived.revoked
+        && derived.task.is_none()
+        && derived.parent == Some(image.capability())
         && authority.agent == RESOURCE_MANAGER
         && authority.resource == booted.report().bootstrap_resource
         && authority.operations == OperationSet::only(Operation::Act)
@@ -74,6 +84,10 @@ pub(super) fn completed(
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
         && kernel.resources().len() == 2
+        && matches!(
+            kernel.capability(agent_kernel_core::CapabilityId::new(13)),
+            Err(KernelError::CapabilityNotFound)
+        )
         && kernel.run_queue().is_empty()
         && events_prove_lifecycle(booted, manager, image)
 }
@@ -90,6 +104,8 @@ fn events_prove_lifecycle(
         EventKind::TaskDispatched,
         EventKind::ResourceCreated,
         EventKind::CapabilityGranted,
+        EventKind::CapabilityDerived,
+        EventKind::CapabilityRevoked,
         EventKind::ResourceRetired,
         EventKind::TaskResultSubmitted,
         EventKind::TaskCompleted,
@@ -109,9 +125,21 @@ fn events_prove_lifecycle(
         && tail[4].capability == Some(image.capability())
         && tail[5].resource == Some(image.resource())
         && tail[5].capability == Some(image.capability())
+        && tail[6].agent == RESOURCE_MANAGER
         && tail[6].resource == Some(image.resource())
-        && tail[6].capability == Some(image.capability())
-        && tail[7].task == Some(manager.task)
-        && tail[7].task_result == Some(image.result())
-        && tail[8].task == Some(manager.task)
+        && tail[6].capability == Some(image.derived_capability())
+        && tail[6].source_capability == Some(image.capability())
+        && tail[6].operations == OperationSet::only(Operation::Observe)
+        && tail[6].target_agent == Some(image.target_agent())
+        && tail[7].agent == RESOURCE_MANAGER
+        && tail[7].resource == Some(image.resource())
+        && tail[7].capability == Some(image.derived_capability())
+        && tail[7].source_capability == Some(image.capability())
+        && tail[7].operations == OperationSet::only(Operation::Observe)
+        && tail[7].target_agent == Some(image.target_agent())
+        && tail[8].resource == Some(image.resource())
+        && tail[8].capability == Some(image.capability())
+        && tail[9].task == Some(manager.task)
+        && tail[9].task_result == Some(image.result())
+        && tail[10].task == Some(manager.task)
 }

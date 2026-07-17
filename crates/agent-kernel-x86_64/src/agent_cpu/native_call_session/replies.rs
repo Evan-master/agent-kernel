@@ -146,6 +146,35 @@ impl PendingAgentCallCpu {
         Some(ResumableAgentCpu(self.session))
     }
 
+    pub(crate) fn acknowledge_capability_derived(
+        mut self,
+        capability: CapabilityId,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::DeriveCapability { .. })
+        })?;
+        self.session
+            .context
+            .encode_capability_derived_reply(self.session.frame.frame_mut(), nonce, capability)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_capability_revoked(
+        mut self,
+        source: CapabilityId,
+        target: CapabilityId,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::RevokeDerivedCapability { .. })
+        })?;
+        self.session
+            .context
+            .encode_capability_revoked_reply(self.session.frame.frame_mut(), nonce, source, target)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
     pub(crate) fn wait(self, waiter: WaiterId) -> Option<WaitingAgentCallCpu> {
         (waiter.raw() != 0
             && self

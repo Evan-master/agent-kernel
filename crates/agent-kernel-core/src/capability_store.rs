@@ -99,25 +99,6 @@ impl<
         Ok(id)
     }
 
-    pub fn revoke_capability(&mut self, capability: CapabilityId) -> Result<(), KernelError> {
-        let cap = self.find_capability(capability)?;
-        self.ensure_event_slots(1)?;
-
-        self.find_capability_mut(capability)?.revoked = true;
-        self.record_capability_event(
-            EventKind::CapabilityRevoked,
-            cap.agent,
-            cap.resource,
-            capability,
-            None,
-            cap.operations,
-            cap.task,
-            None,
-            None,
-        )?;
-        Ok(())
-    }
-
     pub fn capability(&self, capability: CapabilityId) -> Result<Capability, KernelError> {
         self.find_capability(capability)
     }

@@ -5,6 +5,7 @@
 //! performs no privileged operation and trusts identity only from an explicit
 //! scheduler-owned `AgentCallContext`.
 
+mod capability;
 mod context;
 mod mailbox;
 mod resource;
@@ -33,6 +34,8 @@ pub const AGENT_CALL_RECEIVE_MESSAGE: u64 = 8;
 pub const AGENT_CALL_ACKNOWLEDGE_MESSAGE: u64 = 9;
 pub const AGENT_CALL_CREATE_RESOURCE: u64 = 10;
 pub const AGENT_CALL_RETIRE_RESOURCE: u64 = 11;
+pub const AGENT_CALL_DERIVE_CAPABILITY: u64 = 12;
+pub const AGENT_CALL_REVOKE_DERIVED_CAPABILITY: u64 = 13;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
 pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
 pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
@@ -57,6 +60,8 @@ pub enum AgentCallOperation {
     AcknowledgeMessage,
     CreateResource,
     RetireResource,
+    DeriveCapability,
+    RevokeDerivedCapability,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -137,6 +142,23 @@ pub enum AgentCallRequest {
         resource: ResourceId,
         capability: CapabilityId,
     },
+    DeriveCapability {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        source: CapabilityId,
+        target: AgentId,
+        operations: OperationSet,
+    },
+    RevokeDerivedCapability {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        source: CapabilityId,
+        target: CapabilityId,
+    },
 }
 
 impl AgentCallRequest {
@@ -159,6 +181,8 @@ impl AgentCallRequest {
             AGENT_CALL_ACKNOWLEDGE_MESSAGE => AgentCallOperation::AcknowledgeMessage,
             AGENT_CALL_CREATE_RESOURCE => AgentCallOperation::CreateResource,
             AGENT_CALL_RETIRE_RESOURCE => AgentCallOperation::RetireResource,
+            AGENT_CALL_DERIVE_CAPABILITY => AgentCallOperation::DeriveCapability,
+            AGENT_CALL_REVOKE_DERIVED_CAPABILITY => AgentCallOperation::RevokeDerivedCapability,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -233,6 +257,8 @@ impl AgentCallRequest {
             AgentCallOperation::AcknowledgeMessage => mailbox::decode_acknowledgement(frame),
             AgentCallOperation::CreateResource => resource::decode_create(frame),
             AgentCallOperation::RetireResource => resource::decode_retire(frame),
+            AgentCallOperation::DeriveCapability => capability::decode_derive(frame),
+            AgentCallOperation::RevokeDerivedCapability => capability::decode_revoke(frame),
         }
     }
 
@@ -249,6 +275,8 @@ impl AgentCallRequest {
             Self::AcknowledgeMessage { .. } => AgentCallOperation::AcknowledgeMessage,
             Self::CreateResource { .. } => AgentCallOperation::CreateResource,
             Self::RetireResource { .. } => AgentCallOperation::RetireResource,
+            Self::DeriveCapability { .. } => AgentCallOperation::DeriveCapability,
+            Self::RevokeDerivedCapability { .. } => AgentCallOperation::RevokeDerivedCapability,
         }
     }
 }

@@ -20,7 +20,7 @@ resource_manager_entry:
     mov r10d, 10
     mov r11d, 1
     mov r12d, 3
-    mov r13d, 19
+    mov r13d, 51
     xor r14d, r14d
     xor r15d, r15d
     xor ebp, ebp
@@ -34,8 +34,48 @@ resource_manager_entry:
     cmp r11, 11
     jne .halt
 
+    mov ecx, 12
+    xor edx, edx
+    mov r10d, 11
+    mov r11d, 2
+    mov r12d, 1
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 12
+    jne .halt
+    cmp r10, 12
+    jne .halt
+    test r11, r11
+    jne .halt
+
+    mov ecx, 13
+    xor edx, edx
+    mov r10d, 11
+    mov r11d, 12
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 13
+    jne .halt
+    cmp r10, 12
+    jne .halt
+    cmp r11, 11
+    jne .halt
+
     mov ecx, 11
     xor edx, edx
+    mov r10d, 2
+    mov r11d, 11
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -53,8 +93,8 @@ resource_manager_entry:
 
     mov ecx, 4
     xor edx, edx
-    mov r10d, 0xc001
-    movabs r11, 0x000000020000000b
+    mov r10d, 0xc002
+    movabs r11, 0x00000002000b000c
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d

@@ -2,16 +2,17 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Agent Kernel is an experimental, agent-native operating-system kernel written
-in Rust. It is not a Linux distribution, a shell-controlling agent, or a POSIX
-compatibility layer. Its primary kernel objects are Agents, Resources,
-Capabilities, Intents, Tasks, Events, Verification, and Rollback.
+Agent Kernel is an agent-native operating-system kernel written in Rust. Its
+primary kernel objects are Agents, Resources, Capabilities, Intents, Tasks,
+Events, Verification, and Rollback. The architecture is defined independently
+of Linux, shell automation, and POSIX compatibility.
 
-> **Project status:** early research prototype. It boots a freestanding x86_64
-> kernel in QEMU and executes isolated ring-3 Agent Capsules, but it is not yet
-> a general-purpose or production operating system.
+> **Development status:** active kernel development. The freestanding x86_64
+> target boots in QEMU and executes isolated ring-3 Agent Capsules. The ABI and
+> architecture are under active revision; production stability is planned for
+> a later stage.
 
-## Why Agent-Native
+## System Model
 
 Traditional operating systems give programs process, file, socket, and user
 abstractions. An agent-first system needs a different control plane:
@@ -30,10 +31,10 @@ There is no ambient superuser inside the native model. High authority is
 possible, but it must be represented by explicit capabilities and remains
 observable in the event log.
 
-## What Runs Today
+## Current Implementation
 
-The current BIOS/QEMU proof boots without Linux or another host OS underneath
-the kernel and demonstrates:
+The reference BIOS/QEMU configuration boots directly on virtual hardware and
+currently provides:
 
 - a permanent GDT, TSS, IDT, ring-0/ring-3 boundary, and private Agent CR3 roots;
 - six isolated native Agent contexts: two Workers, a Verifier, a Fault Worker,
@@ -50,12 +51,13 @@ the kernel and demonstrates:
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
 - a real ring-3 Resource Manager that creates a child Service through delegated
-  `Act` authority, receives a new capability, retires the Service through
-  `Rollback`, and completes with both kernel handles;
+  `Act` authority, derives attenuated `Observe` authority for another Agent,
+  revokes that direct child through `Delegate`, retires the Service through
+  `Rollback`, and completes with all kernel handles;
 - a kernel-authorized Driver flow from UART interrupt through endpoint lookup,
   immutable HAL request, Port I/O, result recording, and invocation completion.
 
-The deterministic terminal proof currently requires exactly:
+The reference validation profile enforces these deterministic invariants:
 
 | Evidence | Count |
 | --- | ---: |
@@ -65,11 +67,12 @@ The deterministic terminal proof currently requires exactly:
 | Physical quantum expiries | 10 |
 | Contained Agent faults | 4 |
 | Resources after Manager execution | 2 |
-| Capabilities after Manager execution | 11 |
-| Ordered kernel events after Driver completion | 169 |
+| Capabilities after Manager execution | 12 |
+| Ordered kernel events after Driver completion | 171 |
 
-`scripts/run-qemu.sh` checks every event in order and rejects missing markers,
-extra events, wrong QEMU exit status, or any fail-closed boot path.
+`scripts/run-qemu.sh` validates every event in order and rejects missing
+markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
+path.
 
 ## Architecture
 
@@ -88,9 +91,9 @@ flowchart TB
     Supervisor["Userspace supervisor / future model runtime"] --> Facade
 ```
 
-The kernel is deliberately deterministic and small. LLM inference, prompts,
-remote model calls, and high-level planning belong in a userspace Supervisor,
-not in kernel space.
+The kernel remains deterministic and compact. A userspace Supervisor owns LLM
+inference, prompts, remote model calls, and high-level planning; kernel space
+owns deterministic execution and authority primitives.
 
 ## Workspace
 
@@ -100,12 +103,12 @@ not in kernel space.
 | `agent-kernel` | `no_std` syscall-style facade over the core |
 | `agent-kernel-hal` | Immutable, kernel-authorized device request contract |
 | `agent-kernel-boot` | Deterministic bootstrap handoff and fixed capacities |
-| `agent-kernel-x86_64` | Freestanding x86_64 boot, isolation, interrupts, faults, Agent Calls, and QEMU proof |
+| `agent-kernel-x86_64` | Freestanding x86_64 boot, isolation, interrupts, faults, Agent Calls, and QEMU validation |
 | `agent-kernel-image` | Host utility that builds the BIOS disk image |
 | `agent-supervisor` | Host-side userspace simulation and virtual device backend |
 
-All kernel stores use fixed capacities. The core and facade do not use heap
-allocation, host files, sockets, threads, randomness, or hidden mutable globals.
+All kernel stores use fixed capacities. The core and facade are heap-free and
+host-independent, with explicit state ownership and deterministic inputs.
 
 ## Agent Call ABI
 
@@ -126,6 +129,8 @@ and nonce state before it reaches the facade.
 | `AcknowledgeMessage` | 9 | Acknowledge the received message |
 | `CreateResource` | 10 | Create a child Resource through explicit parent authority |
 | `RetireResource` | 11 | Retire a Resource through its `Rollback` capability |
+| `DeriveCapability` | 12 | Attenuate source authority for another registered Agent |
+| `RevokeDerivedCapability` | 13 | Revoke one direct child through its `Delegate` source |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -139,7 +144,7 @@ stale nonces, wrong identities, and non-zero reserved registers fail closed.
 - the repository's pinned nightly toolchain, `rust-src`, LLVM tools, and
   `x86_64-unknown-none` target (installed automatically from
   `rust-toolchain.toml` by rustup-managed Cargo);
-- `qemu-system-x86_64` for the bare-metal proof.
+- `qemu-system-x86_64` for the freestanding x86_64 validation target.
 
 On macOS, QEMU can be installed with:
 
@@ -158,7 +163,7 @@ cargo test --workspace
 cargo run -p agent-supervisor
 ```
 
-### Boot In QEMU
+### Run The x86_64 Validation Target
 
 ```bash
 scripts/run-qemu.sh
@@ -166,14 +171,15 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 169 events, and treat
+validate the complete serial transcript, require exactly 171 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run ends
 with:
 
 ```text
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
+AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[169] driver_invocation_completed
+event[171] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -183,17 +189,14 @@ SUPERVISOR_HANDOFF_READY
 - Task-scoped capabilities cannot silently become generic Resource authority.
 - Derived authority cannot exceed its source and is invalidated by ancestor
   revocation.
-- Architecture adapters call public facade methods; they do not mutate core
-  stores directly.
+- Architecture adapters route every mutation through public facade methods.
 - Capacity checks occur before multi-record mutations so failures remain atomic.
 - Retired objects remain queryable for audit but reject future active use.
 - Malformed Capsules, calls, CPU frames, event sequences, or physical ownership
-  evidence terminate the QEMU proof instead of falling back to permissive
-  behavior.
+  evidence terminate the validation run under the fail-closed policy.
 
-This project explores high-authority Agents. The design goal is not to reduce
-their authority to ordinary application permissions; it is to make broad
-authority explicit, composable, revocable, and auditable.
+High-authority Agents receive explicit, composable, revocable, and auditable
+authority.
 
 ## Implemented And Planned
 
@@ -203,40 +206,39 @@ authority explicit, composable, revocable, and auditable.
   Checkpoint, Rollback, Message, Fault, Driver, Memory Cell, Namespace, and
   Event primitives;
 - capability grant, attenuation, task delegation, source-revocation
-  propagation, resource ownership, and retirement;
+  propagation, authenticated direct-child revocation, resource ownership, and
+  retirement;
 - fixed-capacity scheduling, wait/wake, mailbox IPC, fault policy, image
   verification, runtime admission, and Driver invocation lifecycle;
 - freestanding x86_64 isolation, timer preemption, fault containment/recovery,
-  and native resource lifecycle calls.
+  native resource lifecycle calls, and native cross-Agent authority control.
 
-### Not Yet Implemented
+### Planned
 
 - a general physical/virtual memory manager or dynamic userspace allocator;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
-- an Agent package/application format beyond the bounded Capsule prototype;
+- an Agent package/application format beyond the current bounded Capsule format;
 - a production userspace Supervisor, model runtime, or policy planner;
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Resource Manager design](docs/superpowers/specs/2026-07-17-x86-native-resource-manager-agent-v0-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-resource-manager-agent-v0.md)
+See the current [Capability Manager design](docs/superpowers/specs/2026-07-17-x86-native-capability-manager-v0-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-capability-manager-v0.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
 ## Contributing
 
-This is a public repository. Anyone may fork it and submit a Pull Request, but
-public visibility does not grant push or merge access. Repository maintainers
-decide what enters `main`.
+Before changing code, read [AGENTS.md](AGENTS.md). Contributions must preserve
+the kernel architecture and validation contracts. In particular:
 
-Before changing code, read [AGENTS.md](AGENTS.md). In particular:
-
-- keep the native model Agent-first rather than POSIX-first;
+- keep the native model Agent-first and confine POSIX support to compatibility
+  layers;
 - preserve `no_std`, determinism, fixed-capacity storage, and explicit events;
 - add failing tests before new runtime behavior;
-- never add capability bypasses or hidden privileged mutation paths;
-- run the workspace, Supervisor, and relevant QEMU proof before publishing.
+- route every privileged mutation through explicit capability checks;
+- run the workspace, Supervisor, and relevant QEMU validation before publishing.
 
 ## License
 

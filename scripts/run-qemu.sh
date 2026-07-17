@@ -78,6 +78,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_COUNTERS_OK" \
   "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK" \
+  "AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
@@ -245,19 +246,21 @@ for expected in \
   "event[154] task_dispatched" \
   "event[155] resource_created" \
   "event[156] capability_granted" \
-  "event[157] resource_retired" \
-  "event[158] task_result_submitted" \
-  "event[159] task_completed" \
-  "event[160] device_event_raised" \
-  "event[161] device_event_delivered" \
-  "event[162] driver_invocation_queued" \
-  "event[163] driver_invocation_dispatched" \
-  "event[164] driver_invocation_ticked" \
-  "event[165] device_event_acknowledged" \
-  "event[166] driver_command_submitted" \
-  "event[167] driver_command_dispatched" \
-  "event[168] driver_command_completed" \
-  "event[169] driver_invocation_completed" \
+  "event[157] capability_derived" \
+  "event[158] capability_revoked" \
+  "event[159] resource_retired" \
+  "event[160] task_result_submitted" \
+  "event[161] task_completed" \
+  "event[162] device_event_raised" \
+  "event[163] device_event_delivered" \
+  "event[164] driver_invocation_queued" \
+  "event[165] driver_invocation_dispatched" \
+  "event[166] driver_invocation_ticked" \
+  "event[167] device_event_acknowledged" \
+  "event[168] driver_command_submitted" \
+  "event[169] driver_command_dispatched" \
+  "event[170] driver_command_completed" \
+  "event[171] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -267,7 +270,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 169 ]]; then
-  printf 'expected exactly 169 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 171 ]]; then
+  printf 'expected exactly 171 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

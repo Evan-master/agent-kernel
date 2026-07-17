@@ -4,6 +4,7 @@
 //! replies resume the same owned frame; wait, yield, and completion return
 //! control to the outer scheduler loop.
 
+mod capability;
 mod mailbox;
 mod resource;
 mod task;
@@ -64,6 +65,15 @@ pub(super) fn run(
                 capability,
                 ..
             } => resource::retire(booted, pending, resource, capability)?,
+            AgentCallRequest::DeriveCapability {
+                source,
+                target,
+                operations,
+                ..
+            } => capability::derive(booted, pending, source, target, operations)?,
+            AgentCallRequest::RevokeDerivedCapability { source, target, .. } => {
+                capability::revoke(booted, pending, source, target)?
+            }
             AgentCallRequest::Yield { .. } => {
                 let yielded = task::yield_running(booted, pending)?;
                 if runtime.park_yielded_call(yielded).is_some() {

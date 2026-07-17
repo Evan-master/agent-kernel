@@ -3,6 +3,7 @@
 //! Replies expose only Agent, Task, Image, and nonce. The delegated capability
 //! remains private to trusted kernel code and participates in context equality.
 
+mod capability;
 mod mailbox;
 mod resource;
 
@@ -161,6 +162,20 @@ impl AgentCallContext {
                 ..
             }
             | AgentCallRequest::RetireResource {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::DeriveCapability {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::RevokeDerivedCapability {
                 agent,
                 task,
                 image,
