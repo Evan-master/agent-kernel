@@ -18,4 +18,4 @@
 - [x] Update README architecture, boot flow, runtime evidence, and non-goals.
 - [x] Run formatting, full tests, Supervisor, no_std checks, scoped Clippy,
   debug/release QEMU, and release disassembly inspection.
-- [ ] Commit, merge, publish main, clean the branch, and close the milestone.
+- [x] Commit, merge, publish main, clean the branch, and close the milestone.

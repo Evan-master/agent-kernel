@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented and validated on 2026-07-17; publication is pending.
+Implemented, validated, and published to private `main` on 2026-07-17.
 
 ## Purpose
 
