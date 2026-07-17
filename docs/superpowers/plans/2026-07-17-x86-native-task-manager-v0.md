@@ -12,5 +12,5 @@
 - [x] Update bilingual README status, ABI tables, and deterministic counts.
 - [x] Run formatting, full tests, Supervisor, no-std checks, scoped Clippy,
   debug/release QEMU, Capsule extraction, and disassembly inspection.
-- [ ] Commit, merge, publish public main, clean the feature branch, and close
+- [x] Commit, merge, publish public main, clean the feature branch, and close
   this milestone while keeping the complete Agent Kernel goal active.
