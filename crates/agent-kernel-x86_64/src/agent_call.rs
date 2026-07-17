@@ -7,10 +7,12 @@
 
 mod context;
 mod mailbox;
+mod resource;
 mod transcript;
 
 use agent_kernel_core::{
-    AgentId, AgentImageId, MessageId, MessageKind, MessagePayload, TaskId, TaskResult,
+    AgentId, AgentImageId, CapabilityId, MessageId, MessageKind, MessagePayload, OperationSet,
+    ResourceId, ResourceKind, TaskId, TaskResult,
 };
 
 use crate::context::PrivilegeInterruptStackFrame;
@@ -29,10 +31,17 @@ pub const AGENT_CALL_VERIFY_TASK: u64 = 6;
 pub const AGENT_CALL_SEND_MESSAGE: u64 = 7;
 pub const AGENT_CALL_RECEIVE_MESSAGE: u64 = 8;
 pub const AGENT_CALL_ACKNOWLEDGE_MESSAGE: u64 = 9;
+pub const AGENT_CALL_CREATE_RESOURCE: u64 = 10;
+pub const AGENT_CALL_RETIRE_RESOURCE: u64 = 11;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
 pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
 pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
 pub const AGENT_CALL_MESSAGE_FAULT: u64 = 4;
+pub const AGENT_CALL_RESOURCE_WORKSPACE: u64 = 1;
+pub const AGENT_CALL_RESOURCE_MEMORY: u64 = 2;
+pub const AGENT_CALL_RESOURCE_SERVICE: u64 = 3;
+pub const AGENT_CALL_RESOURCE_NETWORK: u64 = 4;
+pub const AGENT_CALL_RESOURCE_DEVICE: u64 = 5;
 pub const AGENT_CALL_STATUS_OK: u64 = 0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -46,6 +55,8 @@ pub enum AgentCallOperation {
     SendMessage,
     ReceiveMessage,
     AcknowledgeMessage,
+    CreateResource,
+    RetireResource,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -108,6 +119,24 @@ pub enum AgentCallRequest {
         nonce: u64,
         message: MessageId,
     },
+    CreateResource {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        parent: ResourceId,
+        kind: ResourceKind,
+        operations: OperationSet,
+    },
+    RetireResource {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        resource: ResourceId,
+        capability: CapabilityId,
+    },
 }
 
 impl AgentCallRequest {
@@ -128,6 +157,8 @@ impl AgentCallRequest {
             AGENT_CALL_SEND_MESSAGE => AgentCallOperation::SendMessage,
             AGENT_CALL_RECEIVE_MESSAGE => AgentCallOperation::ReceiveMessage,
             AGENT_CALL_ACKNOWLEDGE_MESSAGE => AgentCallOperation::AcknowledgeMessage,
+            AGENT_CALL_CREATE_RESOURCE => AgentCallOperation::CreateResource,
+            AGENT_CALL_RETIRE_RESOURCE => AgentCallOperation::RetireResource,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -200,6 +231,8 @@ impl AgentCallRequest {
             AgentCallOperation::SendMessage => mailbox::decode_send(frame),
             AgentCallOperation::ReceiveMessage => mailbox::decode_receive(frame),
             AgentCallOperation::AcknowledgeMessage => mailbox::decode_acknowledgement(frame),
+            AgentCallOperation::CreateResource => resource::decode_create(frame),
+            AgentCallOperation::RetireResource => resource::decode_retire(frame),
         }
     }
 
@@ -214,6 +247,8 @@ impl AgentCallRequest {
             Self::SendMessage { .. } => AgentCallOperation::SendMessage,
             Self::ReceiveMessage { .. } => AgentCallOperation::ReceiveMessage,
             Self::AcknowledgeMessage { .. } => AgentCallOperation::AcknowledgeMessage,
+            Self::CreateResource { .. } => AgentCallOperation::CreateResource,
+            Self::RetireResource { .. } => AgentCallOperation::RetireResource,
         }
     }
 }

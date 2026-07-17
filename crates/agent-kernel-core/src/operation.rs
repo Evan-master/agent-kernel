@@ -30,6 +30,8 @@ impl Operation {
 pub struct OperationSet(u16);
 
 impl OperationSet {
+    const KNOWN_BITS: u16 = (1 << 6) - 1;
+
     pub const fn empty() -> Self {
         Self(0)
     }
@@ -48,5 +50,17 @@ impl OperationSet {
 
     pub const fn is_subset_of(self, other: Self) -> bool {
         self.0 & !other.0 == 0
+    }
+
+    pub const fn bits(self) -> u16 {
+        self.0
+    }
+
+    pub const fn from_bits(bits: u16) -> Option<Self> {
+        if bits & !Self::KNOWN_BITS == 0 {
+            Some(Self(bits))
+        } else {
+            None
+        }
     }
 }

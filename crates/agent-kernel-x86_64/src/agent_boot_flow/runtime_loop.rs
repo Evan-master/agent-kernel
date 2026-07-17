@@ -15,12 +15,14 @@ use self::evidence::{
 
 use crate::{
     boot_agent_images::{
-        BootAgentImage, BootFaultHandlerImage, BootFaultWorkerImage, BootVerifierImage,
+        BootAgentImage, BootFaultHandlerImage, BootFaultWorkerImage, BootResourceManagerImage,
+        BootVerifierImage,
     },
     fault_handler_flow::PreparedFaultHandlerFlow,
     fault_task_flow::{expected_page_fault, PreparedFaultTaskFlow},
     native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
     native_agent_runtime::NativeAgentRuntime,
+    resource_manager_flow::PreparedResourceManagerFlow,
     serial_write_line,
     timer_task_flow::QueuedTimerTaskFlow,
     verifier_task_flow::PreparedVerifierFlow,
@@ -39,6 +41,8 @@ pub(super) struct RuntimeLoopPlan {
     fault_context: AgentCallContext,
     fault_handler: PreparedFaultHandlerFlow,
     fault_handler_image: BootFaultHandlerImage,
+    resource_manager: PreparedResourceManagerFlow,
+    resource_manager_image: BootResourceManagerImage,
 }
 
 impl RuntimeLoopPlan {
@@ -54,6 +58,8 @@ impl RuntimeLoopPlan {
         fault_context: AgentCallContext,
         fault_handler: PreparedFaultHandlerFlow,
         fault_handler_image: BootFaultHandlerImage,
+        resource_manager: PreparedResourceManagerFlow,
+        resource_manager_image: BootResourceManagerImage,
     ) -> Self {
         Self {
             workers,
@@ -67,6 +73,8 @@ impl RuntimeLoopPlan {
             fault_context,
             fault_handler,
             fault_handler_image,
+            resource_manager,
+            resource_manager_image,
         }
     }
 }
@@ -88,6 +96,8 @@ pub(super) fn run(
         fault_context,
         fault_handler,
         fault_handler_image,
+        resource_manager,
+        resource_manager_image,
     } = plan;
     let authority = verifier.runtime_authority()?;
     let mut report = NativeExecutionReport::new();
@@ -100,7 +110,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 3
+    if runtime.len() != 4
         || report.len() != 2
         || report.faulted_len() != 0
         || !worker_evidence_valid(&report, worker_images, worker_contexts, authority)
@@ -118,7 +128,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 3
+    if runtime.len() != 4
         || report.len() != 2
         || report.faulted_len() != 0
         || !fault_handler.waiting_after_runtime(booted)
@@ -140,7 +150,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 1
+    if runtime.len() != 2
         || report.len() != 3
         || report.faulted_len() != 1
         || !evidence.proves_fault_containment_phase()
@@ -161,7 +171,7 @@ pub(super) fn run(
         &mut report,
         NativeAgentFault::InvalidOpcode,
     )?;
-    if runtime.len() != 2 || report.faulted_len() != 0 {
+    if runtime.len() != 3 || report.faulted_len() != 0 {
         return None;
     }
     native_agent_executor::run_until_idle(
@@ -171,7 +181,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 1
+    if runtime.len() != 2
         || report.len() != 3
         || report.faulted_len() != 1
         || !evidence.proves_general_protection_phase()
@@ -185,7 +195,7 @@ pub(super) fn run(
         &mut report,
         NativeAgentFault::GeneralProtection { error_code: 0 },
     )?;
-    if runtime.len() != 2 || report.faulted_len() != 0 {
+    if runtime.len() != 3 || report.faulted_len() != 0 {
         return None;
     }
     native_agent_executor::run_until_idle(
@@ -195,7 +205,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 1
+    if runtime.len() != 2
         || report.len() != 3
         || report.faulted_len() != 1
         || !evidence.proves_page_fault_phase()
@@ -204,7 +214,7 @@ pub(super) fn run(
         return None;
     }
     fault.restart_for_runtime(booted, runtime, &mut report, expected_page_fault())?;
-    if runtime.len() != 2 || report.faulted_len() != 0 {
+    if runtime.len() != 3 || report.faulted_len() != 0 {
         return None;
     }
     native_agent_executor::run_until_idle(
@@ -214,7 +224,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if runtime.len() != 1
+    if runtime.len() != 2
         || report.len() != 3
         || report.faulted_len() != 1
         || !evidence.proves_lazy_page_fault_phase()
@@ -231,7 +241,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if !runtime.is_empty()
+    if runtime.len() != 1
         || report.len() != 4
         || report.faulted_len() != 1
         || !evidence.proves_fault_handler_decision_phase()
@@ -242,9 +252,11 @@ pub(super) fn run(
         fault_handler.approve_after_runtime(booted, &report, fault_handler_image, routed)?;
     serial_write_line("AGENT_KERNEL_NATIVE_FAULT_HANDLER_DECISION_OK");
     fault.repair_page_for_runtime(booted, runtime, &mut report, approval)?;
-    if runtime.len() != 1 || report.faulted_len() != 0 {
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_REPAIR_ADMITTED_OK");
+    if runtime.len() != 2 || report.faulted_len() != 0 {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_REPAIR_RUNTIME_OK");
     native_agent_executor::run_until_idle(
         booted,
         runtime,
@@ -252,15 +264,44 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
     )?;
-    if !runtime.is_empty() || report.len() != 5 || report.faulted_len() != 0 {
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_RECOVERY_EXECUTION_OK");
+    if runtime.len() != 1 || report.len() != 5 || report.faulted_len() != 0 {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_RECOVERY_COUNTS_OK");
     if !evidence.proves_current_boot() {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_RECOVERY_COUNTERS_OK");
     if !fault_recovery_evidence_valid(booted, &report, &fault, fault_image, fault_context) {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_READY_OK");
+    resource_manager.queue_for_runtime(booted)?;
+    serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_QUEUED_OK");
+    if native_agent_executor::run_until_idle(
+        booted,
+        runtime,
+        &mut report,
+        &mut evidence,
+        Some(authority),
+    )
+    .is_none()
+    {
+        serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_EXECUTION_ERROR");
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_EXECUTION_OK");
+    if !runtime.is_empty()
+        || report.len() != 6
+        || report.faulted_len() != 0
+        || !evidence.proves_resource_manager_phase()
+    {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_COUNTERS_OK");
+    resource_manager.completed_after_runtime(booted, &report, resource_manager_image)?;
+    serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");
     write_verifier_markers();
     Some(())
 }

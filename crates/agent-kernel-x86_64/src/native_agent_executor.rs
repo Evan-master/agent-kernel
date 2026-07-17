@@ -17,7 +17,7 @@ use crate::{
 };
 
 const NATIVE_TASK_QUANTUM: u64 = 1;
-const COMPLETED_AGENT_CAPACITY: usize = 5;
+const COMPLETED_AGENT_CAPACITY: usize = 6;
 const FAULTED_AGENT_CAPACITY: usize = 1;
 
 #[derive(Copy, Clone)]
@@ -299,6 +299,19 @@ impl NativeRuntimeEvidence {
             && self.yielded == 1
             && self.recovered_faults == 1
             && self.quantum_expiries == 9
+            && self.returning_quantum_expiries == 1
+            && self.returning_quantum_generation == 2
+            && self.agent_faults == 4
+    }
+
+    pub(crate) const fn proves_resource_manager_phase(self) -> bool {
+        self.dispatches == 23
+            && self.prepared == 9
+            && self.preempted == 10
+            && self.waiting == 2
+            && self.yielded == 1
+            && self.recovered_faults == 1
+            && self.quantum_expiries == 10
             && self.returning_quantum_expiries == 1
             && self.returning_quantum_generation == 2
             && self.agent_faults == 4

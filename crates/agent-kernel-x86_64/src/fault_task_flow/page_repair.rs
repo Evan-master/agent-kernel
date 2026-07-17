@@ -26,7 +26,7 @@ impl PreparedFaultTaskFlow {
         approval: ApprovedFaultRepair,
     ) -> Option<()> {
         let expected_fault = expected_lazy_page_fault();
-        if !runtime.is_empty()
+        if runtime.contains(FAULT_WORKER)
             || report.faulted_len() != 1
             || !self.faulted_state_valid(booted, expected_fault, 3)
         {

@@ -4,6 +4,7 @@
 //! remains private to trusted kernel code and participates in context equality.
 
 mod mailbox;
+mod resource;
 
 use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult};
 
@@ -146,6 +147,20 @@ impl AgentCallContext {
                 nonce,
             }
             | AgentCallRequest::AcknowledgeMessage {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::CreateResource {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::RetireResource {
                 agent,
                 task,
                 image,

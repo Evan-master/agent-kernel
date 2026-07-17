@@ -33,6 +33,7 @@ for expected in \
   "AGENT_KERNEL_VERIFIER_IMAGE_OK" \
   "AGENT_KERNEL_VERIFIER_MEMORY_OK" \
   "AGENT_KERNEL_FAULT_HANDLER_MEMORY_OK" \
+  "AGENT_KERNEL_RESOURCE_MANAGER_MEMORY_OK" \
   "AGENT_KERNEL_MULTI_AGENT_MEMORY_OK" \
   "AGENT_KERNEL_PIT_IRQ_OK" \
   "AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK" \
@@ -69,7 +70,14 @@ for expected in \
   "AGENT_KERNEL_NATIVE_FAULT_HANDLER_WAIT_OK" \
   "AGENT_KERNEL_NATIVE_FAULT_POLICY_ROUTE_OK" \
   "AGENT_KERNEL_NATIVE_FAULT_HANDLER_DECISION_OK" \
+  "AGENT_KERNEL_NATIVE_FAULT_REPAIR_ADMITTED_OK" \
+  "AGENT_KERNEL_NATIVE_FAULT_RECOVERY_COUNTERS_OK" \
   "AGENT_KERNEL_NATIVE_FAULT_HANDLER_AGENT_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_READY_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_QUEUED_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_EXECUTION_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_COUNTERS_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
@@ -151,85 +159,105 @@ for expected in \
   "event[68] task_accepted" \
   "event[69] fault_handler_installed" \
   "event[70] fault_policy_installed" \
-  "event[71] task_dispatched" \
-  "event[72] task_quantum_expired" \
-  "event[73] task_dispatched" \
-  "event[74] task_quantum_expired" \
-  "event[75] task_dispatched" \
-  "event[76] message_wait_started" \
-  "event[77] task_dispatched" \
-  "event[78] task_result_submitted" \
-  "event[79] message_sent" \
-  "event[80] message_wait_woken" \
-  "event[81] task_quantum_expired" \
+  "event[71] agent_registered" \
+  "event[72] intent_declared" \
+  "event[73] task_created" \
+  "event[74] intent_bound" \
+  "event[75] capability_derived" \
+  "event[76] delegation" \
+  "event[77] capability_derived" \
+  "event[78] agent_image_registered" \
+  "event[79] agent_image_verified" \
+  "event[80] agent_launched" \
+  "event[81] task_accepted" \
   "event[82] task_dispatched" \
-  "event[83] message_received" \
-  "event[84] message_acknowledged" \
-  "event[85] task_result_submitted" \
-  "event[86] task_completed" \
-  "event[87] task_dispatched" \
-  "event[88] task_yielded" \
-  "event[89] task_dispatched" \
-  "event[90] task_completed" \
-  "event[91] task_queued" \
-  "event[92] task_dispatched" \
-  "event[93] task_quantum_expired" \
-  "event[94] task_dispatched" \
-  "event[95] message_wait_started" \
-  "event[96] task_queued" \
-  "event[97] task_queued" \
+  "event[83] task_quantum_expired" \
+  "event[84] task_dispatched" \
+  "event[85] task_quantum_expired" \
+  "event[86] task_dispatched" \
+  "event[87] message_wait_started" \
+  "event[88] task_dispatched" \
+  "event[89] task_result_submitted" \
+  "event[90] message_sent" \
+  "event[91] message_wait_woken" \
+  "event[92] task_quantum_expired" \
+  "event[93] task_dispatched" \
+  "event[94] message_received" \
+  "event[95] message_acknowledged" \
+  "event[96] task_result_submitted" \
+  "event[97] task_completed" \
   "event[98] task_dispatched" \
-  "event[99] task_quantum_expired" \
+  "event[99] task_yielded" \
   "event[100] task_dispatched" \
-  "event[101] task_quantum_expired" \
-  "event[102] task_dispatched" \
-  "event[103] task_faulted" \
-  "event[104] task_dispatched" \
-  "event[105] task_result_inspected" \
-  "event[106] task_verified" \
-  "event[107] intent_fulfilled" \
-  "event[108] task_completed" \
-  "event[109] task_fault_recovered" \
-  "event[110] task_queued" \
+  "event[101] task_completed" \
+  "event[102] task_queued" \
+  "event[103] task_dispatched" \
+  "event[104] task_quantum_expired" \
+  "event[105] task_dispatched" \
+  "event[106] message_wait_started" \
+  "event[107] task_queued" \
+  "event[108] task_queued" \
+  "event[109] task_dispatched" \
+  "event[110] task_quantum_expired" \
   "event[111] task_dispatched" \
   "event[112] task_quantum_expired" \
   "event[113] task_dispatched" \
   "event[114] task_faulted" \
-  "event[115] task_fault_recovered" \
-  "event[116] task_queued" \
-  "event[117] task_dispatched" \
-  "event[118] task_quantum_expired" \
-  "event[119] task_dispatched" \
-  "event[120] task_faulted" \
-  "event[121] task_fault_recovered" \
-  "event[122] task_queued" \
-  "event[123] task_dispatched" \
-  "event[124] task_quantum_expired" \
-  "event[125] task_dispatched" \
-  "event[126] task_faulted" \
-  "event[127] message_sent" \
-  "event[128] message_wait_woken" \
-  "event[129] fault_routed" \
-  "event[130] fault_policy_applied" \
-  "event[131] task_dispatched" \
-  "event[132] message_received" \
-  "event[133] message_acknowledged" \
-  "event[134] task_result_submitted" \
-  "event[135] task_completed" \
-  "event[136] task_fault_recovered" \
-  "event[137] task_queued" \
-  "event[138] task_dispatched" \
-  "event[139] task_completed" \
-  "event[140] device_event_raised" \
-  "event[141] device_event_delivered" \
-  "event[142] driver_invocation_queued" \
-  "event[143] driver_invocation_dispatched" \
-  "event[144] driver_invocation_ticked" \
-  "event[145] device_event_acknowledged" \
-  "event[146] driver_command_submitted" \
-  "event[147] driver_command_dispatched" \
-  "event[148] driver_command_completed" \
-  "event[149] driver_invocation_completed" \
+  "event[115] task_dispatched" \
+  "event[116] task_result_inspected" \
+  "event[117] task_verified" \
+  "event[118] intent_fulfilled" \
+  "event[119] task_completed" \
+  "event[120] task_fault_recovered" \
+  "event[121] task_queued" \
+  "event[122] task_dispatched" \
+  "event[123] task_quantum_expired" \
+  "event[124] task_dispatched" \
+  "event[125] task_faulted" \
+  "event[126] task_fault_recovered" \
+  "event[127] task_queued" \
+  "event[128] task_dispatched" \
+  "event[129] task_quantum_expired" \
+  "event[130] task_dispatched" \
+  "event[131] task_faulted" \
+  "event[132] task_fault_recovered" \
+  "event[133] task_queued" \
+  "event[134] task_dispatched" \
+  "event[135] task_quantum_expired" \
+  "event[136] task_dispatched" \
+  "event[137] task_faulted" \
+  "event[138] message_sent" \
+  "event[139] message_wait_woken" \
+  "event[140] fault_routed" \
+  "event[141] fault_policy_applied" \
+  "event[142] task_dispatched" \
+  "event[143] message_received" \
+  "event[144] message_acknowledged" \
+  "event[145] task_result_submitted" \
+  "event[146] task_completed" \
+  "event[147] task_fault_recovered" \
+  "event[148] task_queued" \
+  "event[149] task_dispatched" \
+  "event[150] task_completed" \
+  "event[151] task_queued" \
+  "event[152] task_dispatched" \
+  "event[153] task_quantum_expired" \
+  "event[154] task_dispatched" \
+  "event[155] resource_created" \
+  "event[156] capability_granted" \
+  "event[157] resource_retired" \
+  "event[158] task_result_submitted" \
+  "event[159] task_completed" \
+  "event[160] device_event_raised" \
+  "event[161] device_event_delivered" \
+  "event[162] driver_invocation_queued" \
+  "event[163] driver_invocation_dispatched" \
+  "event[164] driver_invocation_ticked" \
+  "event[165] device_event_acknowledged" \
+  "event[166] driver_command_submitted" \
+  "event[167] driver_command_dispatched" \
+  "event[168] driver_command_completed" \
+  "event[169] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -239,7 +267,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 149 ]]; then
-  printf 'expected exactly 149 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 169 ]]; then
+  printf 'expected exactly 169 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

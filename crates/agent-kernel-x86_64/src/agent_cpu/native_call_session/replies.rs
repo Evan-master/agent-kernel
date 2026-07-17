@@ -4,7 +4,9 @@
 //! associated with that operation. Scheduler and mailbox mutations must have
 //! completed before callers invoke these methods.
 
-use agent_kernel_core::{MessageId, MessageRecord, TaskResult, WaiterId};
+use agent_kernel_core::{
+    CapabilityId, MessageId, MessageRecord, ResourceCreateOutcome, ResourceId, TaskResult, WaiterId,
+};
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
 use super::{CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu};
@@ -106,6 +108,40 @@ impl PendingAgentCallCpu {
         self.session
             .context
             .encode_message_acknowledgement_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_resource_created(
+        mut self,
+        outcome: ResourceCreateOutcome,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::CreateResource { .. })
+        })?;
+        self.session
+            .context
+            .encode_resource_created_reply(self.session.frame.frame_mut(), nonce, outcome)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_resource_retired(
+        mut self,
+        resource: ResourceId,
+        capability: CapabilityId,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::RetireResource { .. })
+        })?;
+        self.session
+            .context
+            .encode_resource_retired_reply(
+                self.session.frame.frame_mut(),
+                nonce,
+                resource,
+                capability,
+            )
             .ok()?;
         Some(ResumableAgentCpu(self.session))
     }

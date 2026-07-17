@@ -4,7 +4,7 @@
 //! least-authority capability derivation while keeping validation and event
 //! recording inside `agent-kernel-core`.
 
-use agent_kernel_core::{AgentId, CapabilityId, KernelError, OperationSet, ResourceId};
+use agent_kernel_core::{AgentId, Capability, CapabilityId, KernelError, OperationSet, ResourceId};
 
 use crate::AgentKernel;
 
@@ -75,5 +75,9 @@ impl<
     ) -> Result<CapabilityId, KernelError> {
         self.core
             .derive_capability(actor, source_capability, target_agent, operations)
+    }
+
+    pub fn capability(&self, capability: CapabilityId) -> Result<Capability, KernelError> {
+        self.core.capability(capability)
     }
 }

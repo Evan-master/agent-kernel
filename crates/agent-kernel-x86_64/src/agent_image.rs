@@ -22,6 +22,7 @@ pub(crate) const AGENT_IMAGE_ARCH_X86_64: u16 = 1;
 pub(crate) const AGENT_IMAGE_KIND_WORKER: u16 = 1;
 pub(crate) const AGENT_IMAGE_KIND_VERIFIER: u16 = 2;
 pub(crate) const AGENT_IMAGE_KIND_FAULT_HANDLER: u16 = 3;
+pub(crate) const AGENT_IMAGE_KIND_SUPERVISOR: u16 = 4;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentImageLoadError {

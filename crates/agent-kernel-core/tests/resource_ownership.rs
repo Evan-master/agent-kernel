@@ -23,6 +23,11 @@ fn create_resource_sets_owner_records_events_and_returns_usable_capability() {
     assert_eq!(core.events()[1].capability, Some(created.capability));
     assert_eq!(core.events()[2].kind, EventKind::CapabilityGranted);
     assert_eq!(core.events()[2].capability, Some(created.capability));
+    let capability = core
+        .capability(created.capability)
+        .expect("created capability should remain queryable");
+    assert_eq!(capability.agent, agent);
+    assert_eq!(capability.resource, created.resource);
 
     core.observe(agent, created.capability, created.resource)
         .expect("initial capability should authorize observe");

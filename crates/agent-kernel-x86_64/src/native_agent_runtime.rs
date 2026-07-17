@@ -7,14 +7,14 @@
 
 mod dispatch;
 
-use agent_kernel_core::RunQueueEntry;
+use agent_kernel_core::{AgentId, RunQueueEntry};
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
 use crate::agent_cpu::{
     PreemptedAgentCpu, PreparedAgentCpu, ResumableAgentCpu, WaitingAgentCallCpu,
 };
 
-const NATIVE_AGENT_CAPACITY: usize = 5;
+const NATIVE_AGENT_CAPACITY: usize = 6;
 
 pub(crate) enum NativeAgentContext {
     Prepared(PreparedAgentCpu),
@@ -90,6 +90,10 @@ impl NativeAgentRuntime {
 
     pub(crate) const fn is_empty(&self) -> bool {
         self.contexts.is_empty()
+    }
+
+    pub(crate) fn contains(&self, agent: AgentId) -> bool {
+        self.contexts.get(agent).is_ok()
     }
 
     fn park(&mut self, context: NativeAgentContext) -> Option<NativeAgentContext> {

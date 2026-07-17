@@ -5,6 +5,7 @@
 //! control to the outer scheduler loop.
 
 mod mailbox;
+mod resource;
 mod task;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
@@ -51,6 +52,18 @@ pub(super) fn run(
             AgentCallRequest::AcknowledgeMessage { message, .. } => {
                 mailbox::acknowledge(booted, pending, message)?
             }
+            AgentCallRequest::CreateResource {
+                authority,
+                parent,
+                kind,
+                operations,
+                ..
+            } => resource::create(booted, pending, authority, parent, kind, operations)?,
+            AgentCallRequest::RetireResource {
+                resource,
+                capability,
+                ..
+            } => resource::retire(booted, pending, resource, capability)?,
             AgentCallRequest::Yield { .. } => {
                 let yielded = task::yield_running(booted, pending)?;
                 if runtime.park_yielded_call(yielded).is_some() {

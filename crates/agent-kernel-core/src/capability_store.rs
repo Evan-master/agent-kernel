@@ -118,6 +118,10 @@ impl<
         Ok(())
     }
 
+    pub fn capability(&self, capability: CapabilityId) -> Result<Capability, KernelError> {
+        self.find_capability(capability)
+    }
+
     pub(crate) fn record_capability_event(
         &mut self,
         kind: EventKind,

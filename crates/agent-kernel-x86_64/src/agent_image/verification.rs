@@ -4,7 +4,7 @@ use agent_kernel_core::{AgentImageKind, AgentImageRecord, AgentImageStatus};
 
 use super::{
     sha256_digest, AgentImageCapsule, AgentImageLoadError, AGENT_IMAGE_KIND_FAULT_HANDLER,
-    AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
+    AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -51,5 +51,6 @@ fn image_kind_matches(record: AgentImageKind, header: u16) -> bool {
         (AgentImageKind::Worker, AGENT_IMAGE_KIND_WORKER)
             | (AgentImageKind::Verifier, AGENT_IMAGE_KIND_VERIFIER)
             | (AgentImageKind::FaultHandler, AGENT_IMAGE_KIND_FAULT_HANDLER)
+            | (AgentImageKind::Supervisor, AGENT_IMAGE_KIND_SUPERVISOR)
     )
 }

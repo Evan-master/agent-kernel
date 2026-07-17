@@ -134,6 +134,27 @@ fn delegate_task_derives_task_scoped_capability_for_assignee() {
 }
 
 #[test]
+fn task_scoped_capability_cannot_create_a_child_resource() {
+    let mut core = TestCore::new();
+    let owner = AgentId::new(1);
+    let assignee = AgentId::new(2);
+    let delegated = create_delegated_task(&mut core, owner, assignee);
+    let events_before = core.events().len();
+
+    assert_eq!(
+        core.create_resource(
+            assignee,
+            ResourceKind::Service,
+            Some((delegated.resource, delegated.delegated_capability)),
+            OperationSet::only(Operation::Observe),
+        ),
+        Err(KernelError::CapabilityScopeMismatch)
+    );
+    assert_eq!(core.resources().len(), 1);
+    assert_eq!(core.events().len(), events_before);
+}
+
+#[test]
 fn derived_capability_completes_dispatched_task_without_manual_grant() {
     let mut core = TestCore::new();
     let owner = AgentId::new(3);
