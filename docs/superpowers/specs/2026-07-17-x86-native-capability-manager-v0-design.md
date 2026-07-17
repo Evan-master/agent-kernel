@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented and validated locally in debug and release QEMU on 2026-07-17;
-publication is pending.
+Implemented, validated in debug and release QEMU, and published to public
+`main` on 2026-07-17 in commit `0457c2a`.
 
 ## Purpose
 

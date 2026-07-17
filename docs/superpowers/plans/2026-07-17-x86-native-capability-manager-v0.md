@@ -13,5 +13,5 @@
 - [x] Update bilingual README capability proof and deterministic counts.
 - [x] Run formatting, full tests, Supervisor, no-std checks, scoped Clippy,
   debug/release QEMU, digest extraction, and release disassembly inspection.
-- [ ] Commit, merge, publish main, clean the feature branch, and close only this
+- [x] Commit, merge, publish main, clean the feature branch, and close only this
   milestone while keeping the complete Agent Kernel goal active.
