@@ -4,6 +4,8 @@
 //! associated with that operation. Scheduler and mailbox mutations must have
 //! completed before callers invoke these methods.
 
+mod task_lifecycle;
+
 use agent_kernel_core::{
     CapabilityId, MessageId, MessageRecord, ResourceCreateOutcome, ResourceId, TaskResult, WaiterId,
 };

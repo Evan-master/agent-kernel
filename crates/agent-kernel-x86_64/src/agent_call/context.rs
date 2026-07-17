@@ -6,6 +6,7 @@
 mod capability;
 mod mailbox;
 mod resource;
+mod task_lifecycle;
 
 use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult};
 
@@ -176,6 +177,27 @@ impl AgentCallContext {
                 ..
             }
             | AgentCallRequest::RevokeDerivedCapability {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::DeclareIntent {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::CreateTask {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::DelegateTask {
                 agent,
                 task,
                 image,

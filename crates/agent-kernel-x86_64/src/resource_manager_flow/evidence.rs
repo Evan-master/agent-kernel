@@ -1,5 +1,7 @@
 //! Read-only semantic, authority, event, and physical proof for Resource Manager V0.
 
+mod task_lifecycle;
+
 use agent_kernel_core::{
     EventKind, KernelError, Operation, OperationSet, ResourceKind, ResourceStatus, TaskStatus,
 };
@@ -49,8 +51,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 7
-        && completed.address_space_switch_count() == 14
+        && completed.call_count() == 10
+        && completed.address_space_switch_count() == 20
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -79,16 +81,17 @@ pub(super) fn completed(
         && derived.parent == Some(image.capability())
         && authority.agent == RESOURCE_MANAGER
         && authority.resource == booted.report().bootstrap_resource
-        && authority.operations == OperationSet::only(Operation::Act)
+        && authority.operations == OperationSet::only(Operation::Act).with(Operation::Delegate)
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
         && kernel.resources().len() == 2
         && matches!(
-            kernel.capability(agent_kernel_core::CapabilityId::new(13)),
+            kernel.capability(agent_kernel_core::CapabilityId::new(14)),
             Err(KernelError::CapabilityNotFound)
         )
         && kernel.run_queue().is_empty()
+        && task_lifecycle::state_valid(booted, manager, image)
         && events_prove_lifecycle(booted, manager, image)
 }
 
@@ -107,6 +110,11 @@ fn events_prove_lifecycle(
         EventKind::CapabilityDerived,
         EventKind::CapabilityRevoked,
         EventKind::ResourceRetired,
+        EventKind::IntentDeclared,
+        EventKind::TaskCreated,
+        EventKind::IntentBound,
+        EventKind::CapabilityDerived,
+        EventKind::DelegationRequested,
         EventKind::TaskResultSubmitted,
         EventKind::TaskCompleted,
     ];
@@ -139,7 +147,8 @@ fn events_prove_lifecycle(
         && tail[7].target_agent == Some(image.target_agent())
         && tail[8].resource == Some(image.resource())
         && tail[8].capability == Some(image.capability())
-        && tail[9].task == Some(manager.task)
-        && tail[9].task_result == Some(image.result())
-        && tail[10].task == Some(manager.task)
+        && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
+        && tail[14].task == Some(manager.task)
+        && tail[14].task_result == Some(image.result())
+        && tail[15].task == Some(manager.task)
 }

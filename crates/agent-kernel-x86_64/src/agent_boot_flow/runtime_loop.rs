@@ -303,6 +303,7 @@ pub(super) fn run(
     resource_manager.completed_after_runtime(booted, &report, resource_manager_image)?;
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_TASK_MANAGER_OK");
     write_verifier_markers();
     Some(())
 }

@@ -9,11 +9,13 @@ mod capability;
 mod context;
 mod mailbox;
 mod resource;
+mod task_lifecycle;
 mod transcript;
 
 use agent_kernel_core::{
-    AgentId, AgentImageId, CapabilityId, MessageId, MessageKind, MessagePayload, OperationSet,
-    ResourceId, ResourceKind, TaskId, TaskResult,
+    AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MessageId, MessageKind,
+    MessagePayload, OperationSet, ResourceId, ResourceKind, TaskId, TaskResult,
+    VerificationRequirement,
 };
 
 use crate::context::PrivilegeInterruptStackFrame;
@@ -36,6 +38,9 @@ pub const AGENT_CALL_CREATE_RESOURCE: u64 = 10;
 pub const AGENT_CALL_RETIRE_RESOURCE: u64 = 11;
 pub const AGENT_CALL_DERIVE_CAPABILITY: u64 = 12;
 pub const AGENT_CALL_REVOKE_DERIVED_CAPABILITY: u64 = 13;
+pub const AGENT_CALL_DECLARE_INTENT: u64 = 14;
+pub const AGENT_CALL_CREATE_TASK: u64 = 15;
+pub const AGENT_CALL_DELEGATE_TASK: u64 = 16;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
 pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
 pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
@@ -45,6 +50,13 @@ pub const AGENT_CALL_RESOURCE_MEMORY: u64 = 2;
 pub const AGENT_CALL_RESOURCE_SERVICE: u64 = 3;
 pub const AGENT_CALL_RESOURCE_NETWORK: u64 = 4;
 pub const AGENT_CALL_RESOURCE_DEVICE: u64 = 5;
+pub const AGENT_CALL_INTENT_OBSERVE: u64 = 1;
+pub const AGENT_CALL_INTENT_ACT: u64 = 2;
+pub const AGENT_CALL_INTENT_VERIFY: u64 = 3;
+pub const AGENT_CALL_INTENT_CHECKPOINT: u64 = 4;
+pub const AGENT_CALL_INTENT_ROLLBACK: u64 = 5;
+pub const AGENT_CALL_VERIFICATION_OPTIONAL: u64 = 1;
+pub const AGENT_CALL_VERIFICATION_REQUIRED: u64 = 2;
 pub const AGENT_CALL_STATUS_OK: u64 = 0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -62,6 +74,9 @@ pub enum AgentCallOperation {
     RetireResource,
     DeriveCapability,
     RevokeDerivedCapability,
+    DeclareIntent,
+    CreateTask,
+    DelegateTask,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -159,6 +174,33 @@ pub enum AgentCallRequest {
         source: CapabilityId,
         target: CapabilityId,
     },
+    DeclareIntent {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        resource: ResourceId,
+        kind: IntentKind,
+        verification: VerificationRequirement,
+    },
+    CreateTask {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        intent: IntentId,
+    },
+    DelegateTask {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        delegated_task: TaskId,
+        target: AgentId,
+    },
 }
 
 impl AgentCallRequest {
@@ -183,6 +225,9 @@ impl AgentCallRequest {
             AGENT_CALL_RETIRE_RESOURCE => AgentCallOperation::RetireResource,
             AGENT_CALL_DERIVE_CAPABILITY => AgentCallOperation::DeriveCapability,
             AGENT_CALL_REVOKE_DERIVED_CAPABILITY => AgentCallOperation::RevokeDerivedCapability,
+            AGENT_CALL_DECLARE_INTENT => AgentCallOperation::DeclareIntent,
+            AGENT_CALL_CREATE_TASK => AgentCallOperation::CreateTask,
+            AGENT_CALL_DELEGATE_TASK => AgentCallOperation::DelegateTask,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -259,6 +304,9 @@ impl AgentCallRequest {
             AgentCallOperation::RetireResource => resource::decode_retire(frame),
             AgentCallOperation::DeriveCapability => capability::decode_derive(frame),
             AgentCallOperation::RevokeDerivedCapability => capability::decode_revoke(frame),
+            AgentCallOperation::DeclareIntent => task_lifecycle::decode_declare(frame),
+            AgentCallOperation::CreateTask => task_lifecycle::decode_create(frame),
+            AgentCallOperation::DelegateTask => task_lifecycle::decode_delegate(frame),
         }
     }
 
@@ -277,6 +325,9 @@ impl AgentCallRequest {
             Self::RetireResource { .. } => AgentCallOperation::RetireResource,
             Self::DeriveCapability { .. } => AgentCallOperation::DeriveCapability,
             Self::RevokeDerivedCapability { .. } => AgentCallOperation::RevokeDerivedCapability,
+            Self::DeclareIntent { .. } => AgentCallOperation::DeclareIntent,
+            Self::CreateTask { .. } => AgentCallOperation::CreateTask,
+            Self::DelegateTask { .. } => AgentCallOperation::DelegateTask,
         }
     }
 }

@@ -53,7 +53,8 @@ currently provides:
 - a real ring-3 Resource Manager that creates a child Service through delegated
   `Act` authority, derives attenuated `Observe` authority for another Agent,
   revokes that direct child through `Delegate`, retires the Service through
-  `Rollback`, and completes with all kernel handles;
+  `Rollback`, declares a new `Act` Intent, creates its Task, and delegates that
+  Task to a registered Agent with a kernel-issued task capability;
 - a kernel-authorized Driver flow from UART interrupt through endpoint lookup,
   immutable HAL request, Port I/O, result recording, and invocation completion.
 
@@ -67,8 +68,10 @@ The reference validation profile enforces these deterministic invariants:
 | Physical quantum expiries | 10 |
 | Contained Agent faults | 4 |
 | Resources after Manager execution | 2 |
-| Capabilities after Manager execution | 12 |
-| Ordered kernel events after Driver completion | 171 |
+| Capabilities after Manager execution | 13 |
+| Intents after Manager execution | 7 |
+| Tasks after Manager execution | 7 |
+| Ordered kernel events after Driver completion | 176 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -131,10 +134,15 @@ and nonce state before it reaches the facade.
 | `RetireResource` | 11 | Retire a Resource through its `Rollback` capability |
 | `DeriveCapability` | 12 | Attenuate source authority for another registered Agent |
 | `RevokeDerivedCapability` | 13 | Revoke one direct child through its `Delegate` source |
+| `DeclareIntent` | 14 | Declare typed work through explicit Resource authority |
+| `CreateTask` | 15 | Create a Task from an owned declared Intent |
+| `DelegateTask` | 16 | Delegate a created Task and issue task-scoped authority |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
 stale nonces, wrong identities, and non-zero reserved registers fail closed.
+The Task Manager ABI accepts the five native Intent kinds and explicit optional
+or required verification policy codes.
 
 ## Quick Start
 
@@ -171,15 +179,16 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 171 events, and treat
+validate the complete serial transcript, require exactly 176 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run ends
 with:
 
 ```text
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
+AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[171] driver_invocation_completed
+event[176] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -211,7 +220,7 @@ authority.
 - fixed-capacity scheduling, wait/wake, mailbox IPC, fault policy, image
   verification, runtime admission, and Driver invocation lifecycle;
 - freestanding x86_64 isolation, timer preemption, fault containment/recovery,
-  native resource lifecycle calls, and native cross-Agent authority control.
+  native resource, capability, Intent, and Task lifecycle calls.
 
 ### Planned
 
@@ -223,8 +232,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Capability Manager design](docs/superpowers/specs/2026-07-17-x86-native-capability-manager-v0-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-capability-manager-v0.md)
+See the current [Task Manager design](docs/superpowers/specs/2026-07-17-x86-native-task-manager-v0-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-task-manager-v0.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

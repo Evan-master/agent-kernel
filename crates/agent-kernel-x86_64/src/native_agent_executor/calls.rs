@@ -8,6 +8,7 @@ mod capability;
 mod mailbox;
 mod resource;
 mod task;
+mod task_lifecycle;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
@@ -74,6 +75,22 @@ pub(super) fn run(
             AgentCallRequest::RevokeDerivedCapability { source, target, .. } => {
                 capability::revoke(booted, pending, source, target)?
             }
+            AgentCallRequest::DeclareIntent {
+                authority,
+                resource,
+                kind,
+                verification,
+                ..
+            } => task_lifecycle::declare(booted, pending, authority, resource, kind, verification)?,
+            AgentCallRequest::CreateTask {
+                authority, intent, ..
+            } => task_lifecycle::create(booted, pending, authority, intent)?,
+            AgentCallRequest::DelegateTask {
+                authority,
+                delegated_task,
+                target,
+                ..
+            } => task_lifecycle::delegate(booted, pending, authority, delegated_task, target)?,
             AgentCallRequest::Yield { .. } => {
                 let yielded = task::yield_running(booted, pending)?;
                 if runtime.park_yielded_call(yielded).is_some() {

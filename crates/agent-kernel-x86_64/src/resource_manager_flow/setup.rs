@@ -45,7 +45,7 @@ pub(super) fn prepare(
             report.bootstrap_agent,
             report.bootstrap_capability,
             RESOURCE_MANAGER,
-            OperationSet::only(Operation::Act),
+            OperationSet::only(Operation::Act).with(Operation::Delegate),
         )
         .ok()?;
     let image = kernel
@@ -117,7 +117,8 @@ fn prepared_state_valid(
         && matches!(authority, Some(authority)
             if authority.agent == RESOURCE_MANAGER
                 && authority.resource == report.bootstrap_resource
-                && authority.operations == OperationSet::only(Operation::Act)
+                && authority.operations
+                    == OperationSet::only(Operation::Act).with(Operation::Delegate)
                 && !authority.revoked
                 && authority.task.is_none()
                 && authority.parent == Some(report.bootstrap_capability))
