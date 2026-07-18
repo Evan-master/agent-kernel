@@ -27,8 +27,28 @@ reuse_worker_describe_return:
 .global reuse_worker_result_return
 reuse_worker_result_return:
 
+    mov ecx, 7
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 1
+    mov r12, rdi
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global reuse_worker_notification_return
+reuse_worker_notification_return:
+
     mov ecx, 3
     xor edx, edx
+    xor r10d, r10d
+    xor r11d, r11d
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
     int 0x90
 .global reuse_worker_completion_return
 reuse_worker_completion_return:

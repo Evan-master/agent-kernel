@@ -40,8 +40,8 @@ impl PreparedReuseWorkerFlow {
                 if execution.state == AgentExecutionState::Idle && execution.task.is_none())
             && completed.context() == context
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 3
-            && completed.address_space_switch_count() == 6
+            && completed.call_count() == 4
+            && completed.address_space_switch_count() == 8
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1

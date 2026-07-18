@@ -59,38 +59,32 @@ pub(super) fn run(
     {
         return None;
     }
-    let mut supervisor_report = NativeExecutionReport::new();
-    let mut supervisor_evidence = NativeRuntimeEvidence::default();
+    let mut report = NativeExecutionReport::new();
+    let mut evidence = NativeRuntimeEvidence::default();
     native_agent_executor::run_until_idle(
         booted,
         runtime,
         memory_pool,
-        &mut supervisor_report,
-        &mut supervisor_evidence,
+        &mut report,
+        &mut evidence,
         None,
     )?;
     let targets = [flows[0].admission_target(), flows[1].admission_target()];
-    if !runtime.is_empty()
-        || supervisor_report.len() != 1
-        || supervisor_report.faulted_len() != 0
-        || !supervisor_evidence.proves_runtime_admission_supervisor()
-        || !supervisor.completed_after_runtime(
-            booted,
-            &supervisor_report,
-            supervisor_contract,
-            targets,
-        )
+    if runtime.len() != 1
+        || !runtime.contains(ADMISSION_SUPERVISOR)
+        || report.len() != 0
+        || report.faulted_len() != 0
+        || !evidence.proves_runtime_admission_wait()
+        || !supervisor.waiting_after_requests(booted, targets)
+        || address_space_pool.len()
+            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(AGENT_OWNED_FRAME_COUNT)?
+        || address_space_pool.owns(supervisor_admission.identity())
+        || !memory_pool.all_available_and_zero()
     {
         return None;
     }
-    supervisor.verify_completed(booted)?;
-    supervisor_report
-        .reclaim_completed_address_spaces(address_space_pool, [ADMISSION_SUPERVISOR])?;
-    if !address_space_pool.all_reclaimed_and_zero() || !memory_pool.all_available_and_zero() {
-        return None;
-    }
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK");
 
     let first_admission = NativeRuntimeAdmissionBroker::admit_next(
         booted,
@@ -103,8 +97,11 @@ pub(super) fn run(
     .ok()?;
     if first_admission.agent() != REUSE_WORKERS[0]
         || address_space_pool.len()
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(AGENT_OWNED_FRAME_COUNT)?
-        || runtime.len() != 1
+            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(2 * AGENT_OWNED_FRAME_COUNT)?
+        || !supervisor_admission.is_disjoint_from(first_admission)
+        || runtime.len() != 2
+        || !runtime.contains(ADMISSION_SUPERVISOR)
+        || !runtime.contains(REUSE_WORKERS[0])
     {
         return None;
     }
@@ -124,9 +121,11 @@ pub(super) fn run(
         REUSE_WORKERS[0],
         cancelled_identity,
     ) || address_space_pool.len()
-        != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(AGENT_OWNED_FRAME_COUNT)?
+        != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(2 * AGENT_OWNED_FRAME_COUNT)?
         || !address_space_pool.owns_zeroed(cancelled_identity)
-        || runtime.len() != 1
+        || runtime.len() != 2
+        || !runtime.contains(ADMISSION_SUPERVISOR)
+        || !runtime.contains(REUSE_WORKERS[0])
     {
         return None;
     }
@@ -143,12 +142,15 @@ pub(super) fn run(
     .ok()?;
     if second_admission.agent() != REUSE_WORKERS[1]
         || second_admission.identity() != cancelled_identity
+        || !supervisor_admission.is_disjoint_from(second_admission)
         || !first_admission.is_disjoint_from(second_admission)
         || address_space_pool.len()
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(2 * AGENT_OWNED_FRAME_COUNT)?
+            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(3 * AGENT_OWNED_FRAME_COUNT)?
+        || address_space_pool.owns(supervisor_admission.identity())
         || address_space_pool.owns(first_admission.identity())
         || address_space_pool.owns(second_admission.identity())
-        || runtime.len() != 2
+        || runtime.len() != 3
+        || !runtime.contains(ADMISSION_SUPERVISOR)
         || !runtime.contains(REUSE_WORKERS[0])
         || !runtime.contains(REUSE_WORKERS[1])
         || !PreparedReuseWorkerFlow::batch_queued(booted, &flows)
@@ -161,8 +163,6 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK");
 
-    let mut report = NativeExecutionReport::new();
-    let mut evidence = NativeRuntimeEvidence::default();
     native_agent_executor::run_until_idle(
         booted,
         runtime,
@@ -172,22 +172,30 @@ pub(super) fn run(
         None,
     )?;
     if !runtime.is_empty()
-        || report.len() != 2
+        || report.len() != 3
         || report.faulted_len() != 0
-        || !evidence.proves_address_space_runtime_batch()
+        || !evidence.proves_resident_runtime_admission_flow()
         || flows
             .iter()
             .any(|flow| !flow.completed_after_runtime(booted, &report, worker_contract))
+        || !supervisor.completed_after_notifications(booted, &report, supervisor_contract, targets)
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK");
     for flow in &flows {
         flow.verify_completed(booted)?;
     }
+    supervisor.verify_completed(booted)?;
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
-    report.reclaim_completed_address_spaces(address_space_pool, REUSE_WORKERS)?;
+    report.reclaim_completed_address_spaces(
+        address_space_pool,
+        [ADMISSION_SUPERVISOR, REUSE_WORKERS[0], REUSE_WORKERS[1]],
+    )?;
     if !address_space_pool.all_reclaimed_and_zero()
+        || !address_space_pool.owns(supervisor_admission.identity())
         || !address_space_pool.owns(first_admission.identity())
         || !address_space_pool.owns(second_admission.identity())
         || !memory_pool.all_available_and_zero()

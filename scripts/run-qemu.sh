@@ -103,6 +103,8 @@ for expected in \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK" \
   "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
@@ -357,38 +359,47 @@ for expected in \
   "event[230] task_dispatched" \
   "event[231] runtime_admission_requested" \
   "event[232] runtime_admission_requested" \
-  "event[233] task_result_submitted" \
-  "event[234] task_completed" \
-  "event[235] task_verified" \
-  "event[236] intent_fulfilled" \
-  "event[237] runtime_admission_admitted" \
-  "event[238] task_queued" \
-  "event[239] runtime_admission_admitted" \
-  "event[240] task_queued" \
-  "event[241] task_dispatched" \
-  "event[242] task_quantum_expired" \
-  "event[243] task_dispatched" \
-  "event[244] task_quantum_expired" \
-  "event[245] task_dispatched" \
-  "event[246] task_result_submitted" \
-  "event[247] task_completed" \
-  "event[248] task_dispatched" \
-  "event[249] task_result_submitted" \
+  "event[233] message_wait_started" \
+  "event[234] runtime_admission_admitted" \
+  "event[235] task_queued" \
+  "event[236] runtime_admission_admitted" \
+  "event[237] task_queued" \
+  "event[238] task_dispatched" \
+  "event[239] task_quantum_expired" \
+  "event[240] task_dispatched" \
+  "event[241] task_quantum_expired" \
+  "event[242] task_dispatched" \
+  "event[243] task_result_submitted" \
+  "event[244] message_sent" \
+  "event[245] message_wait_woken" \
+  "event[246] task_completed" \
+  "event[247] task_dispatched" \
+  "event[248] task_result_submitted" \
+  "event[249] message_sent" \
   "event[250] task_completed" \
-  "event[251] task_verified" \
-  "event[252] intent_fulfilled" \
-  "event[253] task_verified" \
-  "event[254] intent_fulfilled" \
-  "event[255] device_event_raised" \
-  "event[256] device_event_delivered" \
-  "event[257] driver_invocation_queued" \
-  "event[258] driver_invocation_dispatched" \
-  "event[259] driver_invocation_ticked" \
-  "event[260] device_event_acknowledged" \
-  "event[261] driver_command_submitted" \
-  "event[262] driver_command_dispatched" \
-  "event[263] driver_command_completed" \
-  "event[264] driver_invocation_completed" \
+  "event[251] task_dispatched" \
+  "event[252] message_received" \
+  "event[253] message_acknowledged" \
+  "event[254] message_received" \
+  "event[255] message_acknowledged" \
+  "event[256] task_result_submitted" \
+  "event[257] task_completed" \
+  "event[258] task_verified" \
+  "event[259] intent_fulfilled" \
+  "event[260] task_verified" \
+  "event[261] intent_fulfilled" \
+  "event[262] task_verified" \
+  "event[263] intent_fulfilled" \
+  "event[264] device_event_raised" \
+  "event[265] device_event_delivered" \
+  "event[266] driver_invocation_queued" \
+  "event[267] driver_invocation_dispatched" \
+  "event[268] driver_invocation_ticked" \
+  "event[269] device_event_acknowledged" \
+  "event[270] driver_command_submitted" \
+  "event[271] driver_command_dispatched" \
+  "event[272] driver_command_completed" \
+  "event[273] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -398,8 +409,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 264 ]]; then
-  printf 'expected exactly 264 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 273 ]]; then
+  printf 'expected exactly 273 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -428,6 +439,8 @@ check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 1

@@ -6,7 +6,7 @@
 use super::NativeRuntimeEvidence;
 
 impl NativeRuntimeEvidence {
-    pub(crate) const fn proves_runtime_admission_supervisor(self) -> bool {
+    pub(crate) const fn proves_runtime_admission_wait(self) -> bool {
         self.dispatches == 2
             && self.prepared == 1
             && self.preempted == 1
@@ -19,14 +19,14 @@ impl NativeRuntimeEvidence {
             && self.agent_faults == 0
     }
 
-    pub(crate) const fn proves_address_space_runtime_batch(self) -> bool {
-        self.dispatches == 4
-            && self.prepared == 2
-            && self.preempted == 2
-            && self.waiting == 0
+    pub(crate) const fn proves_resident_runtime_admission_flow(self) -> bool {
+        self.dispatches == 7
+            && self.prepared == 3
+            && self.preempted == 3
+            && self.waiting == 1
             && self.yielded == 0
             && self.recovered_faults == 0
-            && self.quantum_expiries == 2
+            && self.quantum_expiries == 3
             && self.returning_quantum_expiries == 0
             && self.returning_quantum_generation == 0
             && self.agent_faults == 0
