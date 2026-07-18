@@ -11,5 +11,5 @@
 - [x] Shift Manager handles, capacities, exact events, markers, and README.
 - [x] Run formatting, full tests, Supervisor, no-std checks, scoped Clippy,
   debug/release QEMU, Capsule extraction, and release disassembly inspection.
-- [ ] Commit, merge, publish public main, clean the feature branch, and close
+- [x] Commit, merge, publish public main, clean the feature branch, and close
   this milestone while keeping the complete Agent Kernel goal active.
