@@ -7,7 +7,7 @@ use bootloader_api::{config::Mapping, BootloaderConfig};
 
 use crate::agent_memory::PHYSICAL_MEMORY_OFFSET;
 
-const KERNEL_STACK_SIZE: u64 = 1024 * 1024;
+const KERNEL_STACK_SIZE: u64 = 2 * 1024 * 1024;
 
 pub(crate) static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();

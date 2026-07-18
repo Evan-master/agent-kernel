@@ -4,6 +4,7 @@
 //! binds physical evidence to semantic task transitions, then completes the
 //! existing UART Driver flow. All failures terminate through explicit markers.
 
+mod address_space_reuse;
 mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
@@ -35,6 +36,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let fault_image = boot_agent_images::fault_worker();
     let fault_handler_image = boot_agent_images::fault_handler();
     let resource_manager_image = boot_agent_images::resource_manager();
+    let reuse_worker_image = boot_agent_images::reuse_worker();
     let Ok(mut booted) = X86BootedKernel::boot(BootConfig::default()) else {
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
@@ -110,6 +112,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         || AgentImageCapsule::parse(fault_image.bytes()).is_err()
         || AgentImageCapsule::parse(fault_handler_image.bytes()).is_err()
         || AgentImageCapsule::parse(resource_manager_image.bytes()).is_err()
+        || AgentImageCapsule::parse(reuse_worker_image.bytes()).is_err()
     {
         fatal_boot("AGENT_KERNEL_AGENT_IMAGE_FORMAT_ERROR");
     }
@@ -259,6 +262,18 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         || !address_space_frame_pool.all_reclaimed_and_zero()
     {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
+    }
+    if address_space_reuse::run(
+        &mut booted,
+        &mut native_runtime,
+        &mut runtime_memory_pool,
+        &mut address_space_frame_pool,
+        &cpu_runtime,
+        reuse_worker_image,
+    )
+    .is_none()
+    {
+        fatal_boot("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_ERROR");
     }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURN_OK");

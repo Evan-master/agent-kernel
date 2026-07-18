@@ -8,7 +8,9 @@ use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
     address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT},
-    address_space_reclamation::{AddressSpaceFramePool, AddressSpaceReclamation},
+    address_space_reclamation::{
+        AddressSpaceFramePool, AddressSpaceReclamation, AllocatedAddressSpaceFrames,
+    },
 };
 
 use super::{
@@ -45,6 +47,16 @@ impl NativeAddressSpaceFramePool {
         self.ledger.commit(reclamation)
     }
 
+    pub(crate) fn allocate_zeroed(&mut self) -> Option<AllocatedAddressSpaceFrames> {
+        let allocation = self.ledger.prepare_allocation()?;
+        let identity = allocation.identity();
+        if !identity.owned_frames().into_iter().all(frame_is_zero) {
+            return None;
+        }
+        let owner = self.ledger.commit_allocation(allocation)?;
+        (owner.identity() == identity).then_some(owner)
+    }
+
     fn commit_zeroed(&mut self, reclamation: AddressSpaceReclamation) -> bool {
         reclamation
             .identity()
@@ -57,6 +69,13 @@ impl NativeAddressSpaceFramePool {
     pub(crate) fn all_reclaimed_and_zero(&self) -> bool {
         self.ledger.len() == NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
             && self.ledger.frames().iter().copied().all(frame_is_zero)
+    }
+
+    pub(crate) fn owns(&self, identity: AgentMemoryIdentity) -> bool {
+        identity
+            .owned_frames()
+            .into_iter()
+            .all(|frame| self.ledger.contains(frame))
     }
 
     pub(crate) const fn len(&self) -> usize {

@@ -32,8 +32,9 @@ Agent 为中心的系统需要不同的控制面：
 参考 BIOS/QEMU 配置不依赖 Linux 或其他宿主操作系统作为内核底座，当前包括：
 
 - 永久 GDT、TSS、IDT、ring-0/ring-3 边界和每个 Agent 独立的 CR3 页表根；
-- 六个隔离的原生 Agent 上下文：两个 Worker、一个 Verifier、一个 Fault
-  Worker、一个 Fault Handler 和一个 Resource Manager；
+- 七个完成执行的隔离原生 Agent 上下文：两个 Worker、一个 Verifier、一个 Fault
+  Worker、一个 Fault Handler、一个 Resource Manager 和一个回收后准入的 Reuse
+  Worker；
 - 由内核选择的 FIFO 调度、真实 PIT 定时器抢占，以及跨恢复过程完整持有 CPU 帧；
 - 由 SHA-256 绑定的定长 Agent Image Capsule，以及 Worker、Verifier、
   FaultHandler、Supervisor 类型化入口；
@@ -47,6 +48,8 @@ Agent 为中心的系统需要不同的控制面：
   有序回收证据附加到 Completed CPU；
 - 为每个原生 Agent 完整记录 4 个私有页表帧和 7 个内容帧，在终态证据核验后
   清零全部地址空间帧，并转移到固定容量可复用池；
+- 以分配代数绑定完整的 11 帧身份，从回收池原子取出这些帧，精确重建
+  P4/P3/P2/P1，执行并验证新准入的 ring-3 Agent，最后将同一组已清零帧归还池；
 - 将缺页故障按策略路由给真实 ring-3 Fault Handler，再通过 Capability
   限定的方式修复保留页，并从同一故障帧继续执行；
 - 真实 ring-3 Resource Manager：使用派生的 `Act` 权限创建子 Service，
@@ -69,26 +72,29 @@ Agent 为中心的系统需要不同的控制面：
 
 | 证据 | 数量 |
 | --- | ---: |
-| 注册 Agent | 9 |
-| 原生 ring-3 完成上下文 | 6 |
-| 内核选择的 Dispatch | 23 |
+| 注册 Agent | 10 |
+| 原生 ring-3 完成上下文 | 7 |
+| 内核选择的 Dispatch | 25 |
 | Resource Manager Agent Call | 29 |
 | Resource Manager Agent/内核地址空间切换 | 58 |
-| 真实物理时间片到期 | 10 |
+| Reuse Worker Agent Call | 3 |
+| Reuse Worker Agent/内核地址空间切换 | 6 |
+| 真实物理时间片到期 | 11 |
 | 被隔离的 Agent 故障 | 4 |
 | 故障时回收的存活区域 | 1 |
 | 故障时回收的物理帧 | 2 |
 | 完成时回收的存活区域 | 1 |
 | 完成时回收的物理帧 | 3 |
-| 已回收的原生地址空间 | 6 |
-| 已归还并清零的私有地址空间帧 | 66 |
+| 原生地址空间回收完成次数 | 7 |
+| 私有地址空间帧累计归还次数 | 77 |
+| 最终已清零私有地址空间帧池 | 66 |
 | Resource Manager 执行后的资源 | 7 |
-| Resource Manager 执行后的 Capability | 19 |
-| Resource Manager 执行后的 Intent | 7 |
-| Resource Manager 执行后的 Task | 7 |
+| Reuse Worker 验证后的 Capability | 20 |
+| Reuse Worker 验证后的 Intent | 8 |
+| Reuse Worker 验证后的 Task | 8 |
 | Resource Manager 执行后的 MemoryCell | 5 |
 | 已归还并清零的共享运行时帧 | 16 |
-| Driver 完成后的有序内核事件 | 205 |
+| Driver 完成后的有序内核事件 | 223 |
 
 `scripts/run-qemu.sh` 会逐条校验事件顺序，同时拒绝缺失标记、多余事件、异常的
 QEMU 退出状态以及任何 fail-closed 启动路径。
@@ -204,7 +210,7 @@ scripts/run-qemu.sh --release
 ```
 
 脚本会构建裸机目标、生成 BIOS 镜像、启动 QEMU、检查完整串口记录、要求恰好
-205 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
+223 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
 
 ```text
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
@@ -212,6 +218,10 @@ AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
@@ -220,7 +230,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[205] driver_invocation_completed
+event[223] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -255,11 +265,14 @@ SUPERVISOR_HANDOFF_READY
 - 对通过认证的完成请求使用同一固定容量事务，退休仍存活的 Memory Resource，
   清理私有映射，并把回收证据保留到 Completed CPU。
 - 完整记录私有页表与内容帧所有权，在终态回收六个原生地址空间，并把 66 个
-  清零后的帧转移到固定容量池。
+  清零后的帧转移到固定容量池；
+- 从回收池原子分配绑定代数的完整 11 帧身份，精确重建私有页表层级，运行独立的
+  ring-3 Reuse Worker，验证语义 Task，并将全部 11 个已清零帧归还池；
+- 为包含 223 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
 
 ### 后续规划
 
-- 从回收帧创建新的原生地址空间，以及超出当前固定私有层级的运行时页表增长；
+- 通用运行时地址空间服务、重复并发分配、取消恢复，以及超出固定层级的页表增长；
 - SMP 调度、多核同步和硬件 TLB Shootdown；
 - 通用存储、网络、图形、USB 或真实硬件支持；
 - 面向分发与升级的 Agent 包和应用格式；
@@ -267,8 +280,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [原生地址空间回收设计](docs/superpowers/specs/2026-07-18-x86-native-address-space-reclaim-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-address-space-reclaim-v1.md)。
+最新里程碑的完整契约见 [原生地址空间复用设计](docs/superpowers/specs/2026-07-18-x86-native-address-space-reuse-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-address-space-reuse-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献

@@ -5,7 +5,9 @@
 //! run earlier while the completion report still owns every address space.
 
 use agent_kernel_core::AgentId;
-use agent_kernel_x86_64::address_space_reclamation::AddressSpaceReclamation;
+use agent_kernel_x86_64::{
+    address_space::AGENT_OWNED_FRAME_COUNT, address_space_reclamation::AddressSpaceReclamation,
+};
 
 use super::NativeExecutionReport;
 use crate::agent_memory::{
@@ -13,22 +15,26 @@ use crate::agent_memory::{
 };
 
 impl NativeExecutionReport {
-    pub(crate) fn reclaim_completed_address_spaces(
+    pub(crate) fn reclaim_completed_address_spaces<const COUNT: usize>(
         &mut self,
         pool: &mut NativeAddressSpaceFramePool,
-        agents: [AgentId; NATIVE_ADDRESS_SPACE_CAPACITY],
+        agents: [AgentId; COUNT],
     ) -> Option<()> {
-        if self.completed.len() != NATIVE_ADDRESS_SPACE_CAPACITY
+        let expected_len = pool
+            .len()
+            .checked_add(COUNT.checked_mul(AGENT_OWNED_FRAME_COUNT)?)?;
+        if COUNT == 0
+            || COUNT > NATIVE_ADDRESS_SPACE_CAPACITY
+            || self.completed.len() != COUNT
             || !self.faulted.is_empty()
-            || pool.len() != 0
+            || expected_len != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
         {
             return None;
         }
 
         let mut preview = *pool;
-        let mut tokens: [Option<AddressSpaceReclamation>; NATIVE_ADDRESS_SPACE_CAPACITY] =
-            [None; NATIVE_ADDRESS_SPACE_CAPACITY];
-        let mut roots = [0; NATIVE_ADDRESS_SPACE_CAPACITY];
+        let mut tokens: [Option<AddressSpaceReclamation>; COUNT] = [None; COUNT];
+        let mut roots = [0; COUNT];
         for (index, agent) in agents.iter().copied().enumerate() {
             if agent.raw() == 0 || agents[..index].contains(&agent) {
                 return None;
@@ -41,7 +47,7 @@ impl NativeExecutionReport {
             }
             tokens[index] = Some(token);
         }
-        if preview.len() != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY {
+        if preview.len() != expected_len {
             return None;
         }
 
@@ -52,9 +58,7 @@ impl NativeExecutionReport {
                 return None;
             }
         }
-        (self.completed.is_empty()
-            && pool.len() == NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
-            && pool.all_reclaimed_and_zero())
-        .then_some(())
+        (self.completed.is_empty() && pool.len() == expected_len && pool.all_reclaimed_and_zero())
+            .then_some(())
     }
 }

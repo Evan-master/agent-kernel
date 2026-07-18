@@ -37,8 +37,9 @@ The reference BIOS/QEMU configuration boots directly on virtual hardware and
 currently provides:
 
 - a permanent GDT, TSS, IDT, ring-0/ring-3 boundary, and private Agent CR3 roots;
-- six isolated native Agent contexts: two Workers, a Verifier, a Fault Worker,
-  a Fault Handler, and a Resource Manager;
+- seven executed isolated native Agent contexts: two Workers, a Verifier, a
+  Fault Worker, a Fault Handler, a Resource Manager, and a post-reclamation
+  Reuse Worker;
 - kernel-selected FIFO dispatch with physical PIT timer preemption and full CPU
   frame ownership across resume;
 - SHA-256-bound, fixed-size Agent Image Capsules with typed Worker, Verifier,
@@ -58,6 +59,10 @@ currently provides:
 - complete ownership identity for four private page-table frames and seven
   content frames per native Agent, followed by terminal zeroing and transfer
   into a fixed-capacity reusable frame pool;
+- generation-bound atomic allocation of one complete eleven-frame identity,
+  exact P4/P3/P2/P1 reconstruction from reclaimed frames, execution and
+  verification of a newly admitted ring-3 Agent, and return of the same zeroed
+  frames to the pool;
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
 - a real ring-3 Resource Manager that creates a child Service through delegated
@@ -84,26 +89,29 @@ The reference validation profile enforces these deterministic invariants:
 
 | Evidence | Count |
 | --- | ---: |
-| Registered Agents | 9 |
-| Native ring-3 completions | 6 |
-| Kernel-selected dispatches | 23 |
+| Registered Agents | 10 |
+| Native ring-3 completions | 7 |
+| Kernel-selected dispatches | 25 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Physical quantum expiries | 10 |
+| Reuse Worker Agent Calls | 3 |
+| Reuse Worker Agent/kernel address-space switches | 6 |
+| Physical quantum expiries | 11 |
 | Contained Agent faults | 4 |
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
 | Completion-owned live regions reclaimed | 1 |
 | Completion-owned physical frames reclaimed | 3 |
-| Native address spaces reclaimed | 6 |
-| Private address-space frames returned and zeroed | 66 |
+| Native address-space reclamation completions | 7 |
+| Cumulative private address-space frame returns | 77 |
+| Final zeroed private address-space frame pool | 66 |
 | Resources after Manager execution | 7 |
-| Capabilities after Manager execution | 19 |
-| Intents after Manager execution | 7 |
-| Tasks after Manager execution | 7 |
+| Capabilities after Reuse Worker verification | 20 |
+| Intents after Reuse Worker verification | 8 |
+| Tasks after Reuse Worker verification | 8 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 205 |
+| Ordered kernel events after Driver completion | 223 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -226,7 +234,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 205 events, and treat
+validate the complete serial transcript, require exactly 223 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -236,6 +244,10 @@ AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
@@ -244,7 +256,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[205] driver_invocation_completed
+event[223] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -284,12 +296,16 @@ authority.
 - authenticated completion-time retirement of live Memory Resources through
   the same fixed-capacity cleanup transaction;
 - complete private page-table/content ownership tracking and terminal
-  reclamation of six native address spaces into a 66-frame zeroed pool.
+  reclamation of six native address spaces into a 66-frame zeroed pool;
+- generation-bound, atomic eleven-frame allocation from that pool, exact
+  private hierarchy reconstruction, independent ring-3 Reuse Worker execution,
+  semantic Task verification, and restoration of all eleven zeroed frames;
+- a fixed 2 MiB guarded kernel boot stack for the 223-event reference profile.
 
 ### Planned
 
-- allocation of new native address spaces from reclaimed frames and runtime
-  page-table growth beyond the fixed private hierarchy;
+- a general runtime address-space service, repeated concurrent allocations,
+  cancellation recovery, and page-table growth beyond the fixed hierarchy;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -297,8 +313,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Native Address-Space Reclaim design](docs/superpowers/specs/2026-07-18-x86-native-address-space-reclaim-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-address-space-reclaim-v1.md)
+See the current [Native Address-Space Reuse design](docs/superpowers/specs/2026-07-18-x86-native-address-space-reuse-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-address-space-reuse-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

@@ -4,13 +4,28 @@
 //! rejection, atomic whole-address-space commits, and one-shot frame transfer.
 //! Physical clearing and page-table teardown stay in the bare-metal adapter.
 
-use crate::address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT};
+use crate::address_space::{
+    AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT, AGENT_OWNED_FRAME_COUNT,
+    AGENT_PAGE_TABLE_FRAME_COUNT,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct AddressSpaceReclamation {
     identity: AgentMemoryIdentity,
     expected_len: usize,
     expected_generation: u64,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AddressSpaceAllocation {
+    identity: AgentMemoryIdentity,
+    expected_len: usize,
+    expected_generation: u64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AllocatedAddressSpaceFrames {
+    identity: AgentMemoryIdentity,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -78,6 +93,44 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         true
     }
 
+    pub fn prepare_allocation(&self) -> Option<AddressSpaceAllocation> {
+        let start = self.len.checked_sub(AGENT_OWNED_FRAME_COUNT)?;
+        let mut page_table_frames = [0; AGENT_PAGE_TABLE_FRAME_COUNT];
+        page_table_frames
+            .copy_from_slice(&self.frames[start..start + AGENT_PAGE_TABLE_FRAME_COUNT]);
+        let mut content_frames = [0; AGENT_CONTENT_FRAME_COUNT];
+        content_frames.copy_from_slice(
+            &self.frames[start + AGENT_PAGE_TABLE_FRAME_COUNT..start + AGENT_OWNED_FRAME_COUNT],
+        );
+        Some(AddressSpaceAllocation {
+            identity: AgentMemoryIdentity::new(page_table_frames, content_frames)?,
+            expected_len: self.len,
+            expected_generation: self.generation,
+        })
+    }
+
+    pub fn commit_allocation(
+        &mut self,
+        allocation: AddressSpaceAllocation,
+    ) -> Option<AllocatedAddressSpaceFrames> {
+        if self.len != allocation.expected_len || self.generation != allocation.expected_generation
+        {
+            return None;
+        }
+        let start = self.len.checked_sub(AGENT_OWNED_FRAME_COUNT)?;
+        let selected = allocation.identity.owned_frames();
+        if self.frames[start..self.len] != selected {
+            return None;
+        }
+        let next_generation = self.generation.checked_add(1)?;
+        self.frames[start..self.len].fill(0);
+        self.len = start;
+        self.generation = next_generation;
+        Some(AllocatedAddressSpaceFrames {
+            identity: allocation.identity,
+        })
+    }
+
     pub fn take_frame(&mut self) -> Option<u64> {
         let last = self.len.checked_sub(1)?;
         let next_generation = self.generation.checked_add(1)?;
@@ -118,5 +171,21 @@ impl AddressSpaceReclamation {
 
     pub const fn frame_count(self) -> usize {
         AGENT_OWNED_FRAME_COUNT
+    }
+}
+
+impl AddressSpaceAllocation {
+    pub const fn identity(self) -> AgentMemoryIdentity {
+        self.identity
+    }
+}
+
+impl AllocatedAddressSpaceFrames {
+    pub const fn identity(&self) -> AgentMemoryIdentity {
+        self.identity
+    }
+
+    pub const fn into_identity(self) -> AgentMemoryIdentity {
+        self.identity
     }
 }

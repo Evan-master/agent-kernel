@@ -28,6 +28,7 @@ mod pit_timer;
 mod port_driver_flow;
 mod privilege_runtime;
 mod resource_manager_flow;
+mod reuse_worker_flow;
 mod timer_task_flow;
 mod uart_interrupt;
 mod verifier_task_flow;
@@ -38,7 +39,7 @@ use privilege_runtime::PrivilegeBoundary;
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) type X86BootedKernel =
-    BootedKernel<9, 7, 19, 205, 1, 1, 0, 7, 7, 2, 1, 1, 1, 1, 2, 2, 4, 1, 1, 5>;
+    BootedKernel<10, 7, 20, 223, 1, 1, 0, 8, 8, 2, 1, 1, 1, 1, 2, 2, 4, 1, 1, 5>;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();

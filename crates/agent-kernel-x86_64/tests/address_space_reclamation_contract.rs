@@ -70,6 +70,57 @@ fn physical_frame_zero_is_preserved_as_owned_pool_data() {
     assert!(pool.is_empty());
 }
 
+#[test]
+fn complete_address_space_allocation_is_atomic_and_generation_bound() {
+    let first = identity(0x1000);
+    let second = identity(0x20_000);
+    let mut pool = TwoAddressSpacePool::new();
+    let first_reclamation = pool.prepare(first).unwrap();
+    assert!(pool.commit(first_reclamation));
+    let second_reclamation = pool.prepare(second).unwrap();
+    assert!(pool.commit(second_reclamation));
+
+    let allocation = pool.prepare_allocation().unwrap();
+    let stale_replay = allocation;
+    assert_eq!(allocation.identity(), second);
+    assert_eq!(pool.len(), AGENT_OWNED_FRAME_COUNT * 2);
+
+    let owner = pool.commit_allocation(allocation).unwrap();
+    assert_eq!(owner.identity(), second);
+    assert_eq!(pool.len(), AGENT_OWNED_FRAME_COUNT);
+    assert!(first
+        .owned_frames()
+        .iter()
+        .all(|frame| pool.contains(*frame)));
+    assert!(second
+        .owned_frames()
+        .iter()
+        .all(|frame| !pool.contains(*frame)));
+    assert!(pool.commit_allocation(stale_replay).is_none());
+    assert_eq!(owner.into_identity(), second);
+}
+
+#[test]
+fn allocated_address_space_with_frame_zero_can_be_restored_exactly() {
+    let identity = identity(0);
+    let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_COUNT }>::new();
+    let reclamation = pool.prepare(identity).unwrap();
+    assert!(pool.commit(reclamation));
+
+    let allocation = pool.prepare_allocation().unwrap();
+    let replay = allocation;
+    let owner = pool.commit_allocation(allocation).unwrap();
+    assert!(pool.is_empty());
+    assert!(pool.commit_allocation(replay).is_none());
+
+    let returned = owner.into_identity();
+    assert_eq!(returned, identity);
+    let returned_reclamation = pool.prepare(returned).unwrap();
+    assert!(pool.commit(returned_reclamation));
+    assert_eq!(pool.frames(), identity.owned_frames());
+    assert!(pool.contains(0));
+}
+
 fn identity(base: u64) -> AgentMemoryIdentity {
     AgentMemoryIdentity::new(
         [base, base + 0x1000, base + 0x2000, base + 0x3000],

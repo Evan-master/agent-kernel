@@ -7,12 +7,14 @@
 
 mod fault_handler;
 mod resource_manager;
+mod reuse_worker;
 
 use agent_kernel_core::{AgentImageDigest, TaskResult};
 use agent_kernel_x86_64::agent_call::AgentCallOperation;
 
 pub(crate) use fault_handler::{fault_handler, BootFaultHandlerImage};
 pub(crate) use resource_manager::{resource_manager, BootResourceManagerImage};
+pub(crate) use reuse_worker::{reuse_worker, BootReuseWorkerImage};
 
 const WORKER_A_NONCE: u64 = 0xa11c_e001;
 const WORKER_B_NONCE: u64 = 0xb22c_e002;
