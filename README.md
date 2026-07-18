@@ -68,6 +68,9 @@ currently provides:
 - Agent Call 27 and a real ring-3 Admission Supervisor Capsule that creates two
   audited Runtime Admission requests, blocks in its Mailbox, and remains
   resident throughout target admission and execution;
+- Agent Call 28, which exposes the permit-bound requester only to an admitted
+  context; each Runtime Service Worker validates the reply and uses that
+  identity as its completion notification recipient;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -114,11 +117,12 @@ The reference validation profile enforces these deterministic invariants:
 | Resource Manager Agent/kernel address-space switches | 58 |
 | Admission Supervisor Agent Calls | 9 |
 | Admission Supervisor Agent/kernel address-space switches | 18 |
-| Runtime Service Worker Agent Calls | 8 |
-| Runtime Service Worker Agent/kernel address-space switches | 16 |
+| Runtime Service Worker Agent Calls | 10 |
+| Runtime Service Worker Agent/kernel address-space switches | 20 |
 | Physical quantum expiries | 13 |
 | Runtime Admission requests | 2 |
 | Runtime Admission commits | 2 |
+| Runtime Admission requester discoveries | 2 |
 | Runtime Admission releases | 2 |
 | Terminal released Runtime Admission records | 2 |
 | Worker completion notifications | 2 |
@@ -166,7 +170,8 @@ flowchart TB
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
     Supervisor["ring-3 Admission Supervisor"] -->|"Agent Call 27"| X86
-    Workers["Admitted ring-3 Workers"] -->|"Notify / Mailbox"| Supervisor
+    Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
+    Workers -->|"Notify / Mailbox"| Supervisor
 ```
 
 The kernel remains deterministic and compact. A userspace Supervisor owns LLM
@@ -223,6 +228,7 @@ and nonce state before it reaches the facade.
 | `InspectMemoryRegion` | 25 | Audit and return the first value from the first and last mapped pages |
 | `ReleaseMemoryRegion` | 26 | Retire its Memory Resource, remove every leaf, clear every frame, and return the region to the pool |
 | `RequestRuntimeAdmission` | 27 | Request audited native runtime admission for one accepted, unqueued target Task |
+| `DiscoverRuntimeAdmission` | 28 | Return the kernel-owned requester bound to the current admitted context |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -239,7 +245,9 @@ Runtime admission requires an authenticated Supervisor entry and an active,
 root-scoped `Delegate` Capability on the target Task Resource. The kernel binds
 the request to the target Agent, Task, verified Image, and Resource. The x86
 broker receives only a generation-checked permit and commits queue visibility
-after physical registration succeeds.
+after physical registration succeeds. The broker carries the permit requester
+into the admitted CPU context; operation 28 returns it through a canonical,
+authenticated, read-only reply.
 
 ## Quick Start
 
@@ -292,6 +300,7 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
+AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -352,9 +361,10 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Call 27, fixed-capacity
-  admission records, generation-bound permits, and a broker that connects
-  audited semantic requests to the physical runtime service;
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 and 28,
+  fixed-capacity admission records, generation-bound permits, requester-bound
+  admitted contexts, and a broker that connects audited semantic requests to
+  the physical runtime service;
 - resident Supervisor Mailbox waiting across target admission and execution,
   authenticated Worker notifications, FIFO acknowledgement, and atomic
   three-address-space terminal reclamation;
@@ -368,8 +378,8 @@ authority.
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- dynamic requester discovery, repeated resident admission batches, bounded
-  release-record compaction, and an admission queue larger than the Task store;
+- repeated resident admission batches, bounded release-record compaction, and
+  an admission queue larger than the Task store;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -377,8 +387,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Runtime Admission Release design](docs/superpowers/specs/2026-07-19-runtime-admission-release-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-runtime-admission-release-v1.md)
+See the current [Runtime Admission Requester Discovery design](docs/superpowers/specs/2026-07-19-x86-runtime-admission-requester-discovery-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-x86-runtime-admission-requester-discovery-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
