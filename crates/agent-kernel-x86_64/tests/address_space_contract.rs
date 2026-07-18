@@ -24,5 +24,6 @@ fn address_space_roots_are_aligned_distinct_and_preserve_cr3_control() {
     assert!(AddressSpaceRoots::new(0x2000, 0x9001, 0).is_none());
     assert!(AddressSpaceRoots::new(0x2000, 0x2000, 0).is_none());
     assert!(AddressSpaceRoots::new(1 << 52, 0x9000, 0).is_none());
+    assert!(AddressSpaceRoots::new(0x2000, 0x9000, 0x1).is_none());
     assert!(AddressSpaceRoots::new(0x2000, 0x9000, 0x1000).is_none());
 }

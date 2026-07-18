@@ -5,6 +5,7 @@
 //! completed before callers invoke these methods.
 
 mod agent_management;
+mod memory_page;
 mod task_lifecycle;
 
 use agent_kernel_core::{
@@ -194,6 +195,12 @@ impl PendingAgentCallCpu {
         let nonce = self.authenticated_nonce_for(|request| {
             matches!(request, AgentCallRequest::CompleteTask { .. })
         })?;
+        let runtime_page_generation = self.session.memory.runtime_page_generation();
+        let runtime_page_released = self
+            .session
+            .memory
+            .runtime_page_released(runtime_page_generation);
+        let runtime_page_observation = self.session.memory.runtime_page_observation();
         Some(CompletedAgentCpu {
             context: self.session.context,
             nonce,
@@ -201,6 +208,9 @@ impl PendingAgentCallCpu {
             physical_quantum_generation: self.session.memory.physical_quantum_generation(),
             restart_generation: self.session.memory.restart_generation(),
             lazy_data_byte: self.session.memory.lazy_data_byte(),
+            runtime_page_generation,
+            runtime_page_released,
+            runtime_page_observation,
         })
     }
 

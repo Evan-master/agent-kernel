@@ -7,6 +7,7 @@
 mod agent_management;
 mod capability;
 mod mailbox;
+mod memory_page;
 mod resource;
 mod task;
 mod task_lifecycle;
@@ -107,6 +108,17 @@ pub(super) fn run(
             AgentCallRequest::RetireManagedAgent {
                 authority, target, ..
             } => agent_management::retire(booted, pending, authority, target)?,
+            AgentCallRequest::AllocateMemoryPage {
+                capability,
+                resource,
+                ..
+            } => memory_page::allocate(booted, pending, capability, resource)?,
+            AgentCallRequest::InspectMemoryPage {
+                capability, cell, ..
+            } => memory_page::inspect(booted, pending, capability, cell)?,
+            AgentCallRequest::ReleaseMemoryPage {
+                capability, cell, ..
+            } => memory_page::release(booted, pending, capability, cell)?,
             AgentCallRequest::Yield { .. } => {
                 let yielded = task::yield_running(booted, pending)?;
                 if runtime.park_yielded_call(yielded).is_some() {

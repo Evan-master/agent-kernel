@@ -25,6 +25,7 @@ pub struct UserMemoryLayout {
     stack_bottom: u64,
     stack_top: u64,
     lazy_data_start: u64,
+    runtime_page_start: u64,
 }
 
 impl UserMemoryLayout {
@@ -35,6 +36,7 @@ impl UserMemoryLayout {
         let stack_bottom = guard_start + PAGE_BYTES;
         let stack_top = stack_bottom + PAGE_BYTES * STACK_PAGE_COUNT as u64;
         let lazy_data_start = stack_top;
+        let runtime_page_start = lazy_data_start + PAGE_BYTES;
         Self {
             code_start,
             signal_start,
@@ -42,6 +44,7 @@ impl UserMemoryLayout {
             stack_bottom,
             stack_top,
             lazy_data_start,
+            runtime_page_start,
         }
     }
 
@@ -69,12 +72,16 @@ impl UserMemoryLayout {
         self.lazy_data_start
     }
 
+    pub const fn runtime_page_start(self) -> u64 {
+        self.runtime_page_start
+    }
+
     pub const fn p4_index(self) -> usize {
         p4_index(self.code_start)
     }
 
     pub const fn last_mapped_p4_index(self) -> usize {
-        p4_index(self.lazy_data_start + PAGE_BYTES - 1)
+        p4_index(self.runtime_page_start + PAGE_BYTES - 1)
     }
 
     pub const fn contains_code(self, address: u64) -> bool {
@@ -91,5 +98,9 @@ impl UserMemoryLayout {
 
     pub const fn contains_lazy_data(self, address: u64) -> bool {
         address >= self.lazy_data_start && address < self.lazy_data_start + PAGE_BYTES
+    }
+
+    pub const fn contains_runtime_page(self, address: u64) -> bool {
+        address >= self.runtime_page_start && address < self.runtime_page_start + PAGE_BYTES
     }
 }

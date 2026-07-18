@@ -7,16 +7,18 @@
 
 mod replies;
 
+use agent_kernel_core::{MemoryCellId, MemoryValue, ResourceId};
 use agent_kernel_x86_64::{
     agent_call::{AgentCallContext, AgentCallRequest, AgentCallTranscript},
     context::SavedAgentFrame,
     native_runtime::NativeRunBoundary,
+    runtime_page::{RuntimePageRelease, RuntimePageReservation},
 };
 
 use super::{call, runtime::AgentCpuRuntime, storage, FaultedAgentCpu, PreemptedAgentCpu};
 use crate::{agent_memory::PreparedAgentMemory, pit_timer};
 
-pub(super) const MAX_AGENT_CALLS: usize = 14;
+pub(super) const MAX_AGENT_CALLS: usize = 18;
 
 struct AgentCallSession {
     memory: PreparedAgentMemory,
@@ -50,6 +52,9 @@ pub(crate) struct CompletedAgentCpu {
     physical_quantum_generation: u8,
     restart_generation: u8,
     lazy_data_byte: u8,
+    runtime_page_generation: u64,
+    runtime_page_released: bool,
+    runtime_page_observation: Option<u64>,
 }
 
 pub(crate) enum AgentRunOutcome {
@@ -164,6 +169,60 @@ impl PendingAgentCallCpu {
             .authenticates(self.request, nonce)
             .then_some(self.request)
     }
+
+    pub(crate) fn prepare_runtime_page_allocation(
+        &mut self,
+        resource: ResourceId,
+    ) -> Option<(RuntimePageReservation, MemoryValue)> {
+        self.session
+            .memory
+            .prepare_runtime_page_allocation(resource)
+    }
+
+    pub(crate) fn commit_runtime_page_allocation(
+        &mut self,
+        reservation: RuntimePageReservation,
+        cell: MemoryCellId,
+    ) -> bool {
+        self.session
+            .memory
+            .commit_runtime_page_allocation(reservation, cell)
+    }
+
+    pub(crate) fn rollback_runtime_page_allocation(
+        &mut self,
+        reservation: RuntimePageReservation,
+    ) -> bool {
+        self.session
+            .memory
+            .rollback_runtime_page_allocation(reservation)
+    }
+
+    pub(crate) fn inspect_runtime_page(
+        &mut self,
+        resource: ResourceId,
+        cell: MemoryCellId,
+        descriptor: MemoryValue,
+    ) -> Option<(u64, u64)> {
+        self.session
+            .memory
+            .inspect_runtime_page(resource, cell, descriptor)
+    }
+
+    pub(crate) fn prepare_runtime_page_release(
+        &self,
+        resource: ResourceId,
+        cell: MemoryCellId,
+        descriptor: MemoryValue,
+    ) -> Option<RuntimePageRelease> {
+        self.session
+            .memory
+            .prepare_runtime_page_release(resource, cell, descriptor)
+    }
+
+    pub(crate) fn release_runtime_page(&mut self, release: RuntimePageRelease) -> bool {
+        self.session.memory.release_runtime_page(release)
+    }
 }
 
 impl ResumableAgentCpu {
@@ -237,5 +296,17 @@ impl CompletedAgentCpu {
 
     pub(crate) const fn lazy_data_byte(&self) -> u8 {
         self.lazy_data_byte
+    }
+
+    pub(crate) const fn runtime_page_generation(&self) -> u64 {
+        self.runtime_page_generation
+    }
+
+    pub(crate) const fn runtime_page_released(&self) -> bool {
+        self.runtime_page_released
+    }
+
+    pub(crate) const fn runtime_page_observation(&self) -> Option<u64> {
+        self.runtime_page_observation
     }
 }

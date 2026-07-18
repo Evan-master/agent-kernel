@@ -81,6 +81,10 @@ for expected in \
   "AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK" \
   "AGENT_KERNEL_NATIVE_TASK_MANAGER_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK" \
+  "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_PAGE_OK" \
+  "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_PAGE_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_PAGE_OK" \
+  "AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CREATE_TASK_OK" \
   "AGENT_KERNEL_AGENT_CALL_DELEGATE_TASK_OK" \
@@ -267,18 +271,23 @@ for expected in \
   "event[166] agent_suspended" \
   "event[167] agent_resumed" \
   "event[168] agent_retired" \
-  "event[169] task_result_submitted" \
-  "event[170] task_completed" \
-  "event[171] device_event_raised" \
-  "event[172] device_event_delivered" \
-  "event[173] driver_invocation_queued" \
-  "event[174] driver_invocation_dispatched" \
-  "event[175] driver_invocation_ticked" \
-  "event[176] device_event_acknowledged" \
-  "event[177] driver_command_submitted" \
-  "event[178] driver_command_dispatched" \
-  "event[179] driver_command_completed" \
-  "event[180] driver_invocation_completed" \
+  "event[169] resource_created" \
+  "event[170] capability_granted" \
+  "event[171] memory_cell_created" \
+  "event[172] memory_cell_recalled" \
+  "event[173] resource_retired" \
+  "event[174] task_result_submitted" \
+  "event[175] task_completed" \
+  "event[176] device_event_raised" \
+  "event[177] device_event_delivered" \
+  "event[178] driver_invocation_queued" \
+  "event[179] driver_invocation_dispatched" \
+  "event[180] driver_invocation_ticked" \
+  "event[181] device_event_acknowledged" \
+  "event[182] driver_command_submitted" \
+  "event[183] driver_command_dispatched" \
+  "event[184] driver_command_completed" \
+  "event[185] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -288,7 +297,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 180 ]]; then
-  printf 'expected exactly 180 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 185 ]]; then
+  printf 'expected exactly 185 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

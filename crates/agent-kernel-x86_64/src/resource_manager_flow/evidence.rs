@@ -1,6 +1,7 @@
 //! Read-only semantic, authority, event, and physical proof for Resource Manager V0.
 
 mod agent_management;
+mod memory_page;
 mod task_lifecycle;
 
 use agent_kernel_core::{
@@ -52,13 +53,16 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 14
-        && completed.address_space_switch_count() == 28
+        && completed.call_count() == 18
+        && completed.address_space_switch_count() == 36
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
         && completed.restart_generation() == 0
         && completed.lazy_data_byte() == 0
+        && completed.runtime_page_generation() == image.memory_generation()
+        && completed.runtime_page_released()
+        && completed.runtime_page_observation() == Some(image.memory_proof_value())
         && task.status == TaskStatus::Completed
         && task.assignee == Some(RESOURCE_MANAGER)
         && task.delegated_capability == Some(manager.task_capability)
@@ -86,14 +90,15 @@ pub(super) fn completed(
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
-        && kernel.resources().len() == 2
+        && kernel.resources().len() == 3
         && matches!(
-            kernel.capability(agent_kernel_core::CapabilityId::new(14)),
+            kernel.capability(agent_kernel_core::CapabilityId::new(15)),
             Err(KernelError::CapabilityNotFound)
         )
         && kernel.run_queue().is_empty()
         && task_lifecycle::state_valid(booted, manager, image)
         && agent_management::state_valid(booted, manager, image)
+        && memory_page::state_valid(booted, image)
         && events_prove_lifecycle(booted, manager, image)
 }
 
@@ -121,6 +126,11 @@ fn events_prove_lifecycle(
         EventKind::AgentSuspended,
         EventKind::AgentResumed,
         EventKind::AgentRetired,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
+        EventKind::MemoryCellCreated,
+        EventKind::MemoryCellRecalled,
+        EventKind::ResourceRetired,
         EventKind::TaskResultSubmitted,
         EventKind::TaskCompleted,
     ];
@@ -155,7 +165,8 @@ fn events_prove_lifecycle(
         && tail[8].capability == Some(image.capability())
         && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
         && agent_management::events_valid(&tail[14..18], booted, manager, image)
-        && tail[18].task == Some(manager.task)
-        && tail[18].task_result == Some(image.result())
-        && tail[19].task == Some(manager.task)
+        && memory_page::events_valid(&tail[18..23], booted, image)
+        && tail[23].task == Some(manager.task)
+        && tail[23].task_result == Some(image.result())
+        && tail[24].task == Some(manager.task)
 }

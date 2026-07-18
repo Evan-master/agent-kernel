@@ -5,34 +5,12 @@
 //! the bare-metal executor. It performs no mutation or privileged operation.
 
 use agent_kernel_core::{
-    AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MessageId, MessageKind,
-    MessagePayload, OperationSet, ResourceId, ResourceKind, TaskId, TaskResult,
+    AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MemoryCellId, MessageId,
+    MessageKind, MessagePayload, OperationSet, ResourceId, ResourceKind, TaskId, TaskResult,
     VerificationRequirement,
 };
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum AgentCallOperation {
-    DescribeContext,
-    Yield,
-    CompleteTask,
-    SubmitTaskResult,
-    InspectTaskResult,
-    VerifyTask,
-    SendMessage,
-    ReceiveMessage,
-    AcknowledgeMessage,
-    CreateResource,
-    RetireResource,
-    DeriveCapability,
-    RevokeDerivedCapability,
-    DeclareIntent,
-    CreateTask,
-    DelegateTask,
-    RegisterManagedAgent,
-    SuspendManagedAgent,
-    ResumeManagedAgent,
-    RetireManagedAgent,
-}
+use super::AgentCallOperation;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentCallRequest {
@@ -189,6 +167,30 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         target: AgentId,
     },
+    AllocateMemoryPage {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        capability: CapabilityId,
+        resource: ResourceId,
+    },
+    InspectMemoryPage {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        capability: CapabilityId,
+        cell: MemoryCellId,
+    },
+    ReleaseMemoryPage {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        capability: CapabilityId,
+        cell: MemoryCellId,
+    },
 }
 
 impl AgentCallRequest {
@@ -214,6 +216,9 @@ impl AgentCallRequest {
             Self::SuspendManagedAgent { .. } => AgentCallOperation::SuspendManagedAgent,
             Self::ResumeManagedAgent { .. } => AgentCallOperation::ResumeManagedAgent,
             Self::RetireManagedAgent { .. } => AgentCallOperation::RetireManagedAgent,
+            Self::AllocateMemoryPage { .. } => AgentCallOperation::AllocateMemoryPage,
+            Self::InspectMemoryPage { .. } => AgentCallOperation::InspectMemoryPage,
+            Self::ReleaseMemoryPage { .. } => AgentCallOperation::ReleaseMemoryPage,
         }
     }
 }

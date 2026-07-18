@@ -12,6 +12,7 @@ pub mod interrupt;
 pub mod native_runtime;
 pub mod port;
 pub mod privilege;
+pub mod runtime_page;
 pub mod user_memory;
 
 #[cfg(target_arch = "x86_64")]

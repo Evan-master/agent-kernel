@@ -5,6 +5,7 @@
 //! transition. Shared lower tables are never modified through the Agent slot.
 
 mod lazy;
+mod runtime_page;
 mod validation;
 
 use x86_64::{
@@ -32,6 +33,7 @@ pub(super) fn install(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
+    runtime_page_frame: PhysFrame,
 ) -> Option<AddressSpaceRoots> {
     let (kernel_frame, control) = Cr3::read_raw();
     let agent_frame = allocator.allocate()?;
@@ -92,6 +94,7 @@ pub(super) fn install(
             signal_frame,
             stack_frames,
             lazy_data_frame,
+            runtime_page_frame,
         ) {
             return None;
         }
@@ -119,6 +122,41 @@ pub(super) fn activate_lazy_data(
     frame: PhysFrame,
 ) -> Option<()> {
     lazy::activate(physical_offset, roots, layout, frame)
+}
+
+pub(super) fn activate_runtime_page(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    frame: PhysFrame,
+) -> Option<()> {
+    runtime_page::activate(physical_offset, roots, layout, frame)
+}
+
+pub(super) fn runtime_page_is_active(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    frame: PhysFrame,
+) -> bool {
+    runtime_page::is_active(physical_offset, roots, layout, frame)
+}
+
+pub(super) fn runtime_page_is_absent(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+) -> bool {
+    runtime_page::is_absent(physical_offset, roots, layout)
+}
+
+pub(super) fn deactivate_runtime_page(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    frame: PhysFrame,
+) -> Option<()> {
+    runtime_page::deactivate(physical_offset, roots, layout, frame)
 }
 
 pub(super) fn kernel_is_active(roots: AddressSpaceRoots) -> bool {

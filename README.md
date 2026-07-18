@@ -58,6 +58,9 @@ currently provides:
 - a native Agent Manager protocol in the same ring-3 Capsule that registers
   Agent 9 under root-scoped `Delegate` authority, then suspends, resumes, and
   retires the unlaunched identity through four authenticated Agent Calls;
+- a physically backed runtime memory-page lifecycle that creates an owned
+  Memory Resource, maps one private user-writable and non-executable page,
+  observes a ring-3 proof write, then unmaps and clears the retained frame;
 - a kernel-authorized Driver flow from UART interrupt through endpoint lookup,
   immutable HAL request, Port I/O, result recording, and invocation completion.
 
@@ -70,11 +73,12 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 23 |
 | Physical quantum expiries | 10 |
 | Contained Agent faults | 4 |
-| Resources after Manager execution | 2 |
-| Capabilities after Manager execution | 13 |
+| Resources after Manager execution | 3 |
+| Capabilities after Manager execution | 14 |
 | Intents after Manager execution | 7 |
 | Tasks after Manager execution | 7 |
-| Ordered kernel events after Driver completion | 180 |
+| MemoryCells after Manager execution | 1 |
+| Ordered kernel events after Driver completion | 185 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -144,6 +148,9 @@ and nonce state before it reaches the facade.
 | `SuspendManagedAgent` | 18 | Suspend a quiescent managed Agent |
 | `ResumeManagedAgent` | 19 | Reactivate a suspended managed Agent |
 | `RetireManagedAgent` | 20 | Commit the terminal state of a quiescent managed Agent |
+| `AllocateMemoryPage` | 21 | Map one kernel-selected private page under an owned Memory Resource |
+| `InspectMemoryPage` | 22 | Audit and return the first fixed-width value from the mapped page |
+| `ReleaseMemoryPage` | 23 | Retire its Memory Resource, remove the leaf, and clear the frame |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -152,7 +159,9 @@ The Task Manager ABI accepts the five native Intent kinds and explicit optional
 or required verification policy codes. Agent management requires an active,
 root-scoped `Delegate` Capability on the identity's management Resource. The
 target must have an idle execution context, no launch entry, and no active
-assigned Task.
+assigned Task. Runtime page calls accept only Capability and kernel-object
+handles; virtual addresses, physical frames, access flags, and page size remain
+kernel-selected.
 
 ## Quick Start
 
@@ -189,7 +198,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 180 events, and treat
+validate the complete serial transcript, require exactly 185 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run ends
 with:
 
@@ -198,8 +207,9 @@ AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
 AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK
+AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[180] driver_invocation_completed
+event[185] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -231,11 +241,13 @@ authority.
 - fixed-capacity scheduling, wait/wake, mailbox IPC, fault policy, image
   verification, runtime admission, and Driver invocation lifecycle;
 - freestanding x86_64 isolation, timer preemption, fault containment/recovery,
-  native Resource, Capability, Intent, Task, and managed Agent lifecycle calls.
+  native Resource, Capability, Intent, Task, managed Agent, and physically
+  backed runtime memory-page lifecycle calls.
 
 ### Planned
 
-- a general physical/virtual memory manager or dynamic userspace allocator;
+- a shared runtime frame pool, multi-page regions, or dynamic page-table
+  intermediate allocation;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -243,8 +255,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Agent Manager design](docs/superpowers/specs/2026-07-17-x86-native-agent-manager-v0-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-agent-manager-v0.md)
+See the current [Native Memory Page design](docs/superpowers/specs/2026-07-18-x86-native-memory-page-v0-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-memory-page-v0.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

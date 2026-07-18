@@ -6,14 +6,14 @@
 
 pub const PAGE_TABLE_BYTES: u64 = 4096;
 pub const P4_ENTRY_COUNT: usize = 512;
-pub const AGENT_CONTENT_FRAME_COUNT: usize = 7;
+pub const AGENT_CONTENT_FRAME_COUNT: usize = 8;
 pub const AGENT_REGION_BASE: u64 = 0x0000_4000_0000_0000;
 pub const AGENT_P4_INDEX: usize = p4_index(AGENT_REGION_BASE);
 
 const P4_SHIFT: u32 = 39;
 const P4_INDEX_MASK: u64 = 0x1ff;
 const CR3_ROOT_MASK: u64 = 0x000f_ffff_ffff_f000;
-const CR3_CONTROL_MASK: u64 = 0x0fff;
+const CR3_CONTROL_MASK: u64 = (1 << 3) | (1 << 4);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AddressSpaceKind {

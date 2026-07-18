@@ -6,6 +6,7 @@
 mod agent_management;
 mod capability;
 mod mailbox;
+mod memory_page;
 mod resource;
 mod task_lifecycle;
 
@@ -227,6 +228,27 @@ impl AgentCallContext {
                 ..
             }
             | AgentCallRequest::RetireManagedAgent {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::AllocateMemoryPage {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::InspectMemoryPage {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::ReleaseMemoryPage {
                 agent,
                 task,
                 image,

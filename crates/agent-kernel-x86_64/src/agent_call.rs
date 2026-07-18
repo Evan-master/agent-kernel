@@ -9,6 +9,8 @@ mod agent_management;
 mod capability;
 mod context;
 mod mailbox;
+mod memory_page;
+mod operation;
 mod request;
 mod resource;
 mod task_lifecycle;
@@ -19,7 +21,8 @@ use agent_kernel_core::{AgentId, AgentImageId, TaskId, TaskResult};
 use crate::context::PrivilegeInterruptStackFrame;
 
 pub use context::AgentCallContext;
-pub use request::{AgentCallOperation, AgentCallRequest};
+pub use operation::AgentCallOperation;
+pub use request::AgentCallRequest;
 pub use transcript::{AgentCallTranscript, AgentCallTranscriptError};
 
 pub const AGENT_CALL_ABI_MAGIC: u64 = u64::from_le_bytes(*b"AGNTCALL");
@@ -44,6 +47,10 @@ pub const AGENT_CALL_REGISTER_MANAGED_AGENT: u64 = 17;
 pub const AGENT_CALL_SUSPEND_MANAGED_AGENT: u64 = 18;
 pub const AGENT_CALL_RESUME_MANAGED_AGENT: u64 = 19;
 pub const AGENT_CALL_RETIRE_MANAGED_AGENT: u64 = 20;
+pub const AGENT_CALL_ALLOCATE_MEMORY_PAGE: u64 = 21;
+pub const AGENT_CALL_INSPECT_MEMORY_PAGE: u64 = 22;
+pub const AGENT_CALL_RELEASE_MEMORY_PAGE: u64 = 23;
+pub const AGENT_CALL_MEMORY_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
 pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
 pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
@@ -94,6 +101,9 @@ impl AgentCallRequest {
             AGENT_CALL_SUSPEND_MANAGED_AGENT => AgentCallOperation::SuspendManagedAgent,
             AGENT_CALL_RESUME_MANAGED_AGENT => AgentCallOperation::ResumeManagedAgent,
             AGENT_CALL_RETIRE_MANAGED_AGENT => AgentCallOperation::RetireManagedAgent,
+            AGENT_CALL_ALLOCATE_MEMORY_PAGE => AgentCallOperation::AllocateMemoryPage,
+            AGENT_CALL_INSPECT_MEMORY_PAGE => AgentCallOperation::InspectMemoryPage,
+            AGENT_CALL_RELEASE_MEMORY_PAGE => AgentCallOperation::ReleaseMemoryPage,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -178,6 +188,10 @@ impl AgentCallRequest {
             | AgentCallOperation::ResumeManagedAgent
             | AgentCallOperation::RetireManagedAgent => {
                 agent_management::decode_lifecycle(frame, operation)
+            }
+            AgentCallOperation::AllocateMemoryPage => memory_page::decode_allocate(frame),
+            AgentCallOperation::InspectMemoryPage | AgentCallOperation::ReleaseMemoryPage => {
+                memory_page::decode_existing(frame, operation)
             }
         }
     }
