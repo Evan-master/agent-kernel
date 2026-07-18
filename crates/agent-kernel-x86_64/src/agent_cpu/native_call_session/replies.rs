@@ -12,7 +12,9 @@ mod task_lifecycle;
 use agent_kernel_core::{
     CapabilityId, MessageId, MessageRecord, ResourceCreateOutcome, ResourceId, TaskResult, WaiterId,
 };
-use agent_kernel_x86_64::agent_call::AgentCallRequest;
+use agent_kernel_x86_64::{
+    agent_call::AgentCallRequest, runtime_reclamation::RuntimeReclamationLog,
+};
 
 use super::{CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu};
 
@@ -192,10 +194,13 @@ impl PendingAgentCallCpu {
         })
     }
 
-    pub(crate) fn complete(self) -> Option<CompletedAgentCpu> {
+    pub(crate) fn complete(self, reclamation: RuntimeReclamationLog) -> Option<CompletedAgentCpu> {
         let nonce = self.authenticated_nonce_for(|request| {
             matches!(request, AgentCallRequest::CompleteTask { .. })
         })?;
+        if !self.session.memory.runtime_memory_is_clear() {
+            return None;
+        }
         let runtime_page_generation = self.session.memory.runtime_page_generation();
         let runtime_page_released = self
             .session
@@ -221,6 +226,7 @@ impl PendingAgentCallCpu {
             runtime_region_generation,
             runtime_regions_released,
             runtime_region_observations,
+            reclamation,
         })
     }
 

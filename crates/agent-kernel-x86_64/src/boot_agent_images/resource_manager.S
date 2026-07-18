@@ -600,29 +600,6 @@ resource_manager_entry:
     cmp r13, 2
     jne .halt
 
-    mov ecx, 26
-    xor edx, edx
-    mov r10d, 19
-    mov r11d, 5
-    xor r12d, r12d
-    xor r13d, r13d
-    xor r14d, r14d
-    xor r15d, r15d
-    xor ebp, ebp
-    int 0x90
-    test rcx, rcx
-    jne .halt
-    cmp rdx, 26
-    jne .halt
-    cmp r10, 5
-    jne .halt
-    cmp r11, 7
-    jne .halt
-    cmp r12, 3
-    jne .halt
-    cmp r13, 3
-    jne .halt
-
     mov ecx, 4
     xor edx, edx
     mov r10d, 0xc008

@@ -227,6 +227,15 @@ impl<
         self.core.complete_task(agent, capability, task)
     }
 
+    pub fn can_complete_task(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<(), KernelError> {
+        self.core.can_complete_task(agent, capability, task)
+    }
+
     pub fn sys_submit_task_result(
         &mut self,
         agent: AgentId,

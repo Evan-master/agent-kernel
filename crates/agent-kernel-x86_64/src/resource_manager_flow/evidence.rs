@@ -55,8 +55,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 30
-        && completed.address_space_switch_count() == 60
+        && completed.call_count() == 29
+        && completed.address_space_switch_count() == 58
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -68,6 +68,7 @@ pub(super) fn completed(
         && completed.runtime_region_generation() == image.memory_region_c_generation()
         && completed.runtime_regions_released()
         && memory_region::observations_valid(completed, image)
+        && memory_region::reclamation_valid(completed, image)
         && task.status == TaskStatus::Completed
         && task.assignee == Some(RESOURCE_MANAGER)
         && task.delegated_capability == Some(manager.task_capability)
@@ -148,8 +149,8 @@ fn events_prove_lifecycle(
         EventKind::MemoryCellCreated,
         EventKind::MemoryCellRecalled,
         EventKind::ResourceRetired,
-        EventKind::ResourceRetired,
         EventKind::TaskResultSubmitted,
+        EventKind::ResourceRetired,
         EventKind::TaskCompleted,
     ];
     let events = booted.kernel().events();
@@ -184,8 +185,15 @@ fn events_prove_lifecycle(
         && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
         && agent_management::events_valid(&tail[14..18], booted, manager, image)
         && memory_page::events_valid(&tail[18..23], booted, image)
-        && memory_region::events_valid(&tail[23..38], booted, image)
-        && tail[38].task == Some(manager.task)
-        && tail[38].task_result == Some(image.result())
+        && memory_region::events_valid(
+            &[
+                tail[23], tail[24], tail[25], tail[26], tail[27], tail[28], tail[29], tail[30],
+                tail[31], tail[32], tail[33], tail[34], tail[35], tail[36], tail[38],
+            ],
+            booted,
+            image,
+        )
+        && tail[37].task == Some(manager.task)
+        && tail[37].task_result == Some(image.result())
         && tail[39].task == Some(manager.task)
 }

@@ -93,6 +93,7 @@ for expected in \
   "AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK" \
   "AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK" \
   "AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK" \
+  "AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CREATE_TASK_OK" \
   "AGENT_KERNEL_AGENT_CALL_DELEGATE_TASK_OK" \
@@ -303,8 +304,8 @@ for expected in \
   "event[190] memory_cell_created" \
   "event[191] memory_cell_recalled" \
   "event[192] resource_retired" \
-  "event[193] resource_retired" \
-  "event[194] task_result_submitted" \
+  "event[193] task_result_submitted" \
+  "event[194] resource_retired" \
   "event[195] task_completed" \
   "event[196] device_event_raised" \
   "event[197] device_event_delivered" \
@@ -343,5 +344,6 @@ check_marker_count() {
 
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" 4
 check_marker_count "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" 3
-check_marker_count "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" 3
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK" 1

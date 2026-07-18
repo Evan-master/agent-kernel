@@ -7,6 +7,7 @@ use agent_kernel_core::{
     CapabilityId, Event, EventKind, MemoryCellId, MemoryValue, Operation, OperationSet, ResourceId,
     ResourceKind, ResourceStatus,
 };
+use agent_kernel_x86_64::runtime_reclamation::RuntimeMemoryKind;
 
 use super::super::RESOURCE_MANAGER;
 use crate::{
@@ -78,6 +79,24 @@ pub(super) fn observations_valid(
                         && observation.last() == spec.last
                 })
             })
+}
+
+pub(super) fn reclamation_valid(
+    completed: &CompletedAgentCpu,
+    image: BootResourceManagerImage,
+) -> bool {
+    let log = completed.reclamation_log();
+    log.len() == 1
+        && log.get(0).is_some_and(|entry| {
+            entry.kind() == RuntimeMemoryKind::Region
+                && entry.resource() == image.memory_region_c_resource()
+                && entry.capability() == image.memory_region_c_capability()
+                && entry.cell() == image.memory_region_c_cell()
+                && entry.page_count() == image.memory_region_c_page_count() as usize
+                && entry.generation() == image.memory_region_c_generation()
+                && entry.first() == image.memory_region_c_first_proof()
+                && entry.last() == image.memory_region_c_last_proof()
+        })
 }
 
 pub(super) fn events_valid(

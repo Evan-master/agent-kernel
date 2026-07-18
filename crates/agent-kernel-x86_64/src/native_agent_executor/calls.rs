@@ -16,7 +16,9 @@ mod task_lifecycle;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
-use super::{NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority};
+use super::{
+    memory_reclamation, NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority,
+};
 use crate::{
     agent_cpu::{AgentRunOutcome, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu},
     agent_memory::RuntimeMemoryPool,
@@ -156,13 +158,14 @@ pub(super) fn run(
                 task::verify(booted, pending, target_task, verify_authority?)?
             }
             AgentCallRequest::CompleteTask { .. } => {
-                if !pending.runtime_memory_is_clear()
-                    || !memory_pool.agent_is_clear(pending.context().agent())
-                {
-                    return None;
-                }
-                let completed = task::complete(booted, pending)?;
+                task::completion_ready(booted, &pending)?;
+                let (pending, reclamation, reclaimed) =
+                    memory_reclamation::reclaim_completion(booted, memory_pool, pending)?;
+                let completed = task::complete(booted, pending, reclamation)?;
                 report.record(completed)?;
+                if reclaimed != 0 {
+                    crate::serial_write_line("AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK");
+                }
                 return Some(());
             }
         };

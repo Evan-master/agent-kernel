@@ -63,15 +63,7 @@ impl<
         capability: CapabilityId,
         task: TaskId,
     ) -> Result<Event, KernelError> {
-        self.ensure_agent_active(agent)?;
-        let current = self.find_task(task)?;
-        self.ensure_authorized_for_task(agent, capability, current.resource, Operation::Act, task)?;
-        ensure_status(current.status, &[TaskStatus::Running])?;
-        if current.assignee != Some(agent) {
-            return Err(KernelError::TaskAgentMismatch);
-        }
-        self.ensure_agent_admitted_for_task(agent, task)?;
-        self.ensure_event_slots(1)?;
+        self.can_complete_task(agent, capability, task)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Completed;
         self.set_execution_context_idle(agent)?;
@@ -82,6 +74,23 @@ impl<
             task,
             None,
         )
+    }
+
+    pub fn can_complete_task(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        task: TaskId,
+    ) -> Result<(), KernelError> {
+        self.ensure_agent_active(agent)?;
+        let current = self.find_task(task)?;
+        self.ensure_authorized_for_task(agent, capability, current.resource, Operation::Act, task)?;
+        ensure_status(current.status, &[TaskStatus::Running])?;
+        if current.assignee != Some(agent) {
+            return Err(KernelError::TaskAgentMismatch);
+        }
+        self.ensure_agent_admitted_for_task(agent, task)?;
+        self.ensure_event_slots(1)
     }
 
     pub fn verify_task(

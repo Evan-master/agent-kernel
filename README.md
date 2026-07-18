@@ -52,6 +52,9 @@ currently provides:
   `TaskFaulted`: exact-Capability Resource retirement, leaf removal, physical
   frame zeroing and return, fixed-capacity evidence, and restartable CPU
   capture;
+- the same bounded transaction on authenticated `CompleteTask`, with completion
+  readiness preflight and ordered reclamation evidence attached to the
+  completed CPU;
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
 - a real ring-3 Resource Manager that creates a child Service through delegated
@@ -81,12 +84,14 @@ The reference validation profile enforces these deterministic invariants:
 | Registered Agents | 9 |
 | Native ring-3 completions | 6 |
 | Kernel-selected dispatches | 23 |
-| Resource Manager Agent Calls | 30 |
-| Resource Manager Agent/kernel address-space switches | 60 |
+| Resource Manager Agent Calls | 29 |
+| Resource Manager Agent/kernel address-space switches | 58 |
 | Physical quantum expiries | 10 |
 | Contained Agent faults | 4 |
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
+| Completion-owned live regions reclaimed | 1 |
+| Completion-owned physical frames reclaimed | 3 |
 | Resources after Manager execution | 7 |
 | Capabilities after Manager execution | 19 |
 | Intents after Manager execution | 7 |
@@ -145,7 +150,7 @@ and nonce state before it reaches the facade.
 | --- | ---: | --- |
 | `DescribeContext` | 1 | Establish trusted execution identity and nonce |
 | `Yield` | 2 | Cooperatively return the running Task to the queue |
-| `CompleteTask` | 3 | Complete the authenticated Task |
+| `CompleteTask` | 3 | Reclaim live private memory and complete the authenticated Task |
 | `SubmitTaskResult` | 4 | Store a fixed-width Task result |
 | `InspectTaskResult` | 5 | Inspect one authorized target result |
 | `VerifyTask` | 6 | Commit target-scoped verification |
@@ -222,6 +227,7 @@ includes these proof lines:
 
 ```text
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
+AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
@@ -267,7 +273,9 @@ authority.
   frame-pool, compatibility-page, and multi-page memory-region lifecycle calls;
 - deterministic fault-time retirement of live Memory Resources, private leaf
   removal, frame zeroing and return, bounded reclamation evidence, and restart
-  after cleanup.
+  after cleanup;
+- authenticated completion-time retirement of live Memory Resources through
+  the same fixed-capacity cleanup transaction.
 
 ### Planned
 
@@ -280,8 +288,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Native Memory Fault Reclaim design](docs/superpowers/specs/2026-07-18-x86-native-memory-fault-reclaim-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-memory-fault-reclaim-v1.md)
+See the current [Native Memory Completion Reclaim design](docs/superpowers/specs/2026-07-18-x86-native-memory-completion-reclaim-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-memory-completion-reclaim-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

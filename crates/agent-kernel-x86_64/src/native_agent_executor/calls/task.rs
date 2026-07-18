@@ -1,6 +1,7 @@
 //! Task and verification Agent Call handlers for the native runtime loop.
 
 use agent_kernel_core::{EventKind, TaskId, TaskResult};
+use agent_kernel_x86_64::runtime_reclamation::RuntimeReclamationLog;
 
 use super::super::{state, NativeVerifyAuthority};
 use crate::{
@@ -105,6 +106,7 @@ pub(super) fn verify(
 pub(super) fn complete(
     booted: &mut X86BootedKernel,
     pending: PendingAgentCallCpu,
+    reclamation: RuntimeReclamationLog,
 ) -> Option<CompletedAgentCpu> {
     let context = authenticated_context(&pending)?;
     let event = booted
@@ -119,7 +121,18 @@ pub(super) fn complete(
     {
         return None;
     }
-    pending.complete()
+    pending.complete(reclamation)
+}
+
+pub(super) fn completion_ready(
+    booted: &X86BootedKernel,
+    pending: &PendingAgentCallCpu,
+) -> Option<()> {
+    let context = authenticated_context(pending)?;
+    booted
+        .kernel()
+        .can_complete_task(context.agent(), context.capability(), context.task())
+        .ok()
 }
 
 fn authenticated_context(

@@ -12,6 +12,7 @@ use agent_kernel_x86_64::{
     agent_call::{AgentCallContext, AgentCallOperation, AgentCallRequest, AgentCallTranscript},
     context::SavedAgentFrame,
     native_runtime::NativeRunBoundary,
+    runtime_reclamation::RuntimeReclamationLog,
     runtime_region::RuntimeRegionObservationLog,
 };
 
@@ -58,6 +59,7 @@ pub(crate) struct CompletedAgentCpu {
     runtime_region_generation: u64,
     runtime_regions_released: bool,
     runtime_region_observations: RuntimeRegionObservationLog,
+    reclamation: RuntimeReclamationLog,
 }
 
 pub(crate) enum AgentRunOutcome {
@@ -285,5 +287,9 @@ impl CompletedAgentCpu {
 
     pub(crate) const fn runtime_region_observations(&self) -> RuntimeRegionObservationLog {
         self.runtime_region_observations
+    }
+
+    pub(crate) const fn reclamation_log(&self) -> RuntimeReclamationLog {
+        self.reclamation
     }
 }

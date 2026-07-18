@@ -6,6 +6,7 @@
 use agent_kernel_core::{CapabilityId, MemoryCellId, MemoryValue, ResourceId};
 use agent_kernel_x86_64::{
     runtime_page::{RuntimePageRelease, RuntimePageReservation},
+    runtime_reclamation::RuntimeReclamationPlan,
     runtime_region::{RuntimeRegionBinding, RuntimeRegionRelease, RuntimeRegionReservation},
 };
 
@@ -13,6 +14,10 @@ use super::PendingAgentCallCpu;
 use crate::agent_memory::RuntimePhysicalFrameSet;
 
 impl PendingAgentCallCpu {
+    pub(crate) fn runtime_reclamation_plan(&self) -> Option<RuntimeReclamationPlan> {
+        self.session.memory.runtime_reclamation_plan()
+    }
+
     pub(crate) fn prepare_runtime_page_allocation(
         &mut self,
         resource: ResourceId,
