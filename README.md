@@ -74,6 +74,9 @@ currently provides:
 - authenticated Worker completion notifications that wake the retained
   Supervisor call frame, followed by two FIFO receive/acknowledgement pairs and
   a three-owner terminal address-space reclamation;
+- a generation-bound Runtime Admission release batch that requires verified,
+  idle targets, preflights aggregate event capacity, and atomically records two
+  `RuntimeAdmissionReleased` transitions after all 33 physical frames return;
 - post-build cancellation that clears and atomically restores all eleven frames
   after duplicate runtime registration, followed by three disjoint live private
   address spaces, FIFO ring-3 execution, verification, and 33-frame terminal
@@ -116,6 +119,8 @@ The reference validation profile enforces these deterministic invariants:
 | Physical quantum expiries | 13 |
 | Runtime Admission requests | 2 |
 | Runtime Admission commits | 2 |
+| Runtime Admission releases | 2 |
+| Terminal released Runtime Admission records | 2 |
 | Worker completion notifications | 2 |
 | Resident Supervisor Mailbox waits | 1 |
 | Resident Supervisor Mailbox wakes | 1 |
@@ -135,7 +140,7 @@ The reference validation profile enforces these deterministic invariants:
 | Tasks after Runtime Service Worker verification | 10 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 273 |
+| Ordered kernel events after Driver completion | 275 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -271,7 +276,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 273 events, and treat
+validate the complete serial transcript, require exactly 275 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -292,6 +297,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -302,7 +308,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[273] driver_invocation_completed
+event[275] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -352,17 +358,18 @@ authority.
 - resident Supervisor Mailbox waiting across target admission and execution,
   authenticated Worker notifications, FIFO acknowledgement, and atomic
   three-address-space terminal reclamation;
+- an opaque, generation-bound release batch that links verified idle Tasks to
+  post-reclamation `RuntimeAdmissionReleased` records and ordered kernel events;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, and reclamation for
   two disjoint Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 273-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 275-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- terminal `RuntimeAdmissionReleased` state after physical reclamation, dynamic
-  requester discovery, repeated admission batches, and an admission queue
-  larger than the Task store;
+- dynamic requester discovery, repeated resident admission batches, bounded
+  release-record compaction, and an admission queue larger than the Task store;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -370,8 +377,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Resident Runtime Admission Supervisor design](docs/superpowers/specs/2026-07-19-x86-resident-runtime-admission-supervisor-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-x86-resident-runtime-admission-supervisor-v1.md)
+See the current [Runtime Admission Release design](docs/superpowers/specs/2026-07-19-runtime-admission-release-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-runtime-admission-release-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

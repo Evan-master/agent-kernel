@@ -59,6 +59,9 @@ Agent 为中心的系统需要不同的控制面：
   提交语义准入，并在语义提交无法继续时完整恢复物理运行时事务；
 - 受认证的 Worker 完成通知，用于唤醒保留的 Supervisor 调用帧，随后完成两次
   FIFO 接收确认和三个地址空间所有者的终态回收；
+- 代数绑定的 Runtime Admission 批量释放 Permit，要求目标 Task 已验证且执行上下文
+  空闲，预检聚合事件容量，并在 33 个物理帧全部归还后原子记录两条
+  `RuntimeAdmissionReleased` 转换；
 - 一次重复运行时登记在完成页表重建后被拒绝，服务清零并原子归还全部 11 帧，
   随后同时持有三个互不重叠的私有地址空间，完成 FIFO ring-3 执行、验证和 33 帧
   终态回收；
@@ -96,6 +99,8 @@ Agent 为中心的系统需要不同的控制面：
 | 真实物理时间片到期 | 13 |
 | Runtime Admission 请求 | 2 |
 | Runtime Admission 提交 | 2 |
+| Runtime Admission 释放 | 2 |
+| 终态 Released Runtime Admission 记录 | 2 |
 | Worker 完成通知 | 2 |
 | 常驻 Supervisor Mailbox 等待 | 1 |
 | 常驻 Supervisor Mailbox 唤醒 | 1 |
@@ -115,7 +120,7 @@ Agent 为中心的系统需要不同的控制面：
 | Runtime Service Worker 验证后的 Task | 10 |
 | Resource Manager 执行后的 MemoryCell | 5 |
 | 已归还并清零的共享运行时帧 | 16 |
-| Driver 完成后的有序内核事件 | 273 |
+| Driver 完成后的有序内核事件 | 275 |
 
 `scripts/run-qemu.sh` 会逐条校验事件顺序，同时拒绝缺失标记、多余事件、异常的
 QEMU 退出状态以及任何 fail-closed 启动路径。
@@ -243,7 +248,7 @@ scripts/run-qemu.sh --release
 ```
 
 脚本会构建裸机目标、生成 BIOS 镜像、启动 QEMU、检查完整串口记录、要求恰好
-273 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
+275 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
 
 ```text
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
@@ -262,6 +267,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -272,7 +278,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[273] driver_invocation_completed
+event[275] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -314,15 +320,17 @@ SUPERVISOR_HANDOFF_READY
   Permit，以及连接可审计语义请求和物理运行时服务的 Broker；
 - 跨越目标准入和执行阶段的常驻 Supervisor Mailbox 等待、受认证 Worker 通知、
   FIFO 确认和三个地址空间的原子终态回收；
+- 使用不透明、代数绑定的批量释放 Permit，把已验证且空闲的 Task 连接到物理回收
+  完成后的 `RuntimeAdmissionReleased` 记录和有序内核事件；
 - 在页表重建后的准入拒绝路径完成全部帧回滚，并让两个互不重叠的 Runtime Service
   Worker 同时持有地址空间，完成 FIFO ring-3 执行、语义验证和终态回收；
-- 为包含 273 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
+- 为包含 275 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
 
 ### 后续规划
 
 - 超出固定私有层级的动态页表增长；
-- 物理回收后的 `RuntimeAdmissionReleased` 终态、动态请求者发现、多批次准入循环，
-  以及超过 Task Store 容量的准入队列；
+- 动态请求者发现、多批次常驻准入循环、有界释放记录压缩，以及超过 Task Store
+  容量的准入队列；
 - SMP 调度、多核同步和硬件 TLB Shootdown；
 - 通用存储、网络、图形、USB 或真实硬件支持；
 - 面向分发与升级的 Agent 包和应用格式；
@@ -330,8 +338,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [常驻运行时准入 Supervisor 设计](docs/superpowers/specs/2026-07-19-x86-resident-runtime-admission-supervisor-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-19-x86-resident-runtime-admission-supervisor-v1.md)。
+最新里程碑的完整契约见 [Runtime Admission Release 设计](docs/superpowers/specs/2026-07-19-runtime-admission-release-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-19-runtime-admission-release-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献
