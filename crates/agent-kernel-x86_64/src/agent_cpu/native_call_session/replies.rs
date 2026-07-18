@@ -6,6 +6,7 @@
 
 mod agent_management;
 mod memory_page;
+mod memory_region;
 mod task_lifecycle;
 
 use agent_kernel_core::{
@@ -201,6 +202,12 @@ impl PendingAgentCallCpu {
             .memory
             .runtime_page_released(runtime_page_generation);
         let runtime_page_observation = self.session.memory.runtime_page_observation();
+        let runtime_region_generation = self.session.memory.runtime_region_generation();
+        let runtime_regions_released = self
+            .session
+            .memory
+            .runtime_regions_released(runtime_region_generation);
+        let runtime_region_observation = self.session.memory.runtime_region_observation();
         Some(CompletedAgentCpu {
             context: self.session.context,
             nonce,
@@ -211,6 +218,9 @@ impl PendingAgentCallCpu {
             runtime_page_generation,
             runtime_page_released,
             runtime_page_observation,
+            runtime_region_generation,
+            runtime_regions_released,
+            runtime_region_observation,
         })
     }
 

@@ -14,6 +14,7 @@ use self::evidence::{
 };
 
 use crate::{
+    agent_memory::RuntimeMemoryPool,
     boot_agent_images::{
         BootAgentImage, BootFaultHandlerImage, BootFaultWorkerImage, BootResourceManagerImage,
         BootVerifierImage,
@@ -82,6 +83,7 @@ impl RuntimeLoopPlan {
 pub(super) fn run(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
+    memory_pool: &mut RuntimeMemoryPool,
     plan: RuntimeLoopPlan,
 ) -> Option<()> {
     let RuntimeLoopPlan {
@@ -106,6 +108,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -124,6 +127,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -146,6 +150,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -177,6 +182,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -201,6 +207,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -220,6 +227,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -237,6 +245,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -260,6 +269,7 @@ pub(super) fn run(
     native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -282,6 +292,7 @@ pub(super) fn run(
     if native_agent_executor::run_until_idle(
         booted,
         runtime,
+        memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
@@ -300,12 +311,19 @@ pub(super) fn run(
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_COUNTERS_OK");
-    resource_manager.completed_after_runtime(booted, &report, resource_manager_image)?;
+    resource_manager.completed_after_runtime(
+        booted,
+        &report,
+        memory_pool,
+        resource_manager_image,
+    )?;
+    serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_TASK_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK");
     write_verifier_markers();
     Some(())
 }

@@ -2,21 +2,23 @@
 
 mod agent_management;
 mod memory_page;
+mod memory_region;
 mod task_lifecycle;
 
 use agent_kernel_core::{
-    EventKind, KernelError, Operation, OperationSet, ResourceKind, ResourceStatus, TaskStatus,
+    EventKind, Operation, OperationSet, ResourceKind, ResourceStatus, TaskStatus,
 };
 
 use super::{ResourceManagerTask, RESOURCE_MANAGER};
 use crate::{
-    boot_agent_images::BootResourceManagerImage, native_agent_executor::NativeExecutionReport,
-    X86BootedKernel,
+    agent_memory::RuntimeMemoryPool, boot_agent_images::BootResourceManagerImage,
+    native_agent_executor::NativeExecutionReport, X86BootedKernel,
 };
 
 pub(super) fn completed(
     booted: &X86BootedKernel,
     report: &NativeExecutionReport,
+    memory_pool: &RuntimeMemoryPool,
     manager: ResourceManagerTask,
     image: BootResourceManagerImage,
 ) -> bool {
@@ -46,6 +48,9 @@ pub(super) fn completed(
     let Ok(authority) = kernel.capability(manager.resource_authority) else {
         return false;
     };
+    let Some(region_observation) = completed.runtime_region_observation() else {
+        return false;
+    };
     let child_operations = OperationSet::only(Operation::Observe)
         .with(Operation::Act)
         .with(Operation::Delegate)
@@ -53,8 +58,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 18
-        && completed.address_space_switch_count() == 36
+        && completed.call_count() == 22
+        && completed.address_space_switch_count() == 44
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -63,6 +68,12 @@ pub(super) fn completed(
         && completed.runtime_page_generation() == image.memory_generation()
         && completed.runtime_page_released()
         && completed.runtime_page_observation() == Some(image.memory_proof_value())
+        && completed.runtime_region_generation() == image.memory_region_generation()
+        && completed.runtime_regions_released()
+        && region_observation.first == image.memory_region_first_proof()
+        && region_observation.last == image.memory_region_last_proof()
+        && region_observation.page_count == image.memory_region_page_count()
+        && region_observation.generation == image.memory_region_generation()
         && task.status == TaskStatus::Completed
         && task.assignee == Some(RESOURCE_MANAGER)
         && task.delegated_capability == Some(manager.task_capability)
@@ -90,15 +101,13 @@ pub(super) fn completed(
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
-        && kernel.resources().len() == 3
-        && matches!(
-            kernel.capability(agent_kernel_core::CapabilityId::new(15)),
-            Err(KernelError::CapabilityNotFound)
-        )
+        && kernel.resources().len() == 4
         && kernel.run_queue().is_empty()
+        && memory_pool.all_available_and_zero()
         && task_lifecycle::state_valid(booted, manager, image)
         && agent_management::state_valid(booted, manager, image)
         && memory_page::state_valid(booted, image)
+        && memory_region::state_valid(booted, image)
         && events_prove_lifecycle(booted, manager, image)
 }
 
@@ -126,6 +135,11 @@ fn events_prove_lifecycle(
         EventKind::AgentSuspended,
         EventKind::AgentResumed,
         EventKind::AgentRetired,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
+        EventKind::MemoryCellCreated,
+        EventKind::MemoryCellRecalled,
+        EventKind::ResourceRetired,
         EventKind::ResourceCreated,
         EventKind::CapabilityGranted,
         EventKind::MemoryCellCreated,
@@ -166,7 +180,8 @@ fn events_prove_lifecycle(
         && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
         && agent_management::events_valid(&tail[14..18], booted, manager, image)
         && memory_page::events_valid(&tail[18..23], booted, image)
-        && tail[23].task == Some(manager.task)
-        && tail[23].task_result == Some(image.result())
-        && tail[24].task == Some(manager.task)
+        && memory_region::events_valid(&tail[23..28], booted, image)
+        && tail[28].task == Some(manager.task)
+        && tail[28].task_result == Some(image.result())
+        && tail[29].task == Some(manager.task)
 }

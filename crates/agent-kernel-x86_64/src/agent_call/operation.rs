@@ -29,4 +29,7 @@ pub enum AgentCallOperation {
     AllocateMemoryPage,
     InspectMemoryPage,
     ReleaseMemoryPage,
+    AllocateMemoryRegion,
+    InspectMemoryRegion,
+    ReleaseMemoryRegion,
 }

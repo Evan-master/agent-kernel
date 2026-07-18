@@ -11,12 +11,21 @@ use agent_kernel_x86_64::agent_image::{AgentImageCapsule, VerifiedAgentImage};
 use bootloader_api::BootInfo;
 
 use crate::{
-    agent_cpu::AgentCpuRuntime, agent_memory::PreparedAgentMemory, boot_agent_images, event_trace,
-    exit_qemu, fatal_boot, fault_handler_flow::FaultHandlerFlow, fault_task_flow::FaultTaskFlow,
-    halt_forever, native_agent_runtime::NativeAgentRuntime, port_driver_flow::PortDriverSetup,
-    privilege_runtime::PrivilegeBoundary, resource_manager_flow::ResourceManagerFlow,
-    serial_transmit_empty, serial_write_line, serial_write_str, timer_task_flow::TimerTaskFlow,
-    uart_interrupt, verifier_task_flow::VerifierTaskFlow, X86BootedKernel, COM1,
+    agent_cpu::AgentCpuRuntime,
+    agent_memory::{PreparedAgentMemory, RuntimeMemoryPool},
+    boot_agent_images, event_trace, exit_qemu, fatal_boot,
+    fault_handler_flow::FaultHandlerFlow,
+    fault_task_flow::FaultTaskFlow,
+    halt_forever,
+    native_agent_runtime::NativeAgentRuntime,
+    port_driver_flow::PortDriverSetup,
+    privilege_runtime::PrivilegeBoundary,
+    resource_manager_flow::ResourceManagerFlow,
+    serial_transmit_empty, serial_write_line, serial_write_str,
+    timer_task_flow::TimerTaskFlow,
+    uart_interrupt,
+    verifier_task_flow::VerifierTaskFlow,
+    X86BootedKernel, COM1,
 };
 
 pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: PrivilegeBoundary) -> ! {
@@ -163,6 +172,24 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         &fault_handler_memory,
         &resource_manager_memory,
     ]);
+    let Some(mut runtime_memory_pool) = RuntimeMemoryPool::prepare(boot_info) else {
+        fatal_boot("AGENT_KERNEL_RUNTIME_FRAME_POOL_ERROR");
+    };
+    if !runtime_memory_pool.all_available_and_zero()
+        || [
+            &agent_a_memory,
+            &agent_b_memory,
+            &verifier_memory,
+            &fault_memory,
+            &fault_handler_memory,
+            &resource_manager_memory,
+        ]
+        .iter()
+        .any(|memory| !runtime_memory_pool.is_disjoint_from(memory))
+    {
+        fatal_boot("AGENT_KERNEL_RUNTIME_FRAME_POOL_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_OK");
     serial_write_line("AGENT_KERNEL_AGENT_IMAGE_LOAD_OK");
     let Some(cpu_runtime) = AgentCpuRuntime::install(&privilege_boundary, agent_a_memory.roots())
     else {
@@ -220,7 +247,14 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         resource_manager_flow,
         resource_manager_image,
     );
-    if runtime_loop::run(&mut booted, &mut native_runtime, runtime_plan).is_none() {
+    if runtime_loop::run(
+        &mut booted,
+        &mut native_runtime,
+        &mut runtime_memory_pool,
+        runtime_plan,
+    )
+    .is_none()
+    {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
     }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");

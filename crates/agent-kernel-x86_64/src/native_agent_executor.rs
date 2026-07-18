@@ -12,6 +12,7 @@ use agent_kernel_x86_64::native_runtime::NativeAgentRuntimeStore;
 
 use crate::{
     agent_cpu::{AgentRunOutcome, CompletedAgentCpu, FaultedAgentCpu},
+    agent_memory::RuntimeMemoryPool,
     native_agent_runtime::{NativeAgentContext, NativeAgentRuntime},
     X86BootedKernel,
 };
@@ -48,6 +49,7 @@ pub(crate) struct NativeRuntimeEvidence {
 pub(crate) fn run_until_idle(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
+    memory_pool: &mut RuntimeMemoryPool,
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
@@ -62,6 +64,7 @@ pub(crate) fn run_until_idle(
                 run_outcome(
                     booted,
                     runtime,
+                    memory_pool,
                     report,
                     evidence,
                     verify_authority,
@@ -73,6 +76,7 @@ pub(crate) fn run_until_idle(
                 run_outcome(
                     booted,
                     runtime,
+                    memory_pool,
                     report,
                     evidence,
                     verify_authority,
@@ -85,6 +89,7 @@ pub(crate) fn run_until_idle(
                 run_outcome(
                     booted,
                     runtime,
+                    memory_pool,
                     report,
                     evidence,
                     verify_authority,
@@ -96,6 +101,7 @@ pub(crate) fn run_until_idle(
                 run_outcome(
                     booted,
                     runtime,
+                    memory_pool,
                     report,
                     evidence,
                     verify_authority,
@@ -107,6 +113,7 @@ pub(crate) fn run_until_idle(
                 run_outcome(
                     booted,
                     runtime,
+                    memory_pool,
                     report,
                     evidence,
                     verify_authority,
@@ -124,22 +131,30 @@ pub(crate) fn run_until_idle(
 fn run_outcome(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
+    memory_pool: &mut RuntimeMemoryPool,
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
     outcome: AgentRunOutcome,
 ) -> Option<()> {
     match outcome {
-        AgentRunOutcome::Call(pending) => {
-            calls::run(booted, runtime, report, evidence, verify_authority, pending)
-        }
+        AgentRunOutcome::Call(pending) => calls::run(
+            booted,
+            runtime,
+            memory_pool,
+            report,
+            evidence,
+            verify_authority,
+            pending,
+        ),
         AgentRunOutcome::Preempted(cpu) => expire_quantum(booted, runtime, evidence, cpu),
-        AgentRunOutcome::Fault(cpu) => contain_fault(booted, report, evidence, cpu),
+        AgentRunOutcome::Fault(cpu) => contain_fault(booted, memory_pool, report, evidence, cpu),
     }
 }
 
 pub(super) fn contain_fault(
     booted: &mut X86BootedKernel,
+    memory_pool: &RuntimeMemoryPool,
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     cpu: FaultedAgentCpu,
@@ -148,7 +163,10 @@ pub(super) fn contain_fault(
     let fault_kind = FaultKind::ExecutionTrap;
     let fault_detail = cpu.fault().detail();
     let agent_faults = evidence.agent_faults.checked_add(1)?;
-    if !state::running(booted, context) {
+    if !state::running(booted, context)
+        || !cpu.runtime_memory_is_clear()
+        || !memory_pool.agent_is_clear(context.agent())
+    {
         return None;
     }
     let fault = booted

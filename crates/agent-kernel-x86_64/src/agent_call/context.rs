@@ -7,6 +7,7 @@ mod agent_management;
 mod capability;
 mod mailbox;
 mod memory_page;
+mod memory_region;
 mod resource;
 mod task_lifecycle;
 
@@ -249,6 +250,27 @@ impl AgentCallContext {
                 ..
             }
             | AgentCallRequest::ReleaseMemoryPage {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::AllocateMemoryRegion {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::InspectMemoryRegion {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::ReleaseMemoryRegion {
                 agent,
                 task,
                 image,

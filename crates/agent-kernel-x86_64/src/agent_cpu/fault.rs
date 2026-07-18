@@ -109,6 +109,10 @@ impl FaultedAgentCpu {
         self.memory.restart_generation()
     }
 
+    pub(crate) fn runtime_memory_is_clear(&self) -> bool {
+        self.memory.runtime_memory_is_clear()
+    }
+
     pub(crate) fn restart(self) -> Option<PreparedAgentCpu> {
         let Self {
             memory,

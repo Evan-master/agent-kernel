@@ -15,6 +15,7 @@ use x86_64::{
 
 use agent_kernel_x86_64::{
     address_space::{AGENT_P4_INDEX, P4_ENTRY_COUNT},
+    runtime_region::RUNTIME_REGION_SLOT_COUNT,
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
 
@@ -67,6 +68,11 @@ pub(super) fn kernel_excludes_agent_region(
         && mapper
             .translate_addr(VirtAddr::new(layout.runtime_page_start()))
             .is_none()
+        && (0..RUNTIME_REGION_SLOT_COUNT).all(|slot| {
+            layout
+                .runtime_region_page_start(slot)
+                .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
+        })
         && (0..STACK_PAGE_COUNT).all(|index| {
             mapper
                 .translate_addr(VirtAddr::new(
@@ -83,7 +89,6 @@ pub(super) fn agent_mappings_match(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     _lazy_data_frame: PhysFrame,
-    _runtime_page_frame: PhysFrame,
 ) -> bool {
     let code_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
     let signal_flags =
@@ -123,6 +128,11 @@ pub(super) fn agent_mappings_match(
         && mapper
             .translate_addr(VirtAddr::new(layout.runtime_page_start()))
             .is_none()
+        && (0..RUNTIME_REGION_SLOT_COUNT).all(|slot| {
+            layout
+                .runtime_region_page_start(slot)
+                .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
+        })
 }
 
 pub(super) fn lazy_data_mapping_matches(
@@ -168,6 +178,22 @@ pub(super) fn runtime_page_unmapped(
     mapper
         .translate_addr(VirtAddr::new(layout.runtime_page_start()))
         .is_none()
+}
+
+pub(super) fn runtime_region_mapping_matches(
+    mapper: &OffsetPageTable<'_>,
+    address: u64,
+    frame: PhysFrame,
+) -> bool {
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::NO_EXECUTE;
+    mapping_matches(mapper, address, frame, flags, PageTableFlags::HUGE_PAGE)
+}
+
+pub(super) fn runtime_region_unmapped(mapper: &OffsetPageTable<'_>, address: u64) -> bool {
+    mapper.translate_addr(VirtAddr::new(address)).is_none()
 }
 
 fn supervisor_entry(entry: &PageTableEntry) -> bool {

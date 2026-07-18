@@ -26,6 +26,7 @@ pub struct UserMemoryLayout {
     stack_top: u64,
     lazy_data_start: u64,
     runtime_page_start: u64,
+    runtime_region_start: u64,
 }
 
 impl UserMemoryLayout {
@@ -37,6 +38,7 @@ impl UserMemoryLayout {
         let stack_top = stack_bottom + PAGE_BYTES * STACK_PAGE_COUNT as u64;
         let lazy_data_start = stack_top;
         let runtime_page_start = lazy_data_start + PAGE_BYTES;
+        let runtime_region_start = runtime_page_start + PAGE_BYTES;
         Self {
             code_start,
             signal_start,
@@ -45,6 +47,7 @@ impl UserMemoryLayout {
             stack_top,
             lazy_data_start,
             runtime_page_start,
+            runtime_region_start,
         }
     }
 
@@ -76,12 +79,29 @@ impl UserMemoryLayout {
         self.runtime_page_start
     }
 
+    pub const fn runtime_region_start(self) -> u64 {
+        self.runtime_region_start
+    }
+
+    pub const fn runtime_region_end(self) -> u64 {
+        self.runtime_region_start
+            + PAGE_BYTES * crate::runtime_region::RUNTIME_REGION_SLOT_COUNT as u64
+    }
+
+    pub const fn runtime_region_page_start(self, slot: usize) -> Option<u64> {
+        if slot >= crate::runtime_region::RUNTIME_REGION_SLOT_COUNT {
+            None
+        } else {
+            Some(self.runtime_region_start + PAGE_BYTES * slot as u64)
+        }
+    }
+
     pub const fn p4_index(self) -> usize {
         p4_index(self.code_start)
     }
 
     pub const fn last_mapped_p4_index(self) -> usize {
-        p4_index(self.runtime_page_start + PAGE_BYTES - 1)
+        p4_index(self.runtime_region_end() - 1)
     }
 
     pub const fn contains_code(self, address: u64) -> bool {
@@ -102,5 +122,9 @@ impl UserMemoryLayout {
 
     pub const fn contains_runtime_page(self, address: u64) -> bool {
         address >= self.runtime_page_start && address < self.runtime_page_start + PAGE_BYTES
+    }
+
+    pub const fn contains_runtime_region(self, address: u64) -> bool {
+        address >= self.runtime_region_start && address < self.runtime_region_end()
     }
 }

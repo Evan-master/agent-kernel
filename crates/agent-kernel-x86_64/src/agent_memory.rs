@@ -8,6 +8,8 @@
 mod frame_allocator;
 mod page_tables;
 mod runtime_page;
+mod runtime_pool;
+mod runtime_region;
 
 use bootloader_api::BootInfo;
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
@@ -16,6 +18,7 @@ use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
     runtime_page::RuntimePageLedger,
+    runtime_region::RuntimeRegionLedger,
     user_memory::{
         UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_RESTART_GENERATION_OFFSET,
         MAX_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
@@ -25,18 +28,29 @@ use agent_kernel_x86_64::{
 
 use self::frame_allocator::BootFrameAllocator;
 
+pub(crate) use self::runtime_pool::{RuntimeMemoryPool, RuntimePhysicalFrameSet};
+
 pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
 
 pub(crate) struct PreparedAgentMemory {
     layout: UserMemoryLayout,
     signal_pointer: *mut u8,
     lazy_data_pointer: *mut u8,
-    runtime_page_pointer: *mut u8,
     roots: AddressSpaceRoots,
     identity: AgentMemoryIdentity,
     entry_rip: u64,
     runtime_page: RuntimePageLedger,
     runtime_page_observation: Option<u64>,
+    runtime_regions: RuntimeRegionLedger,
+    runtime_region_observation: Option<RuntimeRegionObservation>,
+}
+
+#[derive(Copy, Clone)]
+pub(crate) struct RuntimeRegionObservation {
+    pub(crate) first: u64,
+    pub(crate) last: u64,
+    pub(crate) page_count: u64,
+    pub(crate) generation: u64,
 }
 
 impl PreparedAgentMemory {
@@ -54,15 +68,13 @@ impl PreparedAgentMemory {
             *frame = allocator.allocate()?;
         }
         let lazy_data_frame = allocator.allocate()?;
-        let runtime_page_frame = allocator.allocate()?;
 
-        let (signal_pointer, lazy_data_pointer, runtime_page_pointer) = initialize_content(
+        let (signal_pointer, lazy_data_pointer) = initialize_content(
             physical_offset,
             code_frame,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
-            runtime_page_frame,
             image.code(),
         )?;
         let layout = UserMemoryLayout::fixed();
@@ -80,7 +92,6 @@ impl PreparedAgentMemory {
             signal_frame,
             &stack_frames,
             lazy_data_frame,
-            runtime_page_frame,
         )?;
         if !page_tables::kernel_is_active(roots) {
             return None;
@@ -92,19 +103,19 @@ impl PreparedAgentMemory {
             content_frames[index + 2] = frame.start_address().as_u64();
         }
         content_frames[STACK_PAGE_COUNT + 2] = lazy_data_frame.start_address().as_u64();
-        content_frames[STACK_PAGE_COUNT + 3] = runtime_page_frame.start_address().as_u64();
         let identity = AgentMemoryIdentity::new(roots.agent_root(), content_frames)?;
 
         Some(Self {
             layout,
             signal_pointer,
             lazy_data_pointer,
-            runtime_page_pointer,
             roots,
             identity,
             entry_rip,
             runtime_page: RuntimePageLedger::new(),
             runtime_page_observation: None,
+            runtime_regions: RuntimeRegionLedger::new(),
+            runtime_region_observation: None,
         })
     }
 
@@ -213,7 +224,10 @@ impl PreparedAgentMemory {
     }
 
     pub(crate) fn reset_for_next_restart(self) -> Option<(Self, u8)> {
-        if !self.kernel_address_space_active() || !self.runtime_page.is_available() {
+        if !self.kernel_address_space_active()
+            || !self.runtime_page.is_available()
+            || !self.runtime_regions.is_clear()
+        {
             return None;
         }
         let next_generation = self.restart_generation().checked_add(1)?;
@@ -255,7 +269,7 @@ impl PreparedAgentMemory {
     }
 }
 
-fn clear_page(pointer: *mut u8) -> bool {
+pub(super) fn clear_page(pointer: *mut u8) -> bool {
     // SAFETY: callers pass a supervisor alias for an exclusively owned Agent
     // signal or stack frame while the kernel address space is active.
     unsafe {
@@ -272,22 +286,32 @@ fn clear_page(pointer: *mut u8) -> bool {
     true
 }
 
+pub(super) fn page_is_zero(pointer: *mut u8) -> bool {
+    let mut offset = 0;
+    while offset < PAGE_BYTES as usize {
+        // SAFETY: callers bind this pointer to one exclusive 4 KiB frame.
+        if unsafe { pointer.add(offset).read_volatile() } != 0 {
+            return false;
+        }
+        offset += 1;
+    }
+    true
+}
+
 fn initialize_content(
     physical_offset: u64,
     code_frame: PhysFrame,
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
-    runtime_page_frame: PhysFrame,
     code: &[u8],
-) -> Option<(*mut u8, *mut u8, *mut u8)> {
+) -> Option<(*mut u8, *mut u8)> {
     if code.is_empty() || code.len() > PAGE_BYTES as usize {
         return None;
     }
     let code_pointer = physical_pointer(physical_offset, code_frame)?;
     let signal_pointer = physical_pointer(physical_offset, signal_frame)?;
     let lazy_data_pointer = physical_pointer(physical_offset, lazy_data_frame)?;
-    let runtime_page_pointer = physical_pointer(physical_offset, runtime_page_frame)?;
     // SAFETY: all frames were just removed from Usable memory and are
     // exclusively owned by this preparation operation.
     unsafe {
@@ -299,7 +323,6 @@ fn initialize_content(
             physical_pointer(physical_offset, *frame)?.write_bytes(0, PAGE_BYTES as usize);
         }
         lazy_data_pointer.write_bytes(0, PAGE_BYTES as usize);
-        runtime_page_pointer.write_bytes(0, PAGE_BYTES as usize);
     }
     for (offset, expected) in code.iter().copied().enumerate() {
         // SAFETY: the code frame remains exclusively owned and supervisor-mapped.
@@ -307,7 +330,7 @@ fn initialize_content(
             return None;
         }
     }
-    Some((signal_pointer, lazy_data_pointer, runtime_page_pointer))
+    Some((signal_pointer, lazy_data_pointer))
 }
 
 pub(super) fn physical_pointer(offset: u64, frame: PhysFrame) -> Option<*mut u8> {

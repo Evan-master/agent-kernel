@@ -6,6 +6,7 @@
 
 mod lazy;
 mod runtime_page;
+mod runtime_region;
 mod validation;
 
 use x86_64::{
@@ -33,7 +34,6 @@ pub(super) fn install(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
-    runtime_page_frame: PhysFrame,
 ) -> Option<AddressSpaceRoots> {
     let (kernel_frame, control) = Cr3::read_raw();
     let agent_frame = allocator.allocate()?;
@@ -94,7 +94,6 @@ pub(super) fn install(
             signal_frame,
             stack_frames,
             lazy_data_frame,
-            runtime_page_frame,
         ) {
             return None;
         }
@@ -157,6 +156,46 @@ pub(super) fn deactivate_runtime_page(
     frame: PhysFrame,
 ) -> Option<()> {
     runtime_page::deactivate(physical_offset, roots, layout, frame)
+}
+
+pub(super) fn activate_runtime_region(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    start_slot: usize,
+    frames: &[PhysFrame],
+) -> Option<()> {
+    runtime_region::activate(physical_offset, roots, layout, start_slot, frames)
+}
+
+pub(super) fn runtime_region_is_active(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    start_slot: usize,
+    frames: &[PhysFrame],
+) -> bool {
+    runtime_region::is_active(physical_offset, roots, layout, start_slot, frames)
+}
+
+pub(super) fn runtime_region_is_absent(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    start_slot: usize,
+    page_count: usize,
+) -> bool {
+    runtime_region::is_absent(physical_offset, roots, layout, start_slot, page_count)
+}
+
+pub(super) fn deactivate_runtime_region(
+    physical_offset: u64,
+    roots: AddressSpaceRoots,
+    layout: UserMemoryLayout,
+    start_slot: usize,
+    frames: &[PhysFrame],
+) -> Option<()> {
+    runtime_region::deactivate(physical_offset, roots, layout, start_slot, frames)
 }
 
 pub(super) fn kernel_is_active(roots: AddressSpaceRoots) -> bool {

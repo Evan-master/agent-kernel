@@ -10,6 +10,7 @@ mod capability;
 mod context;
 mod mailbox;
 mod memory_page;
+mod memory_region;
 mod operation;
 mod request;
 mod resource;
@@ -51,6 +52,11 @@ pub const AGENT_CALL_ALLOCATE_MEMORY_PAGE: u64 = 21;
 pub const AGENT_CALL_INSPECT_MEMORY_PAGE: u64 = 22;
 pub const AGENT_CALL_RELEASE_MEMORY_PAGE: u64 = 23;
 pub const AGENT_CALL_MEMORY_PAGE_BYTES: u64 = 4096;
+pub const AGENT_CALL_ALLOCATE_MEMORY_REGION: u64 = 24;
+pub const AGENT_CALL_INSPECT_MEMORY_REGION: u64 = 25;
+pub const AGENT_CALL_RELEASE_MEMORY_REGION: u64 = 26;
+pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
+pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
 pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
 pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
@@ -104,6 +110,9 @@ impl AgentCallRequest {
             AGENT_CALL_ALLOCATE_MEMORY_PAGE => AgentCallOperation::AllocateMemoryPage,
             AGENT_CALL_INSPECT_MEMORY_PAGE => AgentCallOperation::InspectMemoryPage,
             AGENT_CALL_RELEASE_MEMORY_PAGE => AgentCallOperation::ReleaseMemoryPage,
+            AGENT_CALL_ALLOCATE_MEMORY_REGION => AgentCallOperation::AllocateMemoryRegion,
+            AGENT_CALL_INSPECT_MEMORY_REGION => AgentCallOperation::InspectMemoryRegion,
+            AGENT_CALL_RELEASE_MEMORY_REGION => AgentCallOperation::ReleaseMemoryRegion,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -192,6 +201,10 @@ impl AgentCallRequest {
             AgentCallOperation::AllocateMemoryPage => memory_page::decode_allocate(frame),
             AgentCallOperation::InspectMemoryPage | AgentCallOperation::ReleaseMemoryPage => {
                 memory_page::decode_existing(frame, operation)
+            }
+            AgentCallOperation::AllocateMemoryRegion => memory_region::decode_allocate(frame),
+            AgentCallOperation::InspectMemoryRegion | AgentCallOperation::ReleaseMemoryRegion => {
+                memory_region::decode_existing(frame, operation)
             }
         }
     }

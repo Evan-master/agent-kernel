@@ -7,7 +7,9 @@
 mod agent_management;
 mod capability;
 mod mailbox;
+mod memory_authority;
 mod memory_page;
+mod memory_region;
 mod resource;
 mod task;
 mod task_lifecycle;
@@ -17,6 +19,7 @@ use agent_kernel_x86_64::agent_call::AgentCallRequest;
 use super::{NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority};
 use crate::{
     agent_cpu::{AgentRunOutcome, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu},
+    agent_memory::RuntimeMemoryPool,
     native_agent_runtime::NativeAgentRuntime,
     X86BootedKernel,
 };
@@ -24,6 +27,7 @@ use crate::{
 pub(super) fn run(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
+    memory_pool: &mut RuntimeMemoryPool,
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
@@ -112,13 +116,32 @@ pub(super) fn run(
                 capability,
                 resource,
                 ..
-            } => memory_page::allocate(booted, pending, capability, resource)?,
+            } => memory_page::allocate(booted, memory_pool, pending, capability, resource)?,
             AgentCallRequest::InspectMemoryPage {
                 capability, cell, ..
-            } => memory_page::inspect(booted, pending, capability, cell)?,
+            } => memory_page::inspect(booted, memory_pool, pending, capability, cell)?,
             AgentCallRequest::ReleaseMemoryPage {
                 capability, cell, ..
-            } => memory_page::release(booted, pending, capability, cell)?,
+            } => memory_page::release(booted, memory_pool, pending, capability, cell)?,
+            AgentCallRequest::AllocateMemoryRegion {
+                capability,
+                resource,
+                page_count,
+                ..
+            } => memory_region::allocate(
+                booted,
+                memory_pool,
+                pending,
+                capability,
+                resource,
+                usize::try_from(page_count).ok()?,
+            )?,
+            AgentCallRequest::InspectMemoryRegion {
+                capability, cell, ..
+            } => memory_region::inspect(booted, memory_pool, pending, capability, cell)?,
+            AgentCallRequest::ReleaseMemoryRegion {
+                capability, cell, ..
+            } => memory_region::release(booted, memory_pool, pending, capability, cell)?,
             AgentCallRequest::Yield { .. } => {
                 let yielded = task::yield_running(booted, pending)?;
                 if runtime.park_yielded_call(yielded).is_some() {
@@ -133,6 +156,11 @@ pub(super) fn run(
                 task::verify(booted, pending, target_task, verify_authority?)?
             }
             AgentCallRequest::CompleteTask { .. } => {
+                if !pending.runtime_memory_is_clear()
+                    || !memory_pool.agent_is_clear(pending.context().agent())
+                {
+                    return None;
+                }
                 let completed = task::complete(booted, pending)?;
                 report.record(completed)?;
                 return Some(());
@@ -145,7 +173,7 @@ pub(super) fn run(
                 return Some(());
             }
             AgentRunOutcome::Fault(cpu) => {
-                super::contain_fault(booted, report, evidence, cpu)?;
+                super::contain_fault(booted, memory_pool, report, evidence, cpu)?;
                 return Some(());
             }
         }

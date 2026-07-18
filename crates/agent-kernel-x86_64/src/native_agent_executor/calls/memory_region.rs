@@ -1,9 +1,7 @@
-//! Capability-checked physical runtime memory-page handlers.
+//! Capability-checked multi-page runtime memory-region handlers.
 //!
-//! This bare-metal adapter binds one x86 retained frame to existing Memory
-//! Resource and MemoryCell semantics. Reversible page-table preparation occurs
-//! around public facade commits, and every reply is checked against exact core
-//! records, events, physical ownership, and the running scheduler context.
+//! The executor coordinates one virtual-region ledger, the shared physical
+//! frame pool, public MemoryCell calls, exact event evidence, and reply state.
 
 use agent_kernel_core::{
     CapabilityId, EventKind, MemoryCellId, Operation, ResourceId, ResourceStatus,
@@ -22,6 +20,7 @@ pub(super) fn allocate(
     mut pending: PendingAgentCallCpu,
     capability: CapabilityId,
     resource: ResourceId,
+    page_count: usize,
 ) -> Option<ResumableAgentCpu> {
     let context = memory_authority::authenticated_context(&pending)?;
     if !memory_authority::valid(
@@ -34,9 +33,10 @@ pub(super) fn allocate(
     {
         return None;
     }
-    let pool_reservation = memory_pool.reserve(context.agent(), resource, 1)?;
+    let pool_reservation = memory_pool.reserve(context.agent(), resource, page_count)?;
     let frames = memory_pool.frame_set_for_reservation(pool_reservation)?;
-    let Some((reservation, descriptor)) = pending.prepare_runtime_page_allocation(resource, frames)
+    let Some((reservation, descriptor)) =
+        pending.prepare_runtime_region_allocation(resource, page_count, frames)
     else {
         memory_pool.cancel(pool_reservation).then_some(())?;
         return None;
@@ -51,14 +51,14 @@ pub(super) fn allocate(
         Ok(cell) => cell,
         Err(_) => {
             pending
-                .rollback_runtime_page_allocation(reservation, frames)
+                .rollback_runtime_region_allocation(reservation, frames)
                 .then_some(())?;
             memory_pool.cancel(pool_reservation).then_some(())?;
             return None;
         }
     };
     let generation = descriptor.words[3];
-    if !pending.commit_runtime_page_allocation(reservation, cell)
+    if !pending.commit_runtime_region_allocation(reservation, cell)
         || !memory_pool.commit(pool_reservation, cell, generation)
     {
         return None;
@@ -83,13 +83,18 @@ pub(super) fn allocate(
         || event.operation != Some(Operation::Act)
         || memory_pool
             .binding(context.agent(), resource, cell, generation)
-            .is_none_or(|binding| binding.page_count() != 1)
+            .is_none_or(|binding| binding.page_count() != page_count)
         || !state::running(booted, context)
     {
         return None;
     }
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_PAGE_OK");
-    pending.acknowledge_memory_page_allocated(cell, descriptor.words[0], generation)
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK");
+    pending.acknowledge_memory_region_allocated(
+        cell,
+        descriptor.words[0],
+        page_count as u64,
+        generation,
+    )
 }
 
 pub(super) fn inspect(
@@ -112,12 +117,14 @@ pub(super) fn inspect(
         return None;
     }
     let generation = record.value.words[3];
-    let binding = memory_pool.binding(context.agent(), record.resource, cell, generation)?;
-    let frames = memory_pool.frame_set_for_binding(binding)?;
-    let mapped_generation =
-        pending.validate_runtime_page(record.resource, cell, record.value, frames)?;
-    let (value, repeated_value) = memory_pool.observe(binding)?;
-    if binding.page_count() != 1 || mapped_generation != generation || repeated_value != value {
+    let pool_binding = memory_pool.binding(context.agent(), record.resource, cell, generation)?;
+    let frames = memory_pool.frame_set_for_binding(pool_binding)?;
+    let region_binding =
+        pending.validate_runtime_region(record.resource, cell, record.value, frames)?;
+    let (first, last) = memory_pool.observe(pool_binding)?;
+    if pool_binding.page_count() != region_binding.page_count()
+        || pool_binding.generation() != region_binding.generation()
+    {
         return None;
     }
     let event_start = booted.kernel().events().len();
@@ -138,9 +145,15 @@ pub(super) fn inspect(
     {
         return None;
     }
-    pending.record_runtime_page_observation(value);
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_PAGE_OK");
-    pending.acknowledge_memory_page_inspected(cell, value, generation)
+    pending.record_runtime_region_observation(first, last, region_binding);
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK");
+    pending.acknowledge_memory_region_inspected(
+        cell,
+        first,
+        last,
+        region_binding.page_count() as u64,
+        region_binding.generation(),
+    )
 }
 
 pub(super) fn release(
@@ -167,8 +180,10 @@ pub(super) fn release(
         memory_pool.prepare_release(context.agent(), record.resource, cell, generation)?;
     let frames = memory_pool.frame_set_for_release(pool_release)?;
     let release =
-        pending.prepare_runtime_page_release(record.resource, cell, record.value, frames)?;
-    if pool_release.page_count() != 1 || release.generation() != generation {
+        pending.prepare_runtime_region_release(record.resource, cell, record.value, frames)?;
+    if pool_release.page_count() != release.page_count()
+        || pool_release.generation() != release.generation()
+    {
         return None;
     }
     let event_start = booted.kernel().events().len();
@@ -192,12 +207,17 @@ pub(super) fn release(
     {
         return None;
     }
-    if !pending.deactivate_runtime_page(release, frames)
+    if !pending.deactivate_runtime_region(release, frames)
         || !memory_pool.release(pool_release)
-        || !pending.commit_runtime_page_release(release)
+        || !pending.commit_runtime_region_release(release)
     {
         return None;
     }
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_PAGE_OK");
-    pending.acknowledge_memory_page_released(cell, record.resource, release.generation())
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK");
+    pending.acknowledge_memory_region_released(
+        cell,
+        record.resource,
+        release.page_count() as u64,
+        release.generation(),
+    )
 }

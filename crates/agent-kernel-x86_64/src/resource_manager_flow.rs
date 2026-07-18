@@ -14,8 +14,8 @@ use agent_kernel_core::{
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
 use crate::{
-    boot_agent_images::BootResourceManagerImage, native_agent_executor::NativeExecutionReport,
-    X86BootedKernel,
+    agent_memory::RuntimeMemoryPool, boot_agent_images::BootResourceManagerImage,
+    native_agent_executor::NativeExecutionReport, X86BootedKernel,
 };
 
 pub(super) const RESOURCE_MANAGER: AgentId = AgentId::new(8);
@@ -91,8 +91,9 @@ impl PreparedResourceManagerFlow {
         &self,
         booted: &X86BootedKernel,
         report: &NativeExecutionReport,
+        memory_pool: &RuntimeMemoryPool,
         image: BootResourceManagerImage,
     ) -> Option<()> {
-        evidence::completed(booted, report, self.manager, image).then_some(())
+        evidence::completed(booted, report, memory_pool, self.manager, image).then_some(())
     }
 }
