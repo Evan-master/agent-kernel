@@ -101,6 +101,10 @@ for expected in \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CANCEL_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
@@ -326,42 +330,65 @@ for expected in \
   "event[203] agent_image_verified" \
   "event[204] agent_launched" \
   "event[205] task_accepted" \
-  "event[206] task_queued" \
-  "event[207] agent_registered" \
-  "event[208] intent_declared" \
-  "event[209] task_created" \
-  "event[210] intent_bound" \
-  "event[211] capability_derived" \
-  "event[212] delegation" \
-  "event[213] agent_image_registered" \
-  "event[214] agent_image_verified" \
-  "event[215] agent_launched" \
-  "event[216] task_accepted" \
-  "event[217] task_queued" \
-  "event[218] task_dispatched" \
-  "event[219] task_quantum_expired" \
-  "event[220] task_dispatched" \
-  "event[221] task_quantum_expired" \
-  "event[222] task_dispatched" \
-  "event[223] task_result_submitted" \
-  "event[224] task_completed" \
-  "event[225] task_dispatched" \
-  "event[226] task_result_submitted" \
-  "event[227] task_completed" \
-  "event[228] task_verified" \
-  "event[229] intent_fulfilled" \
-  "event[230] task_verified" \
-  "event[231] intent_fulfilled" \
-  "event[232] device_event_raised" \
-  "event[233] device_event_delivered" \
-  "event[234] driver_invocation_queued" \
-  "event[235] driver_invocation_dispatched" \
-  "event[236] driver_invocation_ticked" \
-  "event[237] device_event_acknowledged" \
-  "event[238] driver_command_submitted" \
-  "event[239] driver_command_dispatched" \
-  "event[240] driver_command_completed" \
-  "event[241] driver_invocation_completed" \
+  "event[206] agent_registered" \
+  "event[207] intent_declared" \
+  "event[208] task_created" \
+  "event[209] intent_bound" \
+  "event[210] capability_derived" \
+  "event[211] delegation" \
+  "event[212] agent_image_registered" \
+  "event[213] agent_image_verified" \
+  "event[214] agent_launched" \
+  "event[215] task_accepted" \
+  "event[216] agent_registered" \
+  "event[217] intent_declared" \
+  "event[218] task_created" \
+  "event[219] intent_bound" \
+  "event[220] capability_derived" \
+  "event[221] delegation" \
+  "event[222] capability_derived" \
+  "event[223] agent_image_registered" \
+  "event[224] agent_image_verified" \
+  "event[225] agent_launched" \
+  "event[226] task_accepted" \
+  "event[227] task_queued" \
+  "event[228] task_dispatched" \
+  "event[229] task_quantum_expired" \
+  "event[230] task_dispatched" \
+  "event[231] runtime_admission_requested" \
+  "event[232] runtime_admission_requested" \
+  "event[233] task_result_submitted" \
+  "event[234] task_completed" \
+  "event[235] task_verified" \
+  "event[236] intent_fulfilled" \
+  "event[237] runtime_admission_admitted" \
+  "event[238] task_queued" \
+  "event[239] runtime_admission_admitted" \
+  "event[240] task_queued" \
+  "event[241] task_dispatched" \
+  "event[242] task_quantum_expired" \
+  "event[243] task_dispatched" \
+  "event[244] task_quantum_expired" \
+  "event[245] task_dispatched" \
+  "event[246] task_result_submitted" \
+  "event[247] task_completed" \
+  "event[248] task_dispatched" \
+  "event[249] task_result_submitted" \
+  "event[250] task_completed" \
+  "event[251] task_verified" \
+  "event[252] intent_fulfilled" \
+  "event[253] task_verified" \
+  "event[254] intent_fulfilled" \
+  "event[255] device_event_raised" \
+  "event[256] device_event_delivered" \
+  "event[257] driver_invocation_queued" \
+  "event[258] driver_invocation_dispatched" \
+  "event[259] driver_invocation_ticked" \
+  "event[260] device_event_acknowledged" \
+  "event[261] driver_command_submitted" \
+  "event[262] driver_command_dispatched" \
+  "event[263] driver_command_completed" \
+  "event[264] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -371,8 +398,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 241 ]]; then
-  printf 'expected exactly 241 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 264 ]]; then
+  printf 'expected exactly 264 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -399,5 +426,9 @@ check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CANCEL_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK" 2
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" 1

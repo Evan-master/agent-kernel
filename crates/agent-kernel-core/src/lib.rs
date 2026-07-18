@@ -76,6 +76,10 @@ mod resource;
 mod resource_ownership;
 mod resource_store;
 mod run_queue;
+mod runtime_admission;
+mod runtime_admission_event;
+mod runtime_admission_request;
+mod runtime_admission_transition;
 mod scheduler;
 mod scheduler_dispatch;
 mod scheduler_event;
@@ -114,7 +118,8 @@ pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord}
 pub use id::{
     ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, DeviceEventId, DriverBindingId,
     DriverCommandId, DriverInvocationId, FaultHandlerId, FaultId, FaultPolicyId, IntentId,
-    MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, TaskId, WaiterId,
+    MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, RuntimeAdmissionId,
+    TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};
@@ -126,5 +131,8 @@ pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceCreateOutcome, ResourceKind, ResourceStatus};
 pub use run_queue::{RunQueueEntry, TaskDispatchPermit};
+pub use runtime_admission::{
+    RuntimeAdmissionFailure, RuntimeAdmissionPermit, RuntimeAdmissionRecord, RuntimeAdmissionStatus,
+};
 pub use signal::{SignalKey, SignalOutcome, WaiterKind, WaiterRecord};
 pub use task::{Task, TaskResult, TaskStatus};

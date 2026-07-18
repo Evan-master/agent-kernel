@@ -11,6 +11,7 @@ mod memory_authority;
 mod memory_page;
 mod memory_region;
 mod resource;
+mod runtime_admission;
 mod task;
 mod task_lifecycle;
 
@@ -99,6 +100,12 @@ pub(super) fn run(
                 target,
                 ..
             } => task_lifecycle::delegate(booted, pending, authority, delegated_task, target)?,
+            AgentCallRequest::RequestRuntimeAdmission {
+                authority,
+                target,
+                target_task,
+                ..
+            } => runtime_admission::request(booted, pending, authority, target, target_task)?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

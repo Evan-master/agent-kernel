@@ -35,11 +35,21 @@ impl PreparedReuseWorkerFlow {
         VerifiedAgentImage::verify(booted.kernel().agent_image(self.image).ok()?, bytes).ok()
     }
 
+    pub(super) const fn admission_target(&self) -> (AgentId, TaskId, AgentImageId) {
+        (self.agent, self.task, self.image)
+    }
+
     pub(super) fn batch_queued(booted: &X86BootedKernel, flows: &[Self; 2]) -> bool {
         flows[0].agent == REUSE_WORKERS[0]
             && flows[1].agent == REUSE_WORKERS[1]
             && booted.kernel().run_queue()
                 == [flows[0].run_queue_entry(), flows[1].run_queue_entry()]
+    }
+
+    pub(super) fn batch_unqueued(booted: &X86BootedKernel, flows: &[Self; 2]) -> bool {
+        flows[0].agent == REUSE_WORKERS[0]
+            && flows[1].agent == REUSE_WORKERS[1]
+            && booted.kernel().run_queue().is_empty()
     }
 
     const fn run_queue_entry(&self) -> RunQueueEntry {

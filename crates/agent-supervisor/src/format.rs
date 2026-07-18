@@ -33,6 +33,15 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentImageVerified => format_agent_image_event(event, "agent_image_verified"),
         EventKind::AgentImageRetired => format_agent_image_event(event, "agent_image_retired"),
         EventKind::AgentLaunched => format_agent_launch_event(event),
+        EventKind::RuntimeAdmissionRequested => {
+            format_runtime_admission_event(event, "runtime_admission_requested")
+        }
+        EventKind::RuntimeAdmissionAdmitted => {
+            format_runtime_admission_event(event, "runtime_admission_admitted")
+        }
+        EventKind::RuntimeAdmissionRejected => {
+            format_runtime_admission_event(event, "runtime_admission_rejected")
+        }
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),
@@ -177,6 +186,32 @@ pub fn format_event(event: &Event) -> String {
             format_namespace_event(event, "namespace_entry_rebound")
         }
     }
+}
+
+fn format_runtime_admission_event(event: &Event, label: &str) -> String {
+    let admission = event
+        .runtime_admission
+        .map(|admission| admission.raw())
+        .unwrap_or_default();
+    let target = event
+        .target_agent
+        .map(|agent| agent.raw())
+        .unwrap_or_default();
+    let task = event.task.map(|task| task.raw()).unwrap_or_default();
+    let image = event
+        .agent_image
+        .map(|image| image.raw())
+        .unwrap_or_default();
+    format!(
+        "event[{}] {} agent={} admission={} target_agent={} task={} image={}",
+        event.sequence,
+        label,
+        event.agent.raw(),
+        admission,
+        target,
+        task,
+        image
+    )
 }
 
 fn format_intent_event(event: &Event, label: &str) -> String {

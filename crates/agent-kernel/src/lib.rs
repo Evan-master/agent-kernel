@@ -17,6 +17,7 @@ mod mailbox;
 mod memory;
 mod namespace;
 mod resource;
+mod runtime_admission;
 mod scheduler;
 mod signal;
 

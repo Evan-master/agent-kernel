@@ -7,6 +7,7 @@
 mod agent_management;
 mod memory_page;
 mod memory_region;
+mod runtime_admission;
 mod task_lifecycle;
 
 use agent_kernel_core::{

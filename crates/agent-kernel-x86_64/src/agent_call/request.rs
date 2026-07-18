@@ -216,6 +216,15 @@ pub enum AgentCallRequest {
         capability: CapabilityId,
         cell: MemoryCellId,
     },
+    RequestRuntimeAdmission {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        target: AgentId,
+        target_task: TaskId,
+    },
 }
 
 impl AgentCallRequest {
@@ -247,6 +256,7 @@ impl AgentCallRequest {
             Self::AllocateMemoryRegion { .. } => AgentCallOperation::AllocateMemoryRegion,
             Self::InspectMemoryRegion { .. } => AgentCallOperation::InspectMemoryRegion,
             Self::ReleaseMemoryRegion { .. } => AgentCallOperation::ReleaseMemoryRegion,
+            Self::RequestRuntimeAdmission { .. } => AgentCallOperation::RequestRuntimeAdmission,
         }
     }
 }

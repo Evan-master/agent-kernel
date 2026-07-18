@@ -5,6 +5,7 @@
 //! manifest input; the runtime loader recomputes each digest before mapping a
 //! private code page.
 
+mod admission_supervisor;
 mod fault_handler;
 mod resource_manager;
 mod reuse_worker;
@@ -12,6 +13,7 @@ mod reuse_worker;
 use agent_kernel_core::{AgentImageDigest, TaskResult};
 use agent_kernel_x86_64::agent_call::AgentCallOperation;
 
+pub(crate) use admission_supervisor::{admission_supervisor, BootAdmissionSupervisorImage};
 pub(crate) use fault_handler::{fault_handler, BootFaultHandlerImage};
 pub(crate) use resource_manager::{resource_manager, BootResourceManagerImage};
 pub(crate) use reuse_worker::{reuse_worker, BootReuseWorkerImage};

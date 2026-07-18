@@ -103,6 +103,15 @@ impl NativeAgentRuntime {
         self.contexts.get(agent).is_ok()
     }
 
+    pub(crate) fn take_prepared(&mut self, agent: AgentId) -> Option<PreparedAgentCpu> {
+        if !self.contexts.contains_matching(agent, |context| {
+            matches!(context, NativeAgentContext::Prepared(_))
+        }) {
+            return None;
+        }
+        self.contexts.take(agent).ok()?.into_prepared()
+    }
+
     fn park(&mut self, context: NativeAgentContext) -> Option<NativeAgentContext> {
         let agent = context.context().agent();
         match self.contexts.insert(agent, context) {

@@ -37,6 +37,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let fault_handler_image = boot_agent_images::fault_handler();
     let resource_manager_image = boot_agent_images::resource_manager();
     let reuse_worker_image = boot_agent_images::reuse_worker();
+    let admission_supervisor_image = boot_agent_images::admission_supervisor();
     let Ok(mut booted) = X86BootedKernel::boot(BootConfig::default()) else {
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
@@ -113,6 +114,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         || AgentImageCapsule::parse(fault_handler_image.bytes()).is_err()
         || AgentImageCapsule::parse(resource_manager_image.bytes()).is_err()
         || AgentImageCapsule::parse(reuse_worker_image.bytes()).is_err()
+        || AgentImageCapsule::parse(admission_supervisor_image.bytes()).is_err()
     {
         fatal_boot("AGENT_KERNEL_AGENT_IMAGE_FORMAT_ERROR");
     }
@@ -270,6 +272,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         &mut address_space_frame_pool,
         &cpu_runtime,
         reuse_worker_image,
+        admission_supervisor_image,
     )
     .is_none()
     {

@@ -6,6 +6,19 @@
 use super::NativeRuntimeEvidence;
 
 impl NativeRuntimeEvidence {
+    pub(crate) const fn proves_runtime_admission_supervisor(self) -> bool {
+        self.dispatches == 2
+            && self.prepared == 1
+            && self.preempted == 1
+            && self.waiting == 0
+            && self.yielded == 0
+            && self.recovered_faults == 0
+            && self.quantum_expiries == 1
+            && self.returning_quantum_expiries == 0
+            && self.returning_quantum_generation == 0
+            && self.agent_faults == 0
+    }
+
     pub(crate) const fn proves_address_space_runtime_batch(self) -> bool {
         self.dispatches == 4
             && self.prepared == 2

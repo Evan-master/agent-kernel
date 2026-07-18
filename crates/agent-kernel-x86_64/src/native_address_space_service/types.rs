@@ -60,4 +60,8 @@ impl NativeAddressSpaceAdmissionFailure {
     pub(crate) const fn identity(self) -> Option<AgentMemoryIdentity> {
         self.identity
     }
+
+    pub(crate) const fn stage(self) -> NativeAddressSpaceAdmissionStage {
+        self.stage
+    }
 }

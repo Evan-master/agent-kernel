@@ -12,6 +12,7 @@ use core::{arch::asm, panic::PanicInfo};
 use agent_kernel_boot::BootedKernel;
 use bootloader_api::{entry_point, BootInfo};
 
+mod admission_supervisor_flow;
 mod agent_boot_flow;
 mod agent_cpu;
 mod agent_memory;
@@ -24,6 +25,7 @@ mod fault_task_flow;
 mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
+mod native_runtime_admission_broker;
 mod pic;
 mod pit_timer;
 mod port_driver_flow;
@@ -40,7 +42,7 @@ use privilege_runtime::PrivilegeBoundary;
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) type X86BootedKernel =
-    BootedKernel<11, 7, 21, 241, 1, 1, 0, 9, 9, 2, 1, 1, 1, 1, 2, 2, 4, 1, 1, 5>;
+    BootedKernel<12, 7, 23, 264, 1, 1, 0, 10, 10, 2, 1, 1, 1, 1, 2, 2, 4, 1, 1, 5>;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();

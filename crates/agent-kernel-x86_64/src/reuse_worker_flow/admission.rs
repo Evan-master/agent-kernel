@@ -9,7 +9,7 @@ use super::{PreparedReuseWorkerFlow, REUSE_WORKERS};
 use crate::{boot_agent_images::BootReuseWorkerImage, X86BootedKernel};
 
 impl PreparedReuseWorkerFlow {
-    pub(crate) fn prepare(
+    pub(crate) fn prepare_unqueued(
         booted: &mut X86BootedKernel,
         agent: AgentId,
         contract: BootReuseWorkerImage,
@@ -63,8 +63,6 @@ impl PreparedReuseWorkerFlow {
             .sys_launch_task_agent(agent, capability, task, image, AgentEntryKind::Worker)
             .ok()?;
         kernel.sys_accept_task(agent, task).ok()?;
-        kernel.sys_enqueue_task(agent, task).ok()?;
-
         let flow = Self {
             agent,
             intent,
@@ -72,10 +70,10 @@ impl PreparedReuseWorkerFlow {
             image,
             capability,
         };
-        flow.queued_state_valid(booted).then_some(flow)
+        flow.accepted_state_valid(booted).then_some(flow)
     }
 
-    fn queued_state_valid(&self, booted: &X86BootedKernel) -> bool {
+    fn accepted_state_valid(&self, booted: &X86BootedKernel) -> bool {
         let kernel = booted.kernel();
         let task = kernel.tasks().iter().find(|record| record.id == self.task);
         let execution = kernel
@@ -92,14 +90,9 @@ impl PreparedReuseWorkerFlow {
             && matches!(entry, Some(entry) if entry.image == self.image
                 && entry.task == Some(self.task)
                 && entry.capability == self.capability)
-            && kernel
-                .run_queue()
-                .iter()
-                .filter(|entry| **entry == self.run_queue_entry())
-                .count()
-                == 1
+            && !kernel.run_queue().contains(&self.run_queue_entry())
             && matches!(kernel.events().last(), Some(event)
-                if event.kind == EventKind::TaskQueued
+                if event.kind == EventKind::TaskAccepted
                     && event.agent == self.agent
                     && event.task == Some(self.task))
     }

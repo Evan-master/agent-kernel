@@ -10,7 +10,8 @@ use crate::{
     DriverCommandKind, DriverCommandPayload, DriverCommandResult, DriverInvocationId, FaultId,
     FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId,
     NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation, OperationSet,
-    ResourceId, SignalKey, TaskId, TaskResult, VerificationRequirement, WaiterId,
+    ResourceId, RuntimeAdmissionId, SignalKey, TaskId, TaskResult, VerificationRequirement,
+    WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -20,6 +21,9 @@ pub enum EventKind {
     AgentImageVerified,
     AgentImageRetired,
     AgentLaunched,
+    RuntimeAdmissionRequested,
+    RuntimeAdmissionAdmitted,
+    RuntimeAdmissionRejected,
     AgentSuspended,
     AgentResumed,
     AgentRetired,
@@ -108,6 +112,7 @@ pub struct Event {
     pub verification: VerificationRequirement,
     pub checkpoint: Option<CheckpointId>,
     pub task: Option<TaskId>,
+    pub runtime_admission: Option<RuntimeAdmissionId>,
     pub task_result: Option<TaskResult>,
     pub task_ticks: Option<u64>,
     pub task_quantum: Option<u64>,
@@ -160,6 +165,7 @@ impl Event {
             verification: VerificationRequirement::Optional,
             checkpoint: None,
             task: None,
+            runtime_admission: None,
             task_result: None,
             task_ticks: None,
             task_quantum: None,
