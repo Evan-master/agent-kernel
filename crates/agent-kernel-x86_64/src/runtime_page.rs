@@ -5,7 +5,7 @@
 //! bare-metal memory owner performs those effects around these deterministic
 //! reservation, commit, cancellation, and release transitions.
 
-use agent_kernel_core::{MemoryCellId, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, ResourceId};
 
 pub const RUNTIME_PAGE_ACCESS_READ_WRITE: u64 = 3;
 
@@ -14,11 +14,13 @@ enum RuntimePageState {
     Available,
     Reserved {
         resource: ResourceId,
+        capability: CapabilityId,
         generation: u64,
         token: u64,
     },
     Mapped {
         resource: ResourceId,
+        capability: CapabilityId,
         cell: MemoryCellId,
         generation: u64,
         token: u64,
@@ -28,6 +30,7 @@ enum RuntimePageState {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RuntimePageReservation {
     resource: ResourceId,
+    capability: CapabilityId,
     generation: u64,
     token: u64,
 }
@@ -35,6 +38,7 @@ pub struct RuntimePageReservation {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RuntimePageRelease {
     resource: ResourceId,
+    capability: CapabilityId,
     cell: MemoryCellId,
     generation: u64,
     token: u64,
@@ -43,6 +47,7 @@ pub struct RuntimePageRelease {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RuntimePageBinding {
     resource: ResourceId,
+    capability: CapabilityId,
     cell: MemoryCellId,
     generation: u64,
 }
@@ -63,8 +68,13 @@ impl RuntimePageLedger {
         }
     }
 
-    pub fn reserve(&mut self, resource: ResourceId) -> Option<RuntimePageReservation> {
-        if resource.raw() == 0 || self.state != RuntimePageState::Available {
+    pub fn reserve(
+        &mut self,
+        resource: ResourceId,
+        capability: CapabilityId,
+    ) -> Option<RuntimePageReservation> {
+        if resource.raw() == 0 || capability.raw() == 0 || self.state != RuntimePageState::Available
+        {
             return None;
         }
         let generation = self.generation.checked_add(1)?;
@@ -72,11 +82,13 @@ impl RuntimePageLedger {
         self.next_token = self.next_token.checked_add(1)?;
         let reservation = RuntimePageReservation {
             resource,
+            capability,
             generation,
             token,
         };
         self.state = RuntimePageState::Reserved {
             resource,
+            capability,
             generation,
             token,
         };
@@ -93,6 +105,7 @@ impl RuntimePageLedger {
         }
         self.state = RuntimePageState::Mapped {
             resource: reservation.resource,
+            capability: reservation.capability,
             cell,
             generation: reservation.generation,
             token: reservation.token,
@@ -116,12 +129,14 @@ impl RuntimePageLedger {
         match self.state {
             RuntimePageState::Mapped {
                 resource: actual_resource,
+                capability,
                 cell: actual_cell,
                 generation,
                 token,
             } if resource.raw() == actual_resource.raw() && cell.raw() == actual_cell.raw() => {
                 Some(RuntimePageRelease {
                     resource,
+                    capability,
                     cell,
                     generation,
                     token,
@@ -149,11 +164,13 @@ impl RuntimePageLedger {
         match self.state {
             RuntimePageState::Mapped {
                 resource,
+                capability,
                 cell,
                 generation,
                 ..
             } => Some(RuntimePageBinding {
                 resource,
+                capability,
                 cell,
                 generation,
             }),
@@ -184,9 +201,11 @@ impl RuntimePageLedger {
             self.state,
             RuntimePageState::Reserved {
                 resource,
+                capability,
                 generation,
                 token,
             } if resource.raw() == reservation.resource.raw()
+                && capability.raw() == reservation.capability.raw()
                 && generation == reservation.generation
                 && token == reservation.token
         )
@@ -204,6 +223,10 @@ impl RuntimePageReservation {
         self.resource
     }
 
+    pub const fn capability(self) -> CapabilityId {
+        self.capability
+    }
+
     pub const fn generation(self) -> u64 {
         self.generation
     }
@@ -212,6 +235,10 @@ impl RuntimePageReservation {
 impl RuntimePageRelease {
     pub const fn resource(self) -> ResourceId {
         self.resource
+    }
+
+    pub const fn capability(self) -> CapabilityId {
+        self.capability
     }
 
     pub const fn cell(self) -> MemoryCellId {
@@ -225,6 +252,7 @@ impl RuntimePageRelease {
     const fn binding(self) -> RuntimePageBinding {
         RuntimePageBinding {
             resource: self.resource,
+            capability: self.capability,
             cell: self.cell,
             generation: self.generation,
         }
@@ -234,6 +262,10 @@ impl RuntimePageRelease {
 impl RuntimePageBinding {
     pub const fn resource(self) -> ResourceId {
         self.resource
+    }
+
+    pub const fn capability(self) -> CapabilityId {
+        self.capability
     }
 
     pub const fn cell(self) -> MemoryCellId {

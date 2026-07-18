@@ -12,7 +12,10 @@ use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
     context::SavedAgentFrame,
     native_runtime::{NativeAgentFault, NativeRunBoundary},
+    runtime_reclamation::RuntimeReclamationLog,
 };
+
+mod reclamation;
 
 use super::{
     native_call_session::{AgentCallProgress, ResumableAgentCpu},
@@ -28,6 +31,7 @@ pub(crate) struct FaultedAgentCpu {
     context: AgentCallContext,
     fault: NativeAgentFault,
     progress: AgentCallProgress,
+    reclamation: RuntimeReclamationLog,
 }
 
 impl FaultedAgentCpu {
@@ -77,6 +81,7 @@ impl FaultedAgentCpu {
             context,
             fault: expected_fault,
             progress,
+            reclamation: RuntimeReclamationLog::new(),
         })
     }
 
@@ -99,6 +104,22 @@ impl FaultedAgentCpu {
 
     pub(crate) fn had_call_progress(&self) -> bool {
         !self.progress.is_empty()
+    }
+
+    pub(crate) const fn call_nonce(&self) -> Option<u64> {
+        self.progress.nonce()
+    }
+
+    pub(crate) const fn call_count(&self) -> usize {
+        self.progress.call_count()
+    }
+
+    pub(crate) fn operations(&self) -> &[agent_kernel_x86_64::agent_call::AgentCallOperation] {
+        self.progress.operations()
+    }
+
+    pub(crate) fn return_offsets(&self) -> &[u32] {
+        self.progress.return_offsets()
     }
 
     pub(crate) fn physical_quantum_generation(&self) -> u8 {
@@ -132,6 +153,7 @@ impl FaultedAgentCpu {
             context,
             fault,
             progress,
+            reclamation,
         } = self;
         let NativeAgentFault::PageFault {
             error_code: 6,
@@ -140,6 +162,9 @@ impl FaultedAgentCpu {
         else {
             return None;
         };
+        if !reclamation.is_empty() {
+            return None;
+        }
         memory.activate_lazy_data_page(address)?;
         Some(ResumableAgentCpu::from_repaired_fault(
             memory, runtime, frame, context, progress,

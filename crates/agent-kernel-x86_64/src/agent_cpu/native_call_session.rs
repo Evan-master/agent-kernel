@@ -9,7 +9,7 @@ mod replies;
 mod runtime_memory;
 
 use agent_kernel_x86_64::{
-    agent_call::{AgentCallContext, AgentCallRequest, AgentCallTranscript},
+    agent_call::{AgentCallContext, AgentCallOperation, AgentCallRequest, AgentCallTranscript},
     context::SavedAgentFrame,
     native_runtime::NativeRunBoundary,
     runtime_region::RuntimeRegionObservationLog,
@@ -92,6 +92,22 @@ impl AgentCallProgress {
 
     pub(super) const fn is_empty(&self) -> bool {
         self.transcript.is_empty()
+    }
+
+    pub(super) const fn nonce(&self) -> Option<u64> {
+        self.nonce
+    }
+
+    pub(super) const fn call_count(&self) -> usize {
+        self.transcript.call_count()
+    }
+
+    pub(super) fn operations(&self) -> &[AgentCallOperation] {
+        self.transcript.operations()
+    }
+
+    pub(super) fn return_offsets(&self) -> &[u32] {
+        self.transcript.return_offsets()
     }
 }
 

@@ -5,6 +5,7 @@
 //! bypasses capability checks; the core run queue remains authoritative.
 
 mod calls;
+mod memory_reclamation;
 mod state;
 
 use agent_kernel_core::{AgentId, CapabilityId, EventKind, FaultKind};
@@ -154,19 +155,20 @@ fn run_outcome(
 
 pub(super) fn contain_fault(
     booted: &mut X86BootedKernel,
-    memory_pool: &RuntimeMemoryPool,
+    memory_pool: &mut RuntimeMemoryPool,
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     cpu: FaultedAgentCpu,
 ) -> Option<()> {
     let context = cpu.context();
+    if !state::running(booted, context) {
+        return None;
+    }
+    let (cpu, reclaimed) = memory_reclamation::reclaim(booted, memory_pool, cpu)?;
     let fault_kind = FaultKind::ExecutionTrap;
     let fault_detail = cpu.fault().detail();
     let agent_faults = evidence.agent_faults.checked_add(1)?;
-    if !state::running(booted, context)
-        || !cpu.runtime_memory_is_clear()
-        || !memory_pool.agent_is_clear(context.agent())
-    {
+    if !cpu.runtime_memory_is_clear() || !memory_pool.agent_is_clear(context.agent()) {
         return None;
     }
     let fault = booted
@@ -189,6 +191,9 @@ pub(super) fn contain_fault(
         || !state::faulted(booted, context)
     {
         return None;
+    }
+    if reclaimed != 0 {
+        crate::serial_write_line("AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK");
     }
     report.record_faulted(cpu)?;
     evidence.agent_faults = agent_faults;

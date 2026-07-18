@@ -269,6 +269,10 @@ impl<
         self.core.events()
     }
 
+    pub fn has_event_capacity(&self, needed: usize) -> bool {
+        self.core.has_event_capacity(needed)
+    }
+
     pub fn actions(&self) -> &[ActionRecord] {
         self.core.actions()
     }

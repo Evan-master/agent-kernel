@@ -63,6 +63,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_VERIFY_OK" \
   "AGENT_KERNEL_RESUMABLE_RUNTIME_REGISTRY_OK" \
   "AGENT_KERNEL_DISPATCH_READINESS_HANDOFF_OK" \
+  "AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_CONTAINMENT_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_GENERAL_PROTECTION_OK" \
@@ -106,6 +107,10 @@ for expected in \
   "AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK" \
   "AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_VERIFIER_OK" \
+  "AGENT_KERNEL_PORT_IO_BACKEND_OK" \
+  "AGENT_KERNEL_PORT_COMMAND_FLOW_OK" \
+  "AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK" \
+  "AGENT_KERNEL_UART_IRQ_OK" \
   "event[1] agent_registered" \
   "event[2] capability_granted" \
   "event[3] agent_image_registered" \
@@ -114,10 +119,6 @@ for expected in \
   "event[6] observation" \
   "event[7] action" \
   "event[8] verification" \
-  "AGENT_KERNEL_PORT_IO_BACKEND_OK" \
-  "AGENT_KERNEL_PORT_COMMAND_FLOW_OK" \
-  "AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK" \
-  "AGENT_KERNEL_UART_IRQ_OK" \
   "event[9] driver_endpoint_registered" \
   "event[10] agent_registered" \
   "event[11] capability_derived" \
@@ -159,157 +160,162 @@ for expected in \
   "event[47] agent_launched" \
   "event[48] task_accepted" \
   "event[49] agent_registered" \
-  "event[50] intent_declared" \
-  "event[51] task_created" \
-  "event[52] intent_bound" \
-  "event[53] capability_derived" \
-  "event[54] delegation" \
-  "event[55] agent_image_registered" \
-  "event[56] agent_image_verified" \
-  "event[57] agent_launched" \
-  "event[58] task_accepted" \
-  "event[59] agent_registered" \
-  "event[60] intent_declared" \
-  "event[61] task_created" \
-  "event[62] intent_bound" \
-  "event[63] capability_derived" \
-  "event[64] delegation" \
-  "event[65] agent_image_registered" \
-  "event[66] agent_image_verified" \
-  "event[67] agent_launched" \
-  "event[68] task_accepted" \
-  "event[69] fault_handler_installed" \
-  "event[70] fault_policy_installed" \
-  "event[71] agent_registered" \
-  "event[72] intent_declared" \
-  "event[73] task_created" \
-  "event[74] intent_bound" \
-  "event[75] capability_derived" \
-  "event[76] delegation" \
-  "event[77] capability_derived" \
-  "event[78] agent_image_registered" \
-  "event[79] agent_image_verified" \
-  "event[80] agent_launched" \
-  "event[81] task_accepted" \
-  "event[82] task_dispatched" \
-  "event[83] task_quantum_expired" \
-  "event[84] task_dispatched" \
-  "event[85] task_quantum_expired" \
-  "event[86] task_dispatched" \
-  "event[87] message_wait_started" \
-  "event[88] task_dispatched" \
-  "event[89] task_result_submitted" \
-  "event[90] message_sent" \
-  "event[91] message_wait_woken" \
-  "event[92] task_quantum_expired" \
-  "event[93] task_dispatched" \
-  "event[94] message_received" \
-  "event[95] message_acknowledged" \
-  "event[96] task_result_submitted" \
-  "event[97] task_completed" \
-  "event[98] task_dispatched" \
-  "event[99] task_yielded" \
-  "event[100] task_dispatched" \
-  "event[101] task_completed" \
-  "event[102] task_queued" \
+  "event[50] resource_created" \
+  "event[51] capability_granted" \
+  "event[52] capability_derived" \
+  "event[53] intent_declared" \
+  "event[54] task_created" \
+  "event[55] intent_bound" \
+  "event[56] capability_derived" \
+  "event[57] delegation" \
+  "event[58] agent_image_registered" \
+  "event[59] agent_image_verified" \
+  "event[60] agent_launched" \
+  "event[61] task_accepted" \
+  "event[62] agent_registered" \
+  "event[63] intent_declared" \
+  "event[64] task_created" \
+  "event[65] intent_bound" \
+  "event[66] capability_derived" \
+  "event[67] delegation" \
+  "event[68] agent_image_registered" \
+  "event[69] agent_image_verified" \
+  "event[70] agent_launched" \
+  "event[71] task_accepted" \
+  "event[72] fault_handler_installed" \
+  "event[73] fault_policy_installed" \
+  "event[74] agent_registered" \
+  "event[75] intent_declared" \
+  "event[76] task_created" \
+  "event[77] intent_bound" \
+  "event[78] capability_derived" \
+  "event[79] delegation" \
+  "event[80] capability_derived" \
+  "event[81] agent_image_registered" \
+  "event[82] agent_image_verified" \
+  "event[83] agent_launched" \
+  "event[84] task_accepted" \
+  "event[85] task_dispatched" \
+  "event[86] task_quantum_expired" \
+  "event[87] task_dispatched" \
+  "event[88] task_quantum_expired" \
+  "event[89] task_dispatched" \
+  "event[90] message_wait_started" \
+  "event[91] task_dispatched" \
+  "event[92] task_result_submitted" \
+  "event[93] message_sent" \
+  "event[94] message_wait_woken" \
+  "event[95] task_quantum_expired" \
+  "event[96] task_dispatched" \
+  "event[97] message_received" \
+  "event[98] message_acknowledged" \
+  "event[99] task_result_submitted" \
+  "event[100] task_completed" \
+  "event[101] task_dispatched" \
+  "event[102] task_yielded" \
   "event[103] task_dispatched" \
-  "event[104] task_quantum_expired" \
-  "event[105] task_dispatched" \
-  "event[106] message_wait_started" \
-  "event[107] task_queued" \
-  "event[108] task_queued" \
-  "event[109] task_dispatched" \
-  "event[110] task_quantum_expired" \
-  "event[111] task_dispatched" \
-  "event[112] task_quantum_expired" \
-  "event[113] task_dispatched" \
-  "event[114] task_faulted" \
-  "event[115] task_dispatched" \
-  "event[116] task_result_inspected" \
-  "event[117] task_verified" \
-  "event[118] intent_fulfilled" \
-  "event[119] task_completed" \
-  "event[120] task_fault_recovered" \
-  "event[121] task_queued" \
-  "event[122] task_dispatched" \
-  "event[123] task_quantum_expired" \
-  "event[124] task_dispatched" \
-  "event[125] task_faulted" \
-  "event[126] task_fault_recovered" \
-  "event[127] task_queued" \
-  "event[128] task_dispatched" \
-  "event[129] task_quantum_expired" \
-  "event[130] task_dispatched" \
-  "event[131] task_faulted" \
-  "event[132] task_fault_recovered" \
-  "event[133] task_queued" \
-  "event[134] task_dispatched" \
-  "event[135] task_quantum_expired" \
-  "event[136] task_dispatched" \
-  "event[137] task_faulted" \
-  "event[138] message_sent" \
-  "event[139] message_wait_woken" \
-  "event[140] fault_routed" \
-  "event[141] fault_policy_applied" \
-  "event[142] task_dispatched" \
-  "event[143] message_received" \
-  "event[144] message_acknowledged" \
-  "event[145] task_result_submitted" \
-  "event[146] task_completed" \
-  "event[147] task_fault_recovered" \
-  "event[148] task_queued" \
-  "event[149] task_dispatched" \
-  "event[150] task_completed" \
-  "event[151] task_queued" \
-  "event[152] task_dispatched" \
-  "event[153] task_quantum_expired" \
+  "event[104] task_completed" \
+  "event[105] task_queued" \
+  "event[106] task_dispatched" \
+  "event[107] task_quantum_expired" \
+  "event[108] task_dispatched" \
+  "event[109] message_wait_started" \
+  "event[110] task_queued" \
+  "event[111] task_queued" \
+  "event[112] task_dispatched" \
+  "event[113] task_quantum_expired" \
+  "event[114] task_dispatched" \
+  "event[115] task_quantum_expired" \
+  "event[116] task_dispatched" \
+  "event[117] memory_cell_created" \
+  "event[118] resource_retired" \
+  "event[119] task_faulted" \
+  "event[120] task_dispatched" \
+  "event[121] task_result_inspected" \
+  "event[122] task_verified" \
+  "event[123] intent_fulfilled" \
+  "event[124] task_completed" \
+  "event[125] task_fault_recovered" \
+  "event[126] task_queued" \
+  "event[127] task_dispatched" \
+  "event[128] task_quantum_expired" \
+  "event[129] task_dispatched" \
+  "event[130] task_faulted" \
+  "event[131] task_fault_recovered" \
+  "event[132] task_queued" \
+  "event[133] task_dispatched" \
+  "event[134] task_quantum_expired" \
+  "event[135] task_dispatched" \
+  "event[136] task_faulted" \
+  "event[137] task_fault_recovered" \
+  "event[138] task_queued" \
+  "event[139] task_dispatched" \
+  "event[140] task_quantum_expired" \
+  "event[141] task_dispatched" \
+  "event[142] task_faulted" \
+  "event[143] message_sent" \
+  "event[144] message_wait_woken" \
+  "event[145] fault_routed" \
+  "event[146] fault_policy_applied" \
+  "event[147] task_dispatched" \
+  "event[148] message_received" \
+  "event[149] message_acknowledged" \
+  "event[150] task_result_submitted" \
+  "event[151] task_completed" \
+  "event[152] task_fault_recovered" \
+  "event[153] task_queued" \
   "event[154] task_dispatched" \
-  "event[155] resource_created" \
-  "event[156] capability_granted" \
-  "event[157] capability_derived" \
-  "event[158] capability_revoked" \
-  "event[159] resource_retired" \
-  "event[160] intent_declared" \
-  "event[161] task_created" \
-  "event[162] intent_bound" \
-  "event[163] capability_derived" \
-  "event[164] delegation" \
-  "event[165] agent_registered" \
-  "event[166] agent_suspended" \
-  "event[167] agent_resumed" \
-  "event[168] agent_retired" \
-  "event[169] resource_created" \
-  "event[170] capability_granted" \
-  "event[171] memory_cell_created" \
-  "event[172] memory_cell_recalled" \
-  "event[173] resource_retired" \
+  "event[155] task_completed" \
+  "event[156] task_queued" \
+  "event[157] task_dispatched" \
+  "event[158] task_quantum_expired" \
+  "event[159] task_dispatched" \
+  "event[160] resource_created" \
+  "event[161] capability_granted" \
+  "event[162] capability_derived" \
+  "event[163] capability_revoked" \
+  "event[164] resource_retired" \
+  "event[165] intent_declared" \
+  "event[166] task_created" \
+  "event[167] intent_bound" \
+  "event[168] capability_derived" \
+  "event[169] delegation" \
+  "event[170] agent_registered" \
+  "event[171] agent_suspended" \
+  "event[172] agent_resumed" \
+  "event[173] agent_retired" \
   "event[174] resource_created" \
   "event[175] capability_granted" \
   "event[176] memory_cell_created" \
   "event[177] memory_cell_recalled" \
-  "event[178] resource_created" \
-  "event[179] capability_granted" \
-  "event[180] memory_cell_created" \
-  "event[181] resource_retired" \
+  "event[178] resource_retired" \
+  "event[179] resource_created" \
+  "event[180] capability_granted" \
+  "event[181] memory_cell_created" \
   "event[182] memory_cell_recalled" \
   "event[183] resource_created" \
   "event[184] capability_granted" \
   "event[185] memory_cell_created" \
-  "event[186] memory_cell_recalled" \
-  "event[187] resource_retired" \
-  "event[188] resource_retired" \
-  "event[189] task_result_submitted" \
-  "event[190] task_completed" \
-  "event[191] device_event_raised" \
-  "event[192] device_event_delivered" \
-  "event[193] driver_invocation_queued" \
-  "event[194] driver_invocation_dispatched" \
-  "event[195] driver_invocation_ticked" \
-  "event[196] device_event_acknowledged" \
-  "event[197] driver_command_submitted" \
-  "event[198] driver_command_dispatched" \
-  "event[199] driver_command_completed" \
-  "event[200] driver_invocation_completed" \
+  "event[186] resource_retired" \
+  "event[187] memory_cell_recalled" \
+  "event[188] resource_created" \
+  "event[189] capability_granted" \
+  "event[190] memory_cell_created" \
+  "event[191] memory_cell_recalled" \
+  "event[192] resource_retired" \
+  "event[193] resource_retired" \
+  "event[194] task_result_submitted" \
+  "event[195] task_completed" \
+  "event[196] device_event_raised" \
+  "event[197] device_event_delivered" \
+  "event[198] driver_invocation_queued" \
+  "event[199] driver_invocation_dispatched" \
+  "event[200] driver_invocation_ticked" \
+  "event[201] device_event_acknowledged" \
+  "event[202] driver_command_submitted" \
+  "event[203] driver_command_dispatched" \
+  "event[204] driver_command_completed" \
+  "event[205] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -319,19 +325,23 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 200 ]]; then
-  printf 'expected exactly 200 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 205 ]]; then
+  printf 'expected exactly 205 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
-for marker in \
-  "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" \
-  "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" \
-  "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK"
-do
+check_marker_count() {
+  local marker="$1"
+  local expected_count="$2"
   MARKER_COUNT="$(grep -Fxc "$marker" <<<"$OUTPUT")"
-  if [[ "$MARKER_COUNT" -ne 3 ]]; then
-    printf 'expected exactly 3 occurrences of %s, observed %s\n' "$marker" "$MARKER_COUNT" >&2
+  if [[ "$MARKER_COUNT" -ne "$expected_count" ]]; then
+    printf 'expected exactly %s occurrences of %s, observed %s\n' \
+      "$expected_count" "$marker" "$MARKER_COUNT" >&2
     exit 1
   fi
-done
+}
+
+check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" 4
+check_marker_count "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" 3
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" 3
+check_marker_count "AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK" 1

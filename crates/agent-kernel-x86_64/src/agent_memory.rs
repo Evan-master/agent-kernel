@@ -7,6 +7,7 @@
 
 mod frame_allocator;
 mod page_tables;
+mod reclamation;
 mod runtime_page;
 mod runtime_pool;
 mod runtime_region;

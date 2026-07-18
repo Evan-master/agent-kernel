@@ -14,6 +14,7 @@ pub mod port;
 pub mod privilege;
 pub mod runtime_frame_pool;
 pub mod runtime_page;
+pub mod runtime_reclamation;
 pub mod runtime_region;
 pub mod user_memory;
 

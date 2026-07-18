@@ -27,7 +27,7 @@ struct RegionSpec {
 
 pub(super) fn state_valid(booted: &X86BootedKernel, image: BootResourceManagerImage) -> bool {
     let kernel = booted.kernel();
-    kernel.memory_cells().len() == 4
+    kernel.memory_cells().len() == 5
         && region_specs(image).into_iter().all(|spec| {
             let resource = kernel
                 .resources()

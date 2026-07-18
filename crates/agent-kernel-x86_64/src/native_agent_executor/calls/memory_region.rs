@@ -36,7 +36,7 @@ pub(super) fn allocate(
     let pool_reservation = memory_pool.reserve(context.agent(), resource, page_count)?;
     let frames = memory_pool.frame_set_for_reservation(pool_reservation)?;
     let Some((reservation, descriptor)) =
-        pending.prepare_runtime_region_allocation(resource, page_count, frames)
+        pending.prepare_runtime_region_allocation(resource, capability, page_count, frames)
     else {
         memory_pool.cancel(pool_reservation).then_some(())?;
         return None;

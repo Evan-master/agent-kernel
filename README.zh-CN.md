@@ -40,6 +40,9 @@ Agent 为中心的系统需要不同的控制面：
 - 仅使用寄存器、不接受用户态指针的版本化 Agent Call ABI；
 - 阻塞式邮箱发送、接收、确认与唤醒，主动 Yield，任务结果、目标限定验证和完成；
 - 对 ring-3 `#UD`、`#GP`、`#PF` 的故障隔离；来自内核态的异常仍然直接失败；
+- 在提交 `TaskFaulted` 前，对仍存活的私有运行时内存执行有界故障回收：使用精确
+  Capability 退休 Resource、移除叶项、清零并归还物理帧、保留固定容量证据，同时
+  保持已捕获 CPU 可重启；
 - 将缺页故障按策略路由给真实 ring-3 Fault Handler，再通过 Capability
   限定的方式修复保留页，并从同一故障帧继续执行；
 - 真实 ring-3 Resource Manager：使用派生的 `Act` 权限创建子 Service，
@@ -69,13 +72,15 @@ Agent 为中心的系统需要不同的控制面：
 | Resource Manager Agent/内核地址空间切换 | 60 |
 | 真实物理时间片到期 | 10 |
 | 被隔离的 Agent 故障 | 4 |
-| Resource Manager 执行后的资源 | 6 |
-| Resource Manager 执行后的 Capability | 17 |
+| 故障时回收的存活区域 | 1 |
+| 故障时回收的物理帧 | 2 |
+| Resource Manager 执行后的资源 | 7 |
+| Resource Manager 执行后的 Capability | 19 |
 | Resource Manager 执行后的 Intent | 7 |
 | Resource Manager 执行后的 Task | 7 |
-| Resource Manager 执行后的 MemoryCell | 4 |
+| Resource Manager 执行后的 MemoryCell | 5 |
 | 已归还并清零的共享运行时帧 | 16 |
-| Driver 完成后的有序内核事件 | 200 |
+| Driver 完成后的有序内核事件 | 205 |
 
 `scripts/run-qemu.sh` 会逐条校验事件顺序，同时拒绝缺失标记、多余事件、异常的
 QEMU 退出状态以及任何 fail-closed 启动路径。
@@ -191,9 +196,10 @@ scripts/run-qemu.sh --release
 ```
 
 脚本会构建裸机目标、生成 BIOS 镜像、启动 QEMU、检查完整串口记录、要求恰好
-200 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行的结尾是：
+205 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
 
 ```text
+AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
@@ -203,7 +209,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[200] driver_invocation_completed
+event[205] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -233,6 +239,8 @@ SUPERVISOR_HANDOFF_READY
   Invocation 生命周期；
 - 裸机 x86_64 隔离、时钟抢占、故障隔离/恢复，以及原生 Resource、Capability、
   Intent、Task、受管 Agent、共享物理帧池、兼容页和多页内存区域生命周期调用。
+- 对故障时仍存活的 Memory Resource 执行确定性退休，移除私有叶项，清零并归还
+  帧，保存有界回收证据，并在清理完成后重启 Agent。
 
 ### 后续规划
 
@@ -244,8 +252,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [原生内存并发设计](docs/superpowers/specs/2026-07-18-x86-native-memory-concurrency-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-memory-concurrency-v1.md)。
+最新里程碑的完整契约见 [原生内存故障回收设计](docs/superpowers/specs/2026-07-18-x86-native-memory-fault-reclaim-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-memory-fault-reclaim-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献

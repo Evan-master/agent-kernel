@@ -4,11 +4,12 @@
 //! ledger. Bare-metal adapters consume the public ownership and range
 //! accessors after validating semantic kernel records.
 
-use agent_kernel_core::{MemoryCellId, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeRegionReservation {
     resource: ResourceId,
+    capability: CapabilityId,
     start_slot: u8,
     page_count: u8,
     generation: u64,
@@ -18,6 +19,7 @@ pub struct RuntimeRegionReservation {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeRegionBinding {
     resource: ResourceId,
+    capability: CapabilityId,
     cell: MemoryCellId,
     start_slot: u8,
     page_count: u8,
@@ -31,6 +33,7 @@ pub struct RuntimeRegionRelease(RuntimeRegionBinding);
 impl RuntimeRegionReservation {
     pub(super) fn new(
         resource: ResourceId,
+        capability: CapabilityId,
         start_slot: usize,
         page_count: usize,
         generation: u64,
@@ -38,6 +41,7 @@ impl RuntimeRegionReservation {
     ) -> Self {
         Self {
             resource,
+            capability,
             start_slot: start_slot as u8,
             page_count: page_count as u8,
             generation,
@@ -47,6 +51,10 @@ impl RuntimeRegionReservation {
 
     pub const fn resource(self) -> ResourceId {
         self.resource
+    }
+
+    pub const fn capability(self) -> CapabilityId {
+        self.capability
     }
 
     pub const fn start_slot(self) -> usize {
@@ -69,6 +77,7 @@ impl RuntimeRegionReservation {
 impl RuntimeRegionBinding {
     pub(super) fn new(
         resource: ResourceId,
+        capability: CapabilityId,
         cell: MemoryCellId,
         start_slot: usize,
         page_count: usize,
@@ -77,6 +86,7 @@ impl RuntimeRegionBinding {
     ) -> Self {
         Self {
             resource,
+            capability,
             cell,
             start_slot: start_slot as u8,
             page_count: page_count as u8,
@@ -87,6 +97,10 @@ impl RuntimeRegionBinding {
 
     pub const fn resource(self) -> ResourceId {
         self.resource
+    }
+
+    pub const fn capability(self) -> CapabilityId {
+        self.capability
     }
 
     pub const fn cell(self) -> MemoryCellId {
@@ -113,6 +127,10 @@ impl RuntimeRegionBinding {
 impl RuntimeRegionRelease {
     pub const fn resource(self) -> ResourceId {
         self.0.resource()
+    }
+
+    pub const fn capability(self) -> CapabilityId {
+        self.0.capability()
     }
 
     pub const fn cell(self) -> MemoryCellId {

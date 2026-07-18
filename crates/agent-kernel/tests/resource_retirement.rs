@@ -18,6 +18,16 @@ fn resource_retirement_syscall_retires_resource_and_blocks_future_grants() {
     let capability = kernel
         .sys_grant(agent, resource, OperationSet::only(Operation::Rollback))
         .expect("rollback capability should fit");
+    let events_before = kernel.events().len();
+
+    assert!(kernel.has_event_capacity(1));
+    assert!(!kernel.has_event_capacity(3));
+    assert_eq!(
+        kernel.can_retire_resource(agent, capability, resource),
+        Ok(())
+    );
+    assert_eq!(kernel.events().len(), events_before);
+    assert_eq!(kernel.resources()[0].status, ResourceStatus::Active);
 
     let event = kernel
         .sys_retire_resource(agent, capability, resource)

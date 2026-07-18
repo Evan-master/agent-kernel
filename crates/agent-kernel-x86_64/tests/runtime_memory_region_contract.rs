@@ -1,4 +1,4 @@
-use agent_kernel_core::{MemoryCellId, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, ResourceId};
 use agent_kernel_x86_64::{
     runtime_frame_pool::MAX_RUNTIME_REGION_PAGES,
     runtime_region::{
@@ -43,19 +43,20 @@ fn runtime_region_layout_is_fixed_bounded_and_page_aligned() {
 #[test]
 fn region_ledger_uses_contiguous_first_fit_and_reuses_holes() {
     let mut ledger = RuntimeRegionLedger::new();
-    let first = ledger.reserve(ResourceId::new(1), 3).unwrap();
+    let capability = CapabilityId::new(7);
+    let first = ledger.reserve(ResourceId::new(1), capability, 3).unwrap();
     assert_reservation(first, 1, 0, 3, 1);
     assert!(ledger.commit_mapping(first, MemoryCellId::new(1)));
 
-    let second = ledger.reserve(ResourceId::new(2), 2).unwrap();
+    let second = ledger.reserve(ResourceId::new(2), capability, 2).unwrap();
     assert_reservation(second, 2, 3, 2, 2);
     assert!(ledger.commit_mapping(second, MemoryCellId::new(2)));
 
-    let third = ledger.reserve(ResourceId::new(3), 3).unwrap();
+    let third = ledger.reserve(ResourceId::new(3), capability, 3).unwrap();
     assert_reservation(third, 3, 5, 3, 3);
     assert!(ledger.commit_mapping(third, MemoryCellId::new(3)));
     assert_eq!(ledger.active_region_count(), 3);
-    assert!(ledger.reserve(ResourceId::new(4), 1).is_none());
+    assert!(ledger.reserve(ResourceId::new(4), capability, 1).is_none());
 
     let released = ledger
         .prepare_release(ResourceId::new(2), MemoryCellId::new(2))
@@ -64,26 +65,27 @@ fn region_ledger_uses_contiguous_first_fit_and_reuses_holes() {
     assert_eq!(released.page_count(), 2);
     assert!(ledger.commit_release(released));
 
-    let reused = ledger.reserve(ResourceId::new(4), 2).unwrap();
+    let reused = ledger.reserve(ResourceId::new(4), capability, 2).unwrap();
     assert_reservation(reused, 4, 3, 2, 4);
     assert!(ledger.commit_mapping(reused, MemoryCellId::new(4)));
-    assert!(ledger.reserve(ResourceId::new(5), 4).is_none());
+    assert!(ledger.reserve(ResourceId::new(5), capability, 4).is_none());
 }
 
 #[test]
 fn region_ledger_rejects_stale_tokens_and_preserves_generation_on_cancel() {
     let mut ledger = RuntimeRegionLedger::new();
-    assert!(ledger.reserve(ResourceId::new(0), 1).is_none());
-    assert!(ledger.reserve(ResourceId::new(1), 0).is_none());
+    let capability = CapabilityId::new(7);
+    assert!(ledger.reserve(ResourceId::new(0), capability, 1).is_none());
+    assert!(ledger.reserve(ResourceId::new(1), capability, 0).is_none());
     assert!(ledger
-        .reserve(ResourceId::new(1), MAX_RUNTIME_REGION_PAGES + 1)
+        .reserve(ResourceId::new(1), capability, MAX_RUNTIME_REGION_PAGES + 1,)
         .is_none());
 
-    let stale = ledger.reserve(ResourceId::new(1), 2).unwrap();
+    let stale = ledger.reserve(ResourceId::new(1), capability, 2).unwrap();
     assert!(ledger.cancel(stale));
     assert_eq!(ledger.generation(), 0);
 
-    let current = ledger.reserve(ResourceId::new(1), 2).unwrap();
+    let current = ledger.reserve(ResourceId::new(1), capability, 2).unwrap();
     assert_eq!(current.generation(), 1);
     assert!(!ledger.cancel(stale));
     assert!(!ledger.commit_mapping(stale, MemoryCellId::new(1)));
@@ -112,10 +114,11 @@ fn region_ledger_rejects_stale_tokens_and_preserves_generation_on_cancel() {
 fn region_observation_log_is_ordered_bounded_and_tracks_hole_reuse() {
     let mut ledger = RuntimeRegionLedger::new();
     let mut observations = RuntimeRegionObservationLog::new();
+    let capability = CapabilityId::new(7);
     assert_eq!(RUNTIME_REGION_OBSERVATION_CAPACITY, 3);
     assert!(observations.is_empty());
 
-    let first = ledger.reserve(ResourceId::new(1), 3).unwrap();
+    let first = ledger.reserve(ResourceId::new(1), capability, 3).unwrap();
     assert!(ledger.commit_mapping(first, MemoryCellId::new(1)));
     let first_binding = ledger
         .binding(ResourceId::new(1), MemoryCellId::new(1))
@@ -124,7 +127,7 @@ fn region_observation_log_is_ordered_bounded_and_tracks_hole_reuse() {
     assert!(!observations.record(first_binding, 0xff, 0xff));
     assert_eq!(observations.len(), 1);
 
-    let second = ledger.reserve(ResourceId::new(2), 2).unwrap();
+    let second = ledger.reserve(ResourceId::new(2), capability, 2).unwrap();
     assert!(ledger.commit_mapping(second, MemoryCellId::new(2)));
     let second_binding = ledger
         .binding(ResourceId::new(2), MemoryCellId::new(2))
@@ -135,7 +138,7 @@ fn region_observation_log_is_ordered_bounded_and_tracks_hole_reuse() {
         .prepare_release(ResourceId::new(1), MemoryCellId::new(1))
         .unwrap();
     assert!(ledger.commit_release(first_release));
-    let third = ledger.reserve(ResourceId::new(3), 3).unwrap();
+    let third = ledger.reserve(ResourceId::new(3), capability, 3).unwrap();
     assert_eq!(third.start_slot(), 0);
     assert_eq!(third.generation(), 3);
     assert!(ledger.commit_mapping(third, MemoryCellId::new(3)));
@@ -159,7 +162,7 @@ fn region_observation_log_is_ordered_bounded_and_tracks_hole_reuse() {
         assert_eq!(observation.last(), last);
     }
 
-    let fourth = ledger.reserve(ResourceId::new(4), 1).unwrap();
+    let fourth = ledger.reserve(ResourceId::new(4), capability, 1).unwrap();
     assert!(ledger.commit_mapping(fourth, MemoryCellId::new(4)));
     let fourth_binding = ledger
         .binding(ResourceId::new(4), MemoryCellId::new(4))
@@ -171,6 +174,31 @@ fn region_observation_log_is_ordered_bounded_and_tracks_hole_reuse() {
     assert!(observations
         .get(RUNTIME_REGION_OBSERVATION_CAPACITY)
         .is_none());
+}
+
+#[test]
+fn region_ledger_exports_capability_bound_live_bindings_in_record_order() {
+    let mut ledger = RuntimeRegionLedger::new();
+    assert!(ledger
+        .reserve(ResourceId::new(1), CapabilityId::new(0), 1)
+        .is_none());
+
+    let first = ledger
+        .reserve(ResourceId::new(1), CapabilityId::new(7), 2)
+        .unwrap();
+    assert_eq!(first.capability(), CapabilityId::new(7));
+    assert!(ledger.commit_mapping(first, MemoryCellId::new(1)));
+
+    let second = ledger
+        .reserve(ResourceId::new(2), CapabilityId::new(8), 1)
+        .unwrap();
+    assert_eq!(second.capability(), CapabilityId::new(8));
+    assert!(ledger.commit_mapping(second, MemoryCellId::new(2)));
+
+    let bindings = ledger.bindings();
+    assert_eq!(bindings[0].unwrap().capability(), CapabilityId::new(7));
+    assert_eq!(bindings[1].unwrap().capability(), CapabilityId::new(8));
+    assert!(bindings[2..].iter().all(Option::is_none));
 }
 
 fn assert_reservation(

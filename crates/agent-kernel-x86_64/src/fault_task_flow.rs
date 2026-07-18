@@ -12,8 +12,8 @@ mod restart;
 
 use agent_kernel_core::{
     AgentEntryKind, AgentExecutionState, AgentId, AgentImageDigest, AgentImageId, AgentImageKind,
-    AgentImageRecord, CapabilityId, EventKind, IntentKind, RunQueueEntry, TaskId, TaskStatus,
-    VerificationRequirement,
+    AgentImageRecord, CapabilityId, EventKind, IntentKind, Operation, OperationSet, ResourceId,
+    ResourceKind, ResourceStatus, RunQueueEntry, TaskId, TaskStatus, VerificationRequirement,
 };
 use agent_kernel_x86_64::{
     agent_call::AgentCallContext, native_runtime::NativeAgentFault, user_memory::UserMemoryLayout,
@@ -22,6 +22,8 @@ use agent_kernel_x86_64::{
 use crate::X86BootedKernel;
 
 pub(super) const FAULT_WORKER: AgentId = AgentId::new(6);
+pub(super) const FAULT_WORKER_MEMORY_FIRST_PROOF: u64 = 0x4641_554c_544d_3031;
+pub(super) const FAULT_WORKER_MEMORY_LAST_PROOF: u64 = 0x4641_554c_544d_3032;
 const FAULT_WORKER_PAGE_FAULT_ERROR_CODE: u16 = 7;
 const FAULT_WORKER_PAGE_FAULT_ADDRESS: u64 = UserMemoryLayout::fixed().signal_start();
 const FAULT_WORKER_LAZY_FAULT_ERROR_CODE: u16 = 6;
@@ -46,6 +48,9 @@ struct FaultWorkerTask {
     task: TaskId,
     image: AgentImageId,
     capability: CapabilityId,
+    memory_resource: ResourceId,
+    memory_root: CapabilityId,
+    memory_capability: CapabilityId,
 }
 
 pub(super) struct FaultTaskFlow;
@@ -64,6 +69,22 @@ impl FaultTaskFlow {
         let report = *booted.report();
         let kernel = booted.kernel_mut();
         kernel.sys_register_agent(FAULT_WORKER).ok()?;
+        let memory = kernel
+            .sys_create_resource(
+                report.bootstrap_agent,
+                ResourceKind::Memory,
+                Some((report.bootstrap_resource, report.bootstrap_capability)),
+                fault_memory_root_operations(),
+            )
+            .ok()?;
+        let memory_capability = kernel
+            .sys_derive_capability(
+                report.bootstrap_agent,
+                memory.capability,
+                FAULT_WORKER,
+                fault_memory_operations(),
+            )
+            .ok()?;
         let intent = kernel
             .sys_declare_intent(
                 report.bootstrap_agent,
@@ -119,6 +140,9 @@ impl FaultTaskFlow {
                 task,
                 image,
                 capability,
+                memory_resource: memory.resource,
+                memory_root: memory.capability,
+                memory_capability,
             },
         };
         flow.prepared_state_valid(booted).then_some(flow)
@@ -144,6 +168,18 @@ impl PreparedFaultTaskFlow {
 
     pub(super) fn image_record(&self, booted: &X86BootedKernel) -> Option<AgentImageRecord> {
         booted.kernel().agent_image(self.worker.image).ok()
+    }
+
+    pub(super) const fn memory_resource(&self) -> ResourceId {
+        self.worker.memory_resource
+    }
+
+    pub(super) const fn memory_capability(&self) -> CapabilityId {
+        self.worker.memory_capability
+    }
+
+    pub(super) const fn memory_root(&self) -> CapabilityId {
+        self.worker.memory_root
     }
 
     pub(super) fn queue_for_runtime(&self, booted: &mut X86BootedKernel) -> Option<()> {
@@ -177,7 +213,36 @@ impl PreparedFaultTaskFlow {
             .iter()
             .find(|context| context.agent == FAULT_WORKER);
         let entry = kernel.agent_entry(FAULT_WORKER).ok();
-        matches!(task, Some(task)
+        let resource = kernel
+            .resources()
+            .iter()
+            .find(|resource| resource.id == self.worker.memory_resource);
+        let root = kernel.capability(self.worker.memory_root).ok();
+        let memory_capability = kernel.capability(self.worker.memory_capability).ok();
+        self.worker.memory_resource == ResourceId::new(2)
+            && self.worker.memory_root == CapabilityId::new(7)
+            && self.worker.memory_capability == CapabilityId::new(8)
+            && self.worker.capability == CapabilityId::new(9)
+            && matches!(resource, Some(resource)
+                if resource.kind == ResourceKind::Memory
+                    && resource.parent == Some(booted.report().bootstrap_resource)
+                    && resource.owner == Some(booted.report().bootstrap_agent)
+                    && resource.status == ResourceStatus::Active)
+            && matches!(root, Some(root)
+                if root.agent == booted.report().bootstrap_agent
+                    && root.resource == self.worker.memory_resource
+                    && root.operations == fault_memory_root_operations()
+                    && !root.revoked
+                    && root.task.is_none()
+                    && root.parent.is_none())
+            && matches!(memory_capability, Some(capability)
+                if capability.agent == FAULT_WORKER
+                    && capability.resource == self.worker.memory_resource
+                    && capability.operations == fault_memory_operations()
+                    && !capability.revoked
+                    && capability.task.is_none()
+                    && capability.parent == Some(self.worker.memory_root))
+            && matches!(task, Some(task)
             if task.status == TaskStatus::Accepted
                 && task.delegated_capability == Some(self.worker.capability)
                 && task.run_ticks == 0
@@ -199,7 +264,17 @@ impl PreparedFaultTaskFlow {
                 .any(|queued| queued.task == self.worker.task)
             && matches!(kernel.events().last(), Some(event)
                 if event.kind == EventKind::TaskAccepted
-                    && event.agent == FAULT_WORKER
-                    && event.task == Some(self.worker.task))
+                && event.agent == FAULT_WORKER
+                && event.task == Some(self.worker.task))
     }
+}
+
+fn fault_memory_operations() -> OperationSet {
+    OperationSet::only(Operation::Observe)
+        .with(Operation::Act)
+        .with(Operation::Rollback)
+}
+
+fn fault_memory_root_operations() -> OperationSet {
+    fault_memory_operations().with(Operation::Delegate)
 }

@@ -8,7 +8,7 @@ mod lifecycle;
 mod observation;
 mod types;
 
-use agent_kernel_core::{MemoryCellId, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, ResourceId};
 
 pub use observation::{
     RuntimeRegionObservation, RuntimeRegionObservationLog, RUNTIME_REGION_OBSERVATION_CAPACITY,
@@ -24,6 +24,7 @@ enum RegionState {
     Available,
     Reserved {
         resource: ResourceId,
+        capability: CapabilityId,
         start_slot: u8,
         page_count: u8,
         generation: u64,
@@ -31,6 +32,7 @@ enum RegionState {
     },
     Mapped {
         resource: ResourceId,
+        capability: CapabilityId,
         cell: MemoryCellId,
         start_slot: u8,
         page_count: u8,
@@ -63,6 +65,7 @@ impl RuntimeRegionLedger {
         self.regions.iter().find_map(|state| match *state {
             RegionState::Mapped {
                 resource: actual_resource,
+                capability,
                 cell: actual_cell,
                 start_slot,
                 page_count,
@@ -71,6 +74,7 @@ impl RuntimeRegionLedger {
             } if actual_resource == resource && actual_cell == cell => {
                 Some(RuntimeRegionBinding::new(
                     resource,
+                    capability,
                     cell,
                     usize::from(start_slot),
                     usize::from(page_count),
@@ -89,6 +93,29 @@ impl RuntimeRegionLedger {
             .count()
     }
 
+    pub fn bindings(&self) -> [Option<RuntimeRegionBinding>; RUNTIME_REGION_CAPACITY] {
+        self.regions.map(|state| match state {
+            RegionState::Mapped {
+                resource,
+                capability,
+                cell,
+                start_slot,
+                page_count,
+                generation,
+                transaction,
+            } => Some(RuntimeRegionBinding::new(
+                resource,
+                capability,
+                cell,
+                usize::from(start_slot),
+                usize::from(page_count),
+                generation,
+                transaction,
+            )),
+            _ => None,
+        })
+    }
+
     pub fn is_clear(&self) -> bool {
         self.regions
             .iter()
@@ -103,11 +130,13 @@ impl RuntimeRegionLedger {
         self.regions.iter().position(|state| {
             matches!(*state, RegionState::Reserved {
                 resource,
+                capability,
                 start_slot,
                 page_count,
                 generation,
                 transaction,
             } if resource == reservation.resource()
+                && capability == reservation.capability()
                 && usize::from(start_slot) == reservation.start_slot()
                 && usize::from(page_count) == reservation.page_count()
                 && generation == reservation.generation()

@@ -36,6 +36,11 @@ fn retire_resource_event_log_full_leaves_resource_active() {
         .grant_capability(agent, resource, OperationSet::only(Operation::Rollback))
         .expect("rollback capability should fit");
 
+    assert!(!core.has_event_capacity(1));
+    assert_eq!(
+        core.can_retire_resource(agent, capability, resource),
+        Err(KernelError::EventLogFull)
+    );
     assert_eq!(
         core.retire_resource(agent, capability, resource),
         Err(KernelError::EventLogFull)

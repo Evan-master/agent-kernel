@@ -4,7 +4,7 @@
 //! exact pooled frames and leaves, and retains first/last inspection evidence.
 //! Resource, MemoryCell, and Event mutation remains in the executor.
 
-use agent_kernel_core::{MemoryCellId, MemoryValue, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, MemoryValue, ResourceId};
 use agent_kernel_x86_64::{
     runtime_region::{
         RuntimeRegionBinding, RuntimeRegionObservationLog, RuntimeRegionRelease,
@@ -19,13 +19,16 @@ impl PreparedAgentMemory {
     pub(crate) fn prepare_runtime_region_allocation(
         &mut self,
         resource: ResourceId,
+        capability: CapabilityId,
         page_count: usize,
         frames: RuntimePhysicalFrameSet,
     ) -> Option<(RuntimeRegionReservation, MemoryValue)> {
         if !self.kernel_address_space_active() || frames.page_count() != page_count {
             return None;
         }
-        let reservation = self.runtime_regions.reserve(resource, page_count)?;
+        let reservation = self
+            .runtime_regions
+            .reserve(resource, capability, page_count)?;
         if page_tables::activate_runtime_region(
             PHYSICAL_MEMORY_OFFSET,
             self.roots,

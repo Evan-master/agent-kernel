@@ -4,7 +4,7 @@
 //! frame selected by the global pool. It owns reversible leaf transitions and
 //! retained observation evidence; semantic commits remain in the executor.
 
-use agent_kernel_core::{MemoryCellId, MemoryValue, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, MemoryValue, ResourceId};
 use agent_kernel_x86_64::{
     runtime_page::{RuntimePageRelease, RuntimePageReservation, RUNTIME_PAGE_ACCESS_READ_WRITE},
     user_memory::PAGE_BYTES,
@@ -16,6 +16,7 @@ impl PreparedAgentMemory {
     pub(crate) fn prepare_runtime_page_allocation(
         &mut self,
         resource: ResourceId,
+        capability: CapabilityId,
         frames: RuntimePhysicalFrameSet,
     ) -> Option<(RuntimePageReservation, MemoryValue)> {
         if !self.kernel_address_space_active()
@@ -25,7 +26,7 @@ impl PreparedAgentMemory {
         {
             return None;
         }
-        let reservation = self.runtime_page.reserve(resource)?;
+        let reservation = self.runtime_page.reserve(resource, capability)?;
         if page_tables::activate_runtime_page(
             PHYSICAL_MEMORY_OFFSET,
             self.roots,

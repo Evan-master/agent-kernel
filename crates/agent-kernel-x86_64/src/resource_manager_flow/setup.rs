@@ -98,8 +98,8 @@ fn prepared_state_valid(
     let authority = kernel.capability(manager.resource_authority).ok();
     manager.task.raw() == 6
         && manager.image.raw() == 8
-        && manager.task_capability.raw() == 9
-        && manager.resource_authority.raw() == 10
+        && manager.task_capability.raw() == 11
+        && manager.resource_authority.raw() == 12
         && intent.raw() == 6
         && matches!(task, Some(task)
             if task.status == TaskStatus::Accepted

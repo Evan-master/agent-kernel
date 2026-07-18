@@ -159,7 +159,14 @@ pub(super) fn run(
         || report.len() != 3
         || report.faulted_len() != 1
         || !evidence.proves_fault_containment_phase()
-        || !invalid_opcode_evidence_valid(booted, &report, &fault, fault_image, fault_context)
+        || !invalid_opcode_evidence_valid(
+            booted,
+            memory_pool,
+            &report,
+            &fault,
+            fault_image,
+            fault_context,
+        )
         || !verifier_evidence_valid(
             &report,
             verifier_image,

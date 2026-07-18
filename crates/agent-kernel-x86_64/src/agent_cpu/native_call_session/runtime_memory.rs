@@ -3,7 +3,7 @@
 //! These role-independent wrappers retain the owned Agent memory object while
 //! the executor coordinates semantic records and the global physical pool.
 
-use agent_kernel_core::{MemoryCellId, MemoryValue, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, MemoryValue, ResourceId};
 use agent_kernel_x86_64::{
     runtime_page::{RuntimePageRelease, RuntimePageReservation},
     runtime_region::{RuntimeRegionBinding, RuntimeRegionRelease, RuntimeRegionReservation},
@@ -16,11 +16,12 @@ impl PendingAgentCallCpu {
     pub(crate) fn prepare_runtime_page_allocation(
         &mut self,
         resource: ResourceId,
+        capability: CapabilityId,
         frames: RuntimePhysicalFrameSet,
     ) -> Option<(RuntimePageReservation, MemoryValue)> {
         self.session
             .memory
-            .prepare_runtime_page_allocation(resource, frames)
+            .prepare_runtime_page_allocation(resource, capability, frames)
     }
 
     pub(crate) fn commit_runtime_page_allocation(
@@ -86,12 +87,13 @@ impl PendingAgentCallCpu {
     pub(crate) fn prepare_runtime_region_allocation(
         &mut self,
         resource: ResourceId,
+        capability: CapabilityId,
         page_count: usize,
         frames: RuntimePhysicalFrameSet,
     ) -> Option<(RuntimeRegionReservation, MemoryValue)> {
         self.session
             .memory
-            .prepare_runtime_region_allocation(resource, page_count, frames)
+            .prepare_runtime_region_allocation(resource, capability, page_count, frames)
     }
 
     pub(crate) fn commit_runtime_region_allocation(

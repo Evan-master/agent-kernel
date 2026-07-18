@@ -4,7 +4,7 @@
 //! stale-safe transaction tokens. Page-table work remains in the bare-metal
 //! Agent-memory layer.
 
-use agent_kernel_core::{MemoryCellId, ResourceId};
+use agent_kernel_core::{CapabilityId, MemoryCellId, ResourceId};
 
 use crate::runtime_frame_pool::MAX_RUNTIME_REGION_PAGES;
 
@@ -14,9 +14,11 @@ impl RuntimeRegionLedger {
     pub fn reserve(
         &mut self,
         resource: ResourceId,
+        capability: CapabilityId,
         page_count: usize,
     ) -> Option<RuntimeRegionReservation> {
         if resource.raw() == 0
+            || capability.raw() == 0
             || page_count == 0
             || page_count > MAX_RUNTIME_REGION_PAGES
             || self
@@ -36,6 +38,7 @@ impl RuntimeRegionLedger {
         self.next_transaction = transaction.checked_add(1)?;
         let reservation = RuntimeRegionReservation::new(
             resource,
+            capability,
             start_slot,
             page_count,
             generation,
@@ -43,6 +46,7 @@ impl RuntimeRegionLedger {
         );
         self.regions[entry] = RegionState::Reserved {
             resource,
+            capability,
             start_slot: start_slot as u8,
             page_count: page_count as u8,
             generation,
@@ -76,6 +80,7 @@ impl RuntimeRegionLedger {
         }
         self.regions[entry] = RegionState::Mapped {
             resource: reservation.resource(),
+            capability: reservation.capability(),
             cell,
             start_slot: reservation.start_slot() as u8,
             page_count: reservation.page_count() as u8,
@@ -98,12 +103,14 @@ impl RuntimeRegionLedger {
         let Some(entry) = self.regions.iter().position(|state| {
             matches!(*state, RegionState::Mapped {
                 resource,
+                capability,
                 cell,
                 start_slot,
                 page_count,
                 generation,
                 transaction,
             } if resource == release.resource()
+                && capability == release.capability()
                 && cell == release.cell()
                 && usize::from(start_slot) == release.start_slot()
                 && usize::from(page_count) == release.page_count()

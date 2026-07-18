@@ -95,7 +95,7 @@ pub(super) fn completed(
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
-        && kernel.resources().len() == 6
+        && kernel.resources().len() == 7
         && kernel.run_queue().is_empty()
         && memory_pool.all_available_and_zero()
         && task_lifecycle::state_valid(booted, manager, image)

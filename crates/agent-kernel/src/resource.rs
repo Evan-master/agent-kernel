@@ -87,6 +87,15 @@ impl<
         self.core.retire_resource(agent, capability, resource)
     }
 
+    pub fn can_retire_resource(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+    ) -> Result<(), KernelError> {
+        self.core.can_retire_resource(agent, capability, resource)
+    }
+
     pub fn resources(&self) -> &[Resource] {
         self.core.resources()
     }

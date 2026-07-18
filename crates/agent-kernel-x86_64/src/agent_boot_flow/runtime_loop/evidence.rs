@@ -4,6 +4,8 @@
 //! to immutable Capsule metadata and public semantic state. It performs no
 //! scheduling, page-table mutation, or Agent execution.
 
+mod fault_reclamation;
+
 use agent_kernel_core::EventKind;
 use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
@@ -16,6 +18,7 @@ use agent_kernel_x86_64::{
 
 use crate::{
     agent_cpu::CompletedAgentCpu,
+    agent_memory::RuntimeMemoryPool,
     boot_agent_images::{BootAgentImage, BootFaultWorkerImage, BootVerifierImage},
     fault_task_flow::{
         expected_lazy_page_fault, expected_page_fault, PreparedFaultTaskFlow, FAULT_WORKER,
@@ -86,6 +89,7 @@ pub(super) fn verifier_evidence_valid(
 
 pub(super) fn invalid_opcode_evidence_valid(
     booted: &X86BootedKernel,
+    memory_pool: &RuntimeMemoryPool,
     report: &NativeExecutionReport,
     flow: &PreparedFaultTaskFlow,
     image: BootFaultWorkerImage,
@@ -107,7 +111,7 @@ pub(super) fn invalid_opcode_evidence_valid(
     faulted.context() == context
         && faulted.fault() == NativeAgentFault::InvalidOpcode
         && faulted.fault_offset() == Some(image.invalid_opcode_offset())
-        && !faulted.had_call_progress()
+        && fault_reclamation::valid(booted, memory_pool, faulted, flow, image)
         && faulted.physical_quantum_generation() == 1
         && faulted.restart_generation() == 0
         && flow.invalid_opcode_faulted_after_runtime(booted)

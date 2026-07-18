@@ -58,8 +58,12 @@ impl<
         &self.events[..self.event_len]
     }
 
+    pub fn has_event_capacity(&self, needed: usize) -> bool {
+        EVENTS.saturating_sub(self.event_len) >= needed
+    }
+
     pub(crate) fn ensure_event_slots(&self, needed: usize) -> Result<(), KernelError> {
-        if EVENTS.saturating_sub(self.event_len) < needed {
+        if !self.has_event_capacity(needed) {
             Err(KernelError::EventLogFull)
         } else {
             Ok(())

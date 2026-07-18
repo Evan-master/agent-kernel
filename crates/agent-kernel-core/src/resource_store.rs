@@ -90,12 +90,21 @@ impl<
         capability: CapabilityId,
         resource: ResourceId,
     ) -> Result<Event, KernelError> {
-        self.ensure_agent_active(agent)?;
-        self.ensure_authorized(agent, capability, resource, Operation::Rollback)?;
-        self.ensure_event_slots(1)?;
+        self.can_retire_resource(agent, capability, resource)?;
 
         self.find_resource_mut(resource)?.status = ResourceStatus::Retired;
         self.record_resource_event(EventKind::ResourceRetired, agent, capability, resource)
+    }
+
+    pub fn can_retire_resource(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        resource: ResourceId,
+    ) -> Result<(), KernelError> {
+        self.ensure_agent_active(agent)?;
+        self.ensure_authorized(agent, capability, resource, Operation::Rollback)?;
+        self.ensure_event_slots(1)
     }
 
     pub fn resources(&self) -> &[Resource] {
