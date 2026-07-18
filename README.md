@@ -66,13 +66,17 @@ currently provides:
   authorization, FIFO request preparation, generation-bound permits, bounded
   rejection causes, and atomic admission plus Task queueing;
 - Agent Call 27 and a real ring-3 Admission Supervisor Capsule that creates two
-  audited Runtime Admission requests for accepted, unqueued target Agents;
+  audited Runtime Admission requests, blocks in its Mailbox, and remains
+  resident throughout target admission and execution;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
+- authenticated Worker completion notifications that wake the retained
+  Supervisor call frame, followed by two FIFO receive/acknowledgement pairs and
+  a three-owner terminal address-space reclamation;
 - post-build cancellation that clears and atomically restores all eleven frames
-  after duplicate runtime registration, followed by two disjoint live private
-  address spaces, FIFO ring-3 execution, verification, and 22-frame terminal
+  after duplicate runtime registration, followed by three disjoint live private
+  address spaces, FIFO ring-3 execution, verification, and 33-frame terminal
   reclamation;
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
@@ -102,16 +106,19 @@ The reference validation profile enforces these deterministic invariants:
 | --- | ---: |
 | Registered Agents | 12 |
 | Native ring-3 completions | 9 |
-| Kernel-selected dispatches | 29 |
+| Kernel-selected dispatches | 30 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 5 |
-| Admission Supervisor Agent/kernel address-space switches | 10 |
-| Runtime Service Worker Agent Calls | 6 |
-| Runtime Service Worker Agent/kernel address-space switches | 12 |
+| Admission Supervisor Agent Calls | 9 |
+| Admission Supervisor Agent/kernel address-space switches | 18 |
+| Runtime Service Worker Agent Calls | 8 |
+| Runtime Service Worker Agent/kernel address-space switches | 16 |
 | Physical quantum expiries | 13 |
 | Runtime Admission requests | 2 |
 | Runtime Admission commits | 2 |
+| Worker completion notifications | 2 |
+| Resident Supervisor Mailbox waits | 1 |
+| Resident Supervisor Mailbox wakes | 1 |
 | Contained Agent faults | 4 |
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
@@ -128,7 +135,7 @@ The reference validation profile enforces these deterministic invariants:
 | Tasks after Runtime Service Worker verification | 10 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 264 |
+| Ordered kernel events after Driver completion | 273 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -154,6 +161,7 @@ flowchart TB
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
     Supervisor["ring-3 Admission Supervisor"] -->|"Agent Call 27"| X86
+    Workers["Admitted ring-3 Workers"] -->|"Notify / Mailbox"| Supervisor
 ```
 
 The kernel remains deterministic and compact. A userspace Supervisor owns LLM
@@ -263,7 +271,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 264 events, and treat
+validate the complete serial transcript, require exactly 273 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -280,6 +288,8 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
@@ -292,7 +302,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[264] driver_invocation_completed
+event[273] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -339,16 +349,20 @@ authority.
 - a ring-3 Admission Supervisor, authenticated Agent Call 27, fixed-capacity
   admission records, generation-bound permits, and a broker that connects
   audited semantic requests to the physical runtime service;
+- resident Supervisor Mailbox waiting across target admission and execution,
+  authenticated Worker notifications, FIFO acknowledgement, and atomic
+  three-address-space terminal reclamation;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, and reclamation for
   two disjoint Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 264-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 273-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- keeping a long-lived userspace Supervisor resident while admitted target
-  Agents execute, plus an admission queue larger than the Task store;
+- terminal `RuntimeAdmissionReleased` state after physical reclamation, dynamic
+  requester discovery, repeated admission batches, and an admission queue
+  larger than the Task store;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -356,8 +370,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Native Runtime Admission Protocol design](docs/superpowers/specs/2026-07-19-x86-native-runtime-admission-protocol-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-x86-native-runtime-admission-protocol-v1.md)
+See the current [Resident Runtime Admission Supervisor design](docs/superpowers/specs/2026-07-19-x86-resident-runtime-admission-supervisor-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-x86-resident-runtime-admission-supervisor-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

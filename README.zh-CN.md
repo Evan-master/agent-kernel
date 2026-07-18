@@ -53,11 +53,14 @@ Agent 为中心的系统需要不同的控制面：
 - 固定容量 Runtime Admission 对象，支持根作用域 `Delegate` 授权、FIFO 请求准备、
   代数绑定 Permit、有界拒绝原因，以及准入和 Task 入队的原子提交；
 - Agent Call 27 与真实 ring-3 Admission Supervisor Capsule，为两个已接受且尚未
-  入队的目标 Agent 创建可审计的 Runtime Admission 请求；
+  入队的目标 Agent 创建可审计的 Runtime Admission 请求，随后阻塞在 Mailbox，
+  并在目标准入和执行期间持续驻留；
 - x86 准入 Broker，负责校验 Permit 绑定的 Capsule、驱动既有地址空间服务、
   提交语义准入，并在语义提交无法继续时完整恢复物理运行时事务；
+- 受认证的 Worker 完成通知，用于唤醒保留的 Supervisor 调用帧，随后完成两次
+  FIFO 接收确认和三个地址空间所有者的终态回收；
 - 一次重复运行时登记在完成页表重建后被拒绝，服务清零并原子归还全部 11 帧，
-  随后同时持有两个互不重叠的私有地址空间，完成 FIFO ring-3 执行、验证和 22 帧
+  随后同时持有三个互不重叠的私有地址空间，完成 FIFO ring-3 执行、验证和 33 帧
   终态回收；
 - 将缺页故障按策略路由给真实 ring-3 Fault Handler，再通过 Capability
   限定的方式修复保留页，并从同一故障帧继续执行；
@@ -83,16 +86,19 @@ Agent 为中心的系统需要不同的控制面：
 | --- | ---: |
 | 注册 Agent | 12 |
 | 原生 ring-3 完成上下文 | 9 |
-| 内核选择的 Dispatch | 29 |
+| 内核选择的 Dispatch | 30 |
 | Resource Manager Agent Call | 29 |
 | Resource Manager Agent/内核地址空间切换 | 58 |
-| Admission Supervisor Agent Call | 5 |
-| Admission Supervisor Agent/内核地址空间切换 | 10 |
-| Runtime Service Worker Agent Call | 6 |
-| Runtime Service Worker Agent/内核地址空间切换 | 12 |
+| Admission Supervisor Agent Call | 9 |
+| Admission Supervisor Agent/内核地址空间切换 | 18 |
+| Runtime Service Worker Agent Call | 8 |
+| Runtime Service Worker Agent/内核地址空间切换 | 16 |
 | 真实物理时间片到期 | 13 |
 | Runtime Admission 请求 | 2 |
 | Runtime Admission 提交 | 2 |
+| Worker 完成通知 | 2 |
+| 常驻 Supervisor Mailbox 等待 | 1 |
+| 常驻 Supervisor Mailbox 唤醒 | 1 |
 | 被隔离的 Agent 故障 | 4 |
 | 故障时回收的存活区域 | 1 |
 | 故障时回收的物理帧 | 2 |
@@ -109,7 +115,7 @@ Agent 为中心的系统需要不同的控制面：
 | Runtime Service Worker 验证后的 Task | 10 |
 | Resource Manager 执行后的 MemoryCell | 5 |
 | 已归还并清零的共享运行时帧 | 16 |
-| Driver 完成后的有序内核事件 | 264 |
+| Driver 完成后的有序内核事件 | 273 |
 
 `scripts/run-qemu.sh` 会逐条校验事件顺序，同时拒绝缺失标记、多余事件、异常的
 QEMU 退出状态以及任何 fail-closed 启动路径。
@@ -134,6 +140,7 @@ flowchart TB
     Core --> HAL["不可变 HAL 请求"]
     HAL --> Device["架构或宿主设备后端"]
     Supervisor["ring-3 Admission Supervisor"] -->|"Agent Call 27"| X86
+    Workers["已准入 ring-3 Worker"] -->|"Notify / Mailbox"| Supervisor
 ```
 
 内核保持小型、确定性和可检查。用户态 Supervisor 负责 LLM 推理、Prompt、
@@ -236,7 +243,7 @@ scripts/run-qemu.sh --release
 ```
 
 脚本会构建裸机目标、生成 BIOS 镜像、启动 QEMU、检查完整串口记录、要求恰好
-264 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
+273 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
 
 ```text
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
@@ -251,6 +258,8 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
@@ -263,7 +272,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[264] driver_invocation_completed
+event[273] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -303,15 +312,17 @@ SUPERVISOR_HANDOFF_READY
   页表层级重建、CPU 准备和原生运行时登记；
 - ring-3 Admission Supervisor、受认证 Agent Call 27、固定容量准入记录、代数绑定
   Permit，以及连接可审计语义请求和物理运行时服务的 Broker；
+- 跨越目标准入和执行阶段的常驻 Supervisor Mailbox 等待、受认证 Worker 通知、
+  FIFO 确认和三个地址空间的原子终态回收；
 - 在页表重建后的准入拒绝路径完成全部帧回滚，并让两个互不重叠的 Runtime Service
   Worker 同时持有地址空间，完成 FIFO ring-3 执行、语义验证和终态回收；
-- 为包含 264 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
+- 为包含 273 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
 
 ### 后续规划
 
 - 超出固定私有层级的动态页表增长；
-- 目标 Agent 执行期间保持长期用户态 Supervisor 驻留，以及超过 Task Store
-  容量的准入队列；
+- 物理回收后的 `RuntimeAdmissionReleased` 终态、动态请求者发现、多批次准入循环，
+  以及超过 Task Store 容量的准入队列；
 - SMP 调度、多核同步和硬件 TLB Shootdown；
 - 通用存储、网络、图形、USB 或真实硬件支持；
 - 面向分发与升级的 Agent 包和应用格式；
@@ -319,8 +330,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [原生运行时准入协议设计](docs/superpowers/specs/2026-07-19-x86-native-runtime-admission-protocol-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-19-x86-native-runtime-admission-protocol-v1.md)。
+最新里程碑的完整契约见 [常驻运行时准入 Supervisor 设计](docs/superpowers/specs/2026-07-19-x86-resident-runtime-admission-supervisor-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-19-x86-resident-runtime-admission-supervisor-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献
