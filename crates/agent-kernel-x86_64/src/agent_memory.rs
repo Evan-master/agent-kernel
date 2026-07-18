@@ -17,6 +17,7 @@ mod runtime_region;
 use bootloader_api::BootInfo;
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
+use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
@@ -42,6 +43,7 @@ pub(crate) use self::{
 pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
 
 pub(crate) struct PreparedAgentMemory {
+    allocated_for: Option<AgentId>,
     layout: UserMemoryLayout,
     signal_pointer: *mut u8,
     lazy_data_pointer: *mut u8,
@@ -111,6 +113,7 @@ impl PreparedAgentMemory {
         }
 
         Some(Self {
+            allocated_for: None,
             layout,
             signal_pointer,
             lazy_data_pointer,
@@ -126,6 +129,17 @@ impl PreparedAgentMemory {
 
     pub(crate) const fn layout(&self) -> UserMemoryLayout {
         self.layout
+    }
+
+    pub(crate) const fn allocated_for(&self) -> Option<AgentId> {
+        self.allocated_for
+    }
+
+    pub(crate) const fn allocation_matches(&self, agent: AgentId) -> bool {
+        match self.allocated_for {
+            Some(owner) => owner.raw() == agent.raw(),
+            None => true,
+        }
     }
 
     pub(crate) const fn roots(&self) -> AddressSpaceRoots {

@@ -35,9 +35,14 @@ pub(crate) struct AgentCpuRuntime {
 }
 
 pub(crate) struct PreparedAgentCpu {
-    memory: PreparedAgentMemory,
+    pub(super) memory: PreparedAgentMemory,
     runtime: AgentCpuRuntime,
     context: AgentCallContext,
+}
+
+pub(crate) enum AgentCpuPreparation {
+    Prepared(PreparedAgentCpu),
+    Rejected(PreparedAgentMemory),
 }
 
 pub(crate) struct PreemptedAgentCpu {
@@ -87,6 +92,17 @@ impl AgentCpuRuntime {
         memory: PreparedAgentMemory,
         context: AgentCallContext,
     ) -> Option<PreparedAgentCpu> {
+        match self.prepare_owned(memory, context) {
+            AgentCpuPreparation::Prepared(cpu) => Some(cpu),
+            AgentCpuPreparation::Rejected(_) => None,
+        }
+    }
+
+    pub(crate) fn prepare_owned(
+        &self,
+        memory: PreparedAgentMemory,
+        context: AgentCallContext,
+    ) -> AgentCpuPreparation {
         self.prepare_with_restart_generation(memory, context, 0)
     }
 
@@ -102,7 +118,10 @@ impl AgentCpuRuntime {
         {
             return None;
         }
-        self.prepare_with_restart_generation(memory, context, expected_restart_generation)
+        match self.prepare_with_restart_generation(memory, context, expected_restart_generation) {
+            AgentCpuPreparation::Prepared(cpu) => Some(cpu),
+            AgentCpuPreparation::Rejected(_) => None,
+        }
     }
 
     fn prepare_with_restart_generation(
@@ -110,16 +129,17 @@ impl AgentCpuRuntime {
         memory: PreparedAgentMemory,
         context: AgentCallContext,
         expected_restart_generation: u8,
-    ) -> Option<PreparedAgentCpu> {
+    ) -> AgentCpuPreparation {
         if memory.roots().kernel_cr3() != self.kernel_cr3
             || !memory.kernel_address_space_active()
             || !memory.dispatch_signals_are_clear()
             || memory.restart_generation() != expected_restart_generation
+            || !memory.allocation_matches(context.agent())
             || !stack_canary_valid(self.kernel_stack)
         {
-            return None;
+            return AgentCpuPreparation::Rejected(memory);
         }
-        Some(PreparedAgentCpu {
+        AgentCpuPreparation::Prepared(PreparedAgentCpu {
             memory,
             runtime: *self,
             context,

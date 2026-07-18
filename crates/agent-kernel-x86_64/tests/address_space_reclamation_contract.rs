@@ -1,3 +1,4 @@
+use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT},
     address_space_reclamation::AddressSpaceFramePool,
@@ -80,13 +81,15 @@ fn complete_address_space_allocation_is_atomic_and_generation_bound() {
     let second_reclamation = pool.prepare(second).unwrap();
     assert!(pool.commit(second_reclamation));
 
-    let allocation = pool.prepare_allocation().unwrap();
+    let allocation = pool.prepare_allocation(AgentId::new(10)).unwrap();
     let stale_replay = allocation;
     assert_eq!(allocation.identity(), second);
+    assert_eq!(allocation.agent(), AgentId::new(10));
     assert_eq!(pool.len(), AGENT_OWNED_FRAME_COUNT * 2);
 
     let owner = pool.commit_allocation(allocation).unwrap();
     assert_eq!(owner.identity(), second);
+    assert_eq!(owner.agent(), AgentId::new(10));
     assert_eq!(pool.len(), AGENT_OWNED_FRAME_COUNT);
     assert!(first
         .owned_frames()
@@ -107,7 +110,7 @@ fn allocated_address_space_with_frame_zero_can_be_restored_exactly() {
     let reclamation = pool.prepare(identity).unwrap();
     assert!(pool.commit(reclamation));
 
-    let allocation = pool.prepare_allocation().unwrap();
+    let allocation = pool.prepare_allocation(AgentId::new(10)).unwrap();
     let replay = allocation;
     let owner = pool.commit_allocation(allocation).unwrap();
     assert!(pool.is_empty());
@@ -119,6 +122,57 @@ fn allocated_address_space_with_frame_zero_can_be_restored_exactly() {
     assert!(pool.commit(returned_reclamation));
     assert_eq!(pool.frames(), identity.owned_frames());
     assert!(pool.contains(0));
+}
+
+#[test]
+fn concurrent_allocations_are_agent_bound_disjoint_and_cancellable() {
+    let first = identity(0x1000);
+    let second = identity(0x20_000);
+    let mut pool = TwoAddressSpacePool::new();
+    assert!(pool.commit(pool.prepare(first).unwrap()));
+    assert!(pool.commit(pool.prepare(second).unwrap()));
+
+    assert!(pool.prepare_allocation(AgentId::new(0)).is_none());
+    let first_allocation = pool.prepare_allocation(AgentId::new(10)).unwrap();
+    let stale_other_agent = pool.prepare_allocation(AgentId::new(11)).unwrap();
+    let first_owner = pool.commit_allocation(first_allocation).unwrap();
+    assert!(pool.commit_allocation(stale_other_agent).is_none());
+    let second_owner = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(11)).unwrap())
+        .unwrap();
+
+    assert_eq!(first_owner.agent(), AgentId::new(10));
+    assert_eq!(first_owner.identity(), second);
+    assert_eq!(second_owner.agent(), AgentId::new(11));
+    assert_eq!(second_owner.identity(), first);
+    assert!(first_owner
+        .identity()
+        .is_disjoint_from(second_owner.identity()));
+    assert!(pool.is_empty());
+
+    assert!(pool.cancel_allocation(second_owner).is_ok());
+    assert!(pool.cancel_allocation(first_owner).is_ok());
+    assert_eq!(
+        pool.frames(),
+        [first.owned_frames(), second.owned_frames()].concat()
+    );
+}
+
+#[test]
+fn failed_cancellation_returns_the_noncopy_owner_without_pool_mutation() {
+    let first = identity(0x1000);
+    let second = identity(0x20_000);
+    let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_COUNT }>::new();
+    assert!(pool.commit(pool.prepare(first).unwrap()));
+    let owner = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(10)).unwrap())
+        .unwrap();
+    assert!(pool.commit(pool.prepare(second).unwrap()));
+
+    let returned = pool.cancel_allocation(owner).unwrap_err();
+    assert_eq!(returned.agent(), AgentId::new(10));
+    assert_eq!(returned.identity(), first);
+    assert_eq!(pool.frames(), second.owned_frames());
 }
 
 fn identity(base: u64) -> AgentMemoryIdentity {

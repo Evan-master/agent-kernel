@@ -47,14 +47,33 @@ impl NativeAddressSpaceFramePool {
         self.ledger.commit(reclamation)
     }
 
-    pub(crate) fn allocate_zeroed(&mut self) -> Option<AllocatedAddressSpaceFrames> {
-        let allocation = self.ledger.prepare_allocation()?;
+    pub(crate) fn allocate_zeroed(
+        &mut self,
+        agent: agent_kernel_core::AgentId,
+    ) -> Option<AllocatedAddressSpaceFrames> {
+        let allocation = self.ledger.prepare_allocation(agent)?;
         let identity = allocation.identity();
         if !identity.owned_frames().into_iter().all(frame_is_zero) {
             return None;
         }
         let owner = self.ledger.commit_allocation(allocation)?;
         (owner.identity() == identity).then_some(owner)
+    }
+
+    pub(crate) fn cancel_zeroed_allocation(
+        &mut self,
+        owner: AllocatedAddressSpaceFrames,
+    ) -> Result<AgentMemoryIdentity, AllocatedAddressSpaceFrames> {
+        let identity = owner.identity();
+        for frame in identity.owned_frames() {
+            if clear_frame(frame).is_none() {
+                return Err(owner);
+            }
+        }
+        if !identity.owned_frames().into_iter().all(frame_is_zero) {
+            return Err(owner);
+        }
+        self.ledger.cancel_allocation(owner).map(|()| identity)
     }
 
     fn commit_zeroed(&mut self, reclamation: AddressSpaceReclamation) -> bool {
@@ -76,6 +95,10 @@ impl NativeAddressSpaceFramePool {
             .owned_frames()
             .into_iter()
             .all(|frame| self.ledger.contains(frame))
+    }
+
+    pub(crate) fn owns_zeroed(&self, identity: AgentMemoryIdentity) -> bool {
+        self.owns(identity) && identity.owned_frames().into_iter().all(frame_is_zero)
     }
 
     pub(crate) const fn len(&self) -> usize {
@@ -124,6 +147,14 @@ impl PreparedAgentMemory {
             root: self.identity.root(),
             frame_count: reclamation.frame_count(),
         })
+    }
+
+    pub(crate) fn cancel_address_space(
+        self,
+        pool: &mut NativeAddressSpaceFramePool,
+    ) -> Option<ReclaimedAgentAddressSpace> {
+        let reclamation = self.prepare_address_space_reclamation(pool)?;
+        self.reclaim_address_space(pool, reclamation)
     }
 }
 

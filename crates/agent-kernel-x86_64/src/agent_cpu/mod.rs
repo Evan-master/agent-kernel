@@ -17,4 +17,6 @@ pub(super) use fault::FaultedAgentCpu;
 pub(super) use native_call_session::{
     AgentRunOutcome, CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu,
 };
-pub(super) use runtime::{AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu};
+pub(super) use runtime::{
+    AgentCpuPreparation, AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu,
+};

@@ -39,6 +39,13 @@ impl NativeAgentContext {
         let context = self.context();
         context.agent() == entry.agent && context.task() == entry.task
     }
+
+    pub(crate) fn into_prepared(self) -> Option<PreparedAgentCpu> {
+        match self {
+            Self::Prepared(cpu) => Some(cpu),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) struct NativeAgentRuntime {

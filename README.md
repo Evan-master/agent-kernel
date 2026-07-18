@@ -37,9 +37,9 @@ The reference BIOS/QEMU configuration boots directly on virtual hardware and
 currently provides:
 
 - a permanent GDT, TSS, IDT, ring-0/ring-3 boundary, and private Agent CR3 roots;
-- seven executed isolated native Agent contexts: two Workers, a Verifier, a
-  Fault Worker, a Fault Handler, a Resource Manager, and a post-reclamation
-  Reuse Worker;
+- eight completed isolated native Agent contexts: two initial Workers, a
+  Verifier, a Fault Worker, a Fault Handler, a Resource Manager, and two
+  post-reclamation Runtime Service Workers;
 - kernel-selected FIFO dispatch with physical PIT timer preemption and full CPU
   frame ownership across resume;
 - SHA-256-bound, fixed-size Agent Image Capsules with typed Worker, Verifier,
@@ -59,10 +59,13 @@ currently provides:
 - complete ownership identity for four private page-table frames and seven
   content frames per native Agent, followed by terminal zeroing and transfer
   into a fixed-capacity reusable frame pool;
-- generation-bound atomic allocation of one complete eleven-frame identity,
-  exact P4/P3/P2/P1 reconstruction from reclaimed frames, execution and
-  verification of a newly admitted ring-3 Agent, and return of the same zeroed
-  frames to the pool;
+- an Agent-bound native address-space runtime service that owns allocation,
+  exact P4/P3/P2/P1 reconstruction, CPU preparation, and runtime registration
+  as one transactional admission;
+- post-build cancellation that clears and atomically restores all eleven frames
+  after duplicate runtime registration, followed by two disjoint live private
+  address spaces, FIFO ring-3 execution, verification, and 22-frame terminal
+  reclamation;
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
 - a real ring-3 Resource Manager that creates a child Service through delegated
@@ -89,26 +92,28 @@ The reference validation profile enforces these deterministic invariants:
 
 | Evidence | Count |
 | --- | ---: |
-| Registered Agents | 10 |
-| Native ring-3 completions | 7 |
-| Kernel-selected dispatches | 25 |
+| Registered Agents | 11 |
+| Native ring-3 completions | 8 |
+| Kernel-selected dispatches | 27 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Reuse Worker Agent Calls | 3 |
-| Reuse Worker Agent/kernel address-space switches | 6 |
-| Physical quantum expiries | 11 |
+| Runtime Service Worker Agent Calls | 6 |
+| Runtime Service Worker Agent/kernel address-space switches | 12 |
+| Physical quantum expiries | 12 |
 | Contained Agent faults | 4 |
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
 | Completion-owned live regions reclaimed | 1 |
 | Completion-owned physical frames reclaimed | 3 |
-| Native address-space reclamation completions | 7 |
-| Cumulative private address-space frame returns | 77 |
+| Rejected native admission cancellations | 1 |
+| Frames restored by admission cancellation | 11 |
+| Native address-space reclamation completions | 8 |
+| Cumulative terminal private-frame returns | 88 |
 | Final zeroed private address-space frame pool | 66 |
 | Resources after Manager execution | 7 |
-| Capabilities after Reuse Worker verification | 20 |
-| Intents after Reuse Worker verification | 8 |
-| Tasks after Reuse Worker verification | 8 |
+| Capabilities after Runtime Service Worker verification | 21 |
+| Intents after Runtime Service Worker verification | 9 |
+| Tasks after Runtime Service Worker verification | 9 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
 | Ordered kernel events after Driver completion | 223 |
@@ -128,7 +133,10 @@ flowchart TB
     Core --> Stores["Fixed-capacity object stores"]
     Core --> Events["Ordered event log"]
     Core --> Scheduler["Task and Driver scheduler"]
-    Scheduler --> X86
+    Scheduler --> Runtime["Native CPU runtime"]
+    Runtime --> X86
+    FramePool["Zeroed private frame pool"] <--> AddressService["Address-space runtime service"]
+    AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
     Supervisor["Userspace supervisor / future model runtime"] --> Facade
@@ -234,7 +242,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 223 events, and treat
+validate the complete serial transcript, require exactly 241 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -244,8 +252,11 @@ AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CANCEL_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -256,7 +267,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[223] driver_invocation_completed
+event[241] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -297,15 +308,19 @@ authority.
   the same fixed-capacity cleanup transaction;
 - complete private page-table/content ownership tracking and terminal
   reclamation of six native address spaces into a 66-frame zeroed pool;
-- generation-bound, atomic eleven-frame allocation from that pool, exact
-  private hierarchy reconstruction, independent ring-3 Reuse Worker execution,
-  semantic Task verification, and restoration of all eleven zeroed frames;
-- a fixed 2 MiB guarded kernel boot stack for the 223-event reference profile.
+- Agent-bound, generation-checked eleven-frame allocation from that pool and a
+  transactional runtime service spanning private hierarchy reconstruction,
+  CPU preparation, and native runtime registration;
+- complete rollback after rejected post-build admission, plus concurrent
+  ownership, FIFO ring-3 execution, semantic verification, and reclamation for
+  two disjoint Runtime Service Workers;
+- a fixed 2 MiB guarded kernel boot stack for the 241-event reference profile.
 
 ### Planned
 
-- a general runtime address-space service, repeated concurrent allocations,
-  cancellation recovery, and page-table growth beyond the fixed hierarchy;
+- dynamic page-table growth beyond the fixed private hierarchy;
+- semantic admission requests from a long-lived userspace Supervisor and a
+  queue larger than the current six-context native runtime;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -313,8 +328,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Native Address-Space Reuse design](docs/superpowers/specs/2026-07-18-x86-native-address-space-reuse-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-address-space-reuse-v1.md)
+See the current [Native Address-Space Runtime Service design](docs/superpowers/specs/2026-07-19-x86-native-address-space-runtime-service-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-x86-native-address-space-runtime-service-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

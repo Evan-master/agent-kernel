@@ -24,8 +24,24 @@ impl PreparedAgentMemory {
     pub(crate) fn prepare_reused(
         frames: AllocatedAddressSpaceFrames,
         image: VerifiedAgentImage<'_>,
+    ) -> Result<Self, AllocatedAddressSpaceFrames> {
+        let agent = frames.agent();
+        let identity = frames.identity();
+        let Some(memory) = Self::build_reused(agent, identity, image) else {
+            return Err(frames);
+        };
+        if memory.identity != identity {
+            return Err(frames);
+        }
+        let _transferred_identity = frames.into_identity();
+        Ok(memory)
+    }
+
+    fn build_reused(
+        agent: agent_kernel_core::AgentId,
+        identity: AgentMemoryIdentity,
+        image: VerifiedAgentImage<'_>,
     ) -> Option<Self> {
-        let identity = frames.into_identity();
         if !identity.owned_frames().into_iter().all(frame_is_zero) {
             return None;
         }
@@ -75,6 +91,7 @@ impl PreparedAgentMemory {
         }
 
         Some(Self {
+            allocated_for: Some(agent),
             layout,
             signal_pointer,
             lazy_data_pointer,

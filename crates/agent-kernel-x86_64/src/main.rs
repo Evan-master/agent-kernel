@@ -21,6 +21,7 @@ mod event_trace;
 mod exception_runtime;
 mod fault_handler_flow;
 mod fault_task_flow;
+mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
 mod pic;
@@ -39,7 +40,7 @@ use privilege_runtime::PrivilegeBoundary;
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) type X86BootedKernel =
-    BootedKernel<10, 7, 20, 223, 1, 1, 0, 8, 8, 2, 1, 1, 1, 1, 2, 2, 4, 1, 1, 5>;
+    BootedKernel<11, 7, 21, 241, 1, 1, 0, 9, 9, 2, 1, 1, 1, 1, 2, 2, 4, 1, 1, 5>;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();

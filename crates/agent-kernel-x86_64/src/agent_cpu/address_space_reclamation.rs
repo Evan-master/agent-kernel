@@ -7,7 +7,7 @@ use agent_kernel_x86_64::{
     address_space::AGENT_OWNED_FRAME_COUNT, address_space_reclamation::AddressSpaceReclamation,
 };
 
-use super::CompletedAgentCpu;
+use super::{CompletedAgentCpu, PreparedAgentCpu};
 use crate::agent_memory::{NativeAddressSpaceFramePool, ReclaimedAgentAddressSpace};
 
 #[derive(Copy, Clone)]
@@ -33,6 +33,21 @@ impl CompletedAgentCpu {
         let agent = self.context().agent();
         let reclaimed: ReclaimedAgentAddressSpace =
             self.memory.reclaim_address_space(pool, reclamation)?;
+        Some(ReclaimedAgentCpuAddressSpace {
+            agent,
+            root: reclaimed.root(),
+            frame_count: reclaimed.frame_count(),
+        })
+    }
+}
+
+impl PreparedAgentCpu {
+    pub(crate) fn reclaim_unstarted_address_space(
+        self,
+        pool: &mut NativeAddressSpaceFramePool,
+    ) -> Option<ReclaimedAgentCpuAddressSpace> {
+        let agent = self.context().agent();
+        let reclaimed = self.memory.cancel_address_space(pool)?;
         Some(ReclaimedAgentCpuAddressSpace {
             agent,
             root: reclaimed.root(),
