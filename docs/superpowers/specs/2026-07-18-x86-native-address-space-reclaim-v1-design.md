@@ -2,8 +2,8 @@
 
 ## Status
 
-Implementation and local validation completed on 2026-07-18. Publication is
-tracked in the milestone plan.
+Implemented, validated, and published to public `main` on 2026-07-18. The
+feature implementation is commit `d82c4d8`.
 
 ## Purpose
 

@@ -9,5 +9,5 @@
 - [x] Retain completed memory owners and implement six-owner terminal teardown.
 - [x] Prove 66 unique zeroed frames in strict debug and release QEMU runs.
 - [x] Update bilingual README documentation and release artifact evidence.
-- [ ] Run the complete validation matrix, commit, merge, publish public main,
+- [x] Run the complete validation matrix, commit, merge, publish public main,
   clean the feature branch, and keep the complete Agent Kernel goal active.
