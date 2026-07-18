@@ -154,4 +154,51 @@ impl PreparedAdmissionSupervisorFlow {
                     && event.task == Some(self.supervisor.task)))
         .then_some(())
     }
+
+    pub(crate) fn released_after_reclamation(
+        &self,
+        booted: &X86BootedKernel,
+        targets: [(AgentId, TaskId, AgentImageId); 2],
+        first_event: usize,
+    ) -> bool {
+        let kernel = booted.kernel();
+        let admissions = kernel.runtime_admissions();
+        let release_events = kernel.events().get(first_event..);
+        let supervisor_verified = kernel.tasks().iter().any(|task| {
+            task.id == self.supervisor.task
+                && task.assignee == Some(ADMISSION_SUPERVISOR)
+                && task.status == TaskStatus::Verified
+        });
+
+        supervisor_verified
+            && admissions.len() == 2
+            && admissions.iter().enumerate().all(|(index, admission)| {
+                admission.id.raw() == (index + 1) as u64
+                    && admission.requester == ADMISSION_SUPERVISOR
+                    && admission.authority == self.supervisor.admission_authority
+                    && admission.target == targets[index].0
+                    && admission.task == targets[index].1
+                    && admission.image == targets[index].2
+                    && admission.status == RuntimeAdmissionStatus::Released
+                    && admission.failure.is_none()
+                    && kernel.tasks().iter().any(|task| {
+                        task.id == admission.task
+                            && task.assignee == Some(admission.target)
+                            && task.status == TaskStatus::Verified
+                    })
+            })
+            && matches!(release_events, Some(events) if events.len() == 2
+            && events.iter().enumerate().all(|(index, event)| {
+                let admission = admissions[index];
+                event.sequence == (first_event + index + 1) as u64
+                    && event.kind == EventKind::RuntimeAdmissionReleased
+                    && event.agent == admission.requester
+                    && event.capability == Some(admission.authority)
+                    && event.resource == Some(admission.resource)
+                    && event.task == Some(admission.task)
+                    && event.target_agent == Some(admission.target)
+                    && event.agent_image == Some(admission.image)
+                    && event.runtime_admission == Some(admission.id)
+            }))
+    }
 }

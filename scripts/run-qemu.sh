@@ -107,6 +107,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
@@ -390,16 +391,18 @@ for expected in \
   "event[261] intent_fulfilled" \
   "event[262] task_verified" \
   "event[263] intent_fulfilled" \
-  "event[264] device_event_raised" \
-  "event[265] device_event_delivered" \
-  "event[266] driver_invocation_queued" \
-  "event[267] driver_invocation_dispatched" \
-  "event[268] driver_invocation_ticked" \
-  "event[269] device_event_acknowledged" \
-  "event[270] driver_command_submitted" \
-  "event[271] driver_command_dispatched" \
-  "event[272] driver_command_completed" \
-  "event[273] driver_invocation_completed" \
+  "event[264] runtime_admission_released" \
+  "event[265] runtime_admission_released" \
+  "event[266] device_event_raised" \
+  "event[267] device_event_delivered" \
+  "event[268] driver_invocation_queued" \
+  "event[269] driver_invocation_dispatched" \
+  "event[270] driver_invocation_ticked" \
+  "event[271] device_event_acknowledged" \
+  "event[272] driver_command_submitted" \
+  "event[273] driver_command_dispatched" \
+  "event[274] driver_command_completed" \
+  "event[275] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -409,8 +412,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 273 ]]; then
-  printf 'expected exactly 273 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 275 ]]; then
+  printf 'expected exactly 275 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -443,5 +446,6 @@ check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" 1

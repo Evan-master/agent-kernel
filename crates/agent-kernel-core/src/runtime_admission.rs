@@ -10,6 +10,7 @@ pub enum RuntimeAdmissionStatus {
     Requested,
     Admitted,
     Rejected,
+    Released,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -93,6 +94,37 @@ impl RuntimeAdmissionPermit {
     }
 
     pub(crate) const fn generation(self) -> u64 {
+        self.generation
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeAdmissionReleaseBatch<const COUNT: usize> {
+    records: [RuntimeAdmissionRecord; COUNT],
+    generation: u64,
+}
+
+impl<const COUNT: usize> RuntimeAdmissionReleaseBatch<COUNT> {
+    pub(crate) const fn new(records: [RuntimeAdmissionRecord; COUNT], generation: u64) -> Self {
+        Self {
+            records,
+            generation,
+        }
+    }
+
+    pub const fn len(&self) -> usize {
+        COUNT
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        COUNT == 0
+    }
+
+    pub const fn records(&self) -> &[RuntimeAdmissionRecord; COUNT] {
+        &self.records
+    }
+
+    pub(crate) const fn generation(&self) -> u64 {
         self.generation
     }
 }

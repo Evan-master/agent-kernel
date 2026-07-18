@@ -2,10 +2,35 @@
 mod support;
 
 use agent_kernel_core::{
-    EventKind, KernelError, Operation, OperationSet, RuntimeAdmissionFailure,
-    RuntimeAdmissionStatus,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, EventKind,
+    KernelError, Operation, OperationSet, RuntimeAdmissionFailure, RuntimeAdmissionId,
+    RuntimeAdmissionStatus, TaskId,
 };
-use support::prepared;
+use support::{prepared, prepared_pair, TestCore};
+
+fn admit_and_verify<const EVENTS: usize>(
+    core: &mut TestCore<EVENTS>,
+    supervisor: AgentId,
+    authority: CapabilityId,
+    target: AgentId,
+    task: TaskId,
+    task_capability: CapabilityId,
+) -> RuntimeAdmissionId {
+    let admission = core
+        .request_runtime_admission(supervisor, authority, target, task)
+        .expect("request succeeds");
+    let permit = core
+        .prepare_next_runtime_admission()
+        .expect("request prepares");
+    core.commit_runtime_admission(permit)
+        .expect("request commits");
+    core.dispatch_next(target).expect("target dispatches");
+    core.complete_task(target, task_capability, task)
+        .expect("target completes");
+    core.verify_task(supervisor, authority, task)
+        .expect("target verifies");
+    admission
+}
 
 #[test]
 fn request_requires_supervisor_identity_and_delegate_authority() {
@@ -193,4 +218,278 @@ fn prepared_request_can_record_bounded_physical_rejection() {
         EventKind::RuntimeAdmissionRejected
     );
     assert!(core.run_queue().is_empty());
+}
+
+#[test]
+fn release_requires_verified_idle_target_and_is_read_only_during_preparation() {
+    let (mut core, fixture) = prepared::<60>();
+    let admission = core
+        .request_runtime_admission(
+            fixture.supervisor,
+            fixture.authority,
+            fixture.target,
+            fixture.task,
+        )
+        .expect("request succeeds");
+    let permit = core
+        .prepare_next_runtime_admission()
+        .expect("request prepares");
+    core.commit_runtime_admission(permit)
+        .expect("request commits");
+    let admitted = core
+        .runtime_admission(admission)
+        .expect("admission remains queryable");
+    let event_count = core.events().len();
+
+    assert_eq!(
+        core.prepare_runtime_admission_release_batch([admission]),
+        Err(KernelError::RuntimeAdmissionReleaseNotReady)
+    );
+    assert_eq!(core.runtime_admission(admission), Ok(admitted));
+    assert_eq!(core.events().len(), event_count);
+
+    core.dispatch_next(fixture.target)
+        .expect("target dispatches");
+    assert_eq!(
+        core.prepare_runtime_admission_release_batch([admission]),
+        Err(KernelError::RuntimeAdmissionReleaseNotReady)
+    );
+    core.complete_task(fixture.target, fixture.task_capability, fixture.task)
+        .expect("target completes");
+    assert_eq!(
+        core.prepare_runtime_admission_release_batch([admission]),
+        Err(KernelError::RuntimeAdmissionReleaseNotReady)
+    );
+    core.verify_task(fixture.supervisor, fixture.authority, fixture.task)
+        .expect("target verifies");
+
+    let before_prepare = core.events().len();
+    let release = core
+        .prepare_runtime_admission_release_batch([admission])
+        .expect("verified target prepares for release");
+    assert_eq!(release.len(), 1);
+    assert_eq!(release.records()[0].id, admission);
+    assert_eq!(core.events().len(), before_prepare);
+    assert_eq!(
+        core.runtime_admission(admission)
+            .expect("record remains admitted")
+            .status,
+        RuntimeAdmissionStatus::Admitted
+    );
+}
+
+#[test]
+fn release_batch_commits_two_records_and_events_in_permit_order() {
+    let (mut core, fixture) = prepared_pair::<90>();
+    let first = admit_and_verify(
+        &mut core,
+        fixture.first.supervisor,
+        fixture.first.authority,
+        fixture.first.target,
+        fixture.first.task,
+        fixture.first.task_capability,
+    );
+    let second = admit_and_verify(
+        &mut core,
+        fixture.first.supervisor,
+        fixture.first.authority,
+        fixture.second.target,
+        fixture.second.task,
+        fixture.second.task_capability,
+    );
+    let before = core.events().len();
+    let permit = core
+        .prepare_runtime_admission_release_batch([first, second])
+        .expect("release batch prepares");
+
+    assert_eq!(permit.records()[0].id, first);
+    assert_eq!(permit.records()[1].id, second);
+    let released = core
+        .commit_runtime_admission_release_batch(permit)
+        .expect("release batch commits");
+
+    assert!(released
+        .iter()
+        .all(|record| record.status == RuntimeAdmissionStatus::Released));
+    assert_eq!(core.events().len(), before + 2);
+    assert_eq!(
+        core.events()[before].kind,
+        EventKind::RuntimeAdmissionReleased
+    );
+    assert_eq!(core.events()[before].runtime_admission, Some(first));
+    assert_eq!(
+        core.events()[before + 1].kind,
+        EventKind::RuntimeAdmissionReleased
+    );
+    assert_eq!(core.events()[before + 1].runtime_admission, Some(second));
+    assert_eq!(
+        core.commit_runtime_admission_release_batch(permit),
+        Err(KernelError::RuntimeAdmissionReleasePermitStale)
+    );
+}
+
+#[test]
+fn empty_duplicate_and_capacity_failures_leave_release_batch_unchanged() {
+    let (mut core, fixture) = prepared_pair::<90>();
+    let first = admit_and_verify(
+        &mut core,
+        fixture.first.supervisor,
+        fixture.first.authority,
+        fixture.first.target,
+        fixture.first.task,
+        fixture.first.task_capability,
+    );
+    let second = admit_and_verify(
+        &mut core,
+        fixture.first.supervisor,
+        fixture.first.authority,
+        fixture.second.target,
+        fixture.second.task,
+        fixture.second.task_capability,
+    );
+    let before = core.events().len();
+
+    assert_eq!(
+        core.prepare_runtime_admission_release_batch([]),
+        Err(KernelError::RuntimeAdmissionReleaseBatchEmpty)
+    );
+    assert_eq!(
+        core.prepare_runtime_admission_release_batch([first, first]),
+        Err(KernelError::RuntimeAdmissionReleaseDuplicate)
+    );
+    assert_eq!(core.events().len(), before);
+    assert!(core
+        .runtime_admissions()
+        .iter()
+        .all(|record| record.status == RuntimeAdmissionStatus::Admitted));
+
+    while core.events().len() < 89 {
+        core.observe(
+            fixture.first.supervisor,
+            fixture.first.authority,
+            fixture.first.resource,
+        )
+        .expect("filler observation fits");
+    }
+    assert_eq!(
+        core.prepare_runtime_admission_release_batch([first, second]),
+        Err(KernelError::EventLogFull)
+    );
+    assert!(core
+        .runtime_admissions()
+        .iter()
+        .all(|record| record.status == RuntimeAdmissionStatus::Admitted));
+}
+
+#[test]
+fn semantic_transition_makes_an_older_release_batch_stale_atomically() {
+    let (mut core, fixture) = prepared_pair::<90>();
+    let first = admit_and_verify(
+        &mut core,
+        fixture.first.supervisor,
+        fixture.first.authority,
+        fixture.first.target,
+        fixture.first.task,
+        fixture.first.task_capability,
+    );
+    let second = admit_and_verify(
+        &mut core,
+        fixture.first.supervisor,
+        fixture.first.authority,
+        fixture.second.target,
+        fixture.second.task,
+        fixture.second.task_capability,
+    );
+    let older = core
+        .prepare_runtime_admission_release_batch([first])
+        .expect("first release prepares");
+    let newer = core
+        .prepare_runtime_admission_release_batch([second])
+        .expect("second release prepares");
+    core.commit_runtime_admission_release_batch(newer)
+        .expect("second release commits");
+    let before_stale = core.events().len();
+
+    assert_eq!(
+        core.commit_runtime_admission_release_batch(older),
+        Err(KernelError::RuntimeAdmissionReleasePermitStale)
+    );
+    assert_eq!(core.events().len(), before_stale);
+    assert_eq!(
+        core.runtime_admission(first)
+            .expect("first remains queryable")
+            .status,
+        RuntimeAdmissionStatus::Admitted
+    );
+    assert_eq!(
+        core.runtime_admission(second)
+            .expect("second remains queryable")
+            .status,
+        RuntimeAdmissionStatus::Released
+    );
+}
+
+#[test]
+fn authorized_requester_can_release_a_task_owned_by_another_supervisor() {
+    let (mut core, fixture) = prepared::<70>();
+    let requester = AgentId::new(3);
+    core.register_agent(requester)
+        .expect("requesting supervisor registers");
+    let requester_authority = core
+        .grant_capability(
+            requester,
+            fixture.resource,
+            OperationSet::only(Operation::Act)
+                .with(Operation::Delegate)
+                .with(Operation::Verify),
+        )
+        .expect("requesting supervisor receives authority");
+    let requester_image = core
+        .register_agent_image(
+            requester,
+            requester_authority,
+            fixture.resource,
+            AgentImageKind::Supervisor,
+            AgentImageDigest::new([4; 32]),
+            1,
+            1,
+        )
+        .expect("requesting supervisor image registers");
+    core.verify_agent_image(requester, requester_authority, requester_image)
+        .expect("requesting supervisor image verifies");
+    core.launch_agent(
+        requester,
+        requester_authority,
+        fixture.resource,
+        requester_image,
+        AgentEntryKind::Supervisor,
+        None,
+    )
+    .expect("requesting supervisor launches");
+
+    let admission = core
+        .request_runtime_admission(requester, requester_authority, fixture.target, fixture.task)
+        .expect("alternate requester admits owner task");
+    let permit = core
+        .prepare_next_runtime_admission()
+        .expect("alternate request prepares");
+    core.commit_runtime_admission(permit)
+        .expect("alternate request commits");
+    core.dispatch_next(fixture.target)
+        .expect("owned task dispatches");
+    core.complete_task(fixture.target, fixture.task_capability, fixture.task)
+        .expect("owned task completes");
+    core.verify_task(fixture.supervisor, fixture.authority, fixture.task)
+        .expect("task owner verifies");
+
+    let release = core
+        .prepare_runtime_admission_release_batch([admission])
+        .expect("alternate requester release prepares");
+    let [released] = core
+        .commit_runtime_admission_release_batch(release)
+        .expect("alternate requester release commits");
+
+    assert_eq!(released.requester, requester);
+    assert_eq!(released.status, RuntimeAdmissionStatus::Released);
+    assert_eq!(core.tasks()[0].owner, fixture.supervisor);
 }

@@ -24,6 +24,7 @@ pub enum EventKind {
     RuntimeAdmissionRequested,
     RuntimeAdmissionAdmitted,
     RuntimeAdmissionRejected,
+    RuntimeAdmissionReleased,
     AgentSuspended,
     AgentResumed,
     AgentRetired,

@@ -78,6 +78,7 @@ mod resource_store;
 mod run_queue;
 mod runtime_admission;
 mod runtime_admission_event;
+mod runtime_admission_release;
 mod runtime_admission_request;
 mod runtime_admission_transition;
 mod scheduler;
@@ -132,7 +133,8 @@ pub use operation::{Operation, OperationSet};
 pub use resource::{Resource, ResourceCreateOutcome, ResourceKind, ResourceStatus};
 pub use run_queue::{RunQueueEntry, TaskDispatchPermit};
 pub use runtime_admission::{
-    RuntimeAdmissionFailure, RuntimeAdmissionPermit, RuntimeAdmissionRecord, RuntimeAdmissionStatus,
+    RuntimeAdmissionFailure, RuntimeAdmissionPermit, RuntimeAdmissionRecord,
+    RuntimeAdmissionReleaseBatch, RuntimeAdmissionStatus,
 };
 pub use signal::{SignalKey, SignalOutcome, WaiterKind, WaiterRecord};
 pub use task::{Task, TaskResult, TaskStatus};

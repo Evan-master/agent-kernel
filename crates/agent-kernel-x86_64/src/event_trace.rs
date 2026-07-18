@@ -26,6 +26,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::RuntimeAdmissionRequested => "runtime_admission_requested",
         EventKind::RuntimeAdmissionAdmitted => "runtime_admission_admitted",
         EventKind::RuntimeAdmissionRejected => "runtime_admission_rejected",
+        EventKind::RuntimeAdmissionReleased => "runtime_admission_released",
         EventKind::AgentSuspended => "agent_suspended",
         EventKind::AgentResumed => "agent_resumed",
         EventKind::AgentRetired => "agent_retired",

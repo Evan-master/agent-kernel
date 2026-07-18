@@ -106,4 +106,27 @@ fn facade_exposes_request_prepare_and_atomic_commit() {
         EventKind::RuntimeAdmissionAdmitted
     );
     assert_eq!(kernel.events().last().unwrap().kind, EventKind::TaskQueued);
+
+    kernel
+        .sys_dispatch_next(target)
+        .expect("target dispatches through facade");
+    kernel
+        .sys_complete_task(target, task_capability, task)
+        .expect("target completes through facade");
+    kernel
+        .sys_verify_task(supervisor, authority, task)
+        .expect("target verifies through facade");
+    let release = kernel
+        .sys_prepare_runtime_admission_release_batch([admission])
+        .expect("release permit crosses facade");
+    let [released] = kernel
+        .sys_commit_runtime_admission_release_batch(release)
+        .expect("release commit crosses facade");
+
+    assert_eq!(released.status, RuntimeAdmissionStatus::Released);
+    assert_eq!(kernel.runtime_admissions(), [released]);
+    assert_eq!(
+        kernel.events().last().unwrap().kind,
+        EventKind::RuntimeAdmissionReleased
+    );
 }

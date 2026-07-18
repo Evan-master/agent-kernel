@@ -190,6 +190,15 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
+    let release_ids = [
+        booted.kernel().runtime_admissions().first()?.id,
+        booted.kernel().runtime_admissions().get(1)?.id,
+    ];
+    let release = booted
+        .kernel()
+        .sys_prepare_runtime_admission_release_batch(release_ids)
+        .ok()?;
+    let release_event_start = booted.kernel().events().len();
     report.reclaim_completed_address_spaces(
         address_space_pool,
         [ADMISSION_SUPERVISOR, REUSE_WORKERS[0], REUSE_WORKERS[1]],
@@ -199,9 +208,18 @@ pub(super) fn run(
         || !address_space_pool.owns(first_admission.identity())
         || !address_space_pool.owns(second_admission.identity())
         || !memory_pool.all_available_and_zero()
+        || booted.kernel().events().len() != release_event_start
     {
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK");
+    booted
+        .kernel_mut()
+        .sys_commit_runtime_admission_release_batch(release)
+        .ok()?;
+    if !supervisor.released_after_reclamation(booted, targets, release_event_start) {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK");
     Some(())
 }

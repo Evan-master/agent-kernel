@@ -2,7 +2,7 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, KernelError, RuntimeAdmissionFailure, RuntimeAdmissionId,
-    RuntimeAdmissionPermit, RuntimeAdmissionRecord, TaskId,
+    RuntimeAdmissionPermit, RuntimeAdmissionRecord, RuntimeAdmissionReleaseBatch, TaskId,
 };
 
 use crate::AgentKernel;
@@ -86,6 +86,21 @@ impl<
         failure: RuntimeAdmissionFailure,
     ) -> Result<RuntimeAdmissionRecord, KernelError> {
         self.core.reject_runtime_admission(permit, failure)
+    }
+
+    pub fn sys_prepare_runtime_admission_release_batch<const COUNT: usize>(
+        &self,
+        admissions: [RuntimeAdmissionId; COUNT],
+    ) -> Result<RuntimeAdmissionReleaseBatch<COUNT>, KernelError> {
+        self.core
+            .prepare_runtime_admission_release_batch(admissions)
+    }
+
+    pub fn sys_commit_runtime_admission_release_batch<const COUNT: usize>(
+        &mut self,
+        permit: RuntimeAdmissionReleaseBatch<COUNT>,
+    ) -> Result<[RuntimeAdmissionRecord; COUNT], KernelError> {
+        self.core.commit_runtime_admission_release_batch(permit)
     }
 
     pub fn runtime_admissions(&self) -> &[RuntimeAdmissionRecord] {
