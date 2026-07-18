@@ -2,8 +2,8 @@
 
 ## Status
 
-Implementation and local validation completed on 2026-07-18. Public
-publication is pending.
+Implemented, validated, and published to public `main` on 2026-07-18 in
+feature commit `cc8797f`.
 
 ## Purpose
 

@@ -9,6 +9,6 @@
 - [x] Admit and execute one ring-3 Reuse Worker, then reclaim its address space.
 - [x] Update deterministic evidence, strict QEMU gates, and bilingual README
   documentation.
-- [ ] Run the complete validation matrix, audit release artifacts, commit,
+- [x] Run the complete validation matrix, audit release artifacts, commit,
   publish public `main`, clean the feature branch, and keep the complete Agent
   Kernel goal active.
