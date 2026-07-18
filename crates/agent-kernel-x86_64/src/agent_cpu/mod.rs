@@ -4,6 +4,7 @@
 //! mailboxes, assembly owns raw register mechanics, and runtime exposes owned,
 //! validated type-state transitions for multiple suspended contexts.
 
+mod address_space_reclamation;
 mod assembly;
 mod call;
 mod fault;

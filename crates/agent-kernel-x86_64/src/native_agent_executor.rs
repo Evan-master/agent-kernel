@@ -4,6 +4,7 @@
 //! semantic transitions. It never chooses an Agent, allocates memory, or
 //! bypasses capability checks; the core run queue remains authoritative.
 
+mod address_space_reclamation;
 mod calls;
 mod memory_reclamation;
 mod state;

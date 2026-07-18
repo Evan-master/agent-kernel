@@ -45,6 +45,8 @@ Agent 为中心的系统需要不同的控制面：
   保持已捕获 CPU 可重启；
 - 对通过认证的 `CompleteTask` 使用同一有界事务，先执行只读完成资格预检，再把
   有序回收证据附加到 Completed CPU；
+- 为每个原生 Agent 完整记录 4 个私有页表帧和 7 个内容帧，在终态证据核验后
+  清零全部地址空间帧，并转移到固定容量可复用池；
 - 将缺页故障按策略路由给真实 ring-3 Fault Handler，再通过 Capability
   限定的方式修复保留页，并从同一故障帧继续执行；
 - 真实 ring-3 Resource Manager：使用派生的 `Act` 权限创建子 Service，
@@ -78,6 +80,8 @@ Agent 为中心的系统需要不同的控制面：
 | 故障时回收的物理帧 | 2 |
 | 完成时回收的存活区域 | 1 |
 | 完成时回收的物理帧 | 3 |
+| 已回收的原生地址空间 | 6 |
+| 已归还并清零的私有地址空间帧 | 66 |
 | Resource Manager 执行后的资源 | 7 |
 | Resource Manager 执行后的 Capability | 19 |
 | Resource Manager 执行后的 Intent | 7 |
@@ -206,6 +210,8 @@ scripts/run-qemu.sh --release
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
@@ -248,10 +254,12 @@ SUPERVISOR_HANDOFF_READY
   帧，保存有界回收证据，并在清理完成后重启 Agent。
 - 对通过认证的完成请求使用同一固定容量事务，退休仍存活的 Memory Resource，
   清理私有映射，并把回收证据保留到 Completed CPU。
+- 完整记录私有页表与内容帧所有权，在终态回收六个原生地址空间，并把 66 个
+  清零后的帧转移到固定容量池。
 
 ### 后续规划
 
-- 动态中间页表分配和完整地址空间销毁；
+- 从回收帧创建新的原生地址空间，以及超出当前固定私有层级的运行时页表增长；
 - SMP 调度、多核同步和硬件 TLB Shootdown；
 - 通用存储、网络、图形、USB 或真实硬件支持；
 - 面向分发与升级的 Agent 包和应用格式；
@@ -259,8 +267,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [原生内存完成回收设计](docs/superpowers/specs/2026-07-18-x86-native-memory-completion-reclaim-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-memory-completion-reclaim-v1.md)。
+最新里程碑的完整契约见 [原生地址空间回收设计](docs/superpowers/specs/2026-07-18-x86-native-address-space-reclaim-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-address-space-reclaim-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献

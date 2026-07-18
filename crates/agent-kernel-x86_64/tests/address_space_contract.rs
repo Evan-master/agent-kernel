@@ -20,6 +20,11 @@ fn address_space_roots_are_aligned_distinct_and_preserve_cr3_control() {
     assert_eq!(roots.classify(0x9018), Some(AddressSpaceKind::Agent));
     assert_eq!(roots.classify(0xa018), None);
 
+    assert_eq!(
+        AddressSpaceRoots::new(0, 0x9000, 0).unwrap().kernel_cr3(),
+        0
+    );
+    assert_eq!(AddressSpaceRoots::new(0x2000, 0, 0).unwrap().agent_cr3(), 0);
     assert!(AddressSpaceRoots::new(0x2001, 0x9000, 0).is_none());
     assert!(AddressSpaceRoots::new(0x2000, 0x9001, 0).is_none());
     assert!(AddressSpaceRoots::new(0x2000, 0x2000, 0).is_none());

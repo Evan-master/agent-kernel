@@ -55,6 +55,9 @@ currently provides:
 - the same bounded transaction on authenticated `CompleteTask`, with completion
   readiness preflight and ordered reclamation evidence attached to the
   completed CPU;
+- complete ownership identity for four private page-table frames and seven
+  content frames per native Agent, followed by terminal zeroing and transfer
+  into a fixed-capacity reusable frame pool;
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
 - a real ring-3 Resource Manager that creates a child Service through delegated
@@ -92,6 +95,8 @@ The reference validation profile enforces these deterministic invariants:
 | Fault-owned physical frames reclaimed | 2 |
 | Completion-owned live regions reclaimed | 1 |
 | Completion-owned physical frames reclaimed | 3 |
+| Native address spaces reclaimed | 6 |
+| Private address-space frames returned and zeroed | 66 |
 | Resources after Manager execution | 7 |
 | Capabilities after Manager execution | 19 |
 | Intents after Manager execution | 7 |
@@ -229,6 +234,8 @@ includes these proof lines:
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
@@ -275,12 +282,14 @@ authority.
   removal, frame zeroing and return, bounded reclamation evidence, and restart
   after cleanup;
 - authenticated completion-time retirement of live Memory Resources through
-  the same fixed-capacity cleanup transaction.
+  the same fixed-capacity cleanup transaction;
+- complete private page-table/content ownership tracking and terminal
+  reclamation of six native address spaces into a 66-frame zeroed pool.
 
 ### Planned
 
-- dynamic page-table intermediate allocation and complete address-space
-  destruction;
+- allocation of new native address spaces from reclaimed frames and runtime
+  page-table growth beyond the fixed private hierarchy;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -288,8 +297,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Native Memory Completion Reclaim design](docs/superpowers/specs/2026-07-18-x86-native-memory-completion-reclaim-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-memory-completion-reclaim-v1.md)
+See the current [Native Address-Space Reclaim design](docs/superpowers/specs/2026-07-18-x86-native-address-space-reclaim-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-address-space-reclaim-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

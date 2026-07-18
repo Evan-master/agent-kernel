@@ -5,6 +5,7 @@
 //! transition. Shared lower tables are never modified through the Agent slot.
 
 mod lazy;
+mod ownership;
 mod runtime_page;
 mod runtime_region;
 mod validation;
@@ -16,15 +17,23 @@ use x86_64::{
 };
 
 use agent_kernel_x86_64::{
-    address_space::{AddressSpaceKind, AddressSpaceRoots, AGENT_P4_INDEX},
+    address_space::{
+        AddressSpaceKind, AddressSpaceRoots, AGENT_P4_INDEX, AGENT_PAGE_TABLE_FRAME_COUNT,
+    },
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
 
+use self::ownership::TrackedPageTableAllocator;
 use self::validation::{
     agent_mappings_match, inherited_entries_match, kernel_excludes_agent_region,
     kernel_root_can_be_inherited,
 };
 use super::{physical_pointer, BootFrameAllocator};
+
+pub(super) struct InstalledAgentPageTables {
+    roots: AddressSpaceRoots,
+    private_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
+}
 
 pub(super) fn install(
     physical_offset: u64,
@@ -34,7 +43,7 @@ pub(super) fn install(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
-) -> Option<AddressSpaceRoots> {
+) -> Option<InstalledAgentPageTables> {
     let (kernel_frame, control) = Cr3::read_raw();
     let agent_frame = allocator.allocate()?;
     let roots = AddressSpaceRoots::new(
@@ -59,21 +68,22 @@ pub(super) fn install(
     let signal_flags =
         PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE;
     let stack_flags = signal_flags | PageTableFlags::WRITABLE;
-    {
+    let private_frames = {
         // SAFETY: the fresh root is reachable through the fixed supervisor
         // physical window, and mapped frames are exclusive to this Agent slot.
         let mut agent_mapper =
             unsafe { OffsetPageTable::new(&mut *agent_pointer, VirtAddr::new(physical_offset)) };
+        let mut tracked_allocator = TrackedPageTableAllocator::new(allocator);
         map_page(
             &mut agent_mapper,
-            allocator,
+            &mut tracked_allocator,
             layout.code_start(),
             code_frame,
             code_flags,
         )?;
         map_page(
             &mut agent_mapper,
-            allocator,
+            &mut tracked_allocator,
             layout.signal_start(),
             signal_frame,
             signal_flags,
@@ -81,7 +91,7 @@ pub(super) fn install(
         for (index, frame) in stack_frames.iter().copied().enumerate() {
             map_page(
                 &mut agent_mapper,
-                allocator,
+                &mut tracked_allocator,
                 layout.stack_bottom() + PAGE_BYTES * index as u64,
                 frame,
                 stack_flags,
@@ -97,7 +107,8 @@ pub(super) fn install(
         ) {
             return None;
         }
-    }
+        tracked_allocator.finish(agent_frame)?
+    };
 
     // SAFETY: both pointers name distinct live P4 frames. Hardware-managed
     // accessed/dirty bits are ignored by the inherited-entry comparison.
@@ -111,7 +122,20 @@ pub(super) fn install(
     {
         return None;
     }
-    Some(roots)
+    Some(InstalledAgentPageTables {
+        roots,
+        private_frames,
+    })
+}
+
+impl InstalledAgentPageTables {
+    pub(super) const fn roots(&self) -> AddressSpaceRoots {
+        self.roots
+    }
+
+    pub(super) const fn private_frames(&self) -> [u64; AGENT_PAGE_TABLE_FRAME_COUNT] {
+        self.private_frames
+    }
 }
 
 pub(super) fn activate_lazy_data(
@@ -213,7 +237,9 @@ fn table_pointer(physical_offset: u64, frame: PhysFrame) -> Option<*mut PageTabl
 
 fn map_page(
     mapper: &mut OffsetPageTable<'_>,
-    allocator: &mut BootFrameAllocator<'_>,
+    allocator: &mut impl x86_64::structures::paging::FrameAllocator<
+        x86_64::structures::paging::Size4KiB,
+    >,
     virtual_address: u64,
     frame: PhysFrame,
     flags: PageTableFlags,

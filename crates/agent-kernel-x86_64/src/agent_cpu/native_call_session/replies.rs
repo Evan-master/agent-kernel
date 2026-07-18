@@ -213,13 +213,17 @@ impl PendingAgentCallCpu {
             .memory
             .runtime_regions_released(runtime_region_generation);
         let runtime_region_observations = self.session.memory.runtime_region_observations();
+        let physical_quantum_generation = self.session.memory.physical_quantum_generation();
+        let restart_generation = self.session.memory.restart_generation();
+        let lazy_data_byte = self.session.memory.lazy_data_byte();
         Some(CompletedAgentCpu {
+            memory: self.session.memory,
             context: self.session.context,
             nonce,
             transcript: self.session.progress.transcript,
-            physical_quantum_generation: self.session.memory.physical_quantum_generation(),
-            restart_generation: self.session.memory.restart_generation(),
-            lazy_data_byte: self.session.memory.lazy_data_byte(),
+            physical_quantum_generation,
+            restart_generation,
+            lazy_data_byte,
             runtime_page_generation,
             runtime_page_released,
             runtime_page_observation,

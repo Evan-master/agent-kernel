@@ -5,6 +5,7 @@
 //! restart-generation signal page. Its page-table child creates the distinct
 //! CR3 root and proves that Agent virtual pages are kernel-unmapped.
 
+mod address_space_reclamation;
 mod frame_allocator;
 mod page_tables;
 mod reclamation;
@@ -29,7 +30,13 @@ use agent_kernel_x86_64::{
 
 use self::frame_allocator::BootFrameAllocator;
 
-pub(crate) use self::runtime_pool::{RuntimeMemoryPool, RuntimePhysicalFrameSet};
+pub(crate) use self::{
+    address_space_reclamation::{
+        NativeAddressSpaceFramePool, ReclaimedAgentAddressSpace, NATIVE_ADDRESS_SPACE_CAPACITY,
+        NATIVE_ADDRESS_SPACE_FRAME_CAPACITY,
+    },
+    runtime_pool::{RuntimeMemoryPool, RuntimePhysicalFrameSet},
+};
 
 pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
 
@@ -77,7 +84,7 @@ impl PreparedAgentMemory {
         if !layout.contains_code(entry_rip) {
             return None;
         }
-        let roots = page_tables::install(
+        let installed = page_tables::install(
             physical_offset,
             &mut allocator,
             layout,
@@ -86,6 +93,7 @@ impl PreparedAgentMemory {
             &stack_frames,
             lazy_data_frame,
         )?;
+        let roots = installed.roots();
         if !page_tables::kernel_is_active(roots) {
             return None;
         }
@@ -96,7 +104,10 @@ impl PreparedAgentMemory {
             content_frames[index + 2] = frame.start_address().as_u64();
         }
         content_frames[STACK_PAGE_COUNT + 2] = lazy_data_frame.start_address().as_u64();
-        let identity = AgentMemoryIdentity::new(roots.agent_root(), content_frames)?;
+        let identity = AgentMemoryIdentity::new(installed.private_frames(), content_frames)?;
+        if identity.root() != roots.agent_root() {
+            return None;
+        }
 
         Some(Self {
             layout,

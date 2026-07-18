@@ -12,7 +12,7 @@ use bootloader_api::BootInfo;
 
 use crate::{
     agent_cpu::AgentCpuRuntime,
-    agent_memory::{PreparedAgentMemory, RuntimeMemoryPool},
+    agent_memory::{NativeAddressSpaceFramePool, PreparedAgentMemory, RuntimeMemoryPool},
     boot_agent_images, event_trace, exit_qemu, fatal_boot,
     fault_handler_flow::FaultHandlerFlow,
     fault_task_flow::FaultTaskFlow,
@@ -217,6 +217,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fatal_boot("AGENT_KERNEL_RESOURCE_MANAGER_CPU_SETUP_ERROR");
     };
     let mut native_runtime = NativeAgentRuntime::new();
+    let mut address_space_frame_pool = NativeAddressSpaceFramePool::new();
     for cpu in [
         agent_a_cpu,
         agent_b_cpu,
@@ -251,9 +252,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         &mut booted,
         &mut native_runtime,
         &mut runtime_memory_pool,
+        &mut address_space_frame_pool,
         runtime_plan,
     )
     .is_none()
+        || !address_space_frame_pool.all_reclaimed_and_zero()
     {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
     }

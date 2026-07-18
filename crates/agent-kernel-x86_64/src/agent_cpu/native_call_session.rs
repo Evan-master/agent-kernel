@@ -47,6 +47,7 @@ pub(crate) struct WaitingAgentCallCpu {
 }
 
 pub(crate) struct CompletedAgentCpu {
+    pub(super) memory: PreparedAgentMemory,
     context: AgentCallContext,
     nonce: u64,
     transcript: AgentCallTranscript<MAX_AGENT_CALLS>,

@@ -14,7 +14,7 @@ use self::evidence::{
 };
 
 use crate::{
-    agent_memory::RuntimeMemoryPool,
+    agent_memory::{NativeAddressSpaceFramePool, RuntimeMemoryPool},
     boot_agent_images::{
         BootAgentImage, BootFaultHandlerImage, BootFaultWorkerImage, BootResourceManagerImage,
         BootVerifierImage,
@@ -84,6 +84,7 @@ pub(super) fn run(
     booted: &mut X86BootedKernel,
     runtime: &mut NativeAgentRuntime,
     memory_pool: &mut RuntimeMemoryPool,
+    address_space_pool: &mut NativeAddressSpaceFramePool,
     plan: RuntimeLoopPlan,
 ) -> Option<()> {
     let RuntimeLoopPlan {
@@ -332,6 +333,17 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK");
+    let completed_agents = [
+        worker_contexts[0].agent(),
+        worker_contexts[1].agent(),
+        verifier_context.agent(),
+        fault_context.agent(),
+        fault_handler.call_context()?.agent(),
+        resource_manager.call_context()?.agent(),
+    ];
+    report.reclaim_completed_address_spaces(address_space_pool, completed_agents)?;
+    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK");
     write_verifier_markers();
     Some(())
 }

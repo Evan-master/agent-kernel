@@ -182,10 +182,9 @@ impl RuntimeMemoryPool {
     }
 
     pub(crate) fn is_disjoint_from(&self, memory: &PreparedAgentMemory) -> bool {
-        let content = memory.identity.content_frames();
         self.frames.iter().all(|frame| {
             let address = frame.start_address().as_u64();
-            address != memory.identity.root() && !content.contains(&address)
+            !memory.identity.contains(address)
         })
     }
 
