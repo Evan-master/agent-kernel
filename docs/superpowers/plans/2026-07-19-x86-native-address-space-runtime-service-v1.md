@@ -10,6 +10,6 @@
 - [x] Implement transactional physical admission with complete rollback paths.
 - [x] Admit, execute, verify, and reclaim two simultaneous ring-3 Reuse Workers.
 - [x] Update exact Events, QEMU markers, release evidence, and bilingual README.
-- [ ] Run the complete validation matrix, audit release artifacts, publish
+- [x] Run the complete validation matrix, audit release artifacts, publish
   public `main`, clean the feature branch, and keep the complete Agent Kernel
   goal active.
