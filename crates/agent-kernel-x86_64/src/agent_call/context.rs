@@ -3,6 +3,7 @@
 //! Replies expose only Agent, Task, Image, and nonce. The delegated capability
 //! remains private to trusted kernel code and participates in context equality.
 
+mod agent_management;
 mod capability;
 mod mailbox;
 mod resource;
@@ -198,6 +199,34 @@ impl AgentCallContext {
                 ..
             }
             | AgentCallRequest::DelegateTask {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::RegisterManagedAgent {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::SuspendManagedAgent {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::ResumeManagedAgent {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::RetireManagedAgent {
                 agent,
                 task,
                 image,

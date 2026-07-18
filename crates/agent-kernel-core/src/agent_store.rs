@@ -1,13 +1,12 @@
-//! Fixed-capacity kernel agent registry.
+//! Fixed-capacity Agent registration and lookup.
 //!
-//! This module owns deterministic agent registration, lifecycle status changes,
-//! active-agent authority checks, and read-only inspection. It emits replayable
-//! events without allocation and keeps failure paths atomic with respect to both
-//! the registry and the event log.
+//! This core-layer module owns deterministic trusted registration, record
+//! insertion, and read-only lookup. Lifecycle policy and event construction
+//! live in neighboring modules so this store stays focused and auditable.
 
 use crate::{
     AgentExecutionContext, AgentId, AgentRecord, AgentStatus, Event, EventKind, KernelCore,
-    KernelError, OperationSet, VerificationRequirement,
+    KernelError,
 };
 
 impl<
@@ -60,102 +59,10 @@ impl<
     >
 {
     pub fn register_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        if self.find_agent(agent).is_ok() {
-            return Err(KernelError::AgentAlreadyExists);
-        }
-        if self.agent_len >= AGENTS {
-            return Err(KernelError::AgentStoreFull);
-        }
+        self.ensure_agent_registration_available(agent)?;
         self.ensure_event_slots(1)?;
-
-        let index = self.agent_len;
-        self.agents[index] = AgentRecord {
-            id: agent,
-            status: AgentStatus::Active,
-        };
-        self.execution_contexts[index] = AgentExecutionContext::idle(agent);
-        self.agent_len += 1;
-
-        self.record(Event {
-            sequence: 0,
-            agent,
-            kind: EventKind::AgentRegistered,
-            resource: None,
-            capability: None,
-            source_capability: None,
-            intent: None,
-            intent_kind: None,
-            action: None,
-            observation: None,
-            message: None,
-            memory_cell: None,
-            namespace_entry: None,
-            namespace_key: None,
-            namespace_object: None,
-            operation: None,
-            operations: OperationSet::empty(),
-            verification: VerificationRequirement::Optional,
-            checkpoint: None,
-            task: None,
-            task_result: None,
-            task_ticks: None,
-            task_quantum: None,
-            fault: None,
-            fault_kind: None,
-            fault_detail: None,
-            fault_policy: None,
-            fault_policy_action: None,
-            waiter: None,
-            signal: None,
-            target_agent: Some(agent),
-            driver_binding: None,
-            device_event: None,
-            device_event_kind: None,
-            device_event_payload: None,
-            driver_command: None,
-            driver_command_kind: None,
-            driver_command_payload: None,
-            driver_command_result: None,
-            driver_invocation: None,
-            driver_invocation_ticks: None,
-            driver_invocation_quantum: None,
-            agent_image: None,
-            agent_image_kind: None,
-            agent_image_digest: None,
-            agent_image_abi_version: None,
-            agent_image_entry_version: None,
-        })
-    }
-
-    pub fn suspend_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        let record = self.find_agent(agent)?;
-        match record.status {
-            AgentStatus::Active => self.set_agent_status(agent, AgentStatus::Suspended),
-            AgentStatus::Suspended => Err(KernelError::AgentStatusMismatch),
-            AgentStatus::Retired => Err(KernelError::AgentRetired),
-        }?;
-        self.record_agent_lifecycle_event(EventKind::AgentSuspended, agent)
-    }
-
-    pub fn resume_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        let record = self.find_agent(agent)?;
-        match record.status {
-            AgentStatus::Suspended => self.set_agent_status(agent, AgentStatus::Active),
-            AgentStatus::Active => Err(KernelError::AgentStatusMismatch),
-            AgentStatus::Retired => Err(KernelError::AgentRetired),
-        }?;
-        self.record_agent_lifecycle_event(EventKind::AgentResumed, agent)
-    }
-
-    pub fn retire_agent(&mut self, agent: AgentId) -> Result<Event, KernelError> {
-        let record = self.find_agent(agent)?;
-        match record.status {
-            AgentStatus::Active | AgentStatus::Suspended => {
-                self.set_agent_status(agent, AgentStatus::Retired)
-            }
-            AgentStatus::Retired => Err(KernelError::AgentRetired),
-        }?;
-        self.record_agent_lifecycle_event(EventKind::AgentRetired, agent)
+        self.insert_agent_record(agent, None, None);
+        self.record_agent_event(EventKind::AgentRegistered, agent, agent, None, None, None)
     }
 
     pub fn agents(&self) -> &[AgentRecord] {
@@ -163,13 +70,11 @@ impl<
     }
 
     pub(crate) fn find_agent(&self, id: AgentId) -> Result<AgentRecord, KernelError> {
-        for agent in self.agents() {
-            if agent.id == id {
-                return Ok(*agent);
-            }
-        }
-
-        Err(KernelError::AgentNotFound)
+        self.agents()
+            .iter()
+            .find(|agent| agent.id == id)
+            .copied()
+            .ok_or(KernelError::AgentNotFound)
     }
 
     pub(crate) fn ensure_agent_active(&self, id: AgentId) -> Result<AgentRecord, KernelError> {
@@ -181,75 +86,40 @@ impl<
         }
     }
 
-    fn find_agent_mut(&mut self, id: AgentId) -> Result<&mut AgentRecord, KernelError> {
-        for agent in &mut self.agents[..self.agent_len] {
-            if agent.id == id {
-                return Ok(agent);
-            }
+    pub(crate) fn ensure_agent_registration_available(
+        &self,
+        agent: AgentId,
+    ) -> Result<(), KernelError> {
+        if self.find_agent(agent).is_ok() {
+            return Err(KernelError::AgentAlreadyExists);
         }
-
-        Err(KernelError::AgentNotFound)
-    }
-
-    fn set_agent_status(&mut self, agent: AgentId, status: AgentStatus) -> Result<(), KernelError> {
-        self.ensure_event_slots(1)?;
-        self.find_agent_mut(agent)?.status = status;
+        if self.agent_len >= AGENTS {
+            return Err(KernelError::AgentStoreFull);
+        }
         Ok(())
     }
 
-    fn record_agent_lifecycle_event(
+    pub(crate) fn insert_agent_record(
         &mut self,
-        kind: EventKind,
         agent: AgentId,
-    ) -> Result<Event, KernelError> {
-        self.record(Event {
-            sequence: 0,
-            agent,
-            kind,
-            resource: None,
-            capability: None,
-            source_capability: None,
-            intent: None,
-            intent_kind: None,
-            action: None,
-            observation: None,
-            message: None,
-            memory_cell: None,
-            namespace_entry: None,
-            namespace_key: None,
-            namespace_object: None,
-            operation: None,
-            operations: OperationSet::empty(),
-            verification: VerificationRequirement::Optional,
-            checkpoint: None,
-            task: None,
-            task_result: None,
-            task_ticks: None,
-            task_quantum: None,
-            fault: None,
-            fault_kind: None,
-            fault_detail: None,
-            fault_policy: None,
-            fault_policy_action: None,
-            waiter: None,
-            signal: None,
-            target_agent: Some(agent),
-            driver_binding: None,
-            device_event: None,
-            device_event_kind: None,
-            device_event_payload: None,
-            driver_command: None,
-            driver_command_kind: None,
-            driver_command_payload: None,
-            driver_command_result: None,
-            driver_invocation: None,
-            driver_invocation_ticks: None,
-            driver_invocation_quantum: None,
-            agent_image: None,
-            agent_image_kind: None,
-            agent_image_digest: None,
-            agent_image_abi_version: None,
-            agent_image_entry_version: None,
-        })
+        manager: Option<AgentId>,
+        management_resource: Option<crate::ResourceId>,
+    ) {
+        let index = self.agent_len;
+        self.agents[index] = AgentRecord {
+            id: agent,
+            status: AgentStatus::Active,
+            manager,
+            management_resource,
+        };
+        self.execution_contexts[index] = AgentExecutionContext::idle(agent);
+        self.agent_len += 1;
+    }
+
+    pub(crate) fn find_agent_mut(&mut self, id: AgentId) -> Result<&mut AgentRecord, KernelError> {
+        self.agents[..self.agent_len]
+            .iter_mut()
+            .find(|agent| agent.id == id)
+            .ok_or(KernelError::AgentNotFound)
     }
 }

@@ -80,9 +80,14 @@ for expected in \
   "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK" \
   "AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK" \
   "AGENT_KERNEL_NATIVE_TASK_MANAGER_OK" \
+  "AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CREATE_TASK_OK" \
   "AGENT_KERNEL_AGENT_CALL_DELEGATE_TASK_OK" \
+  "AGENT_KERNEL_AGENT_CALL_REGISTER_MANAGED_AGENT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_SUSPEND_MANAGED_AGENT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RESUME_MANAGED_AGENT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RETIRE_MANAGED_AGENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK" \
   "AGENT_KERNEL_AGENT_CALL_COMPLETE_OK" \
   "AGENT_KERNEL_AGENT_CR3_SWITCH_OK" \
@@ -258,18 +263,22 @@ for expected in \
   "event[162] intent_bound" \
   "event[163] capability_derived" \
   "event[164] delegation" \
-  "event[165] task_result_submitted" \
-  "event[166] task_completed" \
-  "event[167] device_event_raised" \
-  "event[168] device_event_delivered" \
-  "event[169] driver_invocation_queued" \
-  "event[170] driver_invocation_dispatched" \
-  "event[171] driver_invocation_ticked" \
-  "event[172] device_event_acknowledged" \
-  "event[173] driver_command_submitted" \
-  "event[174] driver_command_dispatched" \
-  "event[175] driver_command_completed" \
-  "event[176] driver_invocation_completed" \
+  "event[165] agent_registered" \
+  "event[166] agent_suspended" \
+  "event[167] agent_resumed" \
+  "event[168] agent_retired" \
+  "event[169] task_result_submitted" \
+  "event[170] task_completed" \
+  "event[171] device_event_raised" \
+  "event[172] device_event_delivered" \
+  "event[173] driver_invocation_queued" \
+  "event[174] driver_invocation_dispatched" \
+  "event[175] driver_invocation_ticked" \
+  "event[176] device_event_acknowledged" \
+  "event[177] driver_command_submitted" \
+  "event[178] driver_command_dispatched" \
+  "event[179] driver_command_completed" \
+  "event[180] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -279,7 +288,7 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 176 ]]; then
-  printf 'expected exactly 176 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 180 ]]; then
+  printf 'expected exactly 180 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi

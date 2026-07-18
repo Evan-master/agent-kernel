@@ -5,22 +5,21 @@
 //! performs no privileged operation and trusts identity only from an explicit
 //! scheduler-owned `AgentCallContext`.
 
+mod agent_management;
 mod capability;
 mod context;
 mod mailbox;
+mod request;
 mod resource;
 mod task_lifecycle;
 mod transcript;
 
-use agent_kernel_core::{
-    AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MessageId, MessageKind,
-    MessagePayload, OperationSet, ResourceId, ResourceKind, TaskId, TaskResult,
-    VerificationRequirement,
-};
+use agent_kernel_core::{AgentId, AgentImageId, TaskId, TaskResult};
 
 use crate::context::PrivilegeInterruptStackFrame;
 
 pub use context::AgentCallContext;
+pub use request::{AgentCallOperation, AgentCallRequest};
 pub use transcript::{AgentCallTranscript, AgentCallTranscriptError};
 
 pub const AGENT_CALL_ABI_MAGIC: u64 = u64::from_le_bytes(*b"AGNTCALL");
@@ -41,6 +40,10 @@ pub const AGENT_CALL_REVOKE_DERIVED_CAPABILITY: u64 = 13;
 pub const AGENT_CALL_DECLARE_INTENT: u64 = 14;
 pub const AGENT_CALL_CREATE_TASK: u64 = 15;
 pub const AGENT_CALL_DELEGATE_TASK: u64 = 16;
+pub const AGENT_CALL_REGISTER_MANAGED_AGENT: u64 = 17;
+pub const AGENT_CALL_SUSPEND_MANAGED_AGENT: u64 = 18;
+pub const AGENT_CALL_RESUME_MANAGED_AGENT: u64 = 19;
+pub const AGENT_CALL_RETIRE_MANAGED_AGENT: u64 = 20;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
 pub const AGENT_CALL_MESSAGE_REQUEST: u64 = 2;
 pub const AGENT_CALL_MESSAGE_RESPONSE: u64 = 3;
@@ -57,151 +60,10 @@ pub const AGENT_CALL_INTENT_CHECKPOINT: u64 = 4;
 pub const AGENT_CALL_INTENT_ROLLBACK: u64 = 5;
 pub const AGENT_CALL_VERIFICATION_OPTIONAL: u64 = 1;
 pub const AGENT_CALL_VERIFICATION_REQUIRED: u64 = 2;
+pub const AGENT_CALL_AGENT_ACTIVE: u64 = 1;
+pub const AGENT_CALL_AGENT_SUSPENDED: u64 = 2;
+pub const AGENT_CALL_AGENT_RETIRED: u64 = 3;
 pub const AGENT_CALL_STATUS_OK: u64 = 0;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum AgentCallOperation {
-    DescribeContext,
-    Yield,
-    CompleteTask,
-    SubmitTaskResult,
-    InspectTaskResult,
-    VerifyTask,
-    SendMessage,
-    ReceiveMessage,
-    AcknowledgeMessage,
-    CreateResource,
-    RetireResource,
-    DeriveCapability,
-    RevokeDerivedCapability,
-    DeclareIntent,
-    CreateTask,
-    DelegateTask,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum AgentCallRequest {
-    DescribeContext {
-        nonce: u64,
-    },
-    Yield {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-    },
-    CompleteTask {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-    },
-    SubmitTaskResult {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        result: TaskResult,
-    },
-    InspectTaskResult {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        target_task: TaskId,
-    },
-    VerifyTask {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        target_task: TaskId,
-    },
-    SendMessage {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        recipient: AgentId,
-        kind: MessageKind,
-        payload: MessagePayload,
-    },
-    ReceiveMessage {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-    },
-    AcknowledgeMessage {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        message: MessageId,
-    },
-    CreateResource {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        authority: CapabilityId,
-        parent: ResourceId,
-        kind: ResourceKind,
-        operations: OperationSet,
-    },
-    RetireResource {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        resource: ResourceId,
-        capability: CapabilityId,
-    },
-    DeriveCapability {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        source: CapabilityId,
-        target: AgentId,
-        operations: OperationSet,
-    },
-    RevokeDerivedCapability {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        source: CapabilityId,
-        target: CapabilityId,
-    },
-    DeclareIntent {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        authority: CapabilityId,
-        resource: ResourceId,
-        kind: IntentKind,
-        verification: VerificationRequirement,
-    },
-    CreateTask {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        authority: CapabilityId,
-        intent: IntentId,
-    },
-    DelegateTask {
-        agent: AgentId,
-        task: TaskId,
-        image: AgentImageId,
-        nonce: u64,
-        authority: CapabilityId,
-        delegated_task: TaskId,
-        target: AgentId,
-    },
-}
 
 impl AgentCallRequest {
     pub fn decode(frame: &PrivilegeInterruptStackFrame) -> Result<Self, AgentCallDecodeError> {
@@ -228,6 +90,10 @@ impl AgentCallRequest {
             AGENT_CALL_DECLARE_INTENT => AgentCallOperation::DeclareIntent,
             AGENT_CALL_CREATE_TASK => AgentCallOperation::CreateTask,
             AGENT_CALL_DELEGATE_TASK => AgentCallOperation::DelegateTask,
+            AGENT_CALL_REGISTER_MANAGED_AGENT => AgentCallOperation::RegisterManagedAgent,
+            AGENT_CALL_SUSPEND_MANAGED_AGENT => AgentCallOperation::SuspendManagedAgent,
+            AGENT_CALL_RESUME_MANAGED_AGENT => AgentCallOperation::ResumeManagedAgent,
+            AGENT_CALL_RETIRE_MANAGED_AGENT => AgentCallOperation::RetireManagedAgent,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -307,27 +173,12 @@ impl AgentCallRequest {
             AgentCallOperation::DeclareIntent => task_lifecycle::decode_declare(frame),
             AgentCallOperation::CreateTask => task_lifecycle::decode_create(frame),
             AgentCallOperation::DelegateTask => task_lifecycle::decode_delegate(frame),
-        }
-    }
-
-    pub const fn operation(self) -> AgentCallOperation {
-        match self {
-            Self::DescribeContext { .. } => AgentCallOperation::DescribeContext,
-            Self::Yield { .. } => AgentCallOperation::Yield,
-            Self::CompleteTask { .. } => AgentCallOperation::CompleteTask,
-            Self::SubmitTaskResult { .. } => AgentCallOperation::SubmitTaskResult,
-            Self::InspectTaskResult { .. } => AgentCallOperation::InspectTaskResult,
-            Self::VerifyTask { .. } => AgentCallOperation::VerifyTask,
-            Self::SendMessage { .. } => AgentCallOperation::SendMessage,
-            Self::ReceiveMessage { .. } => AgentCallOperation::ReceiveMessage,
-            Self::AcknowledgeMessage { .. } => AgentCallOperation::AcknowledgeMessage,
-            Self::CreateResource { .. } => AgentCallOperation::CreateResource,
-            Self::RetireResource { .. } => AgentCallOperation::RetireResource,
-            Self::DeriveCapability { .. } => AgentCallOperation::DeriveCapability,
-            Self::RevokeDerivedCapability { .. } => AgentCallOperation::RevokeDerivedCapability,
-            Self::DeclareIntent { .. } => AgentCallOperation::DeclareIntent,
-            Self::CreateTask { .. } => AgentCallOperation::CreateTask,
-            Self::DelegateTask { .. } => AgentCallOperation::DelegateTask,
+            AgentCallOperation::RegisterManagedAgent => agent_management::decode_register(frame),
+            AgentCallOperation::SuspendManagedAgent
+            | AgentCallOperation::ResumeManagedAgent
+            | AgentCallOperation::RetireManagedAgent => {
+                agent_management::decode_lifecycle(frame, operation)
+            }
         }
     }
 }

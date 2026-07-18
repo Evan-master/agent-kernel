@@ -1,5 +1,6 @@
 //! Read-only semantic, authority, event, and physical proof for Resource Manager V0.
 
+mod agent_management;
 mod task_lifecycle;
 
 use agent_kernel_core::{
@@ -51,8 +52,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 10
-        && completed.address_space_switch_count() == 20
+        && completed.call_count() == 14
+        && completed.address_space_switch_count() == 28
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -92,6 +93,7 @@ pub(super) fn completed(
         )
         && kernel.run_queue().is_empty()
         && task_lifecycle::state_valid(booted, manager, image)
+        && agent_management::state_valid(booted, manager, image)
         && events_prove_lifecycle(booted, manager, image)
 }
 
@@ -115,6 +117,10 @@ fn events_prove_lifecycle(
         EventKind::IntentBound,
         EventKind::CapabilityDerived,
         EventKind::DelegationRequested,
+        EventKind::AgentRegistered,
+        EventKind::AgentSuspended,
+        EventKind::AgentResumed,
+        EventKind::AgentRetired,
         EventKind::TaskResultSubmitted,
         EventKind::TaskCompleted,
     ];
@@ -148,7 +154,8 @@ fn events_prove_lifecycle(
         && tail[8].resource == Some(image.resource())
         && tail[8].capability == Some(image.capability())
         && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
-        && tail[14].task == Some(manager.task)
-        && tail[14].task_result == Some(image.result())
-        && tail[15].task == Some(manager.task)
+        && agent_management::events_valid(&tail[14..18], booted, manager, image)
+        && tail[18].task == Some(manager.task)
+        && tail[18].task_result == Some(image.result())
+        && tail[19].task == Some(manager.task)
 }

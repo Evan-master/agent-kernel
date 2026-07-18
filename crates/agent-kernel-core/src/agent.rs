@@ -4,7 +4,7 @@
 //! records for the fixed-capacity no_std agent registry. It does not contain
 //! prompts, model sessions, host process data, or scheduling policy.
 
-use crate::AgentId;
+use crate::{AgentId, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentStatus {
@@ -17,6 +17,8 @@ pub enum AgentStatus {
 pub struct AgentRecord {
     pub id: AgentId,
     pub status: AgentStatus,
+    pub manager: Option<AgentId>,
+    pub management_resource: Option<ResourceId>,
 }
 
 impl AgentRecord {
@@ -24,6 +26,8 @@ impl AgentRecord {
         Self {
             id: AgentId::new(0),
             status: AgentStatus::Active,
+            manager: None,
+            management_resource: None,
         }
     }
 }

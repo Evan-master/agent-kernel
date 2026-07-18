@@ -16,7 +16,7 @@ use agent_kernel_x86_64::{
 use super::{call, runtime::AgentCpuRuntime, storage, FaultedAgentCpu, PreemptedAgentCpu};
 use crate::{agent_memory::PreparedAgentMemory, pit_timer};
 
-pub(super) const MAX_AGENT_CALLS: usize = 10;
+pub(super) const MAX_AGENT_CALLS: usize = 14;
 
 struct AgentCallSession {
     memory: PreparedAgentMemory,

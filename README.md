@@ -55,6 +55,9 @@ currently provides:
   revokes that direct child through `Delegate`, retires the Service through
   `Rollback`, declares a new `Act` Intent, creates its Task, and delegates that
   Task to a registered Agent with a kernel-issued task capability;
+- a native Agent Manager protocol in the same ring-3 Capsule that registers
+  Agent 9 under root-scoped `Delegate` authority, then suspends, resumes, and
+  retires the unlaunched identity through four authenticated Agent Calls;
 - a kernel-authorized Driver flow from UART interrupt through endpoint lookup,
   immutable HAL request, Port I/O, result recording, and invocation completion.
 
@@ -62,7 +65,7 @@ The reference validation profile enforces these deterministic invariants:
 
 | Evidence | Count |
 | --- | ---: |
-| Registered Agents | 8 |
+| Registered Agents | 9 |
 | Native ring-3 completions | 6 |
 | Kernel-selected dispatches | 23 |
 | Physical quantum expiries | 10 |
@@ -71,7 +74,7 @@ The reference validation profile enforces these deterministic invariants:
 | Capabilities after Manager execution | 13 |
 | Intents after Manager execution | 7 |
 | Tasks after Manager execution | 7 |
-| Ordered kernel events after Driver completion | 176 |
+| Ordered kernel events after Driver completion | 180 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -137,12 +140,19 @@ and nonce state before it reaches the facade.
 | `DeclareIntent` | 14 | Declare typed work through explicit Resource authority |
 | `CreateTask` | 15 | Create a Task from an owned declared Intent |
 | `DelegateTask` | 16 | Delegate a created Task and issue task-scoped authority |
+| `RegisterManagedAgent` | 17 | Register an unlaunched Agent under Resource-scoped management authority |
+| `SuspendManagedAgent` | 18 | Suspend a quiescent managed Agent |
+| `ResumeManagedAgent` | 19 | Reactivate a suspended managed Agent |
+| `RetireManagedAgent` | 20 | Commit the terminal state of a quiescent managed Agent |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
 stale nonces, wrong identities, and non-zero reserved registers fail closed.
 The Task Manager ABI accepts the five native Intent kinds and explicit optional
-or required verification policy codes.
+or required verification policy codes. Agent management requires an active,
+root-scoped `Delegate` Capability on the identity's management Resource. The
+target must have an idle execution context, no launch entry, and no active
+assigned Task.
 
 ## Quick Start
 
@@ -179,7 +189,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 176 events, and treat
+validate the complete serial transcript, require exactly 180 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run ends
 with:
 
@@ -187,8 +197,9 @@ with:
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
+AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[176] driver_invocation_completed
+event[180] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -220,7 +231,7 @@ authority.
 - fixed-capacity scheduling, wait/wake, mailbox IPC, fault policy, image
   verification, runtime admission, and Driver invocation lifecycle;
 - freestanding x86_64 isolation, timer preemption, fault containment/recovery,
-  native resource, capability, Intent, and Task lifecycle calls.
+  native Resource, Capability, Intent, Task, and managed Agent lifecycle calls.
 
 ### Planned
 
@@ -232,8 +243,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Task Manager design](docs/superpowers/specs/2026-07-17-x86-native-task-manager-v0-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-task-manager-v0.md)
+See the current [Agent Manager design](docs/superpowers/specs/2026-07-17-x86-native-agent-manager-v0-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-17-x86-native-agent-manager-v0.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

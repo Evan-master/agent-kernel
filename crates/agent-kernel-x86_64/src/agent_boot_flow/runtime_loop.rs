@@ -304,6 +304,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_TASK_MANAGER_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK");
     write_verifier_markers();
     Some(())
 }

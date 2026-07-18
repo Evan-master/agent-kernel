@@ -4,6 +4,7 @@
 //! replies resume the same owned frame; wait, yield, and completion return
 //! control to the outer scheduler loop.
 
+mod agent_management;
 mod capability;
 mod mailbox;
 mod resource;
@@ -91,6 +92,21 @@ pub(super) fn run(
                 target,
                 ..
             } => task_lifecycle::delegate(booted, pending, authority, delegated_task, target)?,
+            AgentCallRequest::RegisterManagedAgent {
+                authority,
+                resource,
+                target,
+                ..
+            } => agent_management::register(booted, pending, authority, resource, target)?,
+            AgentCallRequest::SuspendManagedAgent {
+                authority, target, ..
+            } => agent_management::suspend(booted, pending, authority, target)?,
+            AgentCallRequest::ResumeManagedAgent {
+                authority, target, ..
+            } => agent_management::resume(booted, pending, authority, target)?,
+            AgentCallRequest::RetireManagedAgent {
+                authority, target, ..
+            } => agent_management::retire(booted, pending, authority, target)?,
             AgentCallRequest::Yield { .. } => {
                 let yielded = task::yield_running(booted, pending)?;
                 if runtime.park_yielded_call(yielded).is_some() {
