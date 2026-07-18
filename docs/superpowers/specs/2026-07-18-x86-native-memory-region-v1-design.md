@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented and validated in debug and release QEMU on 2026-07-18. Publication
-to public `main` remains pending until the feature branch closes.
+Implemented, validated in debug and release QEMU, and published to public
+`main` on 2026-07-18 in commit `40739a0`.
 
 ## Purpose
 
