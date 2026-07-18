@@ -35,11 +35,12 @@ impl NativeRuntimeAdmissionBroker {
         if entry.task != Some(permit.task()) || entry.image != permit.image() {
             return None;
         }
-        let context = AgentCallContext::new(
+        let context = AgentCallContext::new_admitted(
             permit.target(),
             permit.task(),
             permit.image(),
             entry.capability,
+            permit.requester(),
         )?;
         let image =
             VerifiedAgentImage::verify(booted.kernel().agent_image(permit.image()).ok()?, capsule)

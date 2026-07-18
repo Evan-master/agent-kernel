@@ -225,6 +225,12 @@ pub enum AgentCallRequest {
         target: AgentId,
         target_task: TaskId,
     },
+    DiscoverRuntimeAdmission {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -257,6 +263,7 @@ impl AgentCallRequest {
             Self::InspectMemoryRegion { .. } => AgentCallOperation::InspectMemoryRegion,
             Self::ReleaseMemoryRegion { .. } => AgentCallOperation::ReleaseMemoryRegion,
             Self::RequestRuntimeAdmission { .. } => AgentCallOperation::RequestRuntimeAdmission,
+            Self::DiscoverRuntimeAdmission { .. } => AgentCallOperation::DiscoverRuntimeAdmission,
         }
     }
 }

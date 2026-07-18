@@ -33,4 +33,5 @@ pub enum AgentCallOperation {
     InspectMemoryRegion,
     ReleaseMemoryRegion,
     RequestRuntimeAdmission,
+    DiscoverRuntimeAdmission,
 }

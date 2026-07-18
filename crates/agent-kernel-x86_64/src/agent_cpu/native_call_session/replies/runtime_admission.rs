@@ -1,4 +1,4 @@
-//! Runtime admission acknowledgement for an authenticated Supervisor call.
+//! Runtime admission acknowledgements for authenticated Supervisor and Worker calls.
 
 use agent_kernel_core::{AgentId, RuntimeAdmissionId, TaskId};
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
@@ -6,6 +6,17 @@ use agent_kernel_x86_64::agent_call::AgentCallRequest;
 use super::{PendingAgentCallCpu, ResumableAgentCpu};
 
 impl PendingAgentCallCpu {
+    pub(crate) fn acknowledge_runtime_admission_discovery(mut self) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::DiscoverRuntimeAdmission { .. })
+        })?;
+        self.session
+            .context
+            .encode_runtime_admission_discovery_reply(self.session.frame.frame_mut(), nonce)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
     pub(crate) fn acknowledge_runtime_admission(
         mut self,
         admission: RuntimeAdmissionId,

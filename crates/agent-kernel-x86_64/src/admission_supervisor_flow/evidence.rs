@@ -104,7 +104,9 @@ impl PreparedAdmissionSupervisorFlow {
             && completed.reclamation_log().is_empty()
             && admissions.len() == 2
             && admissions.iter().all(|admission| {
-                admission.status == RuntimeAdmissionStatus::Admitted && admission.failure.is_none()
+                admission.requester == ADMISSION_SUPERVISOR
+                    && admission.status == RuntimeAdmissionStatus::Admitted
+                    && admission.failure.is_none()
             })
             && matches!(kernel.waiters().last(), Some(waiter)
                 if waiter.id.raw() == 3
@@ -115,7 +117,7 @@ impl PreparedAdmissionSupervisorFlow {
             && notices.iter().enumerate().all(|(index, message)| {
                 message.id.raw() == (index + 3) as u64
                     && message.sender == targets[index].0
-                    && message.recipient == ADMISSION_SUPERVISOR
+                    && message.recipient == admissions[index].requester
                     && message.kind == MessageKind::Notify
                     && message.payload.task == Some(targets[index].1)
                     && message.payload.resource.is_none()

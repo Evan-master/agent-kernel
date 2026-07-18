@@ -1,7 +1,8 @@
 //! Scheduler-owned identity and authority for one Agent Call context.
 //!
-//! Replies expose only Agent, Task, Image, and nonce. The delegated capability
-//! remains private to trusted kernel code and participates in context equality.
+//! Common replies expose Agent, Task, Image, and nonce. Operation-specific
+//! replies may add bounded kernel-owned identities. Delegated capability stays
+//! private to trusted kernel code and participates in context equality.
 
 mod agent_management;
 mod authentication;
@@ -28,6 +29,7 @@ pub struct AgentCallContext {
     task: TaskId,
     image: AgentImageId,
     capability: CapabilityId,
+    runtime_admission_requester: Option<AgentId>,
 }
 
 impl AgentCallContext {
@@ -45,6 +47,7 @@ impl AgentCallContext {
             task,
             image,
             capability,
+            runtime_admission_requester: None,
         })
     }
 

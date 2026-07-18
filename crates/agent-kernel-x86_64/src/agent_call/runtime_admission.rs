@@ -1,8 +1,8 @@
-//! Strict register decoding for Supervisor runtime admission requests.
+//! Strict register decoding for runtime admission requests and discovery.
 
 use agent_kernel_core::{AgentId, CapabilityId, TaskId};
 
-use super::{decode_context_payload, AgentCallDecodeError, AgentCallRequest};
+use super::{decode_context_payload, ensure_reserved_zero, AgentCallDecodeError, AgentCallRequest};
 use crate::context::PrivilegeInterruptStackFrame;
 
 pub(super) fn decode_request(
@@ -23,5 +23,18 @@ pub(super) fn decode_request(
         authority: CapabilityId::new(frame.r10),
         target: AgentId::new(frame.r11),
         target_task: TaskId::new(frame.r12),
+    })
+}
+
+pub(super) fn decode_discovery(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<AgentCallRequest, AgentCallDecodeError> {
+    ensure_reserved_zero(frame)?;
+    let (agent, task, image, nonce) = decode_context_payload(frame)?;
+    Ok(AgentCallRequest::DiscoverRuntimeAdmission {
+        agent,
+        task,
+        image,
+        nonce,
     })
 }

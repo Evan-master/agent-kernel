@@ -106,13 +106,19 @@ pub(super) fn run(
         return None;
     }
 
+    let first_requester = booted
+        .kernel()
+        .runtime_admissions()
+        .iter()
+        .find(|record| record.target == REUSE_WORKERS[0])?
+        .requester;
     let duplicate_failure = NativeAddressSpaceService::admit(
         address_space_pool,
         runtime,
         cpu_runtime,
         memory_pool,
         flows[0].verified_image(booted, worker_contract.bytes())?,
-        flows[0].call_context()?,
+        flows[0].admitted_call_context(first_requester)?,
     )?
     .err()?;
     let cancelled_identity = duplicate_failure.identity()?;

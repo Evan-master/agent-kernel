@@ -1,6 +1,8 @@
 //! Terminal native and semantic evidence for one Reuse Worker.
 
-use agent_kernel_core::{AgentExecutionState, EventKind, IntentStatus, TaskStatus};
+use agent_kernel_core::{
+    AgentExecutionState, EventKind, IntentStatus, RuntimeAdmissionStatus, TaskStatus,
+};
 
 use super::PreparedReuseWorkerFlow;
 use crate::{
@@ -15,7 +17,16 @@ impl PreparedReuseWorkerFlow {
         report: &NativeExecutionReport,
         contract: BootReuseWorkerImage,
     ) -> bool {
-        let Some(context) = self.call_context() else {
+        let Some(admission) = booted.kernel().runtime_admissions().iter().find(|record| {
+            record.target == self.agent
+                && record.task == self.task
+                && record.image == self.image
+                && record.status == RuntimeAdmissionStatus::Admitted
+                && record.failure.is_none()
+        }) else {
+            return false;
+        };
+        let Some(context) = self.admitted_call_context(admission.requester) else {
             return false;
         };
         let Some(completed) = report.completed(self.agent) else {
@@ -39,9 +50,10 @@ impl PreparedReuseWorkerFlow {
             && matches!(execution, Some(execution)
                 if execution.state == AgentExecutionState::Idle && execution.task.is_none())
             && completed.context() == context
+            && completed.context().runtime_admission_requester() == Some(admission.requester)
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 4
-            && completed.address_space_switch_count() == 8
+            && completed.call_count() == 5
+            && completed.address_space_switch_count() == 10
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1

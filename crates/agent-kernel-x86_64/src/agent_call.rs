@@ -57,6 +57,7 @@ pub const AGENT_CALL_ALLOCATE_MEMORY_REGION: u64 = 24;
 pub const AGENT_CALL_INSPECT_MEMORY_REGION: u64 = 25;
 pub const AGENT_CALL_RELEASE_MEMORY_REGION: u64 = 26;
 pub const AGENT_CALL_REQUEST_RUNTIME_ADMISSION: u64 = 27;
+pub const AGENT_CALL_DISCOVER_RUNTIME_ADMISSION: u64 = 28;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -116,6 +117,7 @@ impl AgentCallRequest {
             AGENT_CALL_INSPECT_MEMORY_REGION => AgentCallOperation::InspectMemoryRegion,
             AGENT_CALL_RELEASE_MEMORY_REGION => AgentCallOperation::ReleaseMemoryRegion,
             AGENT_CALL_REQUEST_RUNTIME_ADMISSION => AgentCallOperation::RequestRuntimeAdmission,
+            AGENT_CALL_DISCOVER_RUNTIME_ADMISSION => AgentCallOperation::DiscoverRuntimeAdmission,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -210,6 +212,9 @@ impl AgentCallRequest {
                 memory_region::decode_existing(frame, operation)
             }
             AgentCallOperation::RequestRuntimeAdmission => runtime_admission::decode_request(frame),
+            AgentCallOperation::DiscoverRuntimeAdmission => {
+                runtime_admission::decode_discovery(frame)
+            }
         }
     }
 }
@@ -222,6 +227,7 @@ pub enum AgentCallDecodeError {
     UnsupportedFlags,
     ReservedNotZero,
     InvalidPayload,
+    RuntimeAdmissionContextUnavailable,
 }
 
 fn ensure_reserved_zero(frame: &PrivilegeInterruptStackFrame) -> Result<(), AgentCallDecodeError> {

@@ -106,6 +106,11 @@ pub(super) fn run(
                 target_task,
                 ..
             } => runtime_admission::request(booted, pending, authority, target, target_task)?,
+            AgentCallRequest::DiscoverRuntimeAdmission { .. } => {
+                let resumable = pending.acknowledge_runtime_admission_discovery()?;
+                crate::serial_write_line("AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK");
+                resumable
+            }
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

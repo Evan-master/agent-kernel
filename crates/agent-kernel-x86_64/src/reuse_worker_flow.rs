@@ -23,8 +23,17 @@ pub(super) struct PreparedReuseWorkerFlow {
 }
 
 impl PreparedReuseWorkerFlow {
-    pub(super) const fn call_context(&self) -> Option<AgentCallContext> {
-        AgentCallContext::new(self.agent, self.task, self.image, self.capability)
+    pub(super) const fn admitted_call_context(
+        &self,
+        requester: AgentId,
+    ) -> Option<AgentCallContext> {
+        AgentCallContext::new_admitted(
+            self.agent,
+            self.task,
+            self.image,
+            self.capability,
+            requester,
+        )
     }
 
     pub(super) fn verified_image<'a>(
