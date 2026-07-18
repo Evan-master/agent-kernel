@@ -12,15 +12,13 @@ use agent_kernel_x86_64::{
     agent_call::{AgentCallContext, AgentCallRequest, AgentCallTranscript},
     context::SavedAgentFrame,
     native_runtime::NativeRunBoundary,
+    runtime_region::RuntimeRegionObservationLog,
 };
 
 use super::{call, runtime::AgentCpuRuntime, storage, FaultedAgentCpu, PreemptedAgentCpu};
-use crate::{
-    agent_memory::{PreparedAgentMemory, RuntimeRegionObservation},
-    pit_timer,
-};
+use crate::{agent_memory::PreparedAgentMemory, pit_timer};
 
-pub(super) const MAX_AGENT_CALLS: usize = 22;
+pub(super) const MAX_AGENT_CALLS: usize = 30;
 
 struct AgentCallSession {
     memory: PreparedAgentMemory,
@@ -59,7 +57,7 @@ pub(crate) struct CompletedAgentCpu {
     runtime_page_observation: Option<u64>,
     runtime_region_generation: u64,
     runtime_regions_released: bool,
-    runtime_region_observation: Option<RuntimeRegionObservation>,
+    runtime_region_observations: RuntimeRegionObservationLog,
 }
 
 pub(crate) enum AgentRunOutcome {
@@ -269,7 +267,7 @@ impl CompletedAgentCpu {
         self.runtime_regions_released
     }
 
-    pub(crate) const fn runtime_region_observation(&self) -> Option<RuntimeRegionObservation> {
-        self.runtime_region_observation
+    pub(crate) const fn runtime_region_observations(&self) -> RuntimeRegionObservationLog {
+        self.runtime_region_observations
     }
 }

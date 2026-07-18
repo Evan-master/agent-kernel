@@ -131,10 +131,19 @@ impl PendingAgentCallCpu {
         first: u64,
         last: u64,
         binding: RuntimeRegionBinding,
-    ) {
+    ) -> bool {
         self.session
             .memory
-            .record_runtime_region_observation(first, last, binding);
+            .record_runtime_region_observation(first, last, binding)
+    }
+
+    pub(crate) fn can_record_runtime_region_observation(
+        &self,
+        binding: RuntimeRegionBinding,
+    ) -> bool {
+        self.session
+            .memory
+            .can_record_runtime_region_observation(binding)
     }
 
     pub(crate) fn prepare_runtime_region_release(

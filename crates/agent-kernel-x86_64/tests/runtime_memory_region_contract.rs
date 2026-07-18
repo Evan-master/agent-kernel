@@ -2,8 +2,8 @@ use agent_kernel_core::{MemoryCellId, ResourceId};
 use agent_kernel_x86_64::{
     runtime_frame_pool::MAX_RUNTIME_REGION_PAGES,
     runtime_region::{
-        RuntimeRegionLedger, RUNTIME_MEMORY_ACCESS_READ_WRITE, RUNTIME_REGION_CAPACITY,
-        RUNTIME_REGION_SLOT_COUNT,
+        RuntimeRegionLedger, RuntimeRegionObservationLog, RUNTIME_MEMORY_ACCESS_READ_WRITE,
+        RUNTIME_REGION_CAPACITY, RUNTIME_REGION_OBSERVATION_CAPACITY, RUNTIME_REGION_SLOT_COUNT,
     },
     user_memory::{UserMemoryLayout, PAGE_BYTES},
 };
@@ -106,6 +106,71 @@ fn region_ledger_rejects_stale_tokens_and_preserves_generation_on_cancel() {
     assert!(!ledger.commit_release(release));
     assert!(ledger.is_clear());
     assert_eq!(ledger.generation(), 1);
+}
+
+#[test]
+fn region_observation_log_is_ordered_bounded_and_tracks_hole_reuse() {
+    let mut ledger = RuntimeRegionLedger::new();
+    let mut observations = RuntimeRegionObservationLog::new();
+    assert_eq!(RUNTIME_REGION_OBSERVATION_CAPACITY, 3);
+    assert!(observations.is_empty());
+
+    let first = ledger.reserve(ResourceId::new(1), 3).unwrap();
+    assert!(ledger.commit_mapping(first, MemoryCellId::new(1)));
+    let first_binding = ledger
+        .binding(ResourceId::new(1), MemoryCellId::new(1))
+        .unwrap();
+    assert!(observations.record(first_binding, 0xa1, 0xa3));
+    assert!(!observations.record(first_binding, 0xff, 0xff));
+    assert_eq!(observations.len(), 1);
+
+    let second = ledger.reserve(ResourceId::new(2), 2).unwrap();
+    assert!(ledger.commit_mapping(second, MemoryCellId::new(2)));
+    let second_binding = ledger
+        .binding(ResourceId::new(2), MemoryCellId::new(2))
+        .unwrap();
+    assert!(observations.record(second_binding, 0xb1, 0xb2));
+
+    let first_release = ledger
+        .prepare_release(ResourceId::new(1), MemoryCellId::new(1))
+        .unwrap();
+    assert!(ledger.commit_release(first_release));
+    let third = ledger.reserve(ResourceId::new(3), 3).unwrap();
+    assert_eq!(third.start_slot(), 0);
+    assert_eq!(third.generation(), 3);
+    assert!(ledger.commit_mapping(third, MemoryCellId::new(3)));
+    let third_binding = ledger
+        .binding(ResourceId::new(3), MemoryCellId::new(3))
+        .unwrap();
+    assert!(observations.record(third_binding, 0xc1, 0xc3));
+
+    let expected = [
+        (1, 0, 3, 1, 0xa1, 0xa3),
+        (2, 3, 2, 2, 0xb1, 0xb2),
+        (3, 0, 3, 3, 0xc1, 0xc3),
+    ];
+    for (index, (cell, start, pages, generation, first, last)) in expected.into_iter().enumerate() {
+        let observation = observations.get(index).unwrap();
+        assert_eq!(observation.cell(), MemoryCellId::new(cell));
+        assert_eq!(observation.start_slot(), start);
+        assert_eq!(observation.page_count(), pages);
+        assert_eq!(observation.generation(), generation);
+        assert_eq!(observation.first(), first);
+        assert_eq!(observation.last(), last);
+    }
+
+    let fourth = ledger.reserve(ResourceId::new(4), 1).unwrap();
+    assert!(ledger.commit_mapping(fourth, MemoryCellId::new(4)));
+    let fourth_binding = ledger
+        .binding(ResourceId::new(4), MemoryCellId::new(4))
+        .unwrap();
+    let snapshot = observations;
+    assert!(!observations.record(fourth_binding, 0xd1, 0xd1));
+    assert_eq!(observations, snapshot);
+    assert_eq!(observations.len(), RUNTIME_REGION_OBSERVATION_CAPACITY);
+    assert!(observations
+        .get(RUNTIME_REGION_OBSERVATION_CAPACITY)
+        .is_none());
 }
 
 fn assert_reservation(

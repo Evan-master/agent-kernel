@@ -124,6 +124,7 @@ pub(super) fn inspect(
     let (first, last) = memory_pool.observe(pool_binding)?;
     if pool_binding.page_count() != region_binding.page_count()
         || pool_binding.generation() != region_binding.generation()
+        || !pending.can_record_runtime_region_observation(region_binding)
     {
         return None;
     }
@@ -145,7 +146,9 @@ pub(super) fn inspect(
     {
         return None;
     }
-    pending.record_runtime_region_observation(first, last, region_binding);
+    if !pending.record_runtime_region_observation(first, last, region_binding) {
+        return None;
+    }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK");
     pending.acknowledge_memory_region_inspected(
         cell,

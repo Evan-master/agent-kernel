@@ -7,16 +7,13 @@
 use agent_kernel_core::{MemoryCellId, MemoryValue, ResourceId};
 use agent_kernel_x86_64::{
     runtime_region::{
-        RuntimeRegionBinding, RuntimeRegionRelease, RuntimeRegionReservation,
-        RUNTIME_MEMORY_ACCESS_READ_WRITE,
+        RuntimeRegionBinding, RuntimeRegionObservationLog, RuntimeRegionRelease,
+        RuntimeRegionReservation, RUNTIME_MEMORY_ACCESS_READ_WRITE,
     },
     user_memory::PAGE_BYTES,
 };
 
-use super::{
-    page_tables, PreparedAgentMemory, RuntimePhysicalFrameSet, RuntimeRegionObservation,
-    PHYSICAL_MEMORY_OFFSET,
-};
+use super::{page_tables, PreparedAgentMemory, RuntimePhysicalFrameSet, PHYSICAL_MEMORY_OFFSET};
 
 impl PreparedAgentMemory {
     pub(crate) fn prepare_runtime_region_allocation(
@@ -90,18 +87,21 @@ impl PreparedAgentMemory {
         .then_some(binding)
     }
 
+    pub(crate) fn can_record_runtime_region_observation(
+        &self,
+        binding: RuntimeRegionBinding,
+    ) -> bool {
+        self.runtime_region_observations.can_record(binding)
+    }
+
     pub(crate) fn record_runtime_region_observation(
         &mut self,
         first: u64,
         last: u64,
         binding: RuntimeRegionBinding,
-    ) {
-        self.runtime_region_observation = Some(RuntimeRegionObservation {
-            first,
-            last,
-            page_count: binding.page_count() as u64,
-            generation: binding.generation(),
-        });
+    ) -> bool {
+        self.runtime_region_observations
+            .record(binding, first, last)
     }
 
     pub(crate) fn prepare_runtime_region_release(
@@ -152,8 +152,8 @@ impl PreparedAgentMemory {
         self.runtime_regions.generation()
     }
 
-    pub(crate) fn runtime_region_observation(&self) -> Option<RuntimeRegionObservation> {
-        self.runtime_region_observation
+    pub(crate) fn runtime_region_observations(&self) -> RuntimeRegionObservationLog {
+        self.runtime_region_observations
     }
 
     pub(crate) fn runtime_regions_released(&self, generation: u64) -> bool {

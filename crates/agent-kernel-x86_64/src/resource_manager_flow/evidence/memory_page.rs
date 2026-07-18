@@ -26,7 +26,7 @@ pub(super) fn state_valid(booted: &X86BootedKernel, image: BootResourceManagerIm
         .with(Operation::Act)
         .with(Operation::Rollback);
 
-    kernel.memory_cells().len() == 2
+    kernel.memory_cells().len() == 4
         && matches!(resource, Some(record)
             if record.kind == ResourceKind::Memory
                 && record.parent == Some(booted.report().bootstrap_resource)

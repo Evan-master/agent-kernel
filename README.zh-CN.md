@@ -52,7 +52,9 @@ Agent 为中心的系统需要不同的控制面：
 - 由 16 个物理帧组成的共享运行时池，提供确定性分配、整页清零，以及绑定 Agent、
   Resource、MemoryCell 和分配代数的所有权记录；
 - 真实物理内存支撑的兼容页与多页区域生命周期，可分配 1 至 4 页内核选址区域，
-  执行 ring-3 首尾页证明写入与检查，随后移除全部叶项并归还清零后的帧；
+  执行 ring-3 首尾页证明写入与检查，支持多个区域同时存活、确定性 First-Fit
+  空洞复用，随后移除全部叶项并归还清零后的帧；
+- 固定容量的有序区域观察日志，将分配身份和 ring-3 证明值传递到内核终态证据；
 - 从 UART 中断、端点解析、不可变 HAL 请求、Port I/O、结果记录到 Driver
   Invocation 完成的内核授权驱动链路。
 
@@ -63,15 +65,17 @@ Agent 为中心的系统需要不同的控制面：
 | 注册 Agent | 9 |
 | 原生 ring-3 完成上下文 | 6 |
 | 内核选择的 Dispatch | 23 |
+| Resource Manager Agent Call | 30 |
+| Resource Manager Agent/内核地址空间切换 | 60 |
 | 真实物理时间片到期 | 10 |
 | 被隔离的 Agent 故障 | 4 |
-| Resource Manager 执行后的资源 | 4 |
-| Resource Manager 执行后的 Capability | 15 |
+| Resource Manager 执行后的资源 | 6 |
+| Resource Manager 执行后的 Capability | 17 |
 | Resource Manager 执行后的 Intent | 7 |
 | Resource Manager 执行后的 Task | 7 |
-| Resource Manager 执行后的 MemoryCell | 2 |
+| Resource Manager 执行后的 MemoryCell | 4 |
 | 已归还并清零的共享运行时帧 | 16 |
-| Driver 完成后的有序内核事件 | 190 |
+| Driver 完成后的有序内核事件 | 200 |
 
 `scripts/run-qemu.sh` 会逐条校验事件顺序，同时拒绝缺失标记、多余事件、异常的
 QEMU 退出状态以及任何 fail-closed 启动路径。
@@ -187,7 +191,7 @@ scripts/run-qemu.sh --release
 ```
 
 脚本会构建裸机目标、生成 BIOS 镜像、启动 QEMU、检查完整串口记录、要求恰好
-190 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行的结尾是：
+200 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行的结尾是：
 
 ```text
 AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK
@@ -197,8 +201,9 @@ AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
 AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
+AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[190] driver_invocation_completed
+event[200] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -239,8 +244,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [原生内存区域设计](docs/superpowers/specs/2026-07-18-x86-native-memory-region-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-memory-region-v1.md)。
+最新里程碑的完整契约见 [原生内存并发设计](docs/superpowers/specs/2026-07-18-x86-native-memory-concurrency-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-18-x86-native-memory-concurrency-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献

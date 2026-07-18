@@ -5,10 +5,14 @@
 //! stale-safe transaction identity. Page tables remain in the bare-metal layer.
 
 mod lifecycle;
+mod observation;
 mod types;
 
 use agent_kernel_core::{MemoryCellId, ResourceId};
 
+pub use observation::{
+    RuntimeRegionObservation, RuntimeRegionObservationLog, RUNTIME_REGION_OBSERVATION_CAPACITY,
+};
 pub use types::{RuntimeRegionBinding, RuntimeRegionRelease, RuntimeRegionReservation};
 
 pub const RUNTIME_REGION_SLOT_COUNT: usize = 8;

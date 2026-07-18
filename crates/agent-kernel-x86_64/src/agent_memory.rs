@@ -18,7 +18,7 @@ use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
     runtime_page::RuntimePageLedger,
-    runtime_region::RuntimeRegionLedger,
+    runtime_region::{RuntimeRegionLedger, RuntimeRegionObservationLog},
     user_memory::{
         UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_RESTART_GENERATION_OFFSET,
         MAX_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
@@ -42,15 +42,7 @@ pub(crate) struct PreparedAgentMemory {
     runtime_page: RuntimePageLedger,
     runtime_page_observation: Option<u64>,
     runtime_regions: RuntimeRegionLedger,
-    runtime_region_observation: Option<RuntimeRegionObservation>,
-}
-
-#[derive(Copy, Clone)]
-pub(crate) struct RuntimeRegionObservation {
-    pub(crate) first: u64,
-    pub(crate) last: u64,
-    pub(crate) page_count: u64,
-    pub(crate) generation: u64,
+    runtime_region_observations: RuntimeRegionObservationLog,
 }
 
 impl PreparedAgentMemory {
@@ -115,7 +107,7 @@ impl PreparedAgentMemory {
             runtime_page: RuntimePageLedger::new(),
             runtime_page_observation: None,
             runtime_regions: RuntimeRegionLedger::new(),
-            runtime_region_observation: None,
+            runtime_region_observations: RuntimeRegionObservationLog::new(),
         })
     }
 

@@ -63,7 +63,10 @@ currently provides:
   allocation generation;
 - physically backed runtime memory lifecycles for a compatibility page and
   kernel-selected regions of one to four pages, including ring-3 proof writes,
-  first/last-page inspection, leaf removal, and frame reclamation;
+  first/last-page inspection, concurrent live mappings, deterministic
+  first-fit hole reuse, leaf removal, and frame reclamation;
+- a fixed-capacity ordered region-observation log that carries allocation
+  identity and ring-3 proof values into terminal kernel evidence;
 - a kernel-authorized Driver flow from UART interrupt through endpoint lookup,
   immutable HAL request, Port I/O, result recording, and invocation completion.
 
@@ -74,15 +77,17 @@ The reference validation profile enforces these deterministic invariants:
 | Registered Agents | 9 |
 | Native ring-3 completions | 6 |
 | Kernel-selected dispatches | 23 |
+| Resource Manager Agent Calls | 30 |
+| Resource Manager Agent/kernel address-space switches | 60 |
 | Physical quantum expiries | 10 |
 | Contained Agent faults | 4 |
-| Resources after Manager execution | 4 |
-| Capabilities after Manager execution | 15 |
+| Resources after Manager execution | 6 |
+| Capabilities after Manager execution | 17 |
 | Intents after Manager execution | 7 |
 | Tasks after Manager execution | 7 |
-| MemoryCells after Manager execution | 2 |
+| MemoryCells after Manager execution | 4 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 190 |
+| Ordered kernel events after Driver completion | 200 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -205,7 +210,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 190 events, and treat
+validate the complete serial transcript, require exactly 200 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run ends
 with:
 
@@ -217,8 +222,9 @@ AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
 AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
+AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[190] driver_invocation_completed
+event[200] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -264,8 +270,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Native Memory Region design](docs/superpowers/specs/2026-07-18-x86-native-memory-region-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-memory-region-v1.md)
+See the current [Native Memory Concurrency design](docs/superpowers/specs/2026-07-18-x86-native-memory-concurrency-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-18-x86-native-memory-concurrency-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

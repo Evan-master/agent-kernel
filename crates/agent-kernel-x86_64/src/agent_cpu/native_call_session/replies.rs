@@ -207,7 +207,7 @@ impl PendingAgentCallCpu {
             .session
             .memory
             .runtime_regions_released(runtime_region_generation);
-        let runtime_region_observation = self.session.memory.runtime_region_observation();
+        let runtime_region_observations = self.session.memory.runtime_region_observations();
         Some(CompletedAgentCpu {
             context: self.session.context,
             nonce,
@@ -220,7 +220,7 @@ impl PendingAgentCallCpu {
             runtime_page_observation,
             runtime_region_generation,
             runtime_regions_released,
-            runtime_region_observation,
+            runtime_region_observations,
         })
     }
 

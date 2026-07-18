@@ -91,6 +91,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" \
   "AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK" \
   "AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK" \
+  "AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CREATE_TASK_OK" \
   "AGENT_KERNEL_AGENT_CALL_DELEGATE_TASK_OK" \
@@ -286,19 +287,29 @@ for expected in \
   "event[175] capability_granted" \
   "event[176] memory_cell_created" \
   "event[177] memory_cell_recalled" \
-  "event[178] resource_retired" \
-  "event[179] task_result_submitted" \
-  "event[180] task_completed" \
-  "event[181] device_event_raised" \
-  "event[182] device_event_delivered" \
-  "event[183] driver_invocation_queued" \
-  "event[184] driver_invocation_dispatched" \
-  "event[185] driver_invocation_ticked" \
-  "event[186] device_event_acknowledged" \
-  "event[187] driver_command_submitted" \
-  "event[188] driver_command_dispatched" \
-  "event[189] driver_command_completed" \
-  "event[190] driver_invocation_completed" \
+  "event[178] resource_created" \
+  "event[179] capability_granted" \
+  "event[180] memory_cell_created" \
+  "event[181] resource_retired" \
+  "event[182] memory_cell_recalled" \
+  "event[183] resource_created" \
+  "event[184] capability_granted" \
+  "event[185] memory_cell_created" \
+  "event[186] memory_cell_recalled" \
+  "event[187] resource_retired" \
+  "event[188] resource_retired" \
+  "event[189] task_result_submitted" \
+  "event[190] task_completed" \
+  "event[191] device_event_raised" \
+  "event[192] device_event_delivered" \
+  "event[193] driver_invocation_queued" \
+  "event[194] driver_invocation_dispatched" \
+  "event[195] driver_invocation_ticked" \
+  "event[196] device_event_acknowledged" \
+  "event[197] driver_command_submitted" \
+  "event[198] driver_command_dispatched" \
+  "event[199] driver_command_completed" \
+  "event[200] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -308,7 +319,19 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 190 ]]; then
-  printf 'expected exactly 190 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 200 ]]; then
+  printf 'expected exactly 200 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
+
+for marker in \
+  "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK"
+do
+  MARKER_COUNT="$(grep -Fxc "$marker" <<<"$OUTPUT")"
+  if [[ "$MARKER_COUNT" -ne 3 ]]; then
+    printf 'expected exactly 3 occurrences of %s, observed %s\n' "$marker" "$MARKER_COUNT" >&2
+    exit 1
+  fi
+done

@@ -324,6 +324,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK");
     write_verifier_markers();
     Some(())
 }
