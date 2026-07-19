@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for implementation on 2026-07-19.
+Implemented, validated, and published on 2026-07-19.
 
 ## Purpose
 

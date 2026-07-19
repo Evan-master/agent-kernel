@@ -11,5 +11,5 @@
   runtime liveness enforcement.
 - [x] Extend the resident Supervisor Capsule and x86 terminal proof.
 - [x] Update both README languages and milestone references.
-- [ ] Run full validation, audit binary evidence, publish public `main`, and
+- [x] Run full validation, audit binary evidence, publish public `main`, and
   keep the complete Agent Kernel goal active.
