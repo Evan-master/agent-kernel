@@ -16,4 +16,4 @@
 - [x] Update both README languages and milestone references.
 - [x] Run full workspace, Supervisor, bare-metal, debug QEMU, release QEMU, and
   binary-occurrence validation.
-- [ ] Publish public `main` and keep the complete Agent Kernel goal active.
+- [x] Publish public `main` and keep the complete Agent Kernel goal active.

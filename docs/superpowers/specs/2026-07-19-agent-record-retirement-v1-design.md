@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented and locally validated on 2026-07-19. Public `main` publication is
-tracked in the adjacent implementation plan.
+Implemented, fully validated, and published to public `main` on 2026-07-19 in
+feature commit `70ea153`.
 
 ## Purpose
 
