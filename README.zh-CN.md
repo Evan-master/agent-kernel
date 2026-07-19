@@ -52,6 +52,9 @@ Agent 为中心的系统需要不同的控制面：
   重建、CPU 准备和运行时登记纳入同一个事务式准入流程；
 - 固定容量 Runtime Admission 对象，支持根作用域 `Delegate` 授权、FIFO 请求准备、
   代数绑定 Permit、有界拒绝原因，以及准入和 Task 入队的原子提交；
+- 独立配置的 Runtime Admission 容量，默认跟随 Task 容量以保持源码兼容；x86
+  参考配置为 12 个 Task 提供 16 个 Admission 槽位，终态拒绝记录允许使用单调
+  递增 ID 重试，并保留历史证据直至压缩；
 - Agent Call 27 与真实 ring-3 Admission Supervisor Capsule，分两轮创建四条可审计
   Runtime Admission 请求，两次阻塞在 Mailbox，并在两个批次期间持续持有同一个
   CPU 与地址空间上下文；
@@ -102,6 +105,8 @@ Agent 为中心的系统需要不同的控制面：
 | Runtime Service Worker Agent Call | 20 |
 | Runtime Service Worker Agent/内核地址空间切换 | 40 |
 | 真实物理时间片到期 | 15 |
+| Task Store 容量 | 12 |
+| Runtime Admission Store 容量 | 16 |
 | Runtime Admission 请求 | 4 |
 | Runtime Admission 提交 | 4 |
 | Runtime Admission requester discovery | 4 |
@@ -274,6 +279,7 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
+AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
@@ -335,8 +341,8 @@ SUPERVISOR_HANDOFF_READY
 - 从回收池分配绑定 Agent 和代数的完整 11 帧身份，并由事务式运行时服务负责私有
   页表层级重建、CPU 准备和原生运行时登记；
 - ring-3 Admission Supervisor、受认证 Agent Call 27 至 29、固定容量准入记录、
-  代数绑定 Permit、requester 绑定的准入上下文，以及连接可审计语义请求和物理
-  运行时服务的 Broker；
+  独立容量配置、终态重试、代数绑定 Permit、requester 绑定的准入上下文，以及
+  连接可审计语义请求和物理运行时服务的 Broker；
 - 跨越两个准入与执行批次的常驻 Supervisor Mailbox 等待、受认证 Worker 通知、
   FIFO 确认、第一批 Worker 局部回收和最终三个地址空间回收；
 - 使用不透明、代数绑定的批量释放 Permit，把已验证且空闲的 Task 连接到物理回收
@@ -350,7 +356,7 @@ SUPERVISOR_HANDOFF_READY
 ### 后续规划
 
 - 超出固定私有层级的动态页表增长；
-- 独立的 Runtime Admission 容量，以及超过 Task Store 容量的活跃准入队列；
+- 支持长期准入循环的 Task Store 退休与身份复用；
 - SMP 调度、多核同步和硬件 TLB Shootdown；
 - 通用存储、网络、图形、USB 或真实硬件支持；
 - 面向分发与升级的 Agent 包和应用格式；
@@ -358,8 +364,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [Runtime Admission 压缩设计](docs/superpowers/specs/2026-07-19-runtime-admission-compaction-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-19-runtime-admission-compaction-v1.md)。
+最新里程碑的完整契约见 [Runtime Admission 容量设计](docs/superpowers/specs/2026-07-19-runtime-admission-capacity-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-19-runtime-admission-capacity-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献

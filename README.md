@@ -66,6 +66,10 @@ currently provides:
 - a fixed-capacity Runtime Admission object with root-scoped `Delegate`
   authorization, FIFO request preparation, generation-bound permits, bounded
   rejection causes, and atomic admission plus Task queueing;
+- an independently configured Runtime Admission capacity, defaulted to the Task
+  capacity for source compatibility; the x86 profile provisions 16 Admission
+  slots for 12 Tasks, and terminal rejections permit monotonic-ID retries while
+  retaining prior evidence until compaction;
 - Agent Call 27 and a real ring-3 Admission Supervisor Capsule that creates four
   audited Runtime Admission requests across two rounds, blocks twice in its
   Mailbox, and retains one CPU/address-space context throughout both batches;
@@ -125,6 +129,8 @@ The reference validation profile enforces these deterministic invariants:
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
+| Task store capacity | 12 |
+| Runtime Admission store capacity | 16 |
 | Runtime Admission requests | 4 |
 | Runtime Admission commits | 4 |
 | Runtime Admission requester discoveries | 4 |
@@ -309,6 +315,7 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
+AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
@@ -376,9 +383,9 @@ authority.
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
 - a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 29,
-  fixed-capacity admission records, generation-bound permits, requester-bound
-  admitted contexts, and a broker that connects audited semantic requests to
-  the physical runtime service;
+  independently configured fixed-capacity admission records, terminal retry,
+  generation-bound permits, requester-bound admitted contexts, and a broker
+  that connects audited semantic requests to the physical runtime service;
 - resident Supervisor Mailbox waiting across two admission and execution
   batches, authenticated Worker notifications, FIFO acknowledgement, partial
   Worker reclamation, and final three-address-space reclamation;
@@ -394,8 +401,7 @@ authority.
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- a dedicated Runtime Admission capacity and an active queue larger than the
-  Task store;
+- Task-store retirement and identity reuse for long-running admission loops;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -403,8 +409,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Runtime Admission Compaction design](docs/superpowers/specs/2026-07-19-runtime-admission-compaction-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-runtime-admission-compaction-v1.md)
+See the current [Runtime Admission Capacity design](docs/superpowers/specs/2026-07-19-runtime-admission-capacity-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-runtime-admission-capacity-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
