@@ -707,6 +707,37 @@ admission_supervisor_capability_revoke_return:
     test rbp, rbp
     jne .halt
 
+    mov ecx, 42
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 13
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_capability_cleanup_revocation_return
+admission_supervisor_capability_cleanup_revocation_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 42
+    jne .halt
+    cmp r10, 13
+    jne .halt
+    cmp r11, 3
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
     mov ecx, 32
     xor edx, edx
     mov r10d, 23
@@ -741,7 +772,7 @@ admission_supervisor_first_capability_compaction_return:
     mov ecx, 32
     xor edx, edx
     mov r10d, 23
-    mov r11d, 26
+    mov r11d, 13
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -754,69 +785,38 @@ admission_supervisor_second_capability_compaction_return:
     jne .halt
     cmp rdx, 32
     jne .halt
+    cmp r10, 13
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
+    mov ecx, 32
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 26
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_third_capability_compaction_return
+admission_supervisor_third_capability_compaction_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 32
+    jne .halt
     cmp r10, 26
-    jne .halt
-    test r11, r11
-    jne .halt
-    test r12, r12
-    jne .halt
-    test r13, r13
-    jne .halt
-    test r14, r14
-    jne .halt
-    test r15, r15
-    jne .halt
-    test rbp, rbp
-    jne .halt
-
-    mov ecx, 12
-    xor edx, edx
-    mov r10d, 23
-    mov r11d, 12
-    mov r12d, 32
-    xor r13d, r13d
-    xor r14d, r14d
-    xor r15d, r15d
-    xor ebp, ebp
-    int 0x90
-.global admission_supervisor_first_capability_reuse_return
-admission_supervisor_first_capability_reuse_return:
-    test rcx, rcx
-    jne .halt
-    cmp rdx, 12
-    jne .halt
-    cmp r10, 27
-    jne .halt
-    test r11, r11
-    jne .halt
-    test r12, r12
-    jne .halt
-    test r13, r13
-    jne .halt
-    test r14, r14
-    jne .halt
-    test r15, r15
-    jne .halt
-    test rbp, rbp
-    jne .halt
-
-    mov ecx, 12
-    xor edx, edx
-    mov r10d, 23
-    mov r11d, 12
-    mov r12d, 16
-    xor r13d, r13d
-    xor r14d, r14d
-    xor r15d, r15d
-    xor ebp, ebp
-    int 0x90
-.global admission_supervisor_second_capability_reuse_return
-admission_supervisor_second_capability_reuse_return:
-    test rcx, rcx
-    jne .halt
-    cmp rdx, 12
-    jne .halt
-    cmp r10, 28
     jne .halt
     test r11, r11
     jne .halt
@@ -864,6 +864,130 @@ admission_supervisor_event_archive_return:
     jne .halt
     movabs r12, 0x67bfda0e7b2892b6
     cmp rbp, r12
+    jne .halt
+
+    mov ecx, 41
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 3
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_resource_record_retirement_return
+admission_supervisor_resource_record_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 41
+    jne .halt
+    cmp r10, 3
+    jne .halt
+    cmp r11, 3
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    cmp r13, 8
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
+    mov ecx, 10
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 1
+    mov r12d, 3
+    mov r13d, 1
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_resource_reuse_return
+admission_supervisor_resource_reuse_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 10
+    jne .halt
+    cmp r10, 8
+    jne .halt
+    cmp r11, 27
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
+    mov ecx, 12
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 12
+    mov r12d, 32
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_first_capability_reuse_return
+admission_supervisor_first_capability_reuse_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 12
+    jne .halt
+    cmp r10, 28
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
+    mov ecx, 12
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 12
+    mov r12d, 16
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_second_capability_reuse_return
+admission_supervisor_second_capability_reuse_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 12
+    jne .halt
+    cmp r10, 29
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
     jne .halt
 
     mov ecx, 4

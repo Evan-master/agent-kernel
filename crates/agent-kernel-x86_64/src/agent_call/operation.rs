@@ -46,4 +46,6 @@ pub enum AgentCallOperation {
     CompactWaiters,
     CompactFaults,
     ArchiveEvents,
+    RetireResourceRecord,
+    RevokeCapabilityForCleanup,
 }

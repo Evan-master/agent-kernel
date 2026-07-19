@@ -26,6 +26,7 @@ mod agent_record_retirement;
 mod agent_store;
 mod authorization;
 mod capability;
+mod capability_cleanup_revocation;
 mod capability_compaction;
 mod capability_derivation;
 mod capability_revocation;
@@ -87,6 +88,10 @@ mod orphaned_message_retirement;
 mod resource;
 mod resource_cleanup_authorization;
 mod resource_ownership;
+mod resource_record_reference;
+#[cfg(test)]
+mod resource_record_reference_tests;
+mod resource_record_retirement;
 mod resource_store;
 mod run_queue;
 mod runtime_admission;
@@ -151,7 +156,9 @@ pub use message::{
 pub use namespace::{NamespaceEntryRecord, NamespaceKey, NamespaceObject};
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
-pub use resource::{Resource, ResourceCreateOutcome, ResourceKind, ResourceStatus};
+pub use resource::{
+    Resource, ResourceCreateOutcome, ResourceKind, ResourceRecordRetirement, ResourceStatus,
+};
 pub use run_queue::{RunQueueEntry, TaskDispatchPermit};
 pub use runtime_admission::{
     RuntimeAdmissionCompaction, RuntimeAdmissionFailure, RuntimeAdmissionPermit,

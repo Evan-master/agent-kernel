@@ -48,7 +48,9 @@ pub(super) fn prepare(
             report.bootstrap_agent,
             report.bootstrap_capability,
             ADMISSION_SUPERVISOR,
-            OperationSet::only(Operation::Delegate).with(Operation::Rollback),
+            OperationSet::only(Operation::Act)
+                .with(Operation::Delegate)
+                .with(Operation::Rollback),
         )
         .ok()?;
     let image = kernel
@@ -121,7 +123,9 @@ fn prepared_state_valid(booted: &X86BootedKernel, supervisor: AdmissionSuperviso
             if authority.agent == ADMISSION_SUPERVISOR
                 && authority.resource == report.bootstrap_resource
                 && authority.operations
-                    == OperationSet::only(Operation::Delegate).with(Operation::Rollback)
+                    == OperationSet::only(Operation::Act)
+                        .with(Operation::Delegate)
+                        .with(Operation::Rollback)
                 && !authority.revoked
                 && authority.task.is_none()
                 && authority.parent == Some(report.bootstrap_capability))

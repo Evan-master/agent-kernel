@@ -93,6 +93,9 @@ pub fn format_event(event: &Event) -> String {
         }
         EventKind::ResourceCreated => format_capability_event(event, "resource_created"),
         EventKind::ResourceRetired => format_capability_event(event, "resource_retired"),
+        EventKind::ResourceRecordRetired => {
+            format_capability_event(event, "resource_record_retired")
+        }
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
         EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),

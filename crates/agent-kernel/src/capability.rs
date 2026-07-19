@@ -92,6 +92,16 @@ impl<
             .revoke_derived_capability(actor, source_capability, target_capability)
     }
 
+    pub fn sys_revoke_capability_for_cleanup(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        target: CapabilityId,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .revoke_capability_for_cleanup(actor, authority, target)
+    }
+
     pub fn capability(&self, capability: CapabilityId) -> Result<Capability, KernelError> {
         self.core.capability(capability)
     }

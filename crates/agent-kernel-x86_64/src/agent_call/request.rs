@@ -326,6 +326,22 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         through_sequence: u64,
     },
+    RetireResourceRecord {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        target: ResourceId,
+    },
+    RevokeCapabilityForCleanup {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        target: CapabilityId,
+    },
 }
 
 impl AgentCallRequest {
@@ -371,6 +387,10 @@ impl AgentCallRequest {
             Self::CompactWaiters { .. } => AgentCallOperation::CompactWaiters,
             Self::CompactFaults { .. } => AgentCallOperation::CompactFaults,
             Self::ArchiveEvents { .. } => AgentCallOperation::ArchiveEvents,
+            Self::RetireResourceRecord { .. } => AgentCallOperation::RetireResourceRecord,
+            Self::RevokeCapabilityForCleanup { .. } => {
+                AgentCallOperation::RevokeCapabilityForCleanup
+            }
         }
     }
 }

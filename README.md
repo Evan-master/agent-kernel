@@ -127,10 +127,20 @@ currently provides:
   authority to prepare and commit a dense Event prefix archive, retain a
   chained SHA-256 checkpoint, preserve monotonic Event sequence numbers, and
   recover capacity even when the live Event Log is full;
+- Agent Call 41, which lets a launched Supervisor retire one terminal,
+  unreferenced Resource record through active ancestor `Rollback` authority,
+  return its dense Store slot, preserve monotonic Resource IDs, and emit a
+  complete fixed-width receipt plus ordered audit Event;
+- Agent Call 42, which lets a launched Supervisor revoke residual authority on
+  a retired Resource through active ancestor `Rollback` authority, enabling
+  leaf-first Capability cleanup before Resource record retirement;
 - a 64-record architecture archive handoff that captures Events 1 through 64
   while all 357 live Event slots are occupied, verifies the checkpoint in
   ring 3, resumes execution at Event 358, and later merges archived and live
-  iterators into the exact Event 1 through 378 transcript;
+  iterators into the exact Event 1 through 383 transcript;
+- a seven-slot Resource Store recovery proof that cleanup-revokes Capability
+  13, compacts Capabilities 14, 13, and 26 in child-first order, retires
+  Resource record 3, then creates monotonic Resource 8 in the returned slot;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -201,8 +211,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 34 |
 | Resource Manager Agent/kernel address-space switches | 68 |
-| Admission Supervisor Agent Calls | 34 |
-| Admission Supervisor Agent/kernel address-space switches | 68 |
+| Admission Supervisor Agent Calls | 38 |
+| Admission Supervisor Agent/kernel address-space switches | 76 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -252,20 +262,23 @@ The reference validation profile enforces these deterministic invariants:
 | Native address-space reclamation completions | 11 |
 | Cumulative terminal private-frame returns | 121 |
 | Final zeroed private address-space frame pool | 66 |
-| Resources after Manager execution | 7 |
+| Resource store capacity | 7 |
+| Occupied Resource records after retirement and reuse | 7 |
+| Retired Resource records | 1 |
+| Reused Resource slots | 1 |
 | Capability store capacity | 26 |
 | Occupied Capability slots after compaction and reuse | 26 |
-| Compacted Capability records | 2 |
-| Reused Capability slots | 2 |
+| Compacted Capability records | 3 |
+| Reused Capability slots | 3 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
 | Live Event Log capacity | 357 |
 | Live Event occupancy before archive | 357 |
 | Events in the architecture archive | 64 |
-| Final live Event occupancy | 314 |
-| Final next Event sequence | 379 |
+| Final live Event occupancy | 319 |
+| Final next Event sequence | 384 |
 | Retained Event archive checkpoints | 1 |
-| Ordered kernel events after Driver completion | 378 |
+| Ordered kernel events after Driver completion | 383 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -277,7 +290,7 @@ artifacts:
 | Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
 | Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
-| Admission Supervisor | 34 | 68 | 3,330 | `4f332e0bc22b8039b822ea4ab0a1f6600dc83a132a7267368e2a0bbde210e68c` |
+| Admission Supervisor | 38 | 76 | 3,797 | `12d8f989d16454ce12d6de369033f00d70717ba8d7abee400168ca5610047b0b` |
 
 The generated Rust bytes match independently assembled machine code, and each
 complete Capsule occurs exactly once in the release ELF.
@@ -303,7 +316,7 @@ flowchart TB
     X86 --> Archive["Bounded external Event archive"]
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-40"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-42"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -375,10 +388,14 @@ and nonce state before it reaches the facade.
 | `CompactWaiters` | 38 | Retire an authorized inactive prefix from the dense Waiter Store |
 | `CompactFaults` | 39 | Retire an authorized recovered prefix from the dense Fault Store |
 | `ArchiveEvents` | 40 | Commit an authenticated Event prefix handoff and return its chained digest |
+| `RetireResourceRecord` | 41 | Retire one unreferenced terminal Resource record from the dense Resource Store |
+| `RevokeCapabilityForCleanup` | 42 | Revoke residual authority on a retired Resource through active ancestor authority |
 
-The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
-Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
-stale nonces, wrong identities, and non-zero reserved registers fail closed.
+The native Resource creation ABI accepts AgentOS-oriented Workspace, Memory,
+Service, Network, and Device kinds. Resource retirement replies also encode
+File and Process records already retained by Core. Unknown creation kinds,
+unknown operation bits, zero handles, stale nonces, wrong identities, and
+non-zero reserved registers fail closed.
 The Task Manager ABI accepts the five native Intent kinds and explicit optional
 or required verification policy codes. Agent management requires an active,
 root-scoped `Delegate` Capability on the identity's management Resource. The
@@ -474,6 +491,19 @@ records the actor, authority, root Resource, range, count, predecessor digest,
 and resulting digest. The x86 reply returns the range, count, and four
 little-endian digest words without userspace pointers; the generation remains
 part of the retained Core checkpoint.
+Operation 41 requires a launched Supervisor, a `Retired` target Resource, and
+active ancestor `Rollback` authority. The transaction rejects every retained
+non-Event reference, reserves one Event slot, removes the target in stable
+dense order, leaves the monotonic Resource allocator unchanged, and returns
+the complete removed record with `ResourceRecordRetired` audit evidence. The
+x86 reply carries the Resource identity, stable kind code, optional parent,
+and optional owner in fixed registers.
+Operation 42 requires a launched Supervisor and active, task-unscoped
+`Rollback` authority scoped to an ancestor in the retired target's immutable
+Resource chain. It revokes one residual Capability after complete validation
+and emits `CapabilityRevoked` with the cleanup authority and `Rollback`
+operation. Existing leaf-first Capability compaction then returns the sparse
+slot before operation 41 removes the Resource record.
 
 ## Quick Start
 
@@ -510,7 +540,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 378 events, and treat
+validate the complete serial transcript, require exactly 383 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -542,6 +572,8 @@ AGENT_KERNEL_AGENT_CALL_AGENT_IMAGE_RECORD_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_EVENT_ARCHIVE_OK
+AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK
+AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -565,6 +597,9 @@ AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK
 AGENT_KERNEL_NATIVE_EVENT_LOG_FULL_OK
 AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_OK
 AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
+AGENT_KERNEL_NATIVE_CAPABILITY_CLEANUP_REVOCATION_OK
+AGENT_KERNEL_NATIVE_RESOURCE_RECORD_RETIREMENT_OK
+AGENT_KERNEL_NATIVE_RESOURCE_STORE_REUSE_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK
@@ -580,7 +615,16 @@ event[340] fault_compacted
 event[341] fault_compacted
 event[342] fault_compacted
 event[343] fault_compacted
-event[378] driver_invocation_completed
+event[354] capability_revoked
+event[355] capability_compacted
+event[356] capability_compacted
+event[357] capability_compacted
+event[358] resource_record_retired
+event[359] resource_created
+event[360] capability_granted
+event[361] capability_derived
+event[362] capability_derived
+event[383] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -626,7 +670,7 @@ authority.
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
 - a ring-3 Admission Supervisor, authenticated Agent Call 27 and Calls 29
-  through 40,
+  through 42,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -647,6 +691,12 @@ authority.
 - authorized sparse Capability compaction with leaf-first ordering, live
   reference preflight, retired-Resource ancestor authority, monotonic IDs, hole
   reuse, and complete per-Capability Events;
+- Supervisor-only residual Capability revocation on retired Resources through
+  active ancestor `Rollback` authority, followed by leaf-first sparse cleanup;
+- authorized dense Resource record retirement with terminal-state and complete
+  non-Event reference preflight, active ancestor authority, monotonic IDs,
+  stable retained order, fixed-width receipts, slot reuse, and complete Event
+  evidence;
 - authorized dense Agent Entry retirement with terminal-scope checks, native
   runtime and live-reference preflight, retired-Resource ancestor authority,
   stable retained-record order, same-identity relaunch, and complete retirement
@@ -676,11 +726,11 @@ authority.
 - two-phase Event prefix archival with canonical full-field SHA-256 encoding,
   root Supervisor authorization, stable live-prefix release, monotonic Event
   sequencing, chained checkpoints, a bounded x86 handoff buffer, and exact
-  archived/live replay through Event 378;
+  archived/live replay through Event 383;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 378-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 383-event reference profile.
 
 ### Planned
 
@@ -694,8 +744,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Event Archive Checkpoint design](docs/superpowers/specs/2026-07-19-event-archive-checkpoint-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-event-archive-checkpoint-v1.md)
+See the current [Resource Record Retirement design](docs/superpowers/specs/2026-07-19-resource-record-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-resource-record-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

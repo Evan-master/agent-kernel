@@ -10,6 +10,7 @@ mod agent_image_record_retirement;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
+mod capability_cleanup_revocation;
 mod capability_compaction;
 mod context;
 mod event_archive;
@@ -21,6 +22,7 @@ mod memory_region;
 mod operation;
 mod request;
 mod resource;
+mod resource_record_retirement;
 mod runtime_admission;
 mod task_compaction;
 mod task_lifecycle;
@@ -79,6 +81,8 @@ pub const AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD: u64 = 37;
 pub const AGENT_CALL_COMPACT_WAITERS: u64 = 38;
 pub const AGENT_CALL_COMPACT_FAULTS: u64 = 39;
 pub const AGENT_CALL_ARCHIVE_EVENTS: u64 = 40;
+pub const AGENT_CALL_RETIRE_RESOURCE_RECORD: u64 = 41;
+pub const AGENT_CALL_REVOKE_CAPABILITY_FOR_CLEANUP: u64 = 42;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -90,6 +94,8 @@ pub const AGENT_CALL_RESOURCE_MEMORY: u64 = 2;
 pub const AGENT_CALL_RESOURCE_SERVICE: u64 = 3;
 pub const AGENT_CALL_RESOURCE_NETWORK: u64 = 4;
 pub const AGENT_CALL_RESOURCE_DEVICE: u64 = 5;
+pub const AGENT_CALL_RESOURCE_FILE: u64 = 6;
+pub const AGENT_CALL_RESOURCE_PROCESS: u64 = 7;
 pub const AGENT_CALL_INTENT_OBSERVE: u64 = 1;
 pub const AGENT_CALL_INTENT_ACT: u64 = 2;
 pub const AGENT_CALL_INTENT_VERIFY: u64 = 3;
@@ -151,6 +157,10 @@ impl AgentCallRequest {
             AGENT_CALL_COMPACT_WAITERS => AgentCallOperation::CompactWaiters,
             AGENT_CALL_COMPACT_FAULTS => AgentCallOperation::CompactFaults,
             AGENT_CALL_ARCHIVE_EVENTS => AgentCallOperation::ArchiveEvents,
+            AGENT_CALL_RETIRE_RESOURCE_RECORD => AgentCallOperation::RetireResourceRecord,
+            AGENT_CALL_REVOKE_CAPABILITY_FOR_CLEANUP => {
+                AgentCallOperation::RevokeCapabilityForCleanup
+            }
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -264,6 +274,10 @@ impl AgentCallRequest {
             AgentCallOperation::CompactWaiters => waiter_compaction::decode(frame),
             AgentCallOperation::CompactFaults => fault_compaction::decode(frame),
             AgentCallOperation::ArchiveEvents => event_archive::decode(frame),
+            AgentCallOperation::RetireResourceRecord => resource_record_retirement::decode(frame),
+            AgentCallOperation::RevokeCapabilityForCleanup => {
+                capability_cleanup_revocation::decode(frame)
+            }
         }
     }
 }

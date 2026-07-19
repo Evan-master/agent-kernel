@@ -48,6 +48,7 @@ pub enum EventKind {
     DriverInvocationCompleted,
     ResourceCreated,
     ResourceRetired,
+    ResourceRecordRetired,
     CapabilityGranted,
     CapabilityDerived,
     CapabilityRevoked,

@@ -50,6 +50,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::DriverCommandFailed => "driver_command_failed",
         EventKind::ResourceCreated => "resource_created",
         EventKind::ResourceRetired => "resource_retired",
+        EventKind::ResourceRecordRetired => "resource_record_retired",
         EventKind::CapabilityGranted => "capability_granted",
         EventKind::CapabilityDerived => "capability_derived",
         EventKind::CapabilityRevoked => "capability_revoked",

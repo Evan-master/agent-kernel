@@ -7,6 +7,7 @@ mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod release;
+mod resource_record_retirement;
 mod task_compaction;
 mod terminal;
 mod waiter_compaction;

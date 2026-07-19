@@ -6,7 +6,7 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, Event, KernelError, OperationSet, Resource, ResourceCreateOutcome,
-    ResourceId, ResourceKind,
+    ResourceId, ResourceKind, ResourceRecordRetirement,
 };
 
 use crate::AgentKernel;
@@ -96,6 +96,15 @@ impl<
         resource: ResourceId,
     ) -> Result<(), KernelError> {
         self.core.can_retire_resource(agent, capability, resource)
+    }
+
+    pub fn sys_retire_resource_record(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        target: ResourceId,
+    ) -> Result<ResourceRecordRetirement, KernelError> {
+        self.core.retire_resource_record(actor, authority, target)
     }
 
     pub fn resources(&self) -> &[Resource] {

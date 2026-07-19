@@ -117,7 +117,9 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK" \
   "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_EVENT_ARCHIVE_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
@@ -134,7 +136,10 @@ for expected in \
   "AGENT_KERNEL_NATIVE_FAULT_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" \
+  "AGENT_KERNEL_NATIVE_CAPABILITY_CLEANUP_REVOCATION_OK" \
   "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_RECORD_RETIREMENT_OK" \
+  "AGENT_KERNEL_NATIVE_RESOURCE_STORE_REUSE_OK" \
   "AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK" \
   "AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_EVENT_LOG_FULL_OK" \
@@ -515,31 +520,36 @@ for expected in \
   "event[351] agent_entry_retired" \
   "event[352] capability_derived" \
   "event[353] capability_revoked" \
-  "event[354] capability_compacted" \
+  "event[354] capability_revoked" \
   "event[355] capability_compacted" \
-  "event[356] capability_derived" \
-  "event[357] capability_derived" \
-  "event[358] task_result_submitted" \
-  "event[359] task_completed" \
-  "event[360] task_verified" \
-  "event[361] intent_fulfilled" \
-  "event[362] task_verified" \
-  "event[363] intent_fulfilled" \
-  "event[364] task_verified" \
-  "event[365] intent_fulfilled" \
-  "event[366] runtime_admission_released" \
-  "event[367] runtime_admission_released" \
-  "event[368] agent_image_registered" \
-  "event[369] device_event_raised" \
-  "event[370] device_event_delivered" \
-  "event[371] driver_invocation_queued" \
-  "event[372] driver_invocation_dispatched" \
-  "event[373] driver_invocation_ticked" \
-  "event[374] device_event_acknowledged" \
-  "event[375] driver_command_submitted" \
-  "event[376] driver_command_dispatched" \
-  "event[377] driver_command_completed" \
-  "event[378] driver_invocation_completed" \
+  "event[356] capability_compacted" \
+  "event[357] capability_compacted" \
+  "event[358] resource_record_retired" \
+  "event[359] resource_created" \
+  "event[360] capability_granted" \
+  "event[361] capability_derived" \
+  "event[362] capability_derived" \
+  "event[363] task_result_submitted" \
+  "event[364] task_completed" \
+  "event[365] task_verified" \
+  "event[366] intent_fulfilled" \
+  "event[367] task_verified" \
+  "event[368] intent_fulfilled" \
+  "event[369] task_verified" \
+  "event[370] intent_fulfilled" \
+  "event[371] runtime_admission_released" \
+  "event[372] runtime_admission_released" \
+  "event[373] agent_image_registered" \
+  "event[374] device_event_raised" \
+  "event[375] device_event_delivered" \
+  "event[376] driver_invocation_queued" \
+  "event[377] driver_invocation_dispatched" \
+  "event[378] driver_invocation_ticked" \
+  "event[379] device_event_acknowledged" \
+  "event[380] driver_command_submitted" \
+  "event[381] driver_command_dispatched" \
+  "event[382] driver_command_completed" \
+  "event[383] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -549,8 +559,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 378 ]]; then
-  printf 'expected exactly 378 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 383 ]]; then
+  printf 'expected exactly 383 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -568,6 +578,8 @@ check_marker_count() {
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" 4
 check_marker_count "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" 3
 check_marker_count "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ORPHANED_MESSAGE_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK" 1
@@ -609,8 +621,11 @@ check_marker_count "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" 1
-check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 3
+check_marker_count "AGENT_KERNEL_NATIVE_CAPABILITY_CLEANUP_REVOCATION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RESOURCE_RECORD_RETIREMENT_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RESOURCE_STORE_REUSE_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK" 1

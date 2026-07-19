@@ -39,6 +39,7 @@ pub(super) const fn event_kind(value: EventKind) -> u16 {
         EventKind::DriverInvocationCompleted => 30,
         EventKind::ResourceCreated => 31,
         EventKind::ResourceRetired => 32,
+        EventKind::ResourceRecordRetired => 85,
         EventKind::CapabilityGranted => 33,
         EventKind::CapabilityDerived => 34,
         EventKind::CapabilityRevoked => 35,

@@ -9,6 +9,7 @@ mod agent_image_record_retirement;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
+mod capability_cleanup_revocation;
 mod capability_compaction;
 mod event_archive;
 mod fault_compaction;
@@ -18,6 +19,7 @@ mod memory_authority;
 mod memory_page;
 mod memory_region;
 mod resource;
+mod resource_record_retirement;
 mod runtime_admission;
 mod task;
 mod task_compaction;
@@ -146,6 +148,12 @@ pub(super) fn run(
                 through_sequence,
                 ..
             } => event_archive::archive(booted, report, pending, authority, through_sequence)?,
+            AgentCallRequest::RetireResourceRecord {
+                authority, target, ..
+            } => resource_record_retirement::retire(booted, pending, authority, target)?,
+            AgentCallRequest::RevokeCapabilityForCleanup {
+                authority, target, ..
+            } => capability_cleanup_revocation::revoke(booted, pending, authority, target)?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,
