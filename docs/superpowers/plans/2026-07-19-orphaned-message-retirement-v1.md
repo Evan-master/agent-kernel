@@ -13,5 +13,5 @@
 - [x] Freeze strict QEMU sequence, counts, binary artifact, and release-ELF
   occurrence.
 - [x] Update both README languages and milestone references.
-- [ ] Run full validation, publish public `main`, and keep the complete Agent
+- [x] Run full validation, publish public `main`, and keep the complete Agent
   Kernel goal active.
