@@ -47,11 +47,12 @@ pub(crate) const X86_CAPABILITY_CAPACITY: usize = 26;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
 pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) const X86_FAULT_CAPACITY: usize = 4;
+pub(crate) const X86_EVENT_CAPACITY: usize = 357;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     7,
     X86_CAPABILITY_CAPACITY,
-    378,
+    X86_EVENT_CAPACITY,
     1,
     1,
     0,

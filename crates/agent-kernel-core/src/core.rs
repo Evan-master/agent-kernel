@@ -5,9 +5,10 @@
 use crate::{
     ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord, AgentRecord,
     Capability, CheckpointRecord, DeviceEventRecord, DriverBindingRecord, DriverCommandRecord,
-    DriverEndpointRecord, DriverInvocationRecord, Event, FaultHandlerRecord, FaultPolicyRecord,
-    FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord,
-    Resource, RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
+    DriverEndpointRecord, DriverInvocationRecord, Event, EventArchiveCheckpoint,
+    FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord,
+    NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, RuntimeAdmissionRecord, Task,
+    WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -44,6 +45,7 @@ pub struct KernelCore<
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
     pub(crate) events: [Event; EVENTS],
+    pub(crate) event_archive_checkpoint: Option<EventArchiveCheckpoint>,
     pub(crate) actions: [ActionRecord; ACTIONS],
     pub(crate) observations: [ObservationRecord; OBSERVATIONS],
     pub(crate) checkpoints: [CheckpointRecord; CHECKPOINTS],
@@ -171,6 +173,7 @@ impl<
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
             events: [Event::empty(); EVENTS],
+            event_archive_checkpoint: None,
             actions: [ActionRecord::empty(); ACTIONS],
             observations: [ObservationRecord::empty(); OBSERVATIONS],
             checkpoints: [CheckpointRecord::empty(); CHECKPOINTS],

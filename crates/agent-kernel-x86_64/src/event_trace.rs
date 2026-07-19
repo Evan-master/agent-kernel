@@ -7,7 +7,7 @@ use agent_kernel_core::{Event, EventKind};
 
 use crate::{serial_write_line, serial_write_str, serial_write_u64};
 
-pub(super) fn write(events: &[Event]) {
+pub(super) fn write<'a>(events: impl IntoIterator<Item = &'a Event>) {
     for event in events {
         serial_write_str("event[");
         serial_write_u64(event.sequence);

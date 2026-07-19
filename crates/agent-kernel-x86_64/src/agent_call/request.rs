@@ -318,6 +318,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         through: FaultId,
     },
+    ArchiveEvents {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        through_sequence: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -362,6 +370,7 @@ impl AgentCallRequest {
             Self::RetireAgentImageRecord { .. } => AgentCallOperation::RetireAgentImageRecord,
             Self::CompactWaiters { .. } => AgentCallOperation::CompactWaiters,
             Self::CompactFaults { .. } => AgentCallOperation::CompactFaults,
+            Self::ArchiveEvents { .. } => AgentCallOperation::ArchiveEvents,
         }
     }
 }

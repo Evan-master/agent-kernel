@@ -9,6 +9,7 @@ mod agent_image_record_retirement;
 mod agent_management;
 mod agent_record_retirement;
 mod capability_compaction;
+mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod memory_page;

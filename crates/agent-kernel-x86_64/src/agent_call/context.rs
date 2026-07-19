@@ -11,6 +11,7 @@ mod agent_record_retirement;
 mod authentication;
 mod capability;
 mod capability_compaction;
+mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod mailbox;

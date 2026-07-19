@@ -270,7 +270,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fatal_boot("AGENT_KERNEL_TASK_PREFIX_VERIFICATION_ERROR");
     }
     serial_write_line("AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK");
-    if address_space_reuse::run(
+    let Some(event_archive) = address_space_reuse::run(
         &mut booted,
         &mut native_runtime,
         &mut runtime_memory_pool,
@@ -278,11 +278,9 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         &cpu_runtime,
         reuse_worker_image,
         admission_supervisor_image,
-    )
-    .is_none()
-    {
+    ) else {
         fatal_boot("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_ERROR");
-    }
+    };
     serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURN_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK");
@@ -291,6 +289,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK");
     complete_driver_flow(&mut booted, driver_setup);
+    if !event_archive.proves_terminal_replay(&booted) {
+        fatal_boot("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK");
+    event_trace::write(event_archive.events());
     event_trace::write(booted.kernel().events());
     serial_write_line("SUPERVISOR_HANDOFF_READY");
     exit_qemu(0x10);

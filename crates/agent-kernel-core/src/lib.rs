@@ -50,6 +50,9 @@ mod driver_invocation_tick;
 mod driver_runtime_event;
 mod error;
 mod event;
+mod event_archive;
+mod event_archive_checkpoint;
+mod event_archive_digest;
 mod event_log;
 mod fault;
 mod fault_compaction;
@@ -129,6 +132,7 @@ pub use driver_endpoint::{DriverEndpointDescriptor, DriverEndpointKind, DriverEn
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
 pub use error::KernelError;
 pub use event::{Event, EventKind};
+pub use event_archive::{EventArchiveCheckpoint, EventArchiveDigest, EventArchiveProposal};
 pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};

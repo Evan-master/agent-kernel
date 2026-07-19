@@ -6,6 +6,7 @@
 
 mod address_space_reclamation;
 mod calls;
+mod event_archive;
 mod evidence;
 mod memory_reclamation;
 mod state;
@@ -20,6 +21,8 @@ use crate::{
     X86BootedKernel,
 };
 
+pub(crate) use event_archive::{NativeEventArchive, NATIVE_EVENT_ARCHIVE_CAPACITY};
+
 const NATIVE_TASK_QUANTUM: u64 = 1;
 const COMPLETED_AGENT_CAPACITY: usize = 6;
 const FAULTED_AGENT_CAPACITY: usize = 1;
@@ -33,6 +36,7 @@ pub(crate) struct NativeVerifyAuthority {
 pub(crate) struct NativeExecutionReport {
     completed: NativeAgentRuntimeStore<CompletedAgentCpu, COMPLETED_AGENT_CAPACITY>,
     faulted: NativeAgentRuntimeStore<FaultedAgentCpu, FAULTED_AGENT_CAPACITY>,
+    event_archive: NativeEventArchive,
 }
 
 #[derive(Copy, Clone, Default)]
@@ -268,6 +272,7 @@ impl NativeExecutionReport {
         Self {
             completed: NativeAgentRuntimeStore::new(),
             faulted: NativeAgentRuntimeStore::new(),
+            event_archive: NativeEventArchive::new(),
         }
     }
 

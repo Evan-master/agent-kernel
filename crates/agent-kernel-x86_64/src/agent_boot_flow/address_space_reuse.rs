@@ -16,7 +16,9 @@ use crate::{
     },
     boot_agent_images::{BootAdmissionSupervisorImage, BootReuseWorkerImage},
     native_address_space_service::NativeAddressSpaceService,
-    native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
+    native_agent_executor::{
+        self, NativeEventArchive, NativeExecutionReport, NativeRuntimeEvidence,
+    },
     native_agent_runtime::NativeAgentRuntime,
     reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKER_BATCHES},
     serial_write_line, X86BootedKernel, X86_FAULT_CAPACITY, X86_RUNTIME_ADMISSION_CAPACITY,
@@ -31,7 +33,7 @@ pub(super) fn run(
     cpu_runtime: &AgentCpuRuntime,
     worker_contract: BootReuseWorkerImage,
     supervisor_contract: BootAdmissionSupervisorImage,
-) -> Option<()> {
+) -> Option<NativeEventArchive> {
     if !runtime.is_empty()
         || !booted.kernel().run_queue().is_empty()
         || !memory_pool.all_available_and_zero()
@@ -228,6 +230,8 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_EVENT_LOG_FULL_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
     release::terminal(
@@ -241,7 +245,8 @@ pub(super) fn run(
         supervisor_admission,
         second_admissions,
     )?;
-    prove_agent_image_slot_reuse(booted, worker_contract)
+    prove_agent_image_slot_reuse(booted, worker_contract)?;
+    Some(report.into_event_archive())
 }
 
 fn prove_agent_image_slot_reuse(

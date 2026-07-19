@@ -8,6 +8,7 @@ mod flow_resources;
 mod format;
 mod format_agent;
 mod format_driver;
+mod format_event_archive;
 mod format_fault;
 mod format_signal;
 mod virtual_device;
@@ -22,6 +23,7 @@ use crate::flow_resources::{
     drive_driver_flow, drive_resource_flow, ResourceFlowContext, SupervisorKernel,
 };
 use crate::format::format_event;
+use crate::format_event_archive::format_event_archive_checkpoint;
 
 fn main() {
     let mut kernel = SupervisorKernel::new();
@@ -272,4 +274,11 @@ fn main() {
     for event in kernel.events() {
         println!("{}", format_event(event));
     }
+    let proposal = kernel
+        .sys_prepare_event_archive(64)
+        .expect("event prefix should produce an archive proposal");
+    let checkpoint = kernel
+        .sys_commit_event_archive(agent, owner_capability, proposal)
+        .expect("launched supervisor should commit the event archive");
+    println!("{}", format_event_archive_checkpoint(&checkpoint));
 }

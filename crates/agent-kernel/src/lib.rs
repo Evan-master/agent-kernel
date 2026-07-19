@@ -14,6 +14,7 @@ mod capability;
 mod driver;
 mod driver_endpoint;
 mod driver_runtime;
+mod event_archive;
 mod fault;
 mod fault_compaction;
 mod intent_compaction;
@@ -292,6 +293,10 @@ impl<
 
     pub fn has_event_capacity(&self, needed: usize) -> bool {
         self.core.has_event_capacity(needed)
+    }
+
+    pub const fn next_event_sequence(&self) -> u64 {
+        self.core.next_event_sequence()
     }
 
     pub fn actions(&self) -> &[ActionRecord] {

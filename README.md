@@ -25,11 +25,13 @@ abstractions. An agent-first system needs a different control plane:
   execution unit.
 - **Verification** is separate from successful execution.
 - **Checkpoint** and **Rollback** are first-class lifecycle operations.
-- Every successful mutation produces an ordered **Event** for audit and replay.
+- Every successful mutation produces deterministic audit evidence. Ordinary
+  mutations append an ordered **Event**; Event archive commits advance a
+  cryptographic checkpoint chain so a full log can release capacity safely.
 
 There is no ambient superuser inside the native model. High authority is
 possible, but it must be represented by explicit capabilities and remains
-observable in the event log.
+observable in the audit chain.
 
 ## Current Implementation
 
@@ -121,6 +123,14 @@ currently provides:
   recovered Fault prefix through shared `Rollback` cleanup authority, reject
   live Task or Message references, clear safe Task history pointers, preserve
   monotonic Fault IDs, and emit one complete audit Event per retired Fault;
+- Agent Call 40, which lets a launched Supervisor use root-scoped `Rollback`
+  authority to prepare and commit a dense Event prefix archive, retain a
+  chained SHA-256 checkpoint, preserve monotonic Event sequence numbers, and
+  recover capacity even when the live Event Log is full;
+- a 64-record architecture archive handoff that captures Events 1 through 64
+  while all 357 live Event slots are occupied, verifies the checkpoint in
+  ring 3, resumes execution at Event 358, and later merges archived and live
+  iterators into the exact Event 1 through 378 transcript;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -191,8 +201,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 34 |
 | Resource Manager Agent/kernel address-space switches | 68 |
-| Admission Supervisor Agent Calls | 33 |
-| Admission Supervisor Agent/kernel address-space switches | 66 |
+| Admission Supervisor Agent Calls | 34 |
+| Admission Supervisor Agent/kernel address-space switches | 68 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -249,6 +259,12 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
+| Live Event Log capacity | 357 |
+| Live Event occupancy before archive | 357 |
+| Events in the architecture archive | 64 |
+| Final live Event occupancy | 314 |
+| Final next Event sequence | 379 |
+| Retained Event archive checkpoints | 1 |
 | Ordered kernel events after Driver completion | 378 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
@@ -261,7 +277,7 @@ artifacts:
 | Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
 | Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
-| Admission Supervisor | 33 | 66 | 3,154 | `260768b39dec9e14d895ae0ebf14972114f7ccfb7658058d956df8d99dc3e527` |
+| Admission Supervisor | 34 | 68 | 3,330 | `4f332e0bc22b8039b822ea4ab0a1f6600dc83a132a7267368e2a0bbde210e68c` |
 
 The generated Rust bytes match independently assembled machine code, and each
 complete Capsule occurs exactly once in the release ELF.
@@ -275,7 +291,8 @@ flowchart TB
     X86 --> Facade["agent-kernel syscall facade"]
     Facade --> Core["agent-kernel-core deterministic model"]
     Core --> Stores["Fixed-capacity object stores"]
-    Core --> Events["Ordered event log"]
+    Core --> Events["Bounded live Event Log"]
+    Core --> ArchiveHead["Event archive checkpoint chain head"]
     Core --> Scheduler["Task and Driver scheduler"]
     Scheduler --> Runtime["Native CPU runtime"]
     Runtime --> X86
@@ -283,9 +300,10 @@ flowchart TB
     Broker["Native Runtime Admission broker"] --> AddressService
     Core -->|"Generation-bound permit"| Broker
     AddressService --> Runtime
+    X86 --> Archive["Bounded external Event archive"]
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-39"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-40"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -356,6 +374,7 @@ and nonce state before it reaches the facade.
 | `RetireAgentImageRecord` | 37 | Retire one unreferenced terminal Agent Image record from the dense Image Store |
 | `CompactWaiters` | 38 | Retire an authorized inactive prefix from the dense Waiter Store |
 | `CompactFaults` | 39 | Retire an authorized recovered prefix from the dense Fault Store |
+| `ArchiveEvents` | 40 | Commit an authenticated Event prefix handoff and return its chained digest |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -445,6 +464,16 @@ transaction clears safe Task `last_fault` pointers, removes the prefix in
 stable order, preserves the monotonic Fault allocator, and emits
 `FaultCompacted` with the original Agent, Task, Resource, Fault kind, detail,
 identity, actor, and authority.
+Operation 40 requires a launched Supervisor and an active, task-unscoped,
+root-scoped `Rollback` Capability. Preparation selects a non-empty contiguous
+live prefix without mutation and computes a canonical SHA-256 proposal over
+every Event field, the archive generation, and the previous digest. Commit
+recomputes and compares the full proposal before removing the prefix in stable
+order. The next Event sequence remains monotonic, and a dedicated checkpoint
+records the actor, authority, root Resource, range, count, predecessor digest,
+and resulting digest. The x86 reply returns the range, count, and four
+little-endian digest words without userspace pointers; the generation remains
+part of the retained Core checkpoint.
 
 ## Quick Start
 
@@ -512,6 +541,7 @@ AGENT_KERNEL_AGENT_CALL_AGENT_RECORD_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_AGENT_IMAGE_RECORD_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK
+AGENT_KERNEL_AGENT_CALL_EVENT_ARCHIVE_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -532,6 +562,9 @@ AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK
 AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK
+AGENT_KERNEL_NATIVE_EVENT_LOG_FULL_OK
+AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_OK
+AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK
@@ -593,7 +626,7 @@ authority.
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
 - a ring-3 Admission Supervisor, authenticated Agent Call 27 and Calls 29
-  through 39,
+  through 40,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -640,6 +673,10 @@ authority.
   reference preflight, safe Task-history cleanup, shared Resource cleanup
   authority, stable retained order, monotonic Fault IDs, full Store recovery,
   and complete per-record Event evidence;
+- two-phase Event prefix archival with canonical full-field SHA-256 encoding,
+  root Supervisor authorization, stable live-prefix release, monotonic Event
+  sequencing, chained checkpoints, a bounded x86 handoff buffer, and exact
+  archived/live replay through Event 378;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
@@ -648,7 +685,8 @@ authority.
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- bounded retention and archival policies for Events;
+- durable crash-consistent Event archive storage, signed receipts, and remote
+  transparency logs;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -656,8 +694,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Fault Record Retirement design](docs/superpowers/specs/2026-07-19-fault-record-retirement-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-fault-record-retirement-v1.md)
+See the current [Event Archive Checkpoint design](docs/superpowers/specs/2026-07-19-event-archive-checkpoint-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-event-archive-checkpoint-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

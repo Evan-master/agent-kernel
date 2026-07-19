@@ -831,6 +831,41 @@ admission_supervisor_second_capability_reuse_return:
     test rbp, rbp
     jne .halt
 
+    mov ecx, 40
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 64
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_event_archive_return
+admission_supervisor_event_archive_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 40
+    jne .halt
+    cmp r10, 1
+    jne .halt
+    cmp r11, 64
+    jne .halt
+    cmp r12, 64
+    jne .halt
+    movabs r12, 0x777dc997f787cabc
+    cmp r13, r12
+    jne .halt
+    movabs r12, 0x1494bd12de10a5ee
+    cmp r14, r12
+    jne .halt
+    movabs r12, 0x58277d816695462e
+    cmp r15, r12
+    jne .halt
+    movabs r12, 0x67bfda0e7b2892b6
+    cmp rbp, r12
+    jne .halt
+
     mov ecx, 4
     xor edx, edx
     mov r10d, 0x0a08

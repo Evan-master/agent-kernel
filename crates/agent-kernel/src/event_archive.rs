@@ -1,9 +1,14 @@
-//! Fixed-capacity kernel event log.
+//! Public facade for two-phase Event archive checkpoints.
 //!
-//! This module owns event sequencing and append behavior. It never allocates
-//! and returns explicit capacity errors when the log is full.
+//! This no_std boundary exposes immutable proposal preparation, authorized
+//! commit, and latest-checkpoint inspection while Core retains canonical
+//! hashing, authority validation, and dense Event Store mutation.
 
-use crate::{Event, KernelCore, KernelError};
+use agent_kernel_core::{
+    AgentId, CapabilityId, EventArchiveCheckpoint, EventArchiveProposal, KernelError,
+};
+
+use crate::AgentKernel;
 
 impl<
         const AGENTS: usize,
@@ -30,7 +35,7 @@ impl<
         const DRIVER_INVOCATIONS: usize,
         const RUNTIME_ADMISSIONS: usize,
     >
-    KernelCore<
+    AgentKernel<
         AGENTS,
         RESOURCES,
         CAPS,
@@ -56,34 +61,23 @@ impl<
         RUNTIME_ADMISSIONS,
     >
 {
-    pub fn events(&self) -> &[Event] {
-        &self.events[..self.event_len]
+    pub fn sys_prepare_event_archive(
+        &self,
+        through_sequence: u64,
+    ) -> Result<EventArchiveProposal, KernelError> {
+        self.core.prepare_event_archive(through_sequence)
     }
 
-    pub fn has_event_capacity(&self, needed: usize) -> bool {
-        EVENTS.saturating_sub(self.event_len) >= needed
+    pub fn sys_commit_event_archive(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        proposal: EventArchiveProposal,
+    ) -> Result<EventArchiveCheckpoint, KernelError> {
+        self.core.commit_event_archive(actor, authority, proposal)
     }
 
-    pub const fn next_event_sequence(&self) -> u64 {
-        self.next_sequence
-    }
-
-    pub(crate) fn ensure_event_slots(&self, needed: usize) -> Result<(), KernelError> {
-        if !self.has_event_capacity(needed) {
-            Err(KernelError::EventLogFull)
-        } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) fn record(&mut self, event: Event) -> Result<Event, KernelError> {
-        self.ensure_event_slots(1)?;
-
-        let mut event = event;
-        event.sequence = self.next_sequence;
-        self.next_sequence += 1;
-        self.events[self.event_len] = event;
-        self.event_len += 1;
-        Ok(event)
+    pub const fn event_archive_checkpoint(&self) -> Option<EventArchiveCheckpoint> {
+        self.core.event_archive_checkpoint()
     }
 }

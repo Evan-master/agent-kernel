@@ -10,6 +10,7 @@ mod agent_management;
 mod agent_record_retirement;
 mod capability;
 mod capability_compaction;
+mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod mailbox;
@@ -140,6 +141,11 @@ pub(super) fn run(
             AgentCallRequest::CompactFaults {
                 authority, through, ..
             } => fault_compaction::compact(booted, pending, authority, through)?,
+            AgentCallRequest::ArchiveEvents {
+                authority,
+                through_sequence,
+                ..
+            } => event_archive::archive(booted, report, pending, authority, through_sequence)?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,

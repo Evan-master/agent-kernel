@@ -54,7 +54,7 @@ impl PreparedAdmissionSupervisorFlow {
             && matches!(release_events, Some(events) if events.len() == 2
             && events.iter().enumerate().all(|(index, event)| {
                 let admission = batch[index];
-                event.sequence == (first_event + index + 1) as u64
+                event.sequence == events[0].sequence + index as u64
                     && event.kind == EventKind::RuntimeAdmissionReleased
                     && event.agent == admission.requester
                     && event.capability == Some(admission.authority)

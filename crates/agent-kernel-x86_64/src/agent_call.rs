@@ -12,6 +12,7 @@ mod agent_record_retirement;
 mod capability;
 mod capability_compaction;
 mod context;
+mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod mailbox;
@@ -77,6 +78,7 @@ pub const AGENT_CALL_RETIRE_AGENT_RECORD: u64 = 36;
 pub const AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD: u64 = 37;
 pub const AGENT_CALL_COMPACT_WAITERS: u64 = 38;
 pub const AGENT_CALL_COMPACT_FAULTS: u64 = 39;
+pub const AGENT_CALL_ARCHIVE_EVENTS: u64 = 40;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -148,6 +150,7 @@ impl AgentCallRequest {
             AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD => AgentCallOperation::RetireAgentImageRecord,
             AGENT_CALL_COMPACT_WAITERS => AgentCallOperation::CompactWaiters,
             AGENT_CALL_COMPACT_FAULTS => AgentCallOperation::CompactFaults,
+            AGENT_CALL_ARCHIVE_EVENTS => AgentCallOperation::ArchiveEvents,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -260,6 +263,7 @@ impl AgentCallRequest {
             }
             AgentCallOperation::CompactWaiters => waiter_compaction::decode(frame),
             AgentCallOperation::CompactFaults => fault_compaction::decode(frame),
+            AgentCallOperation::ArchiveEvents => event_archive::decode(frame),
         }
     }
 }
