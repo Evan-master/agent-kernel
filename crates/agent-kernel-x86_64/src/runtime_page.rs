@@ -178,6 +178,14 @@ impl RuntimePageLedger {
         }
     }
 
+    pub const fn contains_memory_cell(&self, cell: MemoryCellId) -> bool {
+        cell.raw() != 0
+            && matches!(
+                self.state,
+                RuntimePageState::Mapped { cell: actual, .. } if actual.raw() == cell.raw()
+            )
+    }
+
     pub const fn matches(&self, resource: ResourceId, cell: MemoryCellId, generation: u64) -> bool {
         matches!(
             self.binding(),

@@ -200,6 +200,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::MemoryCellCreated => format_memory_event(event, "memory_cell_created"),
         EventKind::MemoryCellRecalled => format_memory_event(event, "memory_cell_recalled"),
         EventKind::MemoryCellRemembered => format_memory_event(event, "memory_cell_remembered"),
+        EventKind::MemoryCellRecordRetired => {
+            format_memory_event(event, "memory_cell_record_retired")
+        }
         EventKind::NamespaceEntryBound => format_namespace_event(event, "namespace_entry_bound"),
         EventKind::NamespaceEntryResolved => {
             format_namespace_event(event, "namespace_entry_resolved")

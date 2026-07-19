@@ -179,6 +179,11 @@ impl PreparedAgentMemory {
             )
     }
 
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.runtime_page.contains_memory_cell(cell)
+            || self.runtime_regions.contains_memory_cell(cell)
+    }
+
     fn runtime_region_descriptor(&self, reservation: RuntimeRegionReservation) -> MemoryValue {
         MemoryValue::new([
             self.layout

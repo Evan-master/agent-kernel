@@ -342,6 +342,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         target: CapabilityId,
     },
+    RetireMemoryCellRecord {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        target: MemoryCellId,
+    },
 }
 
 impl AgentCallRequest {
@@ -391,6 +399,7 @@ impl AgentCallRequest {
             Self::RevokeCapabilityForCleanup { .. } => {
                 AgentCallOperation::RevokeCapabilityForCleanup
             }
+            Self::RetireMemoryCellRecord { .. } => AgentCallOperation::RetireMemoryCellRecord,
         }
     }
 }

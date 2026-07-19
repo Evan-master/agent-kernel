@@ -93,6 +93,13 @@ impl RuntimeRegionLedger {
             .count()
     }
 
+    pub fn contains_memory_cell(&self, cell: MemoryCellId) -> bool {
+        cell.raw() != 0
+            && self.regions.iter().any(
+                |state| matches!(state, RegionState::Mapped { cell: actual, .. } if *actual == cell),
+            )
+    }
+
     pub fn bindings(&self) -> [Option<RuntimeRegionBinding>; RUNTIME_REGION_CAPACITY] {
         self.regions.map(|state| match state {
             RegionState::Mapped {

@@ -134,13 +134,20 @@ currently provides:
 - Agent Call 42, which lets a launched Supervisor revoke residual authority on
   a retired Resource through active ancestor `Rollback` authority, enabling
   leaf-first Capability cleanup before Resource record retirement;
+- Agent Call 43, which lets a launched Supervisor retire one terminal,
+  unreferenced MemoryCell record after every semantic, CPU, page-table, and
+  physical-frame binding has been removed, while preserving monotonic IDs and
+  complete fixed-width audit evidence;
 - a 64-record architecture archive handoff that captures Events 1 through 64
   while all 357 live Event slots are occupied, verifies the checkpoint in
   ring 3, resumes execution at Event 358, and later merges archived and live
-  iterators into the exact Event 1 through 383 transcript;
+  iterators into the exact Event 1 through 391 transcript;
 - a seven-slot Resource Store recovery proof that cleanup-revokes Capability
   13, compacts Capabilities 14, 13, and 26 in child-first order, retires
   Resource record 3, then creates monotonic Resource 8 in the returned slot;
+- a five-slot MemoryCell Store recovery proof that retires MemoryCell 2,
+  cleanup-revokes and compacts Capability 16, retires Memory Resource 4, then
+  creates Resource 9, Capability 30, and MemoryCell 6 in the returned slots;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -211,8 +218,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 34 |
 | Resource Manager Agent/kernel address-space switches | 68 |
-| Admission Supervisor Agent Calls | 38 |
-| Admission Supervisor Agent/kernel address-space switches | 76 |
+| Admission Supervisor Agent Calls | 44 |
+| Admission Supervisor Agent/kernel address-space switches | 88 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -256,7 +263,8 @@ The reference validation profile enforces these deterministic invariants:
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
 | Completion-owned live regions reclaimed | 1 |
-| Completion-owned physical frames reclaimed | 3 |
+| Completion-owned live pages reclaimed | 1 |
+| Completion-owned physical frames reclaimed | 4 |
 | Rejected native admission cancellations | 1 |
 | Frames restored by admission cancellation | 11 |
 | Native address-space reclamation completions | 11 |
@@ -264,21 +272,23 @@ The reference validation profile enforces these deterministic invariants:
 | Final zeroed private address-space frame pool | 66 |
 | Resource store capacity | 7 |
 | Occupied Resource records after retirement and reuse | 7 |
-| Retired Resource records | 1 |
-| Reused Resource slots | 1 |
+| Retired Resource records | 2 |
+| Reused Resource slots | 2 |
 | Capability store capacity | 26 |
 | Occupied Capability slots after compaction and reuse | 26 |
-| Compacted Capability records | 3 |
-| Reused Capability slots | 3 |
-| MemoryCells after Manager execution | 5 |
+| Compacted Capability records | 4 |
+| Reused Capability slots | 4 |
+| Final resident MemoryCells | 5 |
+| Retired MemoryCell records | 1 |
+| Reused MemoryCell slots | 1 |
 | Shared runtime frames returned and zeroed | 16 |
 | Live Event Log capacity | 357 |
 | Live Event occupancy before archive | 357 |
 | Events in the architecture archive | 64 |
-| Final live Event occupancy | 319 |
-| Final next Event sequence | 384 |
+| Final live Event occupancy | 327 |
+| Final next Event sequence | 392 |
 | Retained Event archive checkpoints | 1 |
-| Ordered kernel events after Driver completion | 383 |
+| Ordered kernel events after Driver completion | 391 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -290,7 +300,7 @@ artifacts:
 | Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
 | Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
-| Admission Supervisor | 38 | 76 | 3,797 | `12d8f989d16454ce12d6de369033f00d70717ba8d7abee400168ca5610047b0b` |
+| Admission Supervisor | 44 | 88 | 4,114 | `3acd53283d17e77952a5742b895b2f4b578ee768faf497bce070a86397c6cb42` |
 
 The generated Rust bytes match independently assembled machine code, and each
 complete Capsule occurs exactly once in the release ELF.
@@ -316,7 +326,7 @@ flowchart TB
     X86 --> Archive["Bounded external Event archive"]
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-42"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-43"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -390,6 +400,7 @@ and nonce state before it reaches the facade.
 | `ArchiveEvents` | 40 | Commit an authenticated Event prefix handoff and return its chained digest |
 | `RetireResourceRecord` | 41 | Retire one unreferenced terminal Resource record from the dense Resource Store |
 | `RevokeCapabilityForCleanup` | 42 | Revoke residual authority on a retired Resource through active ancestor authority |
+| `RetireMemoryCellRecord` | 43 | Retire one terminal MemoryCell record after every live semantic and architecture binding is gone |
 
 The native Resource creation ABI accepts AgentOS-oriented Workspace, Memory,
 Service, Network, and Device kinds. Resource retirement replies also encode
@@ -504,6 +515,13 @@ Resource chain. It revokes one residual Capability after complete validation
 and emits `CapabilityRevoked` with the cleanup authority and `Rollback`
 operation. Existing leaf-first Capability compaction then returns the sparse
 slot before operation 41 removes the Resource record.
+Operation 43 requires a launched Supervisor, a terminal Memory Resource, and
+active ancestor `Rollback` authority. Core rejects retained Namespace
+references; the x86 adapter additionally rejects current, parked, completed,
+faulted, page, region, and shared-frame-pool bindings. Stable dense removal
+returns one MemoryCell slot, leaves the monotonic allocator unchanged, emits
+`MemoryCellRecordRetired`, and returns the complete descriptor and revision in
+fixed registers.
 
 ## Quick Start
 
@@ -540,7 +558,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 383 events, and treat
+validate the complete serial transcript, require exactly 391 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -574,6 +592,7 @@ AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_EVENT_ARCHIVE_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK
 AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK
+AGENT_KERNEL_AGENT_CALL_MEMORY_CELL_RECORD_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -600,6 +619,8 @@ AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_CLEANUP_REVOCATION_OK
 AGENT_KERNEL_NATIVE_RESOURCE_RECORD_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_RESOURCE_STORE_REUSE_OK
+AGENT_KERNEL_NATIVE_MEMORY_CELL_RECORD_RETIREMENT_OK
+AGENT_KERNEL_NATIVE_MEMORY_CELL_STORE_REUSE_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK
@@ -624,7 +645,17 @@ event[359] resource_created
 event[360] capability_granted
 event[361] capability_derived
 event[362] capability_derived
-event[383] driver_invocation_completed
+event[363] memory_cell_record_retired
+event[364] capability_revoked
+event[365] capability_compacted
+event[366] resource_record_retired
+event[367] resource_created
+event[368] capability_granted
+event[369] memory_cell_created
+event[370] task_result_submitted
+event[371] resource_retired
+event[372] task_completed
+event[391] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -670,7 +701,7 @@ authority.
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
 - a ring-3 Admission Supervisor, authenticated Agent Call 27 and Calls 29
-  through 42,
+  through 43,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -697,6 +728,10 @@ authority.
   non-Event reference preflight, active ancestor authority, monotonic IDs,
   stable retained order, fixed-width receipts, slot reuse, and complete Event
   evidence;
+- authorized dense MemoryCell record retirement with terminal Memory Resource
+  checks, Core and native live-reference preflight, active ancestor authority,
+  monotonic IDs, stable retained order, fixed-width receipts, slot reuse, and
+  complete Event evidence;
 - authorized dense Agent Entry retirement with terminal-scope checks, native
   runtime and live-reference preflight, retired-Resource ancestor authority,
   stable retained-record order, same-identity relaunch, and complete retirement
@@ -726,11 +761,11 @@ authority.
 - two-phase Event prefix archival with canonical full-field SHA-256 encoding,
   root Supervisor authorization, stable live-prefix release, monotonic Event
   sequencing, chained checkpoints, a bounded x86 handoff buffer, and exact
-  archived/live replay through Event 383;
+  archived/live replay through Event 391;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 383-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 391-event reference profile.
 
 ### Planned
 
@@ -744,8 +779,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Resource Record Retirement design](docs/superpowers/specs/2026-07-19-resource-record-retirement-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-resource-record-retirement-v1.md)
+See the current [Memory Cell Record Retirement design](docs/superpowers/specs/2026-07-19-memory-cell-record-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-memory-cell-record-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

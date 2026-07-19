@@ -17,6 +17,7 @@ pub(super) fn compact(
     pending.authenticated_request()?;
     let context = pending.context();
     let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
     let task_len = booted.kernel().tasks().len();
     let admission_len = booted.kernel().runtime_admissions().len();
     let capability_capacity = booted.kernel().capability_capacity();
@@ -31,13 +32,14 @@ pub(super) fn compact(
     let event = kernel.events().get(event_start)?;
     if receipt.capability() != target
         || kernel.events().len() != event_start + 1
+        || kernel.next_event_sequence() != next_sequence.checked_add(1)?
         || kernel.capability_capacity() != capability_capacity
         || kernel.capability_count() + 1 != capability_count
         || kernel.capability(target) != Err(KernelError::CapabilityNotFound)
         || kernel.capability(authority).is_err()
         || kernel.tasks().len() != task_len
         || kernel.runtime_admissions().len() != admission_len
-        || event.sequence != (event_start + 1) as u64
+        || event.sequence != next_sequence
         || event.kind != EventKind::CapabilityCompacted
         || event.agent != context.agent()
         || event.capability != Some(target)

@@ -177,6 +177,10 @@ impl RuntimeMemoryPool {
         self.ledger.agent_is_clear(agent)
     }
 
+    pub(crate) fn contains_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.ledger.contains_memory_cell(cell)
+    }
+
     pub(crate) fn all_available_and_zero(&self) -> bool {
         self.ledger.all_available() && self.pointers.iter().copied().all(page_is_zero)
     }

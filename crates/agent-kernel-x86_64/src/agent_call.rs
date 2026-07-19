@@ -17,6 +17,7 @@ mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod mailbox;
+mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
 mod operation;
@@ -83,6 +84,7 @@ pub const AGENT_CALL_COMPACT_FAULTS: u64 = 39;
 pub const AGENT_CALL_ARCHIVE_EVENTS: u64 = 40;
 pub const AGENT_CALL_RETIRE_RESOURCE_RECORD: u64 = 41;
 pub const AGENT_CALL_REVOKE_CAPABILITY_FOR_CLEANUP: u64 = 42;
+pub const AGENT_CALL_RETIRE_MEMORY_CELL_RECORD: u64 = 43;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -161,6 +163,7 @@ impl AgentCallRequest {
             AGENT_CALL_REVOKE_CAPABILITY_FOR_CLEANUP => {
                 AgentCallOperation::RevokeCapabilityForCleanup
             }
+            AGENT_CALL_RETIRE_MEMORY_CELL_RECORD => AgentCallOperation::RetireMemoryCellRecord,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -277,6 +280,9 @@ impl AgentCallRequest {
             AgentCallOperation::RetireResourceRecord => resource_record_retirement::decode(frame),
             AgentCallOperation::RevokeCapabilityForCleanup => {
                 capability_cleanup_revocation::decode(frame)
+            }
+            AgentCallOperation::RetireMemoryCellRecord => {
+                memory_cell_record_retirement::decode(frame)
             }
         }
     }

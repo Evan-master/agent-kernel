@@ -10,10 +10,14 @@ use agent_kernel_x86_64::{
     runtime_region::{RuntimeRegionBinding, RuntimeRegionRelease, RuntimeRegionReservation},
 };
 
-use super::PendingAgentCallCpu;
+use super::{CompletedAgentCpu, PendingAgentCallCpu, ResumableAgentCpu, WaitingAgentCallCpu};
 use crate::agent_memory::RuntimePhysicalFrameSet;
 
 impl PendingAgentCallCpu {
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.session.memory.references_memory_cell(cell)
+    }
+
     pub(crate) fn runtime_reclamation_plan(&self) -> Option<RuntimeReclamationPlan> {
         self.session.memory.runtime_reclamation_plan()
     }
@@ -181,5 +185,23 @@ impl PendingAgentCallCpu {
 
     pub(crate) fn runtime_memory_is_clear(&self) -> bool {
         self.session.memory.runtime_memory_is_clear()
+    }
+}
+
+impl ResumableAgentCpu {
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.0.memory.references_memory_cell(cell)
+    }
+}
+
+impl WaitingAgentCallCpu {
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.pending.references_memory_cell(cell)
+    }
+}
+
+impl CompletedAgentCpu {
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.memory.references_memory_cell(cell)
     }
 }

@@ -45,12 +45,12 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.run_queue().is_empty()
             && completed.context() == context
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 38
-            && completed.address_space_switch_count() == 76
+            && completed.call_count() == 44
+            && completed.address_space_switch_count() == 88
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1
-            && completed.reclamation_log().is_empty()
+            && completed.reclamation_log().len() == 1
             && self.event_archive_committed(booted, report)
             && admissions.len() == 2
             && admissions.iter().enumerate().all(|(index, admission)| {
@@ -69,6 +69,7 @@ impl PreparedAdmissionSupervisorFlow {
             && self.first_batch_entries_retired(booted, targets)
             && self.capability_store_compacted(booted)
             && self.resource_record_retired_and_reused(booted)
+            && self.memory_cell_record_retired_and_reused(booted, report)
             && retained_boot_messages(booted)
             && kernel.waiters().is_empty()
             && self.waiter_store_compacted(booted)

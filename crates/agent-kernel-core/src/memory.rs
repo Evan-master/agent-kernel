@@ -4,7 +4,7 @@
 //! values and copyable memory cell records for the no_std memory store. It does
 //! not model virtual addresses, byte buffers, host files, or heap allocation.
 
-use crate::{AgentId, MemoryCellId, ResourceId};
+use crate::{AgentId, CapabilityId, MemoryCellId, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MemoryValue {
@@ -25,6 +25,43 @@ pub struct MemoryCellRecord {
     pub last_writer: AgentId,
     pub value: MemoryValue,
     pub revision: u64,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct MemoryCellRecordRetirement {
+    record: MemoryCellRecord,
+    actor: AgentId,
+    authority: CapabilityId,
+}
+
+impl MemoryCellRecordRetirement {
+    pub(crate) const fn new(
+        record: MemoryCellRecord,
+        actor: AgentId,
+        authority: CapabilityId,
+    ) -> Self {
+        Self {
+            record,
+            actor,
+            authority,
+        }
+    }
+
+    pub const fn record(self) -> MemoryCellRecord {
+        self.record
+    }
+
+    pub const fn memory_cell(self) -> MemoryCellId {
+        self.record.id
+    }
+
+    pub const fn actor(self) -> AgentId {
+        self.actor
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
+    }
 }
 
 impl MemoryCellRecord {

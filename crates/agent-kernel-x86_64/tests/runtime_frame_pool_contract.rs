@@ -71,6 +71,9 @@ fn frame_pool_rejects_stale_tokens_and_reuses_released_frames() {
     assert!(!pool.commit_mapping(current, MemoryCellId::new(0), 1));
     assert!(!pool.commit_mapping(current, cell, 0));
     assert!(pool.commit_mapping(current, cell, 1));
+    assert!(pool.contains_memory_cell(cell));
+    assert!(!pool.contains_memory_cell(MemoryCellId::new(0)));
+    assert!(!pool.contains_memory_cell(MemoryCellId::new(2)));
 
     let binding = pool.binding(agent, resource, cell, 1).unwrap();
     assert_eq!(binding.page_count(), 3);
@@ -82,6 +85,7 @@ fn frame_pool_rejects_stale_tokens_and_reuses_released_frames() {
     assert_eq!(release.page_count(), 3);
     assert_eq!(release.generation(), 1);
     assert!(pool.commit_release(release));
+    assert!(!pool.contains_memory_cell(cell));
     assert!(!pool.commit_release(release));
     assert!(pool.agent_is_clear(agent));
     assert!(pool.all_available());

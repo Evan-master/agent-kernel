@@ -6,6 +6,7 @@
 
 use core::sync::atomic::Ordering;
 
+use agent_kernel_core::MemoryCellId;
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots,
     agent_call::AgentCallContext,
@@ -152,6 +153,10 @@ impl PreparedAgentCpu {
         self.context
     }
 
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.memory.references_memory_cell(cell)
+    }
+
     pub(crate) fn run_until_boundary(self) -> Option<AgentRunOutcome> {
         let roots = self.memory.roots();
         storage::begin_dispatch(roots)?;
@@ -238,6 +243,10 @@ impl PreemptedAgentCpu {
 
     pub(crate) const fn context(&self) -> AgentCallContext {
         self.context
+    }
+
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.memory.references_memory_cell(cell)
     }
 
     pub(crate) const fn has_call_progress(&self) -> bool {

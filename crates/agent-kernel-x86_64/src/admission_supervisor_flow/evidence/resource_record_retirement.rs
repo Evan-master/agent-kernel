@@ -39,8 +39,11 @@ impl PreparedAdmissionSupervisorFlow {
             && resources
                 .iter()
                 .map(|record| record.id.raw())
-                .eq([1, 2, 4, 5, 6, 7, 8])
+                .eq([1, 2, 5, 6, 7, 8, 9])
             && resources.iter().all(|record| record.id != RETIRED_RESOURCE)
+            && resources
+                .iter()
+                .all(|record| record.id != ResourceId::new(4))
             && fresh.kind == ResourceKind::Service
             && fresh.parent == Some(ResourceId::new(1))
             && fresh.owner == Some(ADMISSION_SUPERVISOR)

@@ -100,6 +100,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::MemoryCellCreated => "memory_cell_created",
         EventKind::MemoryCellRecalled => "memory_cell_recalled",
         EventKind::MemoryCellRemembered => "memory_cell_remembered",
+        EventKind::MemoryCellRecordRetired => "memory_cell_record_retired",
         EventKind::NamespaceEntryBound => "namespace_entry_bound",
         EventKind::NamespaceEntryResolved => "namespace_entry_resolved",
         EventKind::NamespaceEntryRebound => "namespace_entry_rebound",

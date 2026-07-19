@@ -75,6 +75,8 @@ mod mailbox_store;
 mod mailbox_wait_event;
 mod mailbox_wait_store;
 mod memory;
+mod memory_cell_record_reference;
+mod memory_cell_record_retirement;
 mod memory_store;
 mod message;
 mod message_retirement;
@@ -148,7 +150,7 @@ pub use id::{
     TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, VerificationRequirement};
-pub use memory::{MemoryCellRecord, MemoryValue};
+pub use memory::{MemoryCellRecord, MemoryCellRecordRetirement, MemoryValue};
 pub use message::{
     MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageRetirement,
     MessageStatus, OrphanedMessageRetirement,

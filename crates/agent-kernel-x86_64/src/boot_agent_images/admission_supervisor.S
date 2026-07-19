@@ -977,28 +977,146 @@ admission_supervisor_second_capability_reuse_return:
     jne .halt
     cmp r10, 29
     jne .halt
-    test r11, r11
-    jne .halt
-    test r12, r12
-    jne .halt
-    test r13, r13
-    jne .halt
-    test r14, r14
-    jne .halt
-    test r15, r15
-    jne .halt
-    test rbp, rbp
-    jne .halt
 
-    mov ecx, 4
+    mov cl, 43
     xor edx, edx
-    mov r10d, 0x0a08
-    mov r11d, 0xa88c0008
+    mov r10d, 23
+    mov r11d, 2
+    int 0x90
+.global admission_supervisor_memory_cell_record_retirement_return
+admission_supervisor_memory_cell_record_retirement_return:
+    jmp .memory_cell_retirement_check
+.memory_cell_retirement_fail:
+    jmp .halt
+.memory_cell_retirement_check:
+    test rcx, rcx
+    jne .memory_cell_retirement_fail
+    cmp rdx, 43
+    jne .memory_cell_retirement_fail
+    cmp r10, 2
+    jne .memory_cell_retirement_fail
+    cmp r11, 4
+    jne .memory_cell_retirement_fail
+    cmp r12, 1
+    jne .memory_cell_retirement_fail
+
+    mov cl, 42
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 16
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
     xor ebp, ebp
+    int 0x90
+.global admission_supervisor_memory_capability_cleanup_return
+admission_supervisor_memory_capability_cleanup_return:
+    jmp .memory_capability_cleanup_check
+.memory_capability_cleanup_fail:
+    jmp .halt
+.memory_capability_cleanup_check:
+    test rcx, rcx
+    jne .memory_capability_cleanup_fail
+    cmp rdx, 42
+    jne .memory_capability_cleanup_fail
+    cmp r10, 16
+    jne .memory_capability_cleanup_fail
+    cmp r11, 4
+    jne .memory_capability_cleanup_fail
+
+    mov cl, 32
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 16
+    int 0x90
+.global admission_supervisor_memory_capability_compaction_return
+admission_supervisor_memory_capability_compaction_return:
+    jmp .memory_capability_compaction_check
+.memory_capability_compaction_fail:
+    jmp .halt
+.memory_capability_compaction_check:
+    test rcx, rcx
+    jne .memory_capability_compaction_fail
+    cmp rdx, 32
+    jne .memory_capability_compaction_fail
+    cmp r10, 16
+    jne .memory_capability_compaction_fail
+
+    mov cl, 41
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 4
+    int 0x90
+.global admission_supervisor_memory_resource_record_retirement_return
+admission_supervisor_memory_resource_record_retirement_return:
+    jmp .memory_resource_retirement_check
+.memory_resource_retirement_fail:
+    jmp .halt
+.memory_resource_retirement_check:
+    test rcx, rcx
+    jne .memory_resource_retirement_fail
+    cmp rdx, 41
+    jne .memory_resource_retirement_fail
+    cmp r10, 4
+    jne .memory_resource_retirement_fail
+    cmp r11, 2
+    jne .memory_resource_retirement_fail
+
+    mov cl, 10
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 1
+    mov r12d, 2
+    mov r13d, 19
+    int 0x90
+.global admission_supervisor_memory_resource_reuse_return
+admission_supervisor_memory_resource_reuse_return:
+    jmp .memory_resource_reuse_check
+.memory_resource_reuse_fail:
+    jmp .halt
+.memory_resource_reuse_check:
+    test rcx, rcx
+    jne .memory_resource_reuse_fail
+    cmp rdx, 10
+    jne .memory_resource_reuse_fail
+    cmp r10, 9
+    jne .memory_resource_reuse_fail
+    cmp r11, 30
+    jne .memory_resource_reuse_fail
+
+    mov cl, 21
+    xor edx, edx
+    mov r10d, 30
+    mov r11d, 9
+    int 0x90
+.global admission_supervisor_memory_cell_reuse_return
+admission_supervisor_memory_cell_reuse_return:
+    jmp .memory_cell_reuse_check
+.memory_cell_reuse_fail:
+    jmp .halt
+.memory_cell_reuse_check:
+    test rcx, rcx
+    jne .memory_cell_reuse_fail
+    cmp rdx, 21
+    jne .memory_cell_reuse_fail
+    cmp r10, 6
+    jne .memory_cell_reuse_fail
+    movabs rax, 0x0000400000008000
+    cmp r11, rax
+    jne .memory_cell_reuse_fail
+
+    movabs r15, 0x4d454d43454c4c36
+    mov qword ptr [r11], r15
+    movabs rax, 0x4c4c4143544e4741
+
+    mov cl, 4
+    xor edx, edx
+    mov r10d, 0x0a08
+    mov r11d, 0xa88c0008
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r15d, r15d
     int 0x90
 .global admission_supervisor_result_return
 admission_supervisor_result_return:

@@ -120,6 +120,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK" \
   "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_MEMORY_CELL_RECORD_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_EVENT_ARCHIVE_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
@@ -140,6 +141,8 @@ for expected in \
   "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_RESOURCE_RECORD_RETIREMENT_OK" \
   "AGENT_KERNEL_NATIVE_RESOURCE_STORE_REUSE_OK" \
+  "AGENT_KERNEL_NATIVE_MEMORY_CELL_RECORD_RETIREMENT_OK" \
+  "AGENT_KERNEL_NATIVE_MEMORY_CELL_STORE_REUSE_OK" \
   "AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK" \
   "AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_EVENT_LOG_FULL_OK" \
@@ -529,27 +532,35 @@ for expected in \
   "event[360] capability_granted" \
   "event[361] capability_derived" \
   "event[362] capability_derived" \
-  "event[363] task_result_submitted" \
-  "event[364] task_completed" \
-  "event[365] task_verified" \
-  "event[366] intent_fulfilled" \
-  "event[367] task_verified" \
-  "event[368] intent_fulfilled" \
-  "event[369] task_verified" \
-  "event[370] intent_fulfilled" \
-  "event[371] runtime_admission_released" \
-  "event[372] runtime_admission_released" \
-  "event[373] agent_image_registered" \
-  "event[374] device_event_raised" \
-  "event[375] device_event_delivered" \
-  "event[376] driver_invocation_queued" \
-  "event[377] driver_invocation_dispatched" \
-  "event[378] driver_invocation_ticked" \
-  "event[379] device_event_acknowledged" \
-  "event[380] driver_command_submitted" \
-  "event[381] driver_command_dispatched" \
-  "event[382] driver_command_completed" \
-  "event[383] driver_invocation_completed" \
+  "event[363] memory_cell_record_retired" \
+  "event[364] capability_revoked" \
+  "event[365] capability_compacted" \
+  "event[366] resource_record_retired" \
+  "event[367] resource_created" \
+  "event[368] capability_granted" \
+  "event[369] memory_cell_created" \
+  "event[370] task_result_submitted" \
+  "event[371] resource_retired" \
+  "event[372] task_completed" \
+  "event[373] task_verified" \
+  "event[374] intent_fulfilled" \
+  "event[375] task_verified" \
+  "event[376] intent_fulfilled" \
+  "event[377] task_verified" \
+  "event[378] intent_fulfilled" \
+  "event[379] runtime_admission_released" \
+  "event[380] runtime_admission_released" \
+  "event[381] agent_image_registered" \
+  "event[382] device_event_raised" \
+  "event[383] device_event_delivered" \
+  "event[384] driver_invocation_queued" \
+  "event[385] driver_invocation_dispatched" \
+  "event[386] driver_invocation_ticked" \
+  "event[387] device_event_acknowledged" \
+  "event[388] driver_command_submitted" \
+  "event[389] driver_command_dispatched" \
+  "event[390] driver_command_completed" \
+  "event[391] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -559,8 +570,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 383 ]]; then
-  printf 'expected exactly 383 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 391 ]]; then
+  printf 'expected exactly 391 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -578,8 +589,11 @@ check_marker_count() {
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" 4
 check_marker_count "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" 3
 check_marker_count "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" 2
-check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK" 1
-check_marker_count "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_PAGE_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 4
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_MEMORY_CELL_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ORPHANED_MESSAGE_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK" 1
@@ -588,7 +602,7 @@ check_marker_count "AGENT_KERNEL_NATIVE_AGENT_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_AGENT_IMAGE_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_AGENT_IMAGE_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK" 1
-check_marker_count "AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_COMPLETION_MEMORY_RECLAIMED_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK" 2
@@ -621,11 +635,12 @@ check_marker_count "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" 1
-check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 3
 check_marker_count "AGENT_KERNEL_NATIVE_CAPABILITY_CLEANUP_REVOCATION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RESOURCE_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RESOURCE_STORE_REUSE_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_MEMORY_CELL_RECORD_RETIREMENT_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_MEMORY_CELL_STORE_REUSE_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK" 1

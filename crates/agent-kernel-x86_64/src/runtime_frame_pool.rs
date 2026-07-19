@@ -102,6 +102,13 @@ impl RuntimeFramePoolLedger {
             .count()
     }
 
+    pub fn contains_memory_cell(&self, cell: MemoryCellId) -> bool {
+        cell.raw() != 0
+            && self.frames.iter().any(
+                |state| matches!(state, FrameState::Mapped { cell: actual, .. } if *actual == cell),
+            )
+    }
+
     pub fn agent_is_clear(&self, agent: AgentId) -> bool {
         self.frames.iter().all(|state| match state {
             FrameState::Available => true,

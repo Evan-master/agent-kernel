@@ -27,6 +27,8 @@ pub enum KernelError {
     WaiterCompactionNotReady,
     MessageStoreFull,
     MemoryCellStoreFull,
+    MemoryCellRecordRetirementNotReady,
+    MemoryCellRecordRetirementReferenced,
     NamespaceEntryStoreFull,
     AgentImageStoreFull,
     ResourceRecordRetirementNotReady,

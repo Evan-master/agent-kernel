@@ -91,6 +91,9 @@ fn region_ledger_rejects_stale_tokens_and_preserves_generation_on_cancel() {
     assert!(!ledger.commit_mapping(stale, MemoryCellId::new(1)));
     assert!(!ledger.commit_mapping(current, MemoryCellId::new(0)));
     assert!(ledger.commit_mapping(current, MemoryCellId::new(1)));
+    assert!(ledger.contains_memory_cell(MemoryCellId::new(1)));
+    assert!(!ledger.contains_memory_cell(MemoryCellId::new(0)));
+    assert!(!ledger.contains_memory_cell(MemoryCellId::new(2)));
 
     let binding = ledger
         .binding(ResourceId::new(1), MemoryCellId::new(1))
@@ -105,6 +108,7 @@ fn region_ledger_rejects_stale_tokens_and_preserves_generation_on_cancel() {
         .prepare_release(ResourceId::new(1), MemoryCellId::new(1))
         .unwrap();
     assert!(ledger.commit_release(release));
+    assert!(!ledger.contains_memory_cell(MemoryCellId::new(1)));
     assert!(!ledger.commit_release(release));
     assert!(ledger.is_clear());
     assert_eq!(ledger.generation(), 1);

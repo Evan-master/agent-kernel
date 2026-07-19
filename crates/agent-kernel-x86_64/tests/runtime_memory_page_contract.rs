@@ -32,10 +32,14 @@ fn runtime_page_ledger_commits_releases_and_reuses_one_slot() {
     assert!(!ledger.is_available());
     assert!(ledger.commit_mapping(reservation, cell));
     assert!(ledger.matches(resource, cell, 1));
+    assert!(ledger.contains_memory_cell(cell));
+    assert!(!ledger.contains_memory_cell(MemoryCellId::new(0)));
+    assert!(!ledger.contains_memory_cell(MemoryCellId::new(2)));
 
     let release = ledger.prepare_release(resource, cell).unwrap();
     assert_eq!(release.generation(), 1);
     assert!(ledger.commit_release(release));
+    assert!(!ledger.contains_memory_cell(cell));
     assert!(ledger.is_available());
     assert_eq!(ledger.generation(), 1);
 

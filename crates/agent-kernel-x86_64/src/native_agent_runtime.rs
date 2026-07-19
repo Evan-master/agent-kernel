@@ -7,7 +7,7 @@
 
 mod dispatch;
 
-use agent_kernel_core::{AgentId, AgentImageId, RunQueueEntry};
+use agent_kernel_core::{AgentId, AgentImageId, MemoryCellId, RunQueueEntry};
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
 use crate::agent_cpu::{
@@ -38,6 +38,16 @@ impl NativeAgentContext {
     fn matches_entry(&self, entry: RunQueueEntry) -> bool {
         let context = self.context();
         context.agent() == entry.agent && context.task() == entry.task
+    }
+
+    fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        match self {
+            Self::Prepared(cpu) => cpu.references_memory_cell(cell),
+            Self::Preempted(cpu) => cpu.references_memory_cell(cell),
+            Self::WaitingCall(cpu) => cpu.references_memory_cell(cell),
+            Self::YieldedCall(cpu) => cpu.references_memory_cell(cell),
+            Self::RecoveredFault(cpu) => cpu.references_memory_cell(cell),
+        }
     }
 
     pub(crate) fn into_prepared(self) -> Option<PreparedAgentCpu> {
@@ -106,6 +116,11 @@ impl NativeAgentRuntime {
     pub(crate) fn contains_image(&self, image: AgentImageId) -> bool {
         self.contexts
             .any(|context| context.context().image() == image)
+    }
+
+    pub(crate) fn contains_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.contexts
+            .any(|context| context.references_memory_cell(cell))
     }
 
     pub(crate) fn take_prepared(&mut self, agent: AgentId) -> Option<PreparedAgentCpu> {

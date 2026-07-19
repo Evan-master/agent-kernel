@@ -98,6 +98,7 @@ pub enum EventKind {
     MemoryCellCreated,
     MemoryCellRecalled,
     MemoryCellRemembered,
+    MemoryCellRecordRetired,
     NamespaceEntryBound,
     NamespaceEntryResolved,
     NamespaceEntryRebound,

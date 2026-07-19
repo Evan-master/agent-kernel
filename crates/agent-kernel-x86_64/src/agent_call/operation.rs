@@ -48,4 +48,5 @@ pub enum AgentCallOperation {
     ArchiveEvents,
     RetireResourceRecord,
     RevokeCapabilityForCleanup,
+    RetireMemoryCellRecord,
 }

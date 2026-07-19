@@ -11,7 +11,7 @@ mod evidence;
 mod memory_reclamation;
 mod state;
 
-use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, EventKind, FaultKind};
+use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, EventKind, FaultKind, MemoryCellId};
 use agent_kernel_x86_64::native_runtime::NativeAgentRuntimeStore;
 
 use crate::{
@@ -301,6 +301,11 @@ impl NativeExecutionReport {
     pub(super) fn contains_image(&self, image: AgentImageId) -> bool {
         self.completed.any(|cpu| cpu.context().image() == image)
             || self.faulted.any(|cpu| cpu.context().image() == image)
+    }
+
+    pub(super) fn contains_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.completed.any(|cpu| cpu.references_memory_cell(cell))
+            || self.faulted.any(|cpu| cpu.references_memory_cell(cell))
     }
 
     pub(crate) const fn len(&self) -> usize {

@@ -5,8 +5,8 @@
 //! mutation inside `agent-kernel-core`.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, Event, KernelError, MemoryCellId, MemoryCellRecord, MemoryValue,
-    ResourceId,
+    AgentId, CapabilityId, Event, KernelError, MemoryCellId, MemoryCellRecord,
+    MemoryCellRecordRetirement, MemoryValue, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -91,6 +91,16 @@ impl<
     ) -> Result<Event, KernelError> {
         self.core
             .remember_memory_cell(agent, capability, cell, value)
+    }
+
+    pub fn sys_retire_memory_cell_record(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        target: MemoryCellId,
+    ) -> Result<MemoryCellRecordRetirement, KernelError> {
+        self.core
+            .retire_memory_cell_record(actor, authority, target)
     }
 
     pub fn memory_cells(&self) -> &[MemoryCellRecord] {

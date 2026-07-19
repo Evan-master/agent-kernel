@@ -8,6 +8,7 @@
 
 use core::sync::atomic::Ordering;
 
+use agent_kernel_core::MemoryCellId;
 use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
     context::SavedAgentFrame,
@@ -132,6 +133,10 @@ impl FaultedAgentCpu {
 
     pub(crate) fn runtime_memory_is_clear(&self) -> bool {
         self.memory.runtime_memory_is_clear()
+    }
+
+    pub(crate) fn references_memory_cell(&self, cell: MemoryCellId) -> bool {
+        self.memory.references_memory_cell(cell)
     }
 
     pub(crate) fn restart(self) -> Option<PreparedAgentCpu> {

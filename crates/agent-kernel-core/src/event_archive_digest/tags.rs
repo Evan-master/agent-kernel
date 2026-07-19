@@ -89,6 +89,7 @@ pub(super) const fn event_kind(value: EventKind) -> u16 {
         EventKind::MemoryCellCreated => 79,
         EventKind::MemoryCellRecalled => 80,
         EventKind::MemoryCellRemembered => 81,
+        EventKind::MemoryCellRecordRetired => 86,
         EventKind::NamespaceEntryBound => 82,
         EventKind::NamespaceEntryResolved => 83,
         EventKind::NamespaceEntryRebound => 84,

@@ -16,6 +16,7 @@ mod fault_compaction;
 mod intent_compaction;
 mod mailbox;
 mod memory_authority;
+mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
 mod resource;
@@ -154,6 +155,17 @@ pub(super) fn run(
             AgentCallRequest::RevokeCapabilityForCleanup {
                 authority, target, ..
             } => capability_cleanup_revocation::revoke(booted, pending, authority, target)?,
+            AgentCallRequest::RetireMemoryCellRecord {
+                authority, target, ..
+            } => memory_cell_record_retirement::retire(
+                booted,
+                runtime,
+                memory_pool,
+                report,
+                pending,
+                authority,
+                target,
+            )?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,

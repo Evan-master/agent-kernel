@@ -16,6 +16,7 @@ mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
 mod mailbox;
+mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
 mod resource;

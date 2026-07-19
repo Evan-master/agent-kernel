@@ -12,6 +12,7 @@ use crate::{
 const AUTHORITY: CapabilityId = CapabilityId::new(23);
 const INITIAL_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(13);
 const DERIVED_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(14);
+const RETIRED_MEMORY_CAPABILITY: CapabilityId = CapabilityId::new(16);
 const TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(26);
 const FRESH_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(27);
 const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(28);
@@ -40,6 +41,7 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.capability_count() == X86_CAPABILITY_CAPACITY
             && missing(booted, INITIAL_RESOURCE_CAPABILITY)
             && missing(booted, DERIVED_RESOURCE_CAPABILITY)
+            && missing(booted, RETIRED_MEMORY_CAPABILITY)
             && missing(booted, TRANSIENT_CAPABILITY)
             && fresh_resource_capability_matches(booted)
             && retained_capability_matches(
@@ -59,7 +61,7 @@ impl PreparedAdmissionSupervisorFlow {
                 .iter()
                 .filter(|event| event.kind == EventKind::CapabilityCompacted)
                 .count()
-                == 3
+                == 4
             && window
                 .iter()
                 .enumerate()
