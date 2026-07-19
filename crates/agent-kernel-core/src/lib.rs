@@ -90,6 +90,7 @@ mod signal;
 mod signal_event;
 mod signal_store;
 mod task;
+mod task_compaction;
 mod task_completion;
 mod task_event;
 mod task_lookup;
@@ -138,4 +139,4 @@ pub use runtime_admission::{
     RuntimeAdmissionRecord, RuntimeAdmissionReleaseBatch, RuntimeAdmissionStatus,
 };
 pub use signal::{SignalKey, SignalOutcome, WaiterKind, WaiterRecord};
-pub use task::{Task, TaskResult, TaskStatus};
+pub use task::{Task, TaskCompaction, TaskResult, TaskStatus};

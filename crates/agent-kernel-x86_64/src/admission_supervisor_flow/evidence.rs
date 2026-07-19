@@ -2,6 +2,7 @@
 
 mod compaction;
 mod release;
+mod task_compaction;
 mod terminal;
 
 use agent_kernel_core::{

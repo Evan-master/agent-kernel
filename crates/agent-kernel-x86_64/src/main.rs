@@ -47,7 +47,7 @@ pub(crate) type X86BootedKernel = BootedKernel<
     14,
     7,
     25,
-    328,
+    344,
     1,
     1,
     0,

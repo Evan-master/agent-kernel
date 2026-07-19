@@ -79,6 +79,10 @@ currently provides:
 - Agent Call 29, which lets an authenticated Supervisor compact an authorized
   terminal Runtime Admission prefix, return active capacity, invalidate stale
   permits, and emit one ordered audit Event per retired record;
+- Agent Call 30, which lets an authenticated Supervisor compact an authorized
+  terminal Task prefix, reject live references, preserve monotonic Task IDs,
+  invalidate stale dispatch permits, and emit one ordered audit Event per
+  retired Task;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -124,12 +128,15 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 16 |
-| Admission Supervisor Agent/kernel address-space switches | 32 |
+| Admission Supervisor Agent Calls | 17 |
+| Admission Supervisor Agent/kernel address-space switches | 34 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
 | Task store capacity | 12 |
+| Compacted terminal Tasks | 6 |
+| Active Tasks after prefix compaction | 6 |
+| Task compaction Events | 6 |
 | Runtime Admission store capacity | 16 |
 | Runtime Admission requests | 4 |
 | Runtime Admission commits | 4 |
@@ -153,10 +160,9 @@ The reference validation profile enforces these deterministic invariants:
 | Resources after Manager execution | 7 |
 | Capabilities after Runtime Service Worker verification | 25 |
 | Intents after Runtime Service Worker verification | 12 |
-| Tasks after Runtime Service Worker verification | 12 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 328 |
+| Ordered kernel events after Driver completion | 344 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -181,7 +187,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Call 27"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -242,6 +248,7 @@ and nonce state before it reaches the facade.
 | `RequestRuntimeAdmission` | 27 | Request audited native runtime admission for one accepted, unqueued target Task |
 | `DiscoverRuntimeAdmission` | 28 | Return the kernel-owned requester bound to the current admitted context |
 | `CompactRuntimeAdmissions` | 29 | Retire an authorized terminal prefix from the active admission queue |
+| `CompactTasks` | 30 | Retire an authorized terminal prefix from the active Task store |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -263,7 +270,12 @@ into the admitted CPU context; operation 28 returns it through a canonical,
 authenticated, read-only reply. Operation 29 requires `Delegate` authority for
 every selected Resource, compacts only a contiguous `Rejected` or `Released`
 prefix, preserves monotonic IDs, and records every retired identity in the
-Event log.
+Event log. Operation 30 requires root-scoped `Rollback` authority for every
+selected Task Resource. It accepts only a contiguous `Verified`/`Fulfilled` or
+`Cancelled`/`Cancelled` prefix with no active queue, execution, waiter,
+admission, Namespace, or Message reference. Successful compaction advances the
+Task generation, preserves monotonic IDs, and records the complete retired Task
+identity in ordered Events.
 
 ## Quick Start
 
@@ -300,7 +312,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 328 events, and treat
+validate the complete serial transcript, require exactly 344 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -319,6 +331,8 @@ AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
+AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK
+AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -328,6 +342,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_PARTIAL_RECLAIM_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK
+AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -338,7 +353,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[328] driver_invocation_completed
+event[344] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -350,7 +365,8 @@ SUPERVISOR_HANDOFF_READY
   revocation.
 - Architecture adapters route every mutation through public facade methods.
 - Capacity checks occur before multi-record mutations so failures remain atomic.
-- Retired objects remain queryable for audit but reject future active use.
+- Compacted lifecycle history remains queryable through Events, while retained
+  terminal objects reject future active use.
 - Malformed Capsules, calls, CPU frames, event sequences, or physical ownership
   evidence terminate the validation run under the fail-closed policy.
 
@@ -382,7 +398,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 29,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 30,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -393,15 +409,19 @@ authority.
   post-reclamation `RuntimeAdmissionReleased` records and ordered kernel events;
 - authorized terminal-prefix compaction with FIFO retention, monotonic IDs,
   stale-permit invalidation, active-capacity reuse, and per-record Events;
+- authorized Task-prefix compaction with terminal Intent consistency, complete
+  active-reference preflight, queue cleanup on cancellation, monotonic IDs,
+  generation-bound dispatch permits, and per-Task Events;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 328-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 344-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- Task-store retirement and identity reuse for long-running admission loops;
+- Intent-store compaction and bounded retention policies for Capabilities,
+  Agent entries, Messages, Waiters, Faults, and Events;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -409,8 +429,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Runtime Admission Capacity design](docs/superpowers/specs/2026-07-19-runtime-admission-capacity-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-runtime-admission-capacity-v1.md)
+See the current [Task Store Compaction design](docs/superpowers/specs/2026-07-19-task-store-compaction-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-task-store-compaction-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

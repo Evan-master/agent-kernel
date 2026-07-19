@@ -139,6 +139,7 @@ impl<
         self.ensure_event_slots(2)?;
 
         self.find_task_mut(task)?.status = TaskStatus::Cancelled;
+        self.remove_task_from_run_queue(task);
         self.clear_execution_context_for_task(task);
         let event = self.record_task_event(
             EventKind::TaskCancelled,

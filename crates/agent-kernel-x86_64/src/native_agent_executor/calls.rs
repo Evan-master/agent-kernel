@@ -13,6 +13,7 @@ mod memory_region;
 mod resource;
 mod runtime_admission;
 mod task;
+mod task_compaction;
 mod task_lifecycle;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
@@ -114,6 +115,9 @@ pub(super) fn run(
             AgentCallRequest::CompactRuntimeAdmissions {
                 authority, through, ..
             } => runtime_admission::compact(booted, pending, authority, through)?,
+            AgentCallRequest::CompactTasks {
+                authority, through, ..
+            } => task_compaction::compact(booted, pending, authority, through)?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

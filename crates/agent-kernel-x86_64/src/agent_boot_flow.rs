@@ -8,6 +8,7 @@ mod address_space_reuse;
 mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
+use agent_kernel_core::{EventKind, TaskId, TaskStatus};
 use agent_kernel_x86_64::agent_image::{AgentImageCapsule, VerifiedAgentImage};
 use bootloader_api::BootInfo;
 
@@ -265,6 +266,10 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
     }
+    if verify_initial_task_prefix(&mut booted).is_none() {
+        fatal_boot("AGENT_KERNEL_TASK_PREFIX_VERIFICATION_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK");
     if address_space_reuse::run(
         &mut booted,
         &mut native_runtime,
@@ -290,6 +295,43 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     serial_write_line("SUPERVISOR_HANDOFF_READY");
     exit_qemu(0x10);
     halt_forever()
+}
+
+fn verify_initial_task_prefix(booted: &mut X86BootedKernel) -> Option<()> {
+    let report = *booted.report();
+    let event_start = booted.kernel().events().len();
+    for raw in 1..=6 {
+        let task = TaskId::new(raw);
+        match booted.kernel().task(task).ok()?.status {
+            TaskStatus::Verified => {}
+            TaskStatus::Completed => {
+                booted
+                    .kernel_mut()
+                    .sys_verify_task(report.bootstrap_agent, report.bootstrap_capability, task)
+                    .ok()?;
+            }
+            _ => return None,
+        }
+    }
+
+    let kernel = booted.kernel();
+    let events = kernel.events().get(event_start..)?;
+    (events.len() == 10
+        && (1..=6).all(|raw| {
+            kernel
+                .task(TaskId::new(raw))
+                .is_ok_and(|task| task.status == TaskStatus::Verified)
+        })
+        && (0..events.len() / 2).all(|index| {
+            let task = TaskId::new(index as u64 + 2);
+            let verified = &events[index * 2];
+            let fulfilled = &events[index * 2 + 1];
+            verified.kind == EventKind::TaskVerified
+                && verified.task == Some(task)
+                && fulfilled.kind == EventKind::IntentFulfilled
+                && fulfilled.task == Some(task)
+        }))
+    .then_some(())
 }
 
 fn validate_agent_memory(memories: [&PreparedAgentMemory; 6]) {

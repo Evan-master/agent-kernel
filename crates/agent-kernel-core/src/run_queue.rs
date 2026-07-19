@@ -25,11 +25,16 @@ impl RunQueueEntry {
 pub struct TaskDispatchPermit {
     entry: RunQueueEntry,
     quantum: u64,
+    generation: u64,
 }
 
 impl TaskDispatchPermit {
-    pub(crate) const fn new(entry: RunQueueEntry, quantum: u64) -> Self {
-        Self { entry, quantum }
+    pub(crate) const fn new(entry: RunQueueEntry, quantum: u64, generation: u64) -> Self {
+        Self {
+            entry,
+            quantum,
+            generation,
+        }
     }
 
     pub const fn entry(self) -> RunQueueEntry {
@@ -38,5 +43,9 @@ impl TaskDispatchPermit {
 
     pub const fn quantum(self) -> u64 {
         self.quantum
+    }
+
+    pub(crate) const fn generation(self) -> u64 {
+        self.generation
     }
 }

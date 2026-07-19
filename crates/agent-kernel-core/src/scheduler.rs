@@ -133,4 +133,21 @@ impl<
             .then_some(())
             .ok_or(KernelError::EventLogFull)
     }
+
+    pub(crate) fn remove_task_from_run_queue(&mut self, task: TaskId) {
+        let mut read = 0;
+        let mut write = 0;
+        while read < self.run_queue_len {
+            let entry = self.run_queue[read];
+            if entry.task != task {
+                self.run_queue[write] = entry;
+                write += 1;
+            }
+            read += 1;
+        }
+        for index in write..self.run_queue_len {
+            self.run_queue[index] = RunQueueEntry::empty();
+        }
+        self.run_queue_len = write;
+    }
 }

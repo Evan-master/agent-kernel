@@ -1,10 +1,11 @@
-//! Fixed-capacity task lookup helpers.
+//! Task Store inspection and authenticated compaction facade.
 //!
-//! This module belongs to `agent-kernel-core`. It owns read and mutable lookup
-//! behavior for task records plus shared lifecycle status validation, keeping
-//! task transition code focused on state changes and event consequences.
+//! This no_std boundary forwards typed Task retirement requests to the
+//! deterministic core without exposing mutable store internals.
 
-use crate::{KernelCore, KernelError, Task, TaskId, TaskStatus};
+use agent_kernel_core::{AgentId, CapabilityId, KernelError, Task, TaskCompaction, TaskId};
+
+use crate::AgentKernel;
 
 impl<
         const AGENTS: usize,
@@ -31,7 +32,7 @@ impl<
         const DRIVER_INVOCATIONS: usize,
         const RUNTIME_ADMISSIONS: usize,
     >
-    KernelCore<
+    AgentKernel<
         AGENTS,
         RESOURCES,
         CAPS,
@@ -57,40 +58,20 @@ impl<
         RUNTIME_ADMISSIONS,
     >
 {
-    pub fn tasks(&self) -> &[Task] {
-        &self.tasks[..self.task_len]
+    pub fn sys_compact_task_prefix(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        through: TaskId,
+    ) -> Result<TaskCompaction, KernelError> {
+        self.core.compact_task_prefix(actor, authority, through)
     }
 
     pub const fn task_capacity(&self) -> usize {
-        TASKS
+        self.core.task_capacity()
     }
 
-    pub fn task(&self, id: TaskId) -> Result<Task, KernelError> {
-        self.find_task(id)
+    pub fn task(&self, task: TaskId) -> Result<Task, KernelError> {
+        self.core.task(task)
     }
-
-    pub(crate) fn find_task(&self, id: TaskId) -> Result<Task, KernelError> {
-        self.tasks()
-            .iter()
-            .find(|task| task.id == id)
-            .copied()
-            .ok_or(KernelError::TaskNotFound)
-    }
-
-    pub(crate) fn find_task_mut(&mut self, id: TaskId) -> Result<&mut Task, KernelError> {
-        self.tasks[..self.task_len]
-            .iter_mut()
-            .find(|task| task.id == id)
-            .ok_or(KernelError::TaskNotFound)
-    }
-}
-
-pub(crate) fn ensure_status(
-    current: TaskStatus,
-    allowed: &[TaskStatus],
-) -> Result<(), KernelError> {
-    allowed
-        .contains(&current)
-        .then_some(())
-        .ok_or(KernelError::TaskStatusMismatch)
 }

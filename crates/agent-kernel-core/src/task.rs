@@ -57,3 +57,32 @@ impl Task {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct TaskCompaction {
+    first: TaskId,
+    through: TaskId,
+    count: usize,
+}
+
+impl TaskCompaction {
+    pub(crate) const fn new(first: TaskId, through: TaskId, count: usize) -> Self {
+        Self {
+            first,
+            through,
+            count,
+        }
+    }
+
+    pub const fn first(self) -> TaskId {
+        self.first
+    }
+
+    pub const fn through(self) -> TaskId {
+        self.through
+    }
+
+    pub const fn count(self) -> usize {
+        self.count
+    }
+}

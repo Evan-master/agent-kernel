@@ -154,6 +154,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::TaskCompleted => format_task_event(event, "task_completed"),
         EventKind::TaskVerified => format_task_event(event, "task_verified"),
         EventKind::TaskCancelled => format_task_event(event, "task_cancelled"),
+        EventKind::TaskCompacted => format_task_event(event, "task_compacted"),
         EventKind::TaskQueued => format_task_event(event, "task_queued"),
         EventKind::TaskDispatched => format_task_event(event, "task_dispatched"),
         EventKind::TaskYielded => format_task_event(event, "task_yielded"),

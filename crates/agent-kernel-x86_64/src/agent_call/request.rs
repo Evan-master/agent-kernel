@@ -239,6 +239,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         through: RuntimeAdmissionId,
     },
+    CompactTasks {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        through: TaskId,
+    },
 }
 
 impl AgentCallRequest {
@@ -273,6 +281,7 @@ impl AgentCallRequest {
             Self::RequestRuntimeAdmission { .. } => AgentCallOperation::RequestRuntimeAdmission,
             Self::DiscoverRuntimeAdmission { .. } => AgentCallOperation::DiscoverRuntimeAdmission,
             Self::CompactRuntimeAdmissions { .. } => AgentCallOperation::CompactRuntimeAdmissions,
+            Self::CompactTasks { .. } => AgentCallOperation::CompactTasks,
         }
     }
 }

@@ -106,13 +106,20 @@ impl<
 
         let entry = self.run_queue[0];
         self.ensure_dispatch_ready_entry(entry)?;
-        Ok(TaskDispatchPermit::new(entry, quantum))
+        Ok(TaskDispatchPermit::new(
+            entry,
+            quantum,
+            self.task_generation,
+        ))
     }
 
     pub fn commit_ready_dispatch(
         &mut self,
         permit: TaskDispatchPermit,
     ) -> Result<RunQueueEntry, KernelError> {
+        if permit.generation() != self.task_generation {
+            return Err(KernelError::TaskDispatchPermitStale);
+        }
         let entry = permit.entry();
         if self.run_queue_len == 0 || self.run_queue[0] != entry {
             return Err(KernelError::TaskNotRunnable);

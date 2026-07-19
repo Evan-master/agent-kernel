@@ -214,6 +214,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
     release::terminal(

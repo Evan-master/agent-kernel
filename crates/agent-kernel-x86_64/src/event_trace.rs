@@ -67,6 +67,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::TaskCompleted => "task_completed",
         EventKind::TaskVerified => "task_verified",
         EventKind::TaskCancelled => "task_cancelled",
+        EventKind::TaskCompacted => "task_compacted",
         EventKind::TaskQueued => "task_queued",
         EventKind::TaskDispatched => "task_dispatched",
         EventKind::TaskYielded => "task_yielded",
