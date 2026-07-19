@@ -72,6 +72,9 @@ currently provides:
 - Agent Call 28, which exposes the permit-bound requester only to an admitted
   context; each Runtime Service Worker validates the reply and uses that
   identity as its completion notification recipient;
+- Agent Call 29, which lets an authenticated Supervisor compact an authorized
+  terminal Runtime Admission prefix, return active capacity, invalidate stale
+  permits, and emit one ordered audit Event per retired record;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -79,8 +82,9 @@ currently provides:
   Supervisor call frame across two FIFO receive/acknowledgement rounds;
 - two generation-bound Runtime Admission release batches that require verified,
   idle targets and preflight aggregate event capacity: batch one returns 22
-  frames while the Supervisor retains eleven, and the terminal batch returns
-  the final 33 frames before four ordered `RuntimeAdmissionReleased` records;
+  frames while the Supervisor retains eleven; the Supervisor later compacts
+  released Admissions 1 and 2, and the terminal batch returns the final 33
+  frames while retaining released Admissions 3 and 4;
 - post-build cancellation that clears and atomically restores all eleven frames
   after duplicate runtime registration, followed by cross-batch physical reuse:
   Agents 13 and 14 consume the exact zeroed identities released by Agents 11
@@ -116,8 +120,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 15 |
-| Admission Supervisor Agent/kernel address-space switches | 30 |
+| Admission Supervisor Agent Calls | 16 |
+| Admission Supervisor Agent/kernel address-space switches | 32 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -125,7 +129,8 @@ The reference validation profile enforces these deterministic invariants:
 | Runtime Admission commits | 4 |
 | Runtime Admission requester discoveries | 4 |
 | Runtime Admission releases | 4 |
-| Terminal released Runtime Admission records | 4 |
+| Runtime Admission compaction Events | 2 |
+| Retained terminal Runtime Admission records | 2 |
 | Worker completion notifications | 4 |
 | Resident Supervisor Mailbox waits | 2 |
 | Resident Supervisor Mailbox wakes | 2 |
@@ -145,7 +150,7 @@ The reference validation profile enforces these deterministic invariants:
 | Tasks after Runtime Service Worker verification | 12 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 326 |
+| Ordered kernel events after Driver completion | 328 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -230,6 +235,7 @@ and nonce state before it reaches the facade.
 | `ReleaseMemoryRegion` | 26 | Retire its Memory Resource, remove every leaf, clear every frame, and return the region to the pool |
 | `RequestRuntimeAdmission` | 27 | Request audited native runtime admission for one accepted, unqueued target Task |
 | `DiscoverRuntimeAdmission` | 28 | Return the kernel-owned requester bound to the current admitted context |
+| `CompactRuntimeAdmissions` | 29 | Retire an authorized terminal prefix from the active admission queue |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -248,7 +254,10 @@ the request to the target Agent, Task, verified Image, and Resource. The x86
 broker receives only a generation-checked permit and commits queue visibility
 after physical registration succeeds. The broker carries the permit requester
 into the admitted CPU context; operation 28 returns it through a canonical,
-authenticated, read-only reply.
+authenticated, read-only reply. Operation 29 requires `Delegate` authority for
+every selected Resource, compacts only a contiguous `Rejected` or `Released`
+prefix, preserves monotonic IDs, and records every retired identity in the
+Event log.
 
 ## Quick Start
 
@@ -285,7 +294,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 326 events, and treat
+validate the complete serial transcript, require exactly 328 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -302,6 +311,7 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK
+AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -310,6 +320,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_PARTIAL_RECLAIM_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -320,7 +331,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[326] driver_invocation_completed
+event[328] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -364,7 +375,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 and 28,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 29,
   fixed-capacity admission records, generation-bound permits, requester-bound
   admitted contexts, and a broker that connects audited semantic requests to
   the physical runtime service;
@@ -373,16 +384,18 @@ authority.
   Worker reclamation, and final three-address-space reclamation;
 - opaque, generation-bound release batches that link verified idle Tasks to
   post-reclamation `RuntimeAdmissionReleased` records and ordered kernel events;
+- authorized terminal-prefix compaction with FIFO retention, monotonic IDs,
+  stale-permit invalidation, active-capacity reuse, and per-record Events;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 326-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 328-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- bounded release-record compaction and an admission queue larger than the Task
-  store;
+- a dedicated Runtime Admission capacity and an active queue larger than the
+  Task store;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -390,8 +403,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Resident Runtime Admission Batches design](docs/superpowers/specs/2026-07-19-x86-resident-runtime-admission-batches-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-x86-resident-runtime-admission-batches-v1.md)
+See the current [Runtime Admission Compaction design](docs/superpowers/specs/2026-07-19-runtime-admission-compaction-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-runtime-admission-compaction-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
