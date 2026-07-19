@@ -87,6 +87,10 @@ currently provides:
   terminal Intent prefix after active Task and Message references are gone,
   preserve monotonic Intent IDs, and emit one ordered audit Event per retired
   Intent;
+- Agent Call 32, which lets an authenticated Supervisor retire one revoked
+  Capability leaf after every live child, Task, Agent Entry, Runtime Admission,
+  and unacknowledged Message reference is gone; retired child Resources can be
+  cleaned through active ancestor `Rollback` authority;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -132,8 +136,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 18 |
-| Admission Supervisor Agent/kernel address-space switches | 36 |
+| Admission Supervisor Agent Calls | 24 |
+| Admission Supervisor Agent/kernel address-space switches | 48 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -166,10 +170,13 @@ The reference validation profile enforces these deterministic invariants:
 | Cumulative terminal private-frame returns | 121 |
 | Final zeroed private address-space frame pool | 66 |
 | Resources after Manager execution | 7 |
-| Capabilities after Runtime Service Worker verification | 25 |
+| Capability store capacity | 26 |
+| Occupied Capability slots after compaction and reuse | 26 |
+| Compacted Capability records | 2 |
+| Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 350 |
+| Ordered kernel events after Driver completion | 356 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -194,7 +201,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31, 32"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -257,6 +264,7 @@ and nonce state before it reaches the facade.
 | `CompactRuntimeAdmissions` | 29 | Retire an authorized terminal prefix from the active admission queue |
 | `CompactTasks` | 30 | Retire an authorized terminal prefix from the active Task store |
 | `CompactIntents` | 31 | Retire an authorized terminal prefix from the active Intent store |
+| `CompactCapability` | 32 | Retire one authorized revoked leaf from the sparse Capability store |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -288,6 +296,12 @@ authority for every selected Intent Resource. It accepts only a contiguous
 `Fulfilled` or `Cancelled` prefix after all active Task and unacknowledged
 Message references are gone, preserves monotonic Intent IDs, and records the
 original kind, Resource, owner, and verification requirement in ordered Events.
+Operation 32 requires an authenticated Supervisor and active root-scoped
+`Rollback` authority. It accepts one revoked Capability with no retained child
+or live kernel-object reference, clears exactly one sparse slot, preserves
+monotonic IDs, and emits a `CapabilityCompacted` Event. An active target
+Resource requires exact scope; a retired target Resource accepts authority from
+an active ancestor in its immutable Resource chain.
 
 ## Quick Start
 
@@ -324,7 +338,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 350 events, and treat
+validate the complete serial transcript, require exactly 356 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -346,6 +360,7 @@ AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK
 AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK
+AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
@@ -357,6 +372,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK
 AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK
+AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -367,7 +383,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[350] driver_invocation_completed
+event[356] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -412,7 +428,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 31,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 32,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -429,10 +445,13 @@ authority.
 - authorized Intent-prefix compaction with terminal-state checks, active Task
   and Message reference preflight, monotonic IDs, and complete per-Intent
   Events;
+- authorized sparse Capability compaction with leaf-first ordering, live
+  reference preflight, retired-Resource ancestor authority, monotonic IDs, hole
+  reuse, and complete per-Capability Events;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 350-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 356-event reference profile.
 
 ### Planned
 
@@ -446,8 +465,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Intent Store Compaction design](docs/superpowers/specs/2026-07-19-intent-store-compaction-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-intent-store-compaction-v1.md)
+See the current [Capability Store Compaction design](docs/superpowers/specs/2026-07-19-capability-store-compaction-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-capability-store-compaction-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

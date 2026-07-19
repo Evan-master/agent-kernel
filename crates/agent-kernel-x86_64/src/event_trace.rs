@@ -50,6 +50,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::CapabilityGranted => "capability_granted",
         EventKind::CapabilityDerived => "capability_derived",
         EventKind::CapabilityRevoked => "capability_revoked",
+        EventKind::CapabilityCompacted => "capability_compacted",
         EventKind::IntentDeclared => "intent_declared",
         EventKind::IntentBound => "intent_bound",
         EventKind::IntentFulfilled => "intent_fulfilled",

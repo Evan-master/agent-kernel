@@ -48,6 +48,7 @@ pub enum EventKind {
     CapabilityGranted,
     CapabilityDerived,
     CapabilityRevoked,
+    CapabilityCompacted,
     IntentDeclared,
     IntentBound,
     IntentFulfilled,

@@ -7,6 +7,7 @@
 
 mod agent_management;
 mod capability;
+mod capability_compaction;
 mod context;
 mod intent_compaction;
 mod mailbox;
@@ -63,6 +64,7 @@ pub const AGENT_CALL_DISCOVER_RUNTIME_ADMISSION: u64 = 28;
 pub const AGENT_CALL_COMPACT_RUNTIME_ADMISSIONS: u64 = 29;
 pub const AGENT_CALL_COMPACT_TASKS: u64 = 30;
 pub const AGENT_CALL_COMPACT_INTENTS: u64 = 31;
+pub const AGENT_CALL_COMPACT_CAPABILITY: u64 = 32;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -126,6 +128,7 @@ impl AgentCallRequest {
             AGENT_CALL_COMPACT_RUNTIME_ADMISSIONS => AgentCallOperation::CompactRuntimeAdmissions,
             AGENT_CALL_COMPACT_TASKS => AgentCallOperation::CompactTasks,
             AGENT_CALL_COMPACT_INTENTS => AgentCallOperation::CompactIntents,
+            AGENT_CALL_COMPACT_CAPABILITY => AgentCallOperation::CompactCapability,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -228,6 +231,7 @@ impl AgentCallRequest {
             }
             AgentCallOperation::CompactTasks => task_compaction::decode(frame),
             AgentCallOperation::CompactIntents => intent_compaction::decode(frame),
+            AgentCallOperation::CompactCapability => capability_compaction::decode(frame),
         }
     }
 }

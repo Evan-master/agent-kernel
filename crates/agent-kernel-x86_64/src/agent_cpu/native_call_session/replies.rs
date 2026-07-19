@@ -5,6 +5,7 @@
 //! completed before callers invoke these methods.
 
 mod agent_management;
+mod capability_compaction;
 mod intent_compaction;
 mod memory_page;
 mod memory_region;

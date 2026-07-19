@@ -212,6 +212,13 @@ impl AgentCallContext {
                 image,
                 nonce,
                 ..
+            }
+            | AgentCallRequest::CompactCapability {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
             } => self.matches_identity(agent, task, image, nonce, expected_nonce),
         }
     }

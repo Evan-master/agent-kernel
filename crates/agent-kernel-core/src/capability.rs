@@ -15,3 +15,18 @@ pub struct Capability {
     pub task: Option<TaskId>,
     pub parent: Option<CapabilityId>,
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct CapabilityCompaction {
+    capability: CapabilityId,
+}
+
+impl CapabilityCompaction {
+    pub(crate) const fn new(capability: CapabilityId) -> Self {
+        Self { capability }
+    }
+
+    pub const fn capability(self) -> CapabilityId {
+        self.capability
+    }
+}

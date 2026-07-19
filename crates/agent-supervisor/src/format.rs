@@ -92,6 +92,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::CapabilityGranted => format_capability_event(event, "capability_granted"),
         EventKind::CapabilityDerived => format_capability_event(event, "capability_derived"),
         EventKind::CapabilityRevoked => format_capability_event(event, "capability_revoked"),
+        EventKind::CapabilityCompacted => format_capability_event(event, "capability_compacted"),
         EventKind::IntentDeclared => format_intent_event(event, "intent_declared"),
         EventKind::IntentBound => format_intent_event(event, "intent_bound"),
         EventKind::IntentFulfilled => format_intent_event(event, "intent_fulfilled"),

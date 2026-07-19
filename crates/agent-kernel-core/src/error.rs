@@ -74,6 +74,8 @@ pub enum KernelError {
     CheckpointResourceMismatch,
     CheckpointStatusMismatch,
     CapabilityRevoked,
+    CapabilityCompactionNotReady,
+    CapabilityCompactionReferenced,
     CapabilityScopeMismatch,
     AgentMismatch,
     ResourceMismatch,

@@ -105,6 +105,14 @@ impl<
         self.find_capability(capability)
     }
 
+    pub const fn capability_capacity(&self) -> usize {
+        CAPS
+    }
+
+    pub fn capability_count(&self) -> usize {
+        self.capabilities.iter().flatten().count()
+    }
+
     pub(crate) fn record_capability_event(
         &mut self,
         kind: EventKind,

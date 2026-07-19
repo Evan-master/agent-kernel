@@ -5,7 +5,8 @@
 //! recording inside `agent-kernel-core`.
 
 use agent_kernel_core::{
-    AgentId, Capability, CapabilityId, Event, KernelError, OperationSet, ResourceId,
+    AgentId, Capability, CapabilityCompaction, CapabilityId, Event, KernelError, OperationSet,
+    ResourceId,
 };
 
 use crate::AgentKernel;
@@ -93,5 +94,22 @@ impl<
 
     pub fn capability(&self, capability: CapabilityId) -> Result<Capability, KernelError> {
         self.core.capability(capability)
+    }
+
+    pub fn sys_compact_capability(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        target: CapabilityId,
+    ) -> Result<CapabilityCompaction, KernelError> {
+        self.core.compact_capability(actor, authority, target)
+    }
+
+    pub const fn capability_capacity(&self) -> usize {
+        self.core.capability_capacity()
+    }
+
+    pub fn capability_count(&self) -> usize {
+        self.core.capability_count()
     }
 }
