@@ -40,4 +40,5 @@ pub enum AgentCallOperation {
     CompactCapability,
     RetireAgentEntry,
     RetireMessage,
+    RetireOrphanedMessage,
 }

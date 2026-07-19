@@ -5,7 +5,8 @@
 //! ordered lifecycle events.
 
 use agent_kernel_core::{
-    AgentExecutionState, AgentStatus, Event, EventKind, Operation, TaskStatus,
+    AgentExecutionState, AgentStatus, Event, EventKind, MessageKind, MessageStatus, Operation,
+    TaskStatus,
 };
 
 use super::super::{ResourceManagerTask, RESOURCE_MANAGER};
@@ -42,6 +43,10 @@ pub(super) fn state_valid(
             .agent_entries()
             .iter()
             .any(|entry| entry.agent == image.managed_agent())
+        && !kernel
+            .messages()
+            .iter()
+            .any(|message| message.id == image.orphaned_message())
         && !kernel.tasks().iter().any(|task| {
             task.assignee == Some(image.managed_agent())
                 && !matches!(
@@ -63,19 +68,40 @@ pub(super) fn events_valid(
     manager: ResourceManagerTask,
     image: BootResourceManagerImage,
 ) -> bool {
-    let kinds = [
-        EventKind::AgentRegistered,
-        EventKind::AgentSuspended,
-        EventKind::AgentResumed,
-        EventKind::AgentRetired,
+    let lifecycle_kinds = [
+        (0, EventKind::AgentRegistered),
+        (2, EventKind::AgentSuspended),
+        (3, EventKind::AgentResumed),
+        (4, EventKind::AgentRetired),
     ];
-    events.len() == kinds.len()
-        && events.iter().zip(kinds).all(|(event, kind)| {
-            event.kind == kind
+    events.len() == 6
+        && lifecycle_kinds.iter().all(|(index, kind)| {
+            let event = events[*index];
+            event.kind == *kind
                 && event.agent == RESOURCE_MANAGER
                 && event.target_agent == Some(image.managed_agent())
                 && event.resource == Some(booted.report().bootstrap_resource)
                 && event.capability == Some(manager.resource_authority)
                 && event.operation == Some(Operation::Delegate)
+        })
+        && events[1].kind == EventKind::MessageSent
+        && events[1].agent == RESOURCE_MANAGER
+        && events[1].target_agent == Some(image.managed_agent())
+        && events[1].message == Some(image.orphaned_message())
+        && events[5].kind == EventKind::OrphanedMessageRetired
+        && events[5].agent == RESOURCE_MANAGER
+        && events[5].target_agent == Some(image.managed_agent())
+        && events[5].message == Some(image.orphaned_message())
+        && events[5].message_kind == Some(MessageKind::Notify)
+        && events[5].source_capability == Some(manager.resource_authority)
+        && events[5].operation == Some(Operation::Delegate)
+        && events[5].resource.is_none()
+        && events[5].capability.is_none()
+        && events[5].intent.is_none()
+        && events[5].task.is_none()
+        && events[5].action.is_none()
+        && events[5].fault.is_none()
+        && !booted.kernel().messages().iter().any(|message| {
+            message.id == image.orphaned_message() || message.status == MessageStatus::Pending
         })
 }

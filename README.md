@@ -46,9 +46,9 @@ currently provides:
 - SHA-256-bound, fixed-size Agent Image Capsules with typed Worker, Verifier,
   FaultHandler, and Supervisor entry roles;
 - a versioned register-only Agent Call ABI with no userspace pointers;
-- blocking mailbox send/receive/acknowledge, recipient-owned terminal Message
-  retirement, wakeup, cooperative yield, task results, target-scoped
-  verification, and completion;
+- blocking mailbox send/receive/acknowledge, recipient-owned acknowledged
+  Message retirement, administrator-owned orphaned Message retirement, wakeup,
+  cooperative yield, task results, target-scoped verification, and completion;
 - containment of ring-3 `#UD`, `#GP`, and `#PF` faults while kernel-origin
   exceptions remain fatal;
 - bounded fault-time reclamation of live private runtime memory before
@@ -100,12 +100,16 @@ currently provides:
 - Agent Call 34, which lets the authenticated recipient retire one acknowledged
   Message, return its dense Store slot, preserve retained FIFO order and
   monotonic Message IDs, and emit complete kind and payload audit evidence;
+- Agent Call 35, which lets an authenticated administrator retire one Pending
+  Message addressed to a retired managed Agent through exact root-scoped
+  `Delegate` authority, return its dense Store slot, and emit complete
+  recipient, authority, kind, and payload evidence;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
 - four authenticated Worker completion notifications that wake the retained
   Supervisor call frame across two FIFO receive/acknowledge/retire rounds; two
-  transient slots are reused by Messages 3 through 6 across both batches;
+  transient slots are reused by Messages 4 through 7 across both batches;
 - two generation-bound Runtime Admission release batches that require verified,
   idle targets and preflight aggregate event capacity: batch one returns 22
   frames while the Supervisor retains eleven; the Supervisor later compacts
@@ -123,8 +127,9 @@ currently provides:
   `Rollback`, declares a new `Act` Intent, creates its Task, and delegates that
   Task to a registered Agent with a kernel-issued task capability;
 - a native Agent Manager protocol in the same ring-3 Capsule that registers
-  Agent 9 under root-scoped `Delegate` authority, then suspends, resumes, and
-  retires the unlaunched identity through four authenticated Agent Calls;
+  Agent 9 under root-scoped `Delegate` authority, sends Pending Message 3,
+  suspends, resumes, and retires the unlaunched identity, then retires the
+  orphaned Message through authenticated Agent Call 35;
 - a shared 16-frame runtime pool with deterministic allocation, full-page
   zeroing, and ownership records bound to Agent, Resource, MemoryCell, and
   allocation generation;
@@ -144,8 +149,8 @@ The reference validation profile enforces these deterministic invariants:
 | Registered Agents | 14 |
 | Native ring-3 completions | 11 |
 | Kernel-selected dispatches | 35 |
-| Resource Manager Agent Calls | 29 |
-| Resource Manager Agent/kernel address-space switches | 58 |
+| Resource Manager Agent Calls | 31 |
+| Resource Manager Agent/kernel address-space switches | 62 |
 | Admission Supervisor Agent Calls | 30 |
 | Admission Supervisor Agent/kernel address-space switches | 60 |
 | Runtime Service Worker Agent Calls | 20 |
@@ -174,7 +179,8 @@ The reference validation profile enforces these deterministic invariants:
 | Message store capacity | 4 |
 | Retained acknowledged boot-flow Messages | 2 |
 | Retired completion Messages | 4 |
-| Message retirement Events | 4 |
+| Recipient-owned Message retirement Events | 4 |
+| Administrator-owned orphaned Message retirement Events | 1 |
 | Resident Supervisor Mailbox waits | 2 |
 | Resident Supervisor Mailbox wakes | 2 |
 | Contained Agent faults | 4 |
@@ -194,11 +200,22 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 362 |
+| Ordered kernel events after Driver completion | 364 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
 path.
+
+The two persistent Supervisor Capsules are also frozen as independent binary
+artifacts:
+
+| Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
+| --- | ---: | ---: | ---: | --- |
+| Resource Manager | 31 | 62 | 2,832 | `724f0da14c9a69b9e89ac2c7ea9f70559803a40e1cb1762800218ab9862256ec` |
+| Admission Supervisor | 30 | 60 | 2,794 | `aea6f5f466ea2fffbbb5c39b7c570e20824563b3e8bfdfe94adbd858c51f9011` |
+
+The generated Rust bytes match independently assembled machine code, and each
+complete Capsule occurs exactly once in the release ELF.
 
 ## Architecture
 
@@ -219,7 +236,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31, 32, 33, 34"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-35"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -285,6 +302,7 @@ and nonce state before it reaches the facade.
 | `CompactCapability` | 32 | Retire one authorized revoked leaf from the sparse Capability store |
 | `RetireAgentEntry` | 33 | Retire one authorized quiescent terminal entry from the dense Agent Entry store |
 | `RetireMessage` | 34 | Retire one acknowledged Message owned by the authenticated recipient |
+| `RetireOrphanedMessage` | 35 | Retire one Pending Message addressed to an authorized retired managed Agent |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -335,6 +353,13 @@ and only `Acknowledged` records with no live Namespace binding may retire.
 Dense removal preserves retained order, the next Message ID remains monotonic,
 and `MessageRetired` records the sender, recipient, kind, and every typed
 payload reference before the slot returns to the fixed Store.
+Operation 35 requires an active authenticated caller and an active, exact,
+root-scoped `Delegate` Capability on the retired recipient's recorded
+management Resource. Only `Pending` Messages addressed to managed Agents in
+`Retired` state qualify. A live Namespace binding blocks removal. Successful
+retirement preserves dense order and monotonic Message IDs, then emits
+`OrphanedMessageRetired` with the recipient, authority, operation, kind, and
+every typed payload reference.
 
 ## Quick Start
 
@@ -371,7 +396,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 362 events, and treat
+validate the complete serial transcript, require exactly 364 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -395,11 +420,13 @@ AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK
+AGENT_KERNEL_AGENT_CALL_ORPHANED_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_MESSAGE_RETIREMENT_OK
+AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
@@ -420,7 +447,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[362] driver_invocation_completed
+event[364] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -465,7 +492,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 34,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 35,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -493,16 +520,19 @@ authority.
 - recipient-owned acknowledged Message retirement with Namespace-reference
   preflight, dense-order preservation, monotonic IDs, slot reuse, and complete
   kind and typed-payload Event evidence;
+- administrator-owned orphaned Message retirement for Pending delivery to a
+  retired managed Agent, with exact root-scoped `Delegate` authorization,
+  Namespace-reference preflight, atomic dense removal, monotonic IDs, and
+  complete typed Event evidence;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 362-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 364-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- administrative policy for pending Messages owned by retired Agents, plus
-  bounded retention for Waiters, Faults, and Events;
+- bounded retention and retirement policies for Waiters, Faults, and Events;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -510,8 +540,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Message Retirement design](docs/superpowers/specs/2026-07-19-message-retirement-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-message-retirement-v1.md)
+See the current [Orphaned Message Retirement design](docs/superpowers/specs/2026-07-19-orphaned-message-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-orphaned-message-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

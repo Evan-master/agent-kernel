@@ -75,7 +75,7 @@ impl PreparedAdmissionSupervisorFlow {
                     && waiter.kind == WaiterKind::Mailbox
                     && !waiter.active)
             && targets.iter().enumerate().all(|(index, target)| {
-                retired_notice(booted, index + 3, *target, ADMISSION_SUPERVISOR)
+                retired_notice(booted, index + 4, *target, ADMISSION_SUPERVISOR)
             })
             && matches!(kernel.events().last(), Some(event)
                 if event.kind == EventKind::TaskCompleted

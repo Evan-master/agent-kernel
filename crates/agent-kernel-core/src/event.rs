@@ -89,6 +89,7 @@ pub enum EventKind {
     MessageReceived,
     MessageAcknowledged,
     MessageRetired,
+    OrphanedMessageRetired,
     MemoryCellCreated,
     MemoryCellRecalled,
     MemoryCellRemembered,

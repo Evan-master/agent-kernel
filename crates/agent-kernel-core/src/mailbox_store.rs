@@ -167,6 +167,16 @@ impl<
         message
     }
 
+    pub(crate) fn remove_message_at(&mut self, index: usize) -> MessageRecord {
+        let record = self.messages[index];
+        let previous = self.messages;
+        let remaining = self.message_len - 1;
+        self.messages[index..remaining].copy_from_slice(&previous[index + 1..self.message_len]);
+        self.messages[remaining] = MessageRecord::empty();
+        self.message_len = remaining;
+        record
+    }
+
     pub(crate) fn oldest_pending_message_index(&self, recipient: AgentId) -> Option<usize> {
         let mut index = 0;
         while index < self.message_len {

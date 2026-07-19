@@ -79,7 +79,7 @@ admission_supervisor_first_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    cmp r10, 3
+    cmp r10, 4
     jne .halt
     cmp r11, 10
     jne .halt
@@ -123,7 +123,7 @@ admission_supervisor_first_message_retirement_return:
     jne .halt
     cmp rdx, 34
     jne .halt
-    cmp r10, 3
+    cmp r10, 4
     jne .halt
     test r11, r11
     jne .halt
@@ -148,7 +148,7 @@ admission_supervisor_second_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    cmp r10, 4
+    cmp r10, 5
     jne .halt
     cmp r11, 11
     jne .halt
@@ -192,7 +192,7 @@ admission_supervisor_second_message_retirement_return:
     jne .halt
     cmp rdx, 34
     jne .halt
-    cmp r10, 4
+    cmp r10, 5
     jne .halt
     test r11, r11
     jne .halt
@@ -269,7 +269,7 @@ admission_supervisor_third_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    cmp r10, 5
+    cmp r10, 6
     jne .halt
     cmp r11, 13
     jne .halt
@@ -313,7 +313,7 @@ admission_supervisor_third_message_retirement_return:
     jne .halt
     cmp rdx, 34
     jne .halt
-    cmp r10, 5
+    cmp r10, 6
     jne .halt
     test r11, r11
     jne .halt
@@ -338,7 +338,7 @@ admission_supervisor_fourth_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    cmp r10, 6
+    cmp r10, 7
     jne .halt
     cmp r11, 14
     jne .halt
@@ -382,7 +382,7 @@ admission_supervisor_fourth_message_retirement_return:
     jne .halt
     cmp rdx, 34
     jne .halt
-    cmp r10, 6
+    cmp r10, 7
     jne .halt
     test r11, r11
     jne .halt

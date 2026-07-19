@@ -70,6 +70,9 @@ pub(super) fn run(
             AgentCallRequest::RetireMessage { message, .. } => {
                 mailbox::retire(booted, pending, message)?
             }
+            AgentCallRequest::RetireOrphanedMessage {
+                authority, message, ..
+            } => mailbox::retire_orphaned(booted, pending, authority, message)?,
             AgentCallRequest::CreateResource {
                 authority,
                 parent,

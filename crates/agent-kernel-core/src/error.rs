@@ -123,6 +123,7 @@ pub enum KernelError {
     MessageAgentMismatch,
     MessageStatusMismatch,
     MessageRetirementReferenced,
+    OrphanedMessageRetirementNotReady,
     MailboxEmpty,
     MemoryCellNotFound,
     NamespaceEntryNotFound,

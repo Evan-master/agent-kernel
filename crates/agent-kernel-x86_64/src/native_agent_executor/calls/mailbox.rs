@@ -1,8 +1,8 @@
 //! Mailbox Agent Call handlers for the native runtime loop.
 
 use agent_kernel_core::{
-    AgentId, EventKind, MessageId, MessageKind, MessagePayload, MessageReceiveOutcome,
-    MessageStatus,
+    AgentId, CapabilityId, EventKind, MessageId, MessageKind, MessagePayload,
+    MessageReceiveOutcome, MessageStatus, Operation,
 };
 
 use super::super::state;
@@ -154,6 +154,47 @@ pub(super) fn retire(
     }
     crate::serial_write_line("AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK");
     pending.acknowledge_message_retirement(message)
+}
+
+pub(super) fn retire_orphaned(
+    booted: &mut X86BootedKernel,
+    pending: PendingAgentCallCpu,
+    authority: CapabilityId,
+    message: MessageId,
+) -> Option<ResumableAgentCpu> {
+    let context = authenticated_context(&pending)?;
+    let retirement = booted
+        .kernel_mut()
+        .sys_retire_orphaned_message(context.agent(), authority, message)
+        .ok()?;
+    let record = retirement.record();
+    let recipient = retirement.record().recipient;
+    let management_resource = retirement.management_resource();
+    let event = booted.kernel().events().last()?;
+    if retirement.message() != message
+        || retirement.actor() != context.agent()
+        || retirement.authority() != authority
+        || record.status != MessageStatus::Pending
+        || message_record(booted, message).is_some()
+        || event.kind != EventKind::OrphanedMessageRetired
+        || event.agent != context.agent()
+        || event.target_agent != Some(recipient)
+        || event.message != Some(message)
+        || event.message_kind != Some(record.kind)
+        || event.source_capability != Some(authority)
+        || event.operation != Some(Operation::Delegate)
+        || event.resource != record.payload.resource
+        || event.capability != record.payload.capability
+        || event.intent != record.payload.intent
+        || event.task != record.payload.task
+        || event.action != record.payload.action
+        || event.fault != record.payload.fault
+        || !state::running(booted, context)
+    {
+        return None;
+    }
+    crate::serial_write_line("AGENT_KERNEL_AGENT_CALL_ORPHANED_MESSAGE_RETIREMENT_OK");
+    pending.acknowledge_orphaned_message_retirement(message, recipient, management_resource)
 }
 
 fn validate_received(

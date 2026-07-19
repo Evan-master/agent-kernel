@@ -1,12 +1,13 @@
-//! Recipient-owned retirement of acknowledged mailbox records.
+//! Capability-authorized retirement of pending mail for retired Agents.
 //!
-//! This no_std core module validates Agent identity, terminal delivery state,
-//! Namespace liveness, and Event capacity before removing one record from the
-//! dense fixed-capacity Message Store. Message IDs remain monotonic.
+//! This no_std core module closes orphaned Mailbox records after managed Agent
+//! retirement. It validates the actor, management relationship, Delegate
+//! authority, pending state, Namespace liveness, and Event capacity before one
+//! dense Message Store removal. Message IDs remain monotonic.
 
 use crate::{
-    AgentId, Event, EventKind, KernelCore, KernelError, MessageId, MessageRecord,
-    MessageRetirement, MessageStatus, NamespaceObject,
+    AgentId, AgentStatus, CapabilityId, Event, EventKind, KernelCore, KernelError, MessageId,
+    MessageRecord, MessageStatus, NamespaceObject, Operation, OrphanedMessageRetirement,
 };
 
 impl<
@@ -60,24 +61,35 @@ impl<
         RUNTIME_ADMISSIONS,
     >
 {
-    pub fn retire_message(
+    pub fn retire_orphaned_message(
         &mut self,
-        agent: AgentId,
+        actor: AgentId,
+        authority: CapabilityId,
         message: MessageId,
-    ) -> Result<MessageRetirement, KernelError> {
-        self.ensure_agent_active(agent)?;
+    ) -> Result<OrphanedMessageRetirement, KernelError> {
+        self.ensure_agent_active(actor)?;
         let index = self
             .messages()
             .iter()
             .position(|record| record.id == message)
             .ok_or(KernelError::MessageNotFound)?;
         let record = self.messages[index];
-        if record.recipient != agent {
-            return Err(KernelError::MessageAgentMismatch);
-        }
-        if record.status != MessageStatus::Acknowledged {
+        if record.status != MessageStatus::Pending {
             return Err(KernelError::MessageStatusMismatch);
         }
+
+        let recipient = self.find_agent(record.recipient)?;
+        if recipient.status != AgentStatus::Retired {
+            return Err(KernelError::OrphanedMessageRetirementNotReady);
+        }
+        let Some(management_resource) = recipient.management_resource else {
+            return Err(KernelError::AgentManagementDenied);
+        };
+        if recipient.manager.is_none() {
+            return Err(KernelError::AgentManagementDenied);
+        }
+        self.ensure_authorized(actor, authority, management_resource, Operation::Delegate)?;
+
         if self
             .namespace_entries()
             .iter()
@@ -88,24 +100,34 @@ impl<
         self.ensure_event_slots(1)?;
 
         self.remove_message_at(index);
-        self.record(message_retirement_event(record, agent))?;
-
-        Ok(MessageRetirement::new(record))
+        self.record(orphaned_message_retirement_event(record, actor, authority))?;
+        Ok(OrphanedMessageRetirement::new(
+            record,
+            actor,
+            authority,
+            management_resource,
+        ))
     }
 }
 
-fn message_retirement_event(record: MessageRecord, agent: AgentId) -> Event {
+fn orphaned_message_retirement_event(
+    record: MessageRecord,
+    actor: AgentId,
+    authority: CapabilityId,
+) -> Event {
     let mut event = Event::empty();
-    event.agent = agent;
-    event.kind = EventKind::MessageRetired;
+    event.agent = actor;
+    event.kind = EventKind::OrphanedMessageRetired;
     event.resource = record.payload.resource;
     event.capability = record.payload.capability;
+    event.source_capability = Some(authority);
     event.intent = record.payload.intent;
     event.action = record.payload.action;
     event.message = Some(record.id);
     event.message_kind = Some(record.kind);
+    event.operation = Some(Operation::Delegate);
     event.task = record.payload.task;
     event.fault = record.payload.fault;
-    event.target_agent = Some(record.sender);
+    event.target_agent = Some(record.recipient);
     event
 }

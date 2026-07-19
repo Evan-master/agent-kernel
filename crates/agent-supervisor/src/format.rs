@@ -187,6 +187,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::MessageReceived => format_message_event(event, "message_received"),
         EventKind::MessageAcknowledged => format_message_event(event, "message_acknowledged"),
         EventKind::MessageRetired => format_message_event(event, "message_retired"),
+        EventKind::OrphanedMessageRetired => {
+            format_message_event(event, "orphaned_message_retired")
+        }
         EventKind::MemoryCellCreated => format_memory_event(event, "memory_cell_created"),
         EventKind::MemoryCellRecalled => format_memory_event(event, "memory_cell_recalled"),
         EventKind::MemoryCellRemembered => format_memory_event(event, "memory_cell_remembered"),

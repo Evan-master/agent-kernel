@@ -76,6 +76,7 @@ mod namespace_store;
 mod observation;
 mod observation_store;
 mod operation;
+mod orphaned_message_retirement;
 mod resource;
 mod resource_cleanup_authorization;
 mod resource_ownership;
@@ -133,7 +134,7 @@ pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, Verificatio
 pub use memory::{MemoryCellRecord, MemoryValue};
 pub use message::{
     MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageRetirement,
-    MessageStatus,
+    MessageStatus, OrphanedMessageRetirement,
 };
 pub use namespace::{NamespaceEntryRecord, NamespaceKey, NamespaceObject};
 pub use observation::ObservationRecord;

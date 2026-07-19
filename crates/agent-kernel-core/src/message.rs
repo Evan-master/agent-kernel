@@ -94,3 +94,47 @@ impl MessageRetirement {
         self.record.id
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct OrphanedMessageRetirement {
+    record: MessageRecord,
+    actor: AgentId,
+    authority: CapabilityId,
+    management_resource: ResourceId,
+}
+
+impl OrphanedMessageRetirement {
+    pub(crate) const fn new(
+        record: MessageRecord,
+        actor: AgentId,
+        authority: CapabilityId,
+        management_resource: ResourceId,
+    ) -> Self {
+        Self {
+            record,
+            actor,
+            authority,
+            management_resource,
+        }
+    }
+
+    pub const fn record(self) -> MessageRecord {
+        self.record
+    }
+
+    pub const fn message(self) -> MessageId {
+        self.record.id
+    }
+
+    pub const fn actor(self) -> AgentId {
+        self.actor
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
+    }
+
+    pub const fn management_resource(self) -> ResourceId {
+        self.management_resource
+    }
+}

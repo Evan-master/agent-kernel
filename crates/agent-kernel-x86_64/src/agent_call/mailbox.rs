@@ -3,7 +3,7 @@
 //! This ABI-layer child maps canonical register payloads into core message
 //! types. It performs no mailbox mutation and rejects every unsupported word.
 
-use agent_kernel_core::{AgentId, MessageId, MessageKind, MessagePayload, TaskId};
+use agent_kernel_core::{AgentId, CapabilityId, MessageId, MessageKind, MessagePayload, TaskId};
 
 use super::{
     decode_context_payload, ensure_extended_reserved_zero, ensure_reserved_zero,
@@ -80,6 +80,24 @@ pub(super) fn decode_retirement(
         image,
         nonce,
         message: MessageId::new(frame.r10),
+    })
+}
+
+pub(super) fn decode_orphaned_retirement(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<AgentCallRequest, AgentCallDecodeError> {
+    ensure_extended_reserved_zero(frame)?;
+    let (agent, task, image, nonce) = decode_context_payload(frame)?;
+    if frame.r10 == 0 || frame.r11 == 0 {
+        return Err(AgentCallDecodeError::InvalidPayload);
+    }
+    Ok(AgentCallRequest::RetireOrphanedMessage {
+        agent,
+        task,
+        image,
+        nonce,
+        authority: CapabilityId::new(frame.r10),
+        message: MessageId::new(frame.r11),
     })
 }
 
