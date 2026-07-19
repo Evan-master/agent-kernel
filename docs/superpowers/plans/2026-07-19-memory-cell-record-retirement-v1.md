@@ -20,4 +20,4 @@
 - [x] Update both README languages and latest milestone references.
 - [x] Run focused tests, full workspace tests, Supervisor simulation,
   bare-metal checks, debug/release QEMU, and release ELF artifact audits.
-- [ ] Publish public `main` while keeping the complete Agent Kernel goal active.
+- [x] Publish public `main` while keeping the complete Agent Kernel goal active.

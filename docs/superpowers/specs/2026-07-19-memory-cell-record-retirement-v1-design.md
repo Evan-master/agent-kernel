@@ -1,6 +1,6 @@
 # Memory Cell Record Retirement V1 Design
 
-Status: Implemented, publication validation complete
+Status: Implemented and published
 
 ## Objective
 
