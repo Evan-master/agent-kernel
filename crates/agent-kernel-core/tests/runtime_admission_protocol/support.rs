@@ -3,7 +3,32 @@ use agent_kernel_core::{
     KernelCore, Operation, OperationSet, ResourceId, ResourceKind, TaskId,
 };
 
-pub type TestCore<const EVENTS: usize> = KernelCore<3, 2, 8, EVENTS, 0, 64, 0, 2, 2, 2>;
+pub type TestCore<const EVENTS: usize> = CapacityCore<EVENTS, 2>;
+pub type CapacityCore<const EVENTS: usize, const RUNTIME_ADMISSIONS: usize> = KernelCore<
+    3,
+    2,
+    8,
+    EVENTS,
+    0,
+    64,
+    0,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    3,
+    0,
+    0,
+    0,
+    0,
+    RUNTIME_ADMISSIONS,
+>;
 
 #[derive(Copy, Clone)]
 pub struct Fixture {
@@ -30,7 +55,12 @@ pub struct PairFixture {
 }
 
 pub fn prepared<const EVENTS: usize>() -> (TestCore<EVENTS>, Fixture) {
-    let mut core = TestCore::new();
+    prepared_with_capacity::<EVENTS, 2>()
+}
+
+pub fn prepared_with_capacity<const EVENTS: usize, const RUNTIME_ADMISSIONS: usize>(
+) -> (CapacityCore<EVENTS, RUNTIME_ADMISSIONS>, Fixture) {
+    let mut core = CapacityCore::<EVENTS, RUNTIME_ADMISSIONS>::new();
     let supervisor = AgentId::new(1);
     let target = AgentId::new(2);
     core.register_agent(supervisor)

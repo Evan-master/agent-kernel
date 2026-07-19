@@ -17,7 +17,7 @@ use crate::{
     native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
     native_agent_runtime::NativeAgentRuntime,
     reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKER_BATCHES},
-    serial_write_line, X86BootedKernel,
+    serial_write_line, X86BootedKernel, X86_RUNTIME_ADMISSION_CAPACITY, X86_TASK_CAPACITY,
 };
 
 pub(super) fn run(
@@ -33,9 +33,12 @@ pub(super) fn run(
         || !booted.kernel().run_queue().is_empty()
         || !memory_pool.all_available_and_zero()
         || !address_space_pool.all_reclaimed_and_zero()
+        || booted.kernel().runtime_admission_capacity() != X86_RUNTIME_ADMISSION_CAPACITY
+        || X86_RUNTIME_ADMISSION_CAPACITY <= X86_TASK_CAPACITY
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK");
 
     let first_flows = prepare_batch(booted, REUSE_WORKER_BATCHES[0], worker_contract)?;
     if !PreparedReuseWorkerFlow::batch_unqueued(booted, &first_flows)

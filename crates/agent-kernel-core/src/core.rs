@@ -34,6 +34,7 @@ pub struct KernelCore<
     const DEVICE_EVENTS: usize = 0,
     const DRIVER_COMMANDS: usize = 0,
     const DRIVER_INVOCATIONS: usize = 0,
+    const RUNTIME_ADMISSIONS: usize = TASKS,
 > {
     pub(crate) agents: [AgentRecord; AGENTS],
     pub(crate) execution_contexts: [AgentExecutionContext; AGENTS],
@@ -47,7 +48,7 @@ pub struct KernelCore<
     pub(crate) observations: [ObservationRecord; OBSERVATIONS],
     pub(crate) checkpoints: [CheckpointRecord; CHECKPOINTS],
     pub(crate) tasks: [Task; TASKS],
-    pub(crate) runtime_admissions: [RuntimeAdmissionRecord; TASKS],
+    pub(crate) runtime_admissions: [RuntimeAdmissionRecord; RUNTIME_ADMISSIONS],
     pub(crate) run_queue: [RunQueueEntry; RUN_QUEUE],
     pub(crate) messages: [MessageRecord; MESSAGES],
     pub(crate) memory_cells: [MemoryCellRecord; MEMORY_CELLS],
@@ -130,6 +131,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -154,6 +156,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub const fn new() -> Self {
@@ -170,7 +173,7 @@ impl<
             observations: [ObservationRecord::empty(); OBSERVATIONS],
             checkpoints: [CheckpointRecord::empty(); CHECKPOINTS],
             tasks: [Task::empty(); TASKS],
-            runtime_admissions: [RuntimeAdmissionRecord::empty(); TASKS],
+            runtime_admissions: [RuntimeAdmissionRecord::empty(); RUNTIME_ADMISSIONS],
             run_queue: [RunQueueEntry::empty(); RUN_QUEUE],
             messages: [MessageRecord::empty(); MESSAGES],
             memory_cells: [MemoryCellRecord::empty(); MEMORY_CELLS],
@@ -255,6 +258,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     > Default
     for KernelCore<
         AGENTS,
@@ -279,6 +283,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     fn default() -> Self {

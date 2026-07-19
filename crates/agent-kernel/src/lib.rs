@@ -51,6 +51,7 @@ pub struct AgentKernel<
     const DEVICE_EVENTS: usize = 0,
     const DRIVER_COMMANDS: usize = 0,
     const DRIVER_INVOCATIONS: usize = 0,
+    const RUNTIME_ADMISSIONS: usize = TASKS,
 > {
     pub(crate) core: KernelCore<
         AGENTS,
@@ -75,6 +76,7 @@ pub struct AgentKernel<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >,
 }
 
@@ -101,6 +103,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -125,6 +128,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub const fn new() -> Self {

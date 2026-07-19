@@ -31,6 +31,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     AgentKernel<
         AGENTS,
@@ -55,6 +56,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub fn sys_request_runtime_admission(
@@ -116,6 +118,10 @@ impl<
 
     pub fn runtime_admissions(&self) -> &[RuntimeAdmissionRecord] {
         self.core.runtime_admissions()
+    }
+
+    pub const fn runtime_admission_capacity(&self) -> usize {
+        self.core.runtime_admission_capacity()
     }
 
     pub fn runtime_admission(

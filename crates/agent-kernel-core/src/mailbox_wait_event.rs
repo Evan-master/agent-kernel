@@ -84,6 +84,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -108,6 +109,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub(crate) fn record_mailbox_wait_event(

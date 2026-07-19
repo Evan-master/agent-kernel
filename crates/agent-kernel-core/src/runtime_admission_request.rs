@@ -32,6 +32,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -56,6 +57,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub fn request_runtime_admission(
@@ -67,14 +69,15 @@ impl<
     ) -> Result<RuntimeAdmissionId, KernelError> {
         let task_record =
             self.ensure_runtime_admission_context(requester, authority, target, task)?;
-        if self
-            .runtime_admissions()
-            .iter()
-            .any(|record| record.target == target || record.task == task)
-        {
+        if self.runtime_admissions().iter().any(|record| {
+            matches!(
+                record.status,
+                RuntimeAdmissionStatus::Requested | RuntimeAdmissionStatus::Admitted
+            ) && (record.target == target || record.task == task)
+        }) {
             return Err(KernelError::RuntimeAdmissionDuplicate);
         }
-        if self.runtime_admission_len >= TASKS {
+        if self.runtime_admission_len >= RUNTIME_ADMISSIONS {
             return Err(KernelError::RuntimeAdmissionStoreFull);
         }
         self.ensure_event_slots(1)?;
@@ -104,6 +107,10 @@ impl<
 
     pub fn runtime_admissions(&self) -> &[RuntimeAdmissionRecord] {
         &self.runtime_admissions[..self.runtime_admission_len]
+    }
+
+    pub const fn runtime_admission_capacity(&self) -> usize {
+        RUNTIME_ADMISSIONS
     }
 
     pub fn runtime_admission(

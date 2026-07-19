@@ -83,6 +83,7 @@ pub struct BootedKernel<
     const FAULT_HANDLERS: usize = 0,
     const FAULT_POLICIES: usize = 0,
     const MEMORY_CELLS: usize = 0,
+    const RUNTIME_ADMISSIONS: usize = TASKS,
 > {
     kernel: AgentKernel<
         AGENTS,
@@ -107,6 +108,7 @@ pub struct BootedKernel<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >,
     report: BootReport,
 }
@@ -132,6 +134,7 @@ impl<
         const FAULT_HANDLERS: usize,
         const FAULT_POLICIES: usize,
         const MEMORY_CELLS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     BootedKernel<
         AGENTS,
@@ -154,6 +157,7 @@ impl<
         FAULT_HANDLERS,
         FAULT_POLICIES,
         MEMORY_CELLS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
@@ -249,6 +253,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     > {
         &self.kernel
     }
@@ -278,6 +283,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     > {
         &mut self.kernel
     }

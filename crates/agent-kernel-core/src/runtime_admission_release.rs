@@ -33,6 +33,7 @@ impl<
         const DEVICE_EVENTS: usize,
         const DRIVER_COMMANDS: usize,
         const DRIVER_INVOCATIONS: usize,
+        const RUNTIME_ADMISSIONS: usize,
     >
     KernelCore<
         AGENTS,
@@ -57,6 +58,7 @@ impl<
         DEVICE_EVENTS,
         DRIVER_COMMANDS,
         DRIVER_INVOCATIONS,
+        RUNTIME_ADMISSIONS,
     >
 {
     pub fn prepare_runtime_admission_release_batch<const COUNT: usize>(
@@ -66,7 +68,7 @@ impl<
         if COUNT == 0 {
             return Err(KernelError::RuntimeAdmissionReleaseBatchEmpty);
         }
-        if COUNT > TASKS {
+        if COUNT > RUNTIME_ADMISSIONS {
             return Err(KernelError::RuntimeAdmissionReleaseBatchTooLarge);
         }
 
