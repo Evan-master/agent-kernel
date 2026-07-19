@@ -8,6 +8,7 @@
 mod agent;
 mod agent_entry_retirement;
 mod agent_management;
+mod agent_record_retirement;
 mod capability;
 mod driver;
 mod driver_endpoint;

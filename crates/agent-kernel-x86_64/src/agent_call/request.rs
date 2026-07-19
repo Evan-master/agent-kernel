@@ -286,6 +286,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         message: MessageId,
     },
+    RetireAgentRecord {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        target: AgentId,
+    },
 }
 
 impl AgentCallRequest {
@@ -326,6 +334,7 @@ impl AgentCallRequest {
             Self::RetireAgentEntry { .. } => AgentCallOperation::RetireAgentEntry,
             Self::RetireMessage { .. } => AgentCallOperation::RetireMessage,
             Self::RetireOrphanedMessage { .. } => AgentCallOperation::RetireOrphanedMessage,
+            Self::RetireAgentRecord { .. } => AgentCallOperation::RetireAgentRecord,
         }
     }
 }

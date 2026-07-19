@@ -32,6 +32,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::AgentSuspended => "agent_suspended",
         EventKind::AgentResumed => "agent_resumed",
         EventKind::AgentRetired => "agent_retired",
+        EventKind::AgentRecordRetired => "agent_record_retired",
         EventKind::DriverEndpointRegistered => "driver_endpoint_registered",
         EventKind::DriverBound => "driver_bound",
         EventKind::DeviceEventRaised => "device_event_raised",

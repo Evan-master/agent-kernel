@@ -1,8 +1,7 @@
 //! Terminal state and event evidence for the native Agent Manager protocol.
 //!
-//! This boot-evidence child binds the four ring-3 mutations to Agent 9, the
-//! Manager's root Resource authority, an idle execution context, and exact
-//! ordered lifecycle events.
+//! This boot-evidence child binds lifecycle retirement, record reclamation, and
+//! slot reuse to the Manager's root authority and exact ordered events.
 
 use agent_kernel_core::{
     AgentExecutionState, AgentStatus, Event, EventKind, MessageKind, MessageStatus, Operation,
@@ -18,31 +17,44 @@ pub(super) fn state_valid(
     image: BootResourceManagerImage,
 ) -> bool {
     let kernel = booted.kernel();
-    let agent = kernel
+    let fresh_index = kernel
         .agents()
         .iter()
-        .find(|record| record.id == image.managed_agent());
-    let context = kernel
-        .execution_contexts()
-        .iter()
-        .find(|record| record.agent == image.managed_agent());
+        .position(|record| record.id == image.fresh_managed_agent());
+    let fresh_agent = fresh_index.map(|index| kernel.agents()[index]);
+    let fresh_context = fresh_index.and_then(|index| kernel.execution_contexts().get(index));
     let authority = kernel.capability(manager.resource_authority).ok();
 
     kernel.agents().len() == 9
-        && matches!(agent, Some(agent)
-            if agent.status == AgentStatus::Retired
+        && kernel.execution_contexts().len() == kernel.agents().len()
+        && kernel.retired_agent_floor() == image.managed_agent()
+        && !kernel
+            .agents()
+            .iter()
+            .any(|record| record.id == image.managed_agent())
+        && !kernel
+            .execution_contexts()
+            .iter()
+            .any(|record| record.agent == image.managed_agent())
+        && matches!(fresh_agent, Some(agent)
+            if agent.status == AgentStatus::Active
                 && agent.manager == Some(RESOURCE_MANAGER)
                 && agent.management_resource == Some(booted.report().bootstrap_resource))
-        && matches!(context, Some(context)
-            if context.state == AgentExecutionState::Idle
+        && matches!(fresh_context, Some(context)
+            if context.agent == image.fresh_managed_agent()
+                && context.state == AgentExecutionState::Idle
                 && context.task.is_none()
                 && context.driver_invocation.is_none()
                 && context.run_ticks == 0
                 && context.quantum_remaining == 0)
-        && !kernel
-            .agent_entries()
+        && kernel
+            .agents()
             .iter()
-            .any(|entry| entry.agent == image.managed_agent())
+            .zip(kernel.execution_contexts())
+            .all(|(agent, context)| agent.id == context.agent)
+        && !kernel.agent_entries().iter().any(|entry| {
+            entry.agent == image.managed_agent() || entry.agent == image.fresh_managed_agent()
+        })
         && !kernel
             .messages()
             .iter()
@@ -74,7 +86,7 @@ pub(super) fn events_valid(
         (3, EventKind::AgentResumed),
         (4, EventKind::AgentRetired),
     ];
-    events.len() == 6
+    events.len() == 8
         && lifecycle_kinds.iter().all(|(index, kind)| {
             let event = events[*index];
             event.kind == *kind
@@ -101,6 +113,18 @@ pub(super) fn events_valid(
         && events[5].task.is_none()
         && events[5].action.is_none()
         && events[5].fault.is_none()
+        && events[6].kind == EventKind::AgentRecordRetired
+        && events[6].agent == RESOURCE_MANAGER
+        && events[6].target_agent == Some(image.managed_agent())
+        && events[6].resource == Some(booted.report().bootstrap_resource)
+        && events[6].capability == Some(manager.resource_authority)
+        && events[6].operation == Some(Operation::Delegate)
+        && events[7].kind == EventKind::AgentRegistered
+        && events[7].agent == RESOURCE_MANAGER
+        && events[7].target_agent == Some(image.fresh_managed_agent())
+        && events[7].resource == Some(booted.report().bootstrap_resource)
+        && events[7].capability == Some(manager.resource_authority)
+        && events[7].operation == Some(Operation::Delegate)
         && !booted.kernel().messages().iter().any(|message| {
             message.id == image.orphaned_message() || message.status == MessageStatus::Pending
         })

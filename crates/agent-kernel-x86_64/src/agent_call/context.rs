@@ -6,6 +6,7 @@
 
 mod agent_entry_retirement;
 mod agent_management;
+mod agent_record_retirement;
 mod authentication;
 mod capability;
 mod capability_compaction;

@@ -20,6 +20,8 @@ mod agent_image_store;
 mod agent_launch;
 mod agent_lifecycle;
 mod agent_management;
+mod agent_record_reference;
+mod agent_record_retirement;
 mod agent_store;
 mod authorization;
 mod capability;
@@ -104,7 +106,7 @@ mod task_result_store;
 mod task_store;
 
 pub use action::{ActionRecord, ActionStatus};
-pub use agent::{AgentRecord, AgentStatus};
+pub use agent::{AgentRecord, AgentRecordRetirement, AgentStatus};
 pub use agent_entry::{AgentEntryKind, AgentEntryRecord, AgentEntryRetirement};
 pub use agent_execution::{AgentExecutionContext, AgentExecutionState};
 pub use agent_image::{AgentImageDigest, AgentImageKind, AgentImageRecord, AgentImageStatus};

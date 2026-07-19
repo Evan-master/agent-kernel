@@ -55,8 +55,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 31
-        && completed.address_space_switch_count() == 62
+        && completed.call_count() == 33
+        && completed.address_space_switch_count() == 66
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -132,6 +132,8 @@ fn events_prove_lifecycle(
         EventKind::AgentResumed,
         EventKind::AgentRetired,
         EventKind::OrphanedMessageRetired,
+        EventKind::AgentRecordRetired,
+        EventKind::AgentRegistered,
         EventKind::ResourceCreated,
         EventKind::CapabilityGranted,
         EventKind::MemoryCellCreated,
@@ -185,17 +187,17 @@ fn events_prove_lifecycle(
         && tail[8].resource == Some(image.resource())
         && tail[8].capability == Some(image.capability())
         && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
-        && agent_management::events_valid(&tail[14..20], booted, manager, image)
-        && memory_page::events_valid(&tail[20..25], booted, image)
+        && agent_management::events_valid(&tail[14..22], booted, manager, image)
+        && memory_page::events_valid(&tail[22..27], booted, image)
         && memory_region::events_valid(
             &[
-                tail[25], tail[26], tail[27], tail[28], tail[29], tail[30], tail[31], tail[32],
-                tail[33], tail[34], tail[35], tail[36], tail[37], tail[38], tail[40],
+                tail[27], tail[28], tail[29], tail[30], tail[31], tail[32], tail[33], tail[34],
+                tail[35], tail[36], tail[37], tail[38], tail[39], tail[40], tail[42],
             ],
             booted,
             image,
         )
-        && tail[39].task == Some(manager.task)
-        && tail[39].task_result == Some(image.result())
         && tail[41].task == Some(manager.task)
+        && tail[41].task_result == Some(image.result())
+        && tail[43].task == Some(manager.task)
 }

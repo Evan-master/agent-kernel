@@ -71,6 +71,18 @@ impl<
         &self.agents[..self.agent_len]
     }
 
+    pub const fn agent_capacity(&self) -> usize {
+        AGENTS
+    }
+
+    pub const fn agent_count(&self) -> usize {
+        self.agent_len
+    }
+
+    pub const fn retired_agent_floor(&self) -> AgentId {
+        AgentId::new(self.retired_agent_floor)
+    }
+
     pub(crate) fn find_agent(&self, id: AgentId) -> Result<AgentRecord, KernelError> {
         self.agents()
             .iter()
@@ -95,6 +107,9 @@ impl<
         if self.find_agent(agent).is_ok() {
             return Err(KernelError::AgentAlreadyExists);
         }
+        if agent.raw() == 0 || agent.raw() <= self.retired_agent_floor {
+            return Err(KernelError::AgentIdStale);
+        }
         if self.agent_len >= AGENTS {
             return Err(KernelError::AgentStoreFull);
         }
@@ -116,6 +131,25 @@ impl<
         };
         self.execution_contexts[index] = AgentExecutionContext::idle(agent);
         self.agent_len += 1;
+    }
+
+    pub(crate) fn remove_agent_record_at(
+        &mut self,
+        index: usize,
+    ) -> (AgentRecord, AgentExecutionContext) {
+        let record = self.agents[index];
+        let context = self.execution_contexts[index];
+        let remaining = self.agent_len - 1;
+        self.agents.copy_within(index + 1..self.agent_len, index);
+        self.execution_contexts
+            .copy_within(index + 1..self.agent_len, index);
+        self.agents[remaining] = AgentRecord::empty();
+        self.execution_contexts[remaining] = AgentExecutionContext::empty();
+        self.agent_len = remaining;
+        if record.id.raw() > self.retired_agent_floor {
+            self.retired_agent_floor = record.id.raw();
+        }
+        (record, context)
     }
 
     pub(crate) fn find_agent_mut(&mut self, id: AgentId) -> Result<&mut AgentRecord, KernelError> {

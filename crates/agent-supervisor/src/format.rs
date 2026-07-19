@@ -53,6 +53,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),
+        EventKind::AgentRecordRetired => format_agent_event(event, "agent_record_retired"),
         EventKind::DriverEndpointRegistered => {
             format_capability_event(event, "driver_endpoint_registered")
         }

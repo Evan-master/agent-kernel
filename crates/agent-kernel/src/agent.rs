@@ -147,6 +147,14 @@ impl<
         self.core.agents()
     }
 
+    pub const fn agent_capacity(&self) -> usize {
+        self.core.agent_capacity()
+    }
+
+    pub const fn agent_count(&self) -> usize {
+        self.core.agent_count()
+    }
+
     pub fn agent_entries(&self) -> &[AgentEntryRecord] {
         self.core.agent_entries()
     }
@@ -173,5 +181,9 @@ impl<
 
     pub fn execution_contexts(&self) -> &[AgentExecutionContext] {
         self.core.execution_contexts()
+    }
+
+    pub fn execution_context(&self, agent: AgentId) -> Result<AgentExecutionContext, KernelError> {
+        self.core.execution_context(agent)
     }
 }

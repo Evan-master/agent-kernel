@@ -30,6 +30,7 @@ pub enum EventKind {
     AgentSuspended,
     AgentResumed,
     AgentRetired,
+    AgentRecordRetired,
     DriverEndpointRegistered,
     DriverBound,
     DeviceEventRaised,

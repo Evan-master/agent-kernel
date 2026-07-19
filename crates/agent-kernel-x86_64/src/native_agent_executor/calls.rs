@@ -6,6 +6,7 @@
 
 mod agent_entry_retirement;
 mod agent_management;
+mod agent_record_retirement;
 mod capability;
 mod capability_compaction;
 mod intent_compaction;
@@ -136,6 +137,9 @@ pub(super) fn run(
             AgentCallRequest::RetireAgentEntry {
                 authority, target, ..
             } => agent_entry_retirement::retire(booted, runtime, pending, authority, target)?,
+            AgentCallRequest::RetireAgentRecord {
+                authority, target, ..
+            } => agent_record_retirement::retire(booted, runtime, pending, authority, target)?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

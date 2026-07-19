@@ -4,7 +4,7 @@
 //! records for the fixed-capacity no_std agent registry. It does not contain
 //! prompts, model sessions, host process data, or scheduling policy.
 
-use crate::{AgentId, ResourceId};
+use crate::{AgentExecutionContext, AgentId, CapabilityId, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentStatus {
@@ -29,5 +29,63 @@ impl AgentRecord {
             manager: None,
             management_resource: None,
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentRecordRetirement {
+    record: AgentRecord,
+    context: AgentExecutionContext,
+    actor: AgentId,
+    authority: CapabilityId,
+    management_resource: ResourceId,
+    retired_floor: AgentId,
+}
+
+impl AgentRecordRetirement {
+    pub(crate) const fn new(
+        record: AgentRecord,
+        context: AgentExecutionContext,
+        actor: AgentId,
+        authority: CapabilityId,
+        management_resource: ResourceId,
+        retired_floor: AgentId,
+    ) -> Self {
+        Self {
+            record,
+            context,
+            actor,
+            authority,
+            management_resource,
+            retired_floor,
+        }
+    }
+
+    pub const fn record(self) -> AgentRecord {
+        self.record
+    }
+
+    pub const fn context(self) -> AgentExecutionContext {
+        self.context
+    }
+
+    pub const fn agent(self) -> AgentId {
+        self.record.id
+    }
+
+    pub const fn actor(self) -> AgentId {
+        self.actor
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
+    }
+
+    pub const fn management_resource(self) -> ResourceId {
+        self.management_resource
+    }
+
+    pub const fn retired_floor(self) -> AgentId {
+        self.retired_floor
     }
 }

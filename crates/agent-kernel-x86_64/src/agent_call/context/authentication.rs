@@ -240,6 +240,13 @@ impl AgentCallContext {
                 image,
                 nonce,
                 ..
+            }
+            | AgentCallRequest::RetireAgentRecord {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
             } => self.matches_identity(agent, task, image, nonce, expected_nonce),
         }
     }
