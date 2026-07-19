@@ -94,6 +94,14 @@ impl<
         &self.intents[..self.intent_len]
     }
 
+    pub const fn intent_capacity(&self) -> usize {
+        INTENTS
+    }
+
+    pub fn intent(&self, id: IntentId) -> Result<Intent, KernelError> {
+        self.find_intent(id)
+    }
+
     pub(crate) fn find_intent(&self, id: IntentId) -> Result<Intent, KernelError> {
         self.intents()
             .iter()

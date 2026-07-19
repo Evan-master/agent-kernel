@@ -64,3 +64,32 @@ impl Intent {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct IntentCompaction {
+    first: IntentId,
+    through: IntentId,
+    count: usize,
+}
+
+impl IntentCompaction {
+    pub(crate) const fn new(first: IntentId, through: IntentId, count: usize) -> Self {
+        Self {
+            first,
+            through,
+            count,
+        }
+    }
+
+    pub const fn first(self) -> IntentId {
+        self.first
+    }
+
+    pub const fn through(self) -> IntentId {
+        self.through
+    }
+
+    pub const fn count(self) -> usize {
+        self.count
+    }
+}

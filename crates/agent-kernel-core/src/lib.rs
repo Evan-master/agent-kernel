@@ -56,6 +56,7 @@ mod fault_policy_store;
 mod fault_store;
 mod id;
 mod intent;
+mod intent_compaction;
 mod intent_event;
 mod intent_store;
 mod lookup;
@@ -124,7 +125,7 @@ pub use id::{
     MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, RuntimeAdmissionId,
     TaskId, WaiterId,
 };
-pub use intent::{Intent, IntentKind, IntentStatus, VerificationRequirement};
+pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};
 pub use message::{
     MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageStatus,

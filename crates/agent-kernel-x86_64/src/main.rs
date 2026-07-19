@@ -42,16 +42,17 @@ use privilege_runtime::PrivilegeBoundary;
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) const X86_TASK_CAPACITY: usize = 12;
+pub(crate) const X86_INTENT_CAPACITY: usize = 12;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     7,
     25,
-    344,
+    350,
     1,
     1,
     0,
-    12,
+    X86_INTENT_CAPACITY,
     X86_TASK_CAPACITY,
     2,
     1,

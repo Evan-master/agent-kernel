@@ -83,6 +83,8 @@ pub enum KernelError {
     IntentAgentMismatch,
     IntentKindMismatch,
     IntentStatusMismatch,
+    IntentCompactionNotReady,
+    IntentCompactionReferenced,
     TaskStoreFull,
     RuntimeAdmissionStoreFull,
     TaskNotFound,

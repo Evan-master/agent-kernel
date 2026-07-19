@@ -36,4 +36,5 @@ pub enum AgentCallOperation {
     DiscoverRuntimeAdmission,
     CompactRuntimeAdmissions,
     CompactTasks,
+    CompactIntents,
 }

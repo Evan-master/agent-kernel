@@ -107,6 +107,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK" \
   "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" \
@@ -117,6 +118,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK" \
+  "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
@@ -461,26 +463,32 @@ for expected in \
   "event[322] task_compacted" \
   "event[323] task_compacted" \
   "event[324] task_compacted" \
-  "event[325] task_result_submitted" \
-  "event[326] task_completed" \
-  "event[327] task_verified" \
-  "event[328] intent_fulfilled" \
-  "event[329] task_verified" \
-  "event[330] intent_fulfilled" \
-  "event[331] task_verified" \
-  "event[332] intent_fulfilled" \
-  "event[333] runtime_admission_released" \
-  "event[334] runtime_admission_released" \
-  "event[335] device_event_raised" \
-  "event[336] device_event_delivered" \
-  "event[337] driver_invocation_queued" \
-  "event[338] driver_invocation_dispatched" \
-  "event[339] driver_invocation_ticked" \
-  "event[340] device_event_acknowledged" \
-  "event[341] driver_command_submitted" \
-  "event[342] driver_command_dispatched" \
-  "event[343] driver_command_completed" \
-  "event[344] driver_invocation_completed" \
+  "event[325] intent_compacted" \
+  "event[326] intent_compacted" \
+  "event[327] intent_compacted" \
+  "event[328] intent_compacted" \
+  "event[329] intent_compacted" \
+  "event[330] intent_compacted" \
+  "event[331] task_result_submitted" \
+  "event[332] task_completed" \
+  "event[333] task_verified" \
+  "event[334] intent_fulfilled" \
+  "event[335] task_verified" \
+  "event[336] intent_fulfilled" \
+  "event[337] task_verified" \
+  "event[338] intent_fulfilled" \
+  "event[339] runtime_admission_released" \
+  "event[340] runtime_admission_released" \
+  "event[341] device_event_raised" \
+  "event[342] device_event_delivered" \
+  "event[343] driver_invocation_queued" \
+  "event[344] driver_invocation_dispatched" \
+  "event[345] driver_invocation_ticked" \
+  "event[346] device_event_acknowledged" \
+  "event[347] driver_command_submitted" \
+  "event[348] driver_command_dispatched" \
+  "event[349] driver_command_completed" \
+  "event[350] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -490,8 +498,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 344 ]]; then
-  printf 'expected exactly 344 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 350 ]]; then
+  printf 'expected exactly 350 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -534,5 +542,7 @@ check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" 1

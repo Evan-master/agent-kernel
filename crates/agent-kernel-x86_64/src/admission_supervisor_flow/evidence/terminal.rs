@@ -48,8 +48,8 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.run_queue().is_empty()
             && completed.context() == context
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 17
-            && completed.address_space_switch_count() == 34
+            && completed.call_count() == 18
+            && completed.address_space_switch_count() == 36
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1
@@ -66,6 +66,7 @@ impl PreparedAdmissionSupervisorFlow {
             })
             && self.first_batch_compacted(booted, targets)
             && self.initial_task_prefix_compacted(booted)
+            && self.initial_intent_prefix_compacted(booted)
             && kernel.messages().len() == 6
             && matches!(kernel.waiters().last(), Some(waiter)
                 if waiter.id.raw() == 4

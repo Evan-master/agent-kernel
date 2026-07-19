@@ -54,6 +54,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::IntentBound => "intent_bound",
         EventKind::IntentFulfilled => "intent_fulfilled",
         EventKind::IntentCancelled => "intent_cancelled",
+        EventKind::IntentCompacted => "intent_compacted",
         EventKind::Observation => "observation",
         EventKind::ActionExecuted => "action",
         EventKind::VerificationRequested => "verification",

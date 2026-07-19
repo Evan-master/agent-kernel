@@ -6,6 +6,7 @@
 
 mod agent_management;
 mod capability;
+mod intent_compaction;
 mod mailbox;
 mod memory_authority;
 mod memory_page;
@@ -118,6 +119,9 @@ pub(super) fn run(
             AgentCallRequest::CompactTasks {
                 authority, through, ..
             } => task_compaction::compact(booted, pending, authority, through)?,
+            AgentCallRequest::CompactIntents {
+                authority, through, ..
+            } => intent_compaction::compact(booted, pending, authority, through)?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

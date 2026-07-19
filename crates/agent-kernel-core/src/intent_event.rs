@@ -1,10 +1,70 @@
-//! Task-driven intent lifecycle event helpers.
+//! Intent lifecycle event helpers.
 //!
-//! This module belongs to `agent-kernel-core`. It records deterministic
-//! task-driven intent lifecycle events using existing task and intent records,
-//! without allocating or depending on host runtime behavior.
+//! This module belongs to `agent-kernel-core`. It records deterministic Task
+//! transitions and Supervisor compaction using existing Intent records,
+//! without allocation or host runtime behavior.
 
-use crate::{AgentId, Event, EventKind, KernelCore, KernelError, OperationSet, TaskId};
+use crate::{
+    AgentId, CapabilityId, Event, EventKind, Intent, KernelCore, KernelError, Operation,
+    OperationSet, TaskId,
+};
+
+pub(crate) fn intent_compaction_event(
+    intent: Intent,
+    actor: AgentId,
+    authority: CapabilityId,
+) -> Event {
+    Event {
+        sequence: 0,
+        agent: actor,
+        kind: EventKind::IntentCompacted,
+        resource: Some(intent.resource),
+        capability: Some(authority),
+        source_capability: None,
+        intent: Some(intent.id),
+        intent_kind: Some(intent.kind),
+        action: None,
+        observation: None,
+        message: None,
+        memory_cell: None,
+        namespace_entry: None,
+        namespace_key: None,
+        namespace_object: None,
+        operation: Some(Operation::Rollback),
+        operations: OperationSet::empty(),
+        verification: intent.verification,
+        checkpoint: None,
+        task: None,
+        runtime_admission: None,
+        task_result: None,
+        task_ticks: None,
+        task_quantum: None,
+        fault: None,
+        fault_kind: None,
+        fault_detail: None,
+        fault_policy: None,
+        fault_policy_action: None,
+        waiter: None,
+        signal: None,
+        target_agent: Some(intent.owner),
+        driver_binding: None,
+        device_event: None,
+        device_event_kind: None,
+        device_event_payload: None,
+        driver_command: None,
+        driver_command_kind: None,
+        driver_command_payload: None,
+        driver_command_result: None,
+        driver_invocation: None,
+        driver_invocation_ticks: None,
+        driver_invocation_quantum: None,
+        agent_image: None,
+        agent_image_kind: None,
+        agent_image_digest: None,
+        agent_image_abi_version: None,
+        agent_image_entry_version: None,
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IntentTaskEventKind {

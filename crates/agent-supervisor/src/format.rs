@@ -96,6 +96,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::IntentBound => format_intent_event(event, "intent_bound"),
         EventKind::IntentFulfilled => format_intent_event(event, "intent_fulfilled"),
         EventKind::IntentCancelled => format_intent_event(event, "intent_cancelled"),
+        EventKind::IntentCompacted => format_intent_event(event, "intent_compacted"),
         EventKind::Observation => {
             format!(
                 "event[{}] observation agent={} resource={}",

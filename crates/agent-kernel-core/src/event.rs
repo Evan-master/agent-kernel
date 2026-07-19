@@ -52,6 +52,7 @@ pub enum EventKind {
     IntentBound,
     IntentFulfilled,
     IntentCancelled,
+    IntentCompacted,
     Observation,
     ActionExecuted,
     VerificationRequested,

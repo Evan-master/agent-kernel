@@ -7,6 +7,7 @@
 mod agent_management;
 mod authentication;
 mod capability;
+mod intent_compaction;
 mod mailbox;
 mod memory_page;
 mod memory_region;

@@ -1,6 +1,7 @@
 //! Phase proof for the resident Runtime Admission Supervisor.
 
 mod compaction;
+mod intent_compaction;
 mod release;
 mod task_compaction;
 mod terminal;
