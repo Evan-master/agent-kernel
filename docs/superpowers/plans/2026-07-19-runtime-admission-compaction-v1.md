@@ -11,5 +11,5 @@
 - [x] Extend and freeze the resident Supervisor Capsule, active-store evidence,
   terminal release indexing, markers, and 328-Event trace.
 - [x] Update both README languages and milestone references.
-- [ ] Run the full validation and artifact audit, publish public `main`, and
+- [x] Run the full validation and artifact audit, publish public `main`, and
   keep the complete Agent Kernel goal active.
