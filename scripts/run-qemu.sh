@@ -103,6 +103,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK" \
   "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK" \
+  "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" \
@@ -111,6 +112,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_PARTIAL_RECLAIM_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK" \
+  "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" \
   "AGENT_KERNEL_AGENT_CALL_DECLARE_INTENT_OK" \
@@ -437,26 +439,28 @@ for expected in \
   "event[304] message_acknowledged" \
   "event[305] message_received" \
   "event[306] message_acknowledged" \
-  "event[307] task_result_submitted" \
-  "event[308] task_completed" \
-  "event[309] task_verified" \
-  "event[310] intent_fulfilled" \
+  "event[307] runtime_admission_compacted" \
+  "event[308] runtime_admission_compacted" \
+  "event[309] task_result_submitted" \
+  "event[310] task_completed" \
   "event[311] task_verified" \
   "event[312] intent_fulfilled" \
   "event[313] task_verified" \
   "event[314] intent_fulfilled" \
-  "event[315] runtime_admission_released" \
-  "event[316] runtime_admission_released" \
-  "event[317] device_event_raised" \
-  "event[318] device_event_delivered" \
-  "event[319] driver_invocation_queued" \
-  "event[320] driver_invocation_dispatched" \
-  "event[321] driver_invocation_ticked" \
-  "event[322] device_event_acknowledged" \
-  "event[323] driver_command_submitted" \
-  "event[324] driver_command_dispatched" \
-  "event[325] driver_command_completed" \
-  "event[326] driver_invocation_completed" \
+  "event[315] task_verified" \
+  "event[316] intent_fulfilled" \
+  "event[317] runtime_admission_released" \
+  "event[318] runtime_admission_released" \
+  "event[319] device_event_raised" \
+  "event[320] device_event_delivered" \
+  "event[321] driver_invocation_queued" \
+  "event[322] driver_invocation_dispatched" \
+  "event[323] driver_invocation_ticked" \
+  "event[324] device_event_acknowledged" \
+  "event[325] driver_command_submitted" \
+  "event[326] driver_command_dispatched" \
+  "event[327] driver_command_completed" \
+  "event[328] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -466,8 +470,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 326 ]]; then
-  printf 'expected exactly 326 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 328 ]]; then
+  printf 'expected exactly 328 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -496,6 +500,7 @@ check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK" 2
 check_marker_count "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK" 4
 check_marker_count "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK" 4
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" 2
@@ -504,5 +509,6 @@ check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_PARTIAL_RECLAIM_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" 1

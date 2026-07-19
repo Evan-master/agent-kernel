@@ -48,27 +48,23 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.run_queue().is_empty()
             && completed.context() == context
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 15
-            && completed.address_space_switch_count() == 30
+            && completed.call_count() == 16
+            && completed.address_space_switch_count() == 32
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1
             && completed.reclamation_log().is_empty()
-            && admissions.len() == 4
+            && admissions.len() == 2
             && admissions.iter().enumerate().all(|(index, admission)| {
-                let status = if index < 2 {
-                    RuntimeAdmissionStatus::Released
-                } else {
-                    RuntimeAdmissionStatus::Admitted
-                };
                 admission_matches(
                     admission,
-                    index,
+                    index + 2,
                     self.supervisor.admission_authority,
-                    targets[index],
-                    status,
+                    targets[index + 2],
+                    RuntimeAdmissionStatus::Admitted,
                 )
             })
+            && self.first_batch_compacted(booted, targets)
             && kernel.messages().len() == 6
             && matches!(kernel.waiters().last(), Some(waiter)
                 if waiter.id.raw() == 4

@@ -1,6 +1,6 @@
 //! Replayable event construction for runtime admission transitions.
 
-use crate::{Event, EventKind, Operation, RuntimeAdmissionRecord, Task};
+use crate::{AgentId, CapabilityId, Event, EventKind, Operation, RuntimeAdmissionRecord, Task};
 
 pub(crate) fn runtime_admission_event(record: RuntimeAdmissionRecord, kind: EventKind) -> Event {
     let mut event = Event::empty();
@@ -26,5 +26,16 @@ pub(crate) fn runtime_admission_queue_event(record: RuntimeAdmissionRecord, task
     event.target_agent = Some(record.target);
     event.agent_image = Some(record.image);
     event.runtime_admission = Some(record.id);
+    event
+}
+
+pub(crate) fn runtime_admission_compaction_event(
+    record: RuntimeAdmissionRecord,
+    actor: AgentId,
+    authority: CapabilityId,
+) -> Event {
+    let mut event = runtime_admission_event(record, EventKind::RuntimeAdmissionCompacted);
+    event.agent = actor;
+    event.capability = Some(authority);
     event
 }

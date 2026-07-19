@@ -86,8 +86,8 @@ pub(super) fn terminal(
     }
     supervisor.verify_completed(booted)?;
     let release_ids = [
-        booted.kernel().runtime_admissions().get(2)?.id,
-        booted.kernel().runtime_admissions().get(3)?.id,
+        booted.kernel().runtime_admissions().first()?.id,
+        booted.kernel().runtime_admissions().get(1)?.id,
     ];
     let release = booted
         .kernel()

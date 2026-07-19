@@ -45,6 +45,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::RuntimeAdmissionReleased => {
             format_runtime_admission_event(event, "runtime_admission_released")
         }
+        EventKind::RuntimeAdmissionCompacted => {
+            format_runtime_admission_event(event, "runtime_admission_compacted")
+        }
         EventKind::AgentSuspended => format_agent_event(event, "agent_suspended"),
         EventKind::AgentResumed => format_agent_event(event, "agent_resumed"),
         EventKind::AgentRetired => format_agent_event(event, "agent_retired"),

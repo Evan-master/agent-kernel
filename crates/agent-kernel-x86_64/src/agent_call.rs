@@ -58,6 +58,7 @@ pub const AGENT_CALL_INSPECT_MEMORY_REGION: u64 = 25;
 pub const AGENT_CALL_RELEASE_MEMORY_REGION: u64 = 26;
 pub const AGENT_CALL_REQUEST_RUNTIME_ADMISSION: u64 = 27;
 pub const AGENT_CALL_DISCOVER_RUNTIME_ADMISSION: u64 = 28;
+pub const AGENT_CALL_COMPACT_RUNTIME_ADMISSIONS: u64 = 29;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -118,6 +119,7 @@ impl AgentCallRequest {
             AGENT_CALL_RELEASE_MEMORY_REGION => AgentCallOperation::ReleaseMemoryRegion,
             AGENT_CALL_REQUEST_RUNTIME_ADMISSION => AgentCallOperation::RequestRuntimeAdmission,
             AGENT_CALL_DISCOVER_RUNTIME_ADMISSION => AgentCallOperation::DiscoverRuntimeAdmission,
+            AGENT_CALL_COMPACT_RUNTIME_ADMISSIONS => AgentCallOperation::CompactRuntimeAdmissions,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -214,6 +216,9 @@ impl AgentCallRequest {
             AgentCallOperation::RequestRuntimeAdmission => runtime_admission::decode_request(frame),
             AgentCallOperation::DiscoverRuntimeAdmission => {
                 runtime_admission::decode_discovery(frame)
+            }
+            AgentCallOperation::CompactRuntimeAdmissions => {
+                runtime_admission::decode_compaction(frame)
             }
         }
     }

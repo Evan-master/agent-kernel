@@ -1,5 +1,6 @@
 //! Phase proof for the resident Runtime Admission Supervisor.
 
+mod compaction;
 mod release;
 mod terminal;
 

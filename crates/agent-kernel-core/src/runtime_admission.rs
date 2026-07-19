@@ -51,6 +51,39 @@ impl RuntimeAdmissionRecord {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeAdmissionCompaction {
+    first: RuntimeAdmissionId,
+    through: RuntimeAdmissionId,
+    count: usize,
+}
+
+impl RuntimeAdmissionCompaction {
+    pub(crate) const fn new(
+        first: RuntimeAdmissionId,
+        through: RuntimeAdmissionId,
+        count: usize,
+    ) -> Self {
+        Self {
+            first,
+            through,
+            count,
+        }
+    }
+
+    pub const fn first(self) -> RuntimeAdmissionId {
+        self.first
+    }
+
+    pub const fn through(self) -> RuntimeAdmissionId {
+        self.through
+    }
+
+    pub const fn count(self) -> usize {
+        self.count
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeAdmissionPermit {
     record: RuntimeAdmissionRecord,
     generation: u64,

@@ -1,7 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, IntentKind, Operation,
-    OperationSet, ResourceKind, RuntimeAdmissionStatus, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, EventKind, IntentKind, KernelError,
+    Operation, OperationSet, ResourceKind, RuntimeAdmissionStatus, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<3, 2, 8, 40, 0, 0, 0, 2, 2, 2>;
@@ -128,5 +128,21 @@ fn facade_exposes_request_prepare_and_atomic_commit() {
     assert_eq!(
         kernel.events().last().unwrap().kind,
         EventKind::RuntimeAdmissionReleased
+    );
+
+    let receipt = kernel
+        .sys_compact_runtime_admission_prefix(supervisor, authority, admission)
+        .expect("compaction crosses facade");
+    assert_eq!(receipt.first(), admission);
+    assert_eq!(receipt.through(), admission);
+    assert_eq!(receipt.count(), 1);
+    assert!(kernel.runtime_admissions().is_empty());
+    assert_eq!(
+        kernel.runtime_admission(admission),
+        Err(KernelError::RuntimeAdmissionNotFound)
+    );
+    assert_eq!(
+        kernel.events().last().unwrap().kind,
+        EventKind::RuntimeAdmissionCompacted
     );
 }

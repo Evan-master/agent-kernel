@@ -111,6 +111,9 @@ pub(super) fn run(
                 crate::serial_write_line("AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK");
                 resumable
             }
+            AgentCallRequest::CompactRuntimeAdmissions {
+                authority, through, ..
+            } => runtime_admission::compact(booted, pending, authority, through)?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

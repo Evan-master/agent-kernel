@@ -1,6 +1,6 @@
 //! Runtime admission acknowledgements for authenticated Supervisor and Worker calls.
 
-use agent_kernel_core::{AgentId, RuntimeAdmissionId, TaskId};
+use agent_kernel_core::{AgentId, RuntimeAdmissionCompaction, RuntimeAdmissionId, TaskId};
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
 use super::{PendingAgentCallCpu, ResumableAgentCpu};
@@ -41,6 +41,30 @@ impl PendingAgentCallCpu {
                 admission,
                 target,
                 target_task,
+            )
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_runtime_admission_compaction(
+        mut self,
+        receipt: RuntimeAdmissionCompaction,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(
+                request,
+                AgentCallRequest::CompactRuntimeAdmissions { through, .. }
+                    if through == receipt.through()
+            )
+        })?;
+        self.session
+            .context
+            .encode_runtime_admission_compaction_reply(
+                self.session.frame.frame_mut(),
+                nonce,
+                receipt.first(),
+                receipt.through(),
+                receipt.count(),
             )
             .ok()?;
         Some(ResumableAgentCpu(self.session))

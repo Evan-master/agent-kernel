@@ -95,6 +95,7 @@ pub enum KernelError {
     RuntimeAdmissionReleaseDuplicate,
     RuntimeAdmissionReleaseNotReady,
     RuntimeAdmissionReleasePermitStale,
+    RuntimeAdmissionCompactionNotReady,
     TaskAgentMismatch,
     TaskStatusMismatch,
     TaskResultAlreadySubmitted,

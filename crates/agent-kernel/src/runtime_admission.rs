@@ -1,8 +1,9 @@
 //! Runtime admission syscall facade.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, KernelError, RuntimeAdmissionFailure, RuntimeAdmissionId,
-    RuntimeAdmissionPermit, RuntimeAdmissionRecord, RuntimeAdmissionReleaseBatch, TaskId,
+    AgentId, CapabilityId, KernelError, RuntimeAdmissionCompaction, RuntimeAdmissionFailure,
+    RuntimeAdmissionId, RuntimeAdmissionPermit, RuntimeAdmissionRecord,
+    RuntimeAdmissionReleaseBatch, TaskId,
 };
 
 use crate::AgentKernel;
@@ -101,6 +102,16 @@ impl<
         permit: RuntimeAdmissionReleaseBatch<COUNT>,
     ) -> Result<[RuntimeAdmissionRecord; COUNT], KernelError> {
         self.core.commit_runtime_admission_release_batch(permit)
+    }
+
+    pub fn sys_compact_runtime_admission_prefix(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        through: RuntimeAdmissionId,
+    ) -> Result<RuntimeAdmissionCompaction, KernelError> {
+        self.core
+            .compact_runtime_admission_prefix(actor, authority, through)
     }
 
     pub fn runtime_admissions(&self) -> &[RuntimeAdmissionRecord] {

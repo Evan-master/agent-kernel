@@ -6,8 +6,8 @@
 
 use agent_kernel_core::{
     AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MemoryCellId, MessageId,
-    MessageKind, MessagePayload, OperationSet, ResourceId, ResourceKind, TaskId, TaskResult,
-    VerificationRequirement,
+    MessageKind, MessagePayload, OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId,
+    TaskId, TaskResult, VerificationRequirement,
 };
 
 use super::AgentCallOperation;
@@ -231,6 +231,14 @@ pub enum AgentCallRequest {
         image: AgentImageId,
         nonce: u64,
     },
+    CompactRuntimeAdmissions {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        through: RuntimeAdmissionId,
+    },
 }
 
 impl AgentCallRequest {
@@ -264,6 +272,7 @@ impl AgentCallRequest {
             Self::ReleaseMemoryRegion { .. } => AgentCallOperation::ReleaseMemoryRegion,
             Self::RequestRuntimeAdmission { .. } => AgentCallOperation::RequestRuntimeAdmission,
             Self::DiscoverRuntimeAdmission { .. } => AgentCallOperation::DiscoverRuntimeAdmission,
+            Self::CompactRuntimeAdmissions { .. } => AgentCallOperation::CompactRuntimeAdmissions,
         }
     }
 }
