@@ -1,16 +1,16 @@
 //! Kernel-visible admission and least-authority binding for the Resource Manager.
 
 use agent_kernel_core::{
-    AgentEntryKind, AgentExecutionState, AgentImageDigest, AgentImageKind, EventKind, IntentKind,
+    AgentEntryKind, AgentExecutionState, AgentImageKind, AgentImageStatus, EventKind, IntentKind,
     Operation, OperationSet, RunQueueEntry, TaskStatus, VerificationRequirement,
 };
 
 use super::{ResourceManagerTask, RESOURCE_MANAGER};
-use crate::X86BootedKernel;
+use crate::{boot_agent_images::BootResourceManagerImage, X86BootedKernel};
 
 pub(super) fn prepare(
     booted: &mut X86BootedKernel,
-    digest: AgentImageDigest,
+    contract: BootResourceManagerImage,
 ) -> Option<ResourceManagerTask> {
     let report = *booted.report();
     let kernel = booted.kernel_mut();
@@ -45,7 +45,9 @@ pub(super) fn prepare(
             report.bootstrap_agent,
             report.bootstrap_capability,
             RESOURCE_MANAGER,
-            OperationSet::only(Operation::Act).with(Operation::Delegate),
+            OperationSet::only(Operation::Act)
+                .with(Operation::Rollback)
+                .with(Operation::Delegate),
         )
         .ok()?;
     let image = kernel
@@ -54,13 +56,34 @@ pub(super) fn prepare(
             report.bootstrap_capability,
             report.bootstrap_resource,
             AgentImageKind::Supervisor,
-            digest,
+            contract.digest(),
             1,
             1,
         )
         .ok()?;
     kernel
         .sys_verify_agent_image(report.bootstrap_agent, report.bootstrap_capability, image)
+        .ok()?;
+    let retired_image = kernel
+        .sys_register_agent_image(
+            report.bootstrap_agent,
+            report.bootstrap_capability,
+            report.bootstrap_resource,
+            AgentImageKind::Worker,
+            contract.retired_image_digest(),
+            1,
+            1,
+        )
+        .ok()?;
+    if retired_image != contract.retired_image() {
+        return None;
+    }
+    kernel
+        .sys_retire_agent_image(
+            report.bootstrap_agent,
+            report.bootstrap_capability,
+            retired_image,
+        )
         .ok()?;
     kernel
         .sys_launch_task_agent(
@@ -78,14 +101,16 @@ pub(super) fn prepare(
         image,
         task_capability,
         resource_authority,
+        retired_image,
     };
-    prepared_state_valid(booted, manager, intent).then_some(manager)
+    prepared_state_valid(booted, manager, intent, contract).then_some(manager)
 }
 
 fn prepared_state_valid(
     booted: &X86BootedKernel,
     manager: ResourceManagerTask,
     intent: agent_kernel_core::IntentId,
+    contract: BootResourceManagerImage,
 ) -> bool {
     let report = *booted.report();
     let kernel = booted.kernel();
@@ -96,10 +121,12 @@ fn prepared_state_valid(
         .find(|context| context.agent == RESOURCE_MANAGER);
     let entry = kernel.agent_entry(RESOURCE_MANAGER).ok();
     let authority = kernel.capability(manager.resource_authority).ok();
+    let retired_image = kernel.agent_image(manager.retired_image).ok();
     manager.task.raw() == 6
         && manager.image.raw() == 8
         && manager.task_capability.raw() == 11
         && manager.resource_authority.raw() == 12
+        && manager.retired_image.raw() == 9
         && intent.raw() == 6
         && matches!(task, Some(task)
             if task.status == TaskStatus::Accepted
@@ -118,10 +145,20 @@ fn prepared_state_valid(
             if authority.agent == RESOURCE_MANAGER
                 && authority.resource == report.bootstrap_resource
                 && authority.operations
-                    == OperationSet::only(Operation::Act).with(Operation::Delegate)
+                    == OperationSet::only(Operation::Act)
+                        .with(Operation::Rollback)
+                        .with(Operation::Delegate)
                 && !authority.revoked
                 && authority.task.is_none()
                 && authority.parent == Some(report.bootstrap_capability))
+        && matches!(retired_image, Some(image)
+            if image.owner == report.bootstrap_agent
+                && image.resource == report.bootstrap_resource
+                && image.kind == AgentImageKind::Worker
+                && image.digest == contract.retired_image_digest()
+                && image.abi_version == 1
+                && image.entry_version == 1
+                && image.status == AgentImageStatus::Retired)
         && !kernel.run_queue().contains(&RunQueueEntry {
             task: manager.task,
             agent: RESOURCE_MANAGER,

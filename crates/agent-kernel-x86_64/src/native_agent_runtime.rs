@@ -7,7 +7,7 @@
 
 mod dispatch;
 
-use agent_kernel_core::{AgentId, RunQueueEntry};
+use agent_kernel_core::{AgentId, AgentImageId, RunQueueEntry};
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
 use crate::agent_cpu::{
@@ -101,6 +101,11 @@ impl NativeAgentRuntime {
 
     pub(crate) fn contains(&self, agent: AgentId) -> bool {
         self.contexts.get(agent).is_ok()
+    }
+
+    pub(crate) fn contains_image(&self, image: AgentImageId) -> bool {
+        self.contexts
+            .any(|context| context.context().image() == image)
     }
 
     pub(crate) fn take_prepared(&mut self, agent: AgentId) -> Option<PreparedAgentCpu> {

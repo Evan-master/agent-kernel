@@ -20,6 +20,7 @@ pub enum EventKind {
     AgentImageRegistered,
     AgentImageVerified,
     AgentImageRetired,
+    AgentImageRecordRetired,
     AgentLaunched,
     AgentEntryRetired,
     RuntimeAdmissionRequested,

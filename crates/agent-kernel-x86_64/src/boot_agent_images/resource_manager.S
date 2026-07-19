@@ -321,6 +321,35 @@ resource_manager_entry:
     test rbp, rbp
     jne .halt
 
+    mov ecx, 37
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 9
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 37
+    jne .halt
+    cmp r10, 9
+    jne .halt
+    cmp r11, 1
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
     mov ecx, 17
     xor edx, edx
     mov r10d, 12

@@ -22,6 +22,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::AgentImageRegistered => "agent_image_registered",
         EventKind::AgentImageVerified => "agent_image_verified",
         EventKind::AgentImageRetired => "agent_image_retired",
+        EventKind::AgentImageRecordRetired => "agent_image_record_retired",
         EventKind::AgentLaunched => "agent_launched",
         EventKind::AgentEntryRetired => "agent_entry_retired",
         EventKind::RuntimeAdmissionRequested => "runtime_admission_requested",

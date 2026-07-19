@@ -123,3 +123,20 @@ fn matching_preflight_is_read_only_for_match_mismatch_and_missing_agent() {
     assert_eq!(store.take(AgentId::new(3)), Ok(OwnedRuntime("prepared-a")));
     assert_eq!(store.take(AgentId::new(4)), Ok(OwnedRuntime("preempted-b")));
 }
+
+#[test]
+fn value_predicate_scans_every_resident_slot_without_moving_values() {
+    let mut store = NativeAgentRuntimeStore::<OwnedRuntime, 3>::new();
+    store
+        .insert(AgentId::new(3), OwnedRuntime("prepared-a"))
+        .unwrap();
+    store
+        .insert(AgentId::new(4), OwnedRuntime("waiting-b"))
+        .unwrap();
+
+    assert!(store.any(|runtime| runtime.0 == "waiting-b"));
+    assert!(!store.any(|runtime| runtime.0 == "completed-c"));
+    assert_eq!(store.len(), 2);
+    assert_eq!(store.get(AgentId::new(3)).unwrap().0, "prepared-a");
+    assert_eq!(store.get(AgentId::new(4)).unwrap().0, "waiting-b");
+}

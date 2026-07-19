@@ -1,5 +1,6 @@
 //! Read-only semantic, authority, event, and physical proof for Resource Manager V0.
 
+mod agent_image;
 mod agent_management;
 mod memory_page;
 mod memory_region;
@@ -55,8 +56,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 33
-        && completed.address_space_switch_count() == 66
+        && completed.call_count() == 34
+        && completed.address_space_switch_count() == 68
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -92,7 +93,10 @@ pub(super) fn completed(
         && derived.parent == Some(image.capability())
         && authority.agent == RESOURCE_MANAGER
         && authority.resource == booted.report().bootstrap_resource
-        && authority.operations == OperationSet::only(Operation::Act).with(Operation::Delegate)
+        && authority.operations
+            == OperationSet::only(Operation::Act)
+                .with(Operation::Rollback)
+                .with(Operation::Delegate)
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
@@ -101,6 +105,7 @@ pub(super) fn completed(
         && memory_pool.all_available_and_zero()
         && task_lifecycle::state_valid(booted, manager, image)
         && agent_management::state_valid(booted, manager, image)
+        && agent_image::state_valid(booted, manager, image)
         && memory_page::state_valid(booted, image)
         && memory_region::state_valid(booted, image)
         && events_prove_lifecycle(booted, manager, image)
@@ -133,6 +138,7 @@ fn events_prove_lifecycle(
         EventKind::AgentRetired,
         EventKind::OrphanedMessageRetired,
         EventKind::AgentRecordRetired,
+        EventKind::AgentImageRecordRetired,
         EventKind::AgentRegistered,
         EventKind::ResourceCreated,
         EventKind::CapabilityGranted,
@@ -187,17 +193,25 @@ fn events_prove_lifecycle(
         && tail[8].resource == Some(image.resource())
         && tail[8].capability == Some(image.capability())
         && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
-        && agent_management::events_valid(&tail[14..22], booted, manager, image)
-        && memory_page::events_valid(&tail[22..27], booted, image)
+        && agent_management::events_valid(
+            &[
+                tail[14], tail[15], tail[16], tail[17], tail[18], tail[19], tail[20], tail[22],
+            ],
+            booted,
+            manager,
+            image,
+        )
+        && agent_image::events_valid(&tail[21], booted, manager, image)
+        && memory_page::events_valid(&tail[23..28], booted, image)
         && memory_region::events_valid(
             &[
-                tail[27], tail[28], tail[29], tail[30], tail[31], tail[32], tail[33], tail[34],
-                tail[35], tail[36], tail[37], tail[38], tail[39], tail[40], tail[42],
+                tail[28], tail[29], tail[30], tail[31], tail[32], tail[33], tail[34], tail[35],
+                tail[36], tail[37], tail[38], tail[39], tail[40], tail[41], tail[43],
             ],
             booted,
             image,
         )
-        && tail[41].task == Some(manager.task)
-        && tail[41].task_result == Some(image.result())
-        && tail[43].task == Some(manager.task)
+        && tail[42].task == Some(manager.task)
+        && tail[42].task_result == Some(image.result())
+        && tail[44].task == Some(manager.task)
 }

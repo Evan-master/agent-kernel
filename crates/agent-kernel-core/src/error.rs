@@ -21,6 +21,8 @@ pub enum KernelError {
     MemoryCellStoreFull,
     NamespaceEntryStoreFull,
     AgentImageStoreFull,
+    AgentImageRecordRetirementNotReady,
+    AgentImageRecordRetirementReferenced,
     AgentEntryStoreFull,
     AgentEntryRetirementNotReady,
     AgentEntryRetirementReferenced,

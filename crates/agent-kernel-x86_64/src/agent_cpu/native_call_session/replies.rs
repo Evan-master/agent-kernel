@@ -5,6 +5,7 @@
 //! completed before callers invoke these methods.
 
 mod agent_entry_retirement;
+mod agent_image_record_retirement;
 mod agent_management;
 mod agent_record_retirement;
 mod capability_compaction;

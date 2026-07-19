@@ -8,8 +8,7 @@ mod evidence;
 mod setup;
 
 use agent_kernel_core::{
-    AgentId, AgentImageDigest, AgentImageId, AgentImageRecord, CapabilityId, EventKind,
-    RunQueueEntry, TaskId,
+    AgentId, AgentImageId, AgentImageRecord, CapabilityId, EventKind, RunQueueEntry, TaskId,
 };
 use agent_kernel_x86_64::agent_call::AgentCallContext;
 
@@ -26,6 +25,7 @@ struct ResourceManagerTask {
     image: AgentImageId,
     task_capability: CapabilityId,
     resource_authority: CapabilityId,
+    retired_image: AgentImageId,
 }
 
 impl ResourceManagerTask {
@@ -48,10 +48,10 @@ pub(super) struct PreparedResourceManagerFlow {
 impl ResourceManagerFlow {
     pub(super) fn prepare(
         booted: &mut X86BootedKernel,
-        digest: AgentImageDigest,
+        image: BootResourceManagerImage,
     ) -> Option<PreparedResourceManagerFlow> {
         Some(PreparedResourceManagerFlow {
-            manager: setup::prepare(booted, digest)?,
+            manager: setup::prepare(booted, image)?,
         })
     }
 }

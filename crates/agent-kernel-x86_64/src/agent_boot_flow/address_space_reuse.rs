@@ -3,7 +3,9 @@
 mod batch;
 mod release;
 
-use agent_kernel_core::RunQueueEntry;
+use agent_kernel_core::{
+    AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
+};
 use agent_kernel_x86_64::address_space::AGENT_OWNED_FRAME_COUNT;
 
 use crate::{
@@ -231,7 +233,65 @@ pub(super) fn run(
         &second_flows,
         supervisor_admission,
         second_admissions,
-    )
+    )?;
+    prove_agent_image_slot_reuse(booted, worker_contract)
+}
+
+fn prove_agent_image_slot_reuse(
+    booted: &mut X86BootedKernel,
+    contract: BootReuseWorkerImage,
+) -> Option<()> {
+    let report = *booted.report();
+    let event_start = booted.kernel().events().len();
+    let fresh = booted
+        .kernel_mut()
+        .sys_register_agent_image(
+            report.bootstrap_agent,
+            report.bootstrap_capability,
+            report.bootstrap_resource,
+            AgentImageKind::Worker,
+            contract.digest(),
+            1,
+            1,
+        )
+        .ok()?;
+    let kernel = booted.kernel();
+    let record = kernel.agent_image(fresh).ok()?;
+    let event = kernel.events().get(event_start)?;
+    if fresh != AgentImageId::new(15)
+        || kernel.agent_images().len() != 14
+        || !kernel
+            .agent_images()
+            .iter()
+            .enumerate()
+            .all(|(index, record)| {
+                record.id.raw()
+                    == if index < 8 {
+                        index as u64 + 1
+                    } else {
+                        index as u64 + 2
+                    }
+            })
+        || record.owner != report.bootstrap_agent
+        || record.resource != report.bootstrap_resource
+        || record.kind != AgentImageKind::Worker
+        || record.digest != contract.digest()
+        || record.abi_version != 1
+        || record.entry_version != 1
+        || record.status != AgentImageStatus::Pending
+        || kernel.events().len() != event_start + 1
+        || event.kind != EventKind::AgentImageRegistered
+        || event.agent != report.bootstrap_agent
+        || event.target_agent != Some(report.bootstrap_agent)
+        || event.resource != Some(report.bootstrap_resource)
+        || event.capability != Some(report.bootstrap_capability)
+        || event.operation != Some(Operation::Act)
+        || event.agent_image != Some(fresh)
+    {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK");
+    Some(())
 }
 
 fn prepare_batch(

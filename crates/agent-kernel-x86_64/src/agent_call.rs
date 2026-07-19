@@ -6,6 +6,7 @@
 //! scheduler-owned `AgentCallContext`.
 
 mod agent_entry_retirement;
+mod agent_image_record_retirement;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
@@ -71,6 +72,7 @@ pub const AGENT_CALL_RETIRE_AGENT_ENTRY: u64 = 33;
 pub const AGENT_CALL_RETIRE_MESSAGE: u64 = 34;
 pub const AGENT_CALL_RETIRE_ORPHANED_MESSAGE: u64 = 35;
 pub const AGENT_CALL_RETIRE_AGENT_RECORD: u64 = 36;
+pub const AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD: u64 = 37;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -139,6 +141,7 @@ impl AgentCallRequest {
             AGENT_CALL_RETIRE_MESSAGE => AgentCallOperation::RetireMessage,
             AGENT_CALL_RETIRE_ORPHANED_MESSAGE => AgentCallOperation::RetireOrphanedMessage,
             AGENT_CALL_RETIRE_AGENT_RECORD => AgentCallOperation::RetireAgentRecord,
+            AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD => AgentCallOperation::RetireAgentImageRecord,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -246,6 +249,9 @@ impl AgentCallRequest {
             AgentCallOperation::RetireMessage => mailbox::decode_retirement(frame),
             AgentCallOperation::RetireOrphanedMessage => mailbox::decode_orphaned_retirement(frame),
             AgentCallOperation::RetireAgentRecord => agent_record_retirement::decode(frame),
+            AgentCallOperation::RetireAgentImageRecord => {
+                agent_image_record_retirement::decode(frame)
+            }
         }
     }
 }

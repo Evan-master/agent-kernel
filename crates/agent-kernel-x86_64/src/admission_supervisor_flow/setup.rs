@@ -102,7 +102,7 @@ fn prepared_state_valid(booted: &X86BootedKernel, supervisor: AdmissionSuperviso
     let authority = kernel.capability(supervisor.admission_authority).ok();
     supervisor.intent.raw() == 10
         && supervisor.task.raw() == 10
-        && supervisor.image.raw() == 11
+        && supervisor.image.raw() == 12
         && supervisor.task_capability.raw() == 22
         && supervisor.admission_authority.raw() == 23
         && matches!(task, Some(task)

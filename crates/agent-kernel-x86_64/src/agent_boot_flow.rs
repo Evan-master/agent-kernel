@@ -74,7 +74,7 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fatal_boot("AGENT_KERNEL_FAULT_HANDLER_SETUP_ERROR");
     };
     let Some(resource_manager_flow) =
-        ResourceManagerFlow::prepare(&mut booted, resource_manager_image.digest())
+        ResourceManagerFlow::prepare(&mut booted, resource_manager_image)
     else {
         fatal_boot("AGENT_KERNEL_RESOURCE_MANAGER_SETUP_ERROR");
     };

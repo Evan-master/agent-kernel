@@ -97,6 +97,13 @@ impl<T, const CAPACITY: usize> NativeAgentRuntimeStore<T, CAPACITY> {
         }
     }
 
+    pub fn any(&self, mut matches: impl FnMut(&T) -> bool) -> bool {
+        self.slots[..self.len]
+            .iter()
+            .filter_map(|slot| slot.as_ref().map(|slot| &slot.value))
+            .any(&mut matches)
+    }
+
     pub fn get(&self, agent: AgentId) -> Result<&T, NativeAgentRuntimeError> {
         self.slots[..self.len]
             .iter()

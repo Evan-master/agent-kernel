@@ -42,4 +42,5 @@ pub enum AgentCallOperation {
     RetireMessage,
     RetireOrphanedMessage,
     RetireAgentRecord,
+    RetireAgentImageRecord,
 }

@@ -5,6 +5,7 @@
 //! control to the outer scheduler loop.
 
 mod agent_entry_retirement;
+mod agent_image_record_retirement;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
@@ -140,6 +141,11 @@ pub(super) fn run(
             AgentCallRequest::RetireAgentRecord {
                 authority, target, ..
             } => agent_record_retirement::retire(booted, runtime, pending, authority, target)?,
+            AgentCallRequest::RetireAgentImageRecord {
+                authority, target, ..
+            } => agent_image_record_retirement::retire(
+                booted, runtime, report, pending, authority, target,
+            )?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

@@ -108,6 +108,11 @@ currently provides:
   managed Agent record and its index-aligned execution context after every live
   non-Event reference is gone; a monotonic retirement high-water prevents
   historical Agent identities from being registered again;
+- Agent Call 37, which lets an authenticated Supervisor retire one terminal
+  Agent Image record through root-scoped `Rollback` cleanup authority after
+  every Agent Entry, Runtime Admission, and native execution-context reference
+  is gone; stable dense removal returns Image Store capacity while monotonic
+  Image IDs preserve historical identity;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -135,6 +140,10 @@ currently provides:
   suspends, resumes, and retires the unlaunched identity, then retires the
   orphaned Message through Agent Call 35, retires the Agent 9 record/context
   pair through Agent Call 36, and registers Agent 15 into the reclaimed slot;
+- a native Agent Image Manager protocol that retires disposable Worker Image 9
+  through Agent Call 37, validates complete removal evidence, and later
+  registers Image 15 into the reclaimed physical slot; the final dense Store
+  holds the monotonic identities 1 through 8 and 10 through 15;
 - a shared 16-frame runtime pool with deterministic allocation, full-page
   zeroing, and ownership records bound to Agent, Resource, MemoryCell, and
   allocation generation;
@@ -157,10 +166,15 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Agent record/context slots | 1 |
 | Agent record retirement Events | 1 |
 | Agent retirement high-water | 9 |
+| Registered Agent Image Events | 15 |
+| Final resident Agent Image records | 14 |
+| Retired Agent Image records | 1 |
+| Reused Agent Image record slots | 1 |
+| Agent Image record retirement Events | 1 |
 | Native ring-3 completions | 11 |
 | Kernel-selected dispatches | 35 |
-| Resource Manager Agent Calls | 33 |
-| Resource Manager Agent/kernel address-space switches | 66 |
+| Resource Manager Agent Calls | 34 |
+| Resource Manager Agent/kernel address-space switches | 68 |
 | Admission Supervisor Agent Calls | 30 |
 | Admission Supervisor Agent/kernel address-space switches | 60 |
 | Runtime Service Worker Agent Calls | 20 |
@@ -210,7 +224,7 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 366 |
+| Ordered kernel events after Driver completion | 370 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -221,7 +235,7 @@ artifacts:
 
 | Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
-| Resource Manager | 33 | 66 | 3,075 | `13a019b701939983d3a90ed938ad4028745e24e448708c5f2dd58d5dbf0f2034` |
+| Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
 | Admission Supervisor | 30 | 60 | 2,794 | `aea6f5f466ea2fffbbb5c39b7c570e20824563b3e8bfdfe94adbd858c51f9011` |
 
 The generated Rust bytes match independently assembled machine code, and each
@@ -246,7 +260,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-36"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-37"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -314,6 +328,7 @@ and nonce state before it reaches the facade.
 | `RetireMessage` | 34 | Retire one acknowledged Message owned by the authenticated recipient |
 | `RetireOrphanedMessage` | 35 | Retire one Pending Message addressed to an authorized retired managed Agent |
 | `RetireAgentRecord` | 36 | Retire one unreferenced terminal managed Agent record and aligned execution context |
+| `RetireAgentImageRecord` | 37 | Retire one unreferenced terminal Agent Image record from the dense Image Store |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -379,6 +394,14 @@ execution context together, advances the retirement high-water, and emits
 `AgentRecordRetired`. Later registration rejects zero identities and every
 identity at or below that high-water, so historical Events cannot alias a new
 Agent.
+Operation 37 requires an authenticated active Supervisor and root-scoped
+`Rollback` cleanup authority. The target Image must be `Retired`, with no
+Agent Entry, Runtime Admission, current caller, parked runtime, completed
+report, or faulted report carrying its identity. Active Image Resources require
+exact authority scope; retired Image Resources accept active ancestor scope.
+Successful retirement removes one dense Image record in stable order, leaves
+the monotonic Image allocator unchanged, and emits `AgentImageRecordRetired`
+with the complete Image metadata, actor, and authorizing Capability.
 
 ## Quick Start
 
@@ -415,7 +438,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 366 events, and treat
+validate the complete serial transcript, require exactly 370 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -441,6 +464,7 @@ AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_ORPHANED_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_AGENT_RECORD_RETIREMENT_OK
+AGENT_KERNEL_AGENT_CALL_AGENT_IMAGE_RECORD_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
@@ -448,6 +472,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_AGENT_RECORD_RETIREMENT_OK
+AGENT_KERNEL_NATIVE_AGENT_IMAGE_RECORD_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
@@ -460,6 +485,7 @@ AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
+AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
@@ -468,7 +494,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[366] driver_invocation_completed
+event[370] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -513,7 +539,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 36,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 37,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -549,10 +575,14 @@ authority.
   `Delegate` authorization, complete non-Event reference preflight, atomic
   dense removal, monotonic identity high-water, slot reuse, and complete Event
   evidence;
+- authorized dense Agent Image record retirement with lifecycle and strict
+  semantic/native-reference preflight, retired-Resource ancestor authority,
+  monotonic Image IDs, stable retained order, physical slot reuse, and complete
+  metadata Event evidence;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 366-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 370-event reference profile.
 
 ### Planned
 
@@ -565,8 +595,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Agent Record Retirement design](docs/superpowers/specs/2026-07-19-agent-record-retirement-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-agent-record-retirement-v1.md)
+See the current [Agent Image Record Retirement design](docs/superpowers/specs/2026-07-19-agent-image-record-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-agent-image-record-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

@@ -4,7 +4,7 @@
 //! provenance and compatibility identity only; executable bytes, loaders, and
 //! hash computation stay outside the no_std kernel core.
 
-use crate::{AgentId, AgentImageId, ResourceId};
+use crate::{AgentId, AgentImageId, CapabilityId, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct AgentImageDigest {
@@ -58,5 +58,42 @@ impl AgentImageRecord {
             entry_version: 0,
             status: AgentImageStatus::Retired,
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentImageRecordRetirement {
+    record: AgentImageRecord,
+    actor: AgentId,
+    authority: CapabilityId,
+}
+
+impl AgentImageRecordRetirement {
+    pub(crate) const fn new(
+        record: AgentImageRecord,
+        actor: AgentId,
+        authority: CapabilityId,
+    ) -> Self {
+        Self {
+            record,
+            actor,
+            authority,
+        }
+    }
+
+    pub const fn record(self) -> AgentImageRecord {
+        self.record
+    }
+
+    pub const fn image(self) -> AgentImageId {
+        self.record.id
+    }
+
+    pub const fn actor(self) -> AgentId {
+        self.actor
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
     }
 }

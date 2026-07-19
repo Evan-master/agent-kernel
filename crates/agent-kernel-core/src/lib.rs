@@ -16,6 +16,7 @@ mod agent_execution;
 mod agent_execution_store;
 mod agent_image;
 mod agent_image_event;
+mod agent_image_record_retirement;
 mod agent_image_store;
 mod agent_launch;
 mod agent_lifecycle;
@@ -109,7 +110,10 @@ pub use action::{ActionRecord, ActionStatus};
 pub use agent::{AgentRecord, AgentRecordRetirement, AgentStatus};
 pub use agent_entry::{AgentEntryKind, AgentEntryRecord, AgentEntryRetirement};
 pub use agent_execution::{AgentExecutionContext, AgentExecutionState};
-pub use agent_image::{AgentImageDigest, AgentImageKind, AgentImageRecord, AgentImageStatus};
+pub use agent_image::{
+    AgentImageDigest, AgentImageKind, AgentImageRecord, AgentImageRecordRetirement,
+    AgentImageStatus,
+};
 pub use capability::{Capability, CapabilityCompaction};
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
