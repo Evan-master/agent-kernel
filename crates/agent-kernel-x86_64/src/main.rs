@@ -49,7 +49,7 @@ pub(crate) type X86BootedKernel = BootedKernel<
     14,
     7,
     X86_CAPABILITY_CAPACITY,
-    356,
+    358,
     1,
     1,
     0,

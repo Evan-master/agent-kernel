@@ -52,6 +52,49 @@ pub fn format_agent_launch_event(event: &Event) -> String {
     }
 }
 
+pub fn format_agent_entry_retirement_event(event: &Event) -> String {
+    let target = event
+        .target_agent
+        .map(|agent| agent.raw())
+        .unwrap_or_default();
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let capability = event
+        .capability
+        .map(|capability| capability.raw())
+        .unwrap_or_default();
+    let authority = event
+        .source_capability
+        .map(|capability| capability.raw())
+        .unwrap_or_default();
+    let image = event
+        .agent_image
+        .map(|image| image.raw())
+        .unwrap_or_default();
+    let kind = event
+        .agent_image_kind
+        .map(image_kind_label)
+        .unwrap_or("unknown");
+    let intent = event.intent.map(|intent| intent.raw()).unwrap_or_default();
+    let task = event.task.map(|task| task.raw()).unwrap_or_default();
+
+    format!(
+        "event[{}] agent_entry_retired actor={} target_agent={} resource={} capability={} authority={} image={} kind={} intent={} task={}",
+        event.sequence,
+        event.agent.raw(),
+        target,
+        resource,
+        capability,
+        authority,
+        image,
+        kind,
+        intent,
+        task
+    )
+}
+
 pub fn format_agent_image_event(event: &Event, label: &str) -> String {
     let agent = event.agent.raw();
     let resource = event

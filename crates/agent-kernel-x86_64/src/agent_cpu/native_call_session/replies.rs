@@ -4,6 +4,7 @@
 //! associated with that operation. Scheduler and mailbox mutations must have
 //! completed before callers invoke these methods.
 
+mod agent_entry_retirement;
 mod agent_management;
 mod capability_compaction;
 mod intent_compaction;

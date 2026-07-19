@@ -384,6 +384,68 @@ admission_supervisor_intent_compaction_return:
     test rbp, rbp
     jne .halt
 
+    mov ecx, 33
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 10
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_first_agent_entry_retirement_return
+admission_supervisor_first_agent_entry_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 33
+    jne .halt
+    cmp r10, 10
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
+    mov ecx, 33
+    xor edx, edx
+    mov r10d, 23
+    mov r11d, 11
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global admission_supervisor_second_agent_entry_retirement_return
+admission_supervisor_second_agent_entry_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 33
+    jne .halt
+    cmp r10, 11
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
     mov ecx, 12
     xor edx, edx
     mov r10d, 23

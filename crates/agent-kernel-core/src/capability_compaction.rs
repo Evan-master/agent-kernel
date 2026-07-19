@@ -6,7 +6,7 @@
 
 use crate::{
     AgentEntryKind, AgentId, Capability, CapabilityCompaction, CapabilityId, Event, EventKind,
-    KernelCore, KernelError, MessageStatus, Operation, ResourceId, ResourceStatus,
+    KernelCore, KernelError, MessageStatus, Operation,
 };
 
 impl<
@@ -78,7 +78,7 @@ impl<
             return Err(KernelError::CapabilityCompactionNotReady);
         }
 
-        self.ensure_capability_compaction_authority(actor, authority, target_record.resource)?;
+        self.ensure_cleanup_authorized(actor, authority, target_record.resource)?;
         self.ensure_capability_unreferenced(target)?;
         self.ensure_event_slots(1)?;
 
@@ -121,53 +121,6 @@ impl<
         } else {
             Ok(())
         }
-    }
-
-    fn ensure_capability_compaction_authority(
-        &self,
-        actor: AgentId,
-        authority: CapabilityId,
-        target_resource: ResourceId,
-    ) -> Result<(), KernelError> {
-        let authority_record = self.find_capability(authority)?;
-        self.ensure_authorized(
-            actor,
-            authority,
-            authority_record.resource,
-            Operation::Rollback,
-        )?;
-
-        let target_record = self
-            .resources()
-            .iter()
-            .find(|resource| resource.id == target_resource)
-            .copied()
-            .ok_or(KernelError::ResourceNotFound)?;
-        if target_record.status == ResourceStatus::Active {
-            return if authority_record.resource == target_resource {
-                Ok(())
-            } else {
-                Err(KernelError::ResourceMismatch)
-            };
-        }
-
-        let mut current = target_record;
-        for _ in 0..RESOURCES {
-            let Some(parent) = current.parent else {
-                return Err(KernelError::ResourceMismatch);
-            };
-            if parent == authority_record.resource {
-                return Ok(());
-            }
-            current = self
-                .resources()
-                .iter()
-                .find(|resource| resource.id == parent)
-                .copied()
-                .ok_or(KernelError::ResourceNotFound)?;
-        }
-
-        Err(KernelError::ResourceMismatch)
     }
 }
 

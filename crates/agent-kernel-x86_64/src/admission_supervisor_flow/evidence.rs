@@ -1,5 +1,6 @@
 //! Phase proof for the resident Runtime Admission Supervisor.
 
+mod agent_entry_retirement;
 mod capability_compaction;
 mod compaction;
 mod intent_compaction;

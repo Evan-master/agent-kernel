@@ -108,6 +108,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" \
@@ -120,6 +121,7 @@ for expected in \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" \
+  "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" \
   "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" \
@@ -471,32 +473,34 @@ for expected in \
   "event[328] intent_compacted" \
   "event[329] intent_compacted" \
   "event[330] intent_compacted" \
-  "event[331] capability_derived" \
-  "event[332] capability_revoked" \
-  "event[333] capability_compacted" \
-  "event[334] capability_compacted" \
-  "event[335] capability_derived" \
-  "event[336] capability_derived" \
-  "event[337] task_result_submitted" \
-  "event[338] task_completed" \
-  "event[339] task_verified" \
-  "event[340] intent_fulfilled" \
+  "event[331] agent_entry_retired" \
+  "event[332] agent_entry_retired" \
+  "event[333] capability_derived" \
+  "event[334] capability_revoked" \
+  "event[335] capability_compacted" \
+  "event[336] capability_compacted" \
+  "event[337] capability_derived" \
+  "event[338] capability_derived" \
+  "event[339] task_result_submitted" \
+  "event[340] task_completed" \
   "event[341] task_verified" \
   "event[342] intent_fulfilled" \
   "event[343] task_verified" \
   "event[344] intent_fulfilled" \
-  "event[345] runtime_admission_released" \
-  "event[346] runtime_admission_released" \
-  "event[347] device_event_raised" \
-  "event[348] device_event_delivered" \
-  "event[349] driver_invocation_queued" \
-  "event[350] driver_invocation_dispatched" \
-  "event[351] driver_invocation_ticked" \
-  "event[352] device_event_acknowledged" \
-  "event[353] driver_command_submitted" \
-  "event[354] driver_command_dispatched" \
-  "event[355] driver_command_completed" \
-  "event[356] driver_invocation_completed" \
+  "event[345] task_verified" \
+  "event[346] intent_fulfilled" \
+  "event[347] runtime_admission_released" \
+  "event[348] runtime_admission_released" \
+  "event[349] device_event_raised" \
+  "event[350] device_event_delivered" \
+  "event[351] driver_invocation_queued" \
+  "event[352] driver_invocation_dispatched" \
+  "event[353] driver_invocation_ticked" \
+  "event[354] device_event_acknowledged" \
+  "event[355] driver_command_submitted" \
+  "event[356] driver_command_dispatched" \
+  "event[357] driver_command_completed" \
+  "event[358] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -506,8 +510,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 356 ]]; then
-  printf 'expected exactly 356 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 358 ]]; then
+  printf 'expected exactly 358 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -552,6 +556,8 @@ check_marker_count "AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" 2
+check_marker_count "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 2

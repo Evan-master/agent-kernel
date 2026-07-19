@@ -6,6 +6,7 @@
 //! reaching into core state directly.
 
 mod agent;
+mod agent_entry_retirement;
 mod agent_management;
 mod capability;
 mod driver;

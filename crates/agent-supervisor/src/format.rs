@@ -3,7 +3,8 @@
 use agent_kernel_core::{Event, EventKind};
 
 use crate::format_agent::{
-    format_agent_event, format_agent_image_event, format_agent_launch_event,
+    format_agent_entry_retirement_event, format_agent_event, format_agent_image_event,
+    format_agent_launch_event,
 };
 use crate::format_driver::{
     format_device_event, format_driver_command_event, format_driver_event,
@@ -33,6 +34,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentImageVerified => format_agent_image_event(event, "agent_image_verified"),
         EventKind::AgentImageRetired => format_agent_image_event(event, "agent_image_retired"),
         EventKind::AgentLaunched => format_agent_launch_event(event),
+        EventKind::AgentEntryRetired => format_agent_entry_retirement_event(event),
         EventKind::RuntimeAdmissionRequested => {
             format_runtime_admission_event(event, "runtime_admission_requested")
         }

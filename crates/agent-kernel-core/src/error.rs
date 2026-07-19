@@ -22,6 +22,8 @@ pub enum KernelError {
     NamespaceEntryStoreFull,
     AgentImageStoreFull,
     AgentEntryStoreFull,
+    AgentEntryRetirementNotReady,
+    AgentEntryRetirementReferenced,
     DriverBindingStoreFull,
     DriverEndpointStoreFull,
     DeviceEventStoreFull,

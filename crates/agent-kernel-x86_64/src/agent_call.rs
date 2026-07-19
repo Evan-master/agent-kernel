@@ -5,6 +5,7 @@
 //! performs no privileged operation and trusts identity only from an explicit
 //! scheduler-owned `AgentCallContext`.
 
+mod agent_entry_retirement;
 mod agent_management;
 mod capability;
 mod capability_compaction;
@@ -65,6 +66,7 @@ pub const AGENT_CALL_COMPACT_RUNTIME_ADMISSIONS: u64 = 29;
 pub const AGENT_CALL_COMPACT_TASKS: u64 = 30;
 pub const AGENT_CALL_COMPACT_INTENTS: u64 = 31;
 pub const AGENT_CALL_COMPACT_CAPABILITY: u64 = 32;
+pub const AGENT_CALL_RETIRE_AGENT_ENTRY: u64 = 33;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -129,6 +131,7 @@ impl AgentCallRequest {
             AGENT_CALL_COMPACT_TASKS => AgentCallOperation::CompactTasks,
             AGENT_CALL_COMPACT_INTENTS => AgentCallOperation::CompactIntents,
             AGENT_CALL_COMPACT_CAPABILITY => AgentCallOperation::CompactCapability,
+            AGENT_CALL_RETIRE_AGENT_ENTRY => AgentCallOperation::RetireAgentEntry,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -232,6 +235,7 @@ impl AgentCallRequest {
             AgentCallOperation::CompactTasks => task_compaction::decode(frame),
             AgentCallOperation::CompactIntents => intent_compaction::decode(frame),
             AgentCallOperation::CompactCapability => capability_compaction::decode(frame),
+            AgentCallOperation::RetireAgentEntry => agent_entry_retirement::decode(frame),
         }
     }
 }

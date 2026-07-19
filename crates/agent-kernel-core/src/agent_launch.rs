@@ -153,6 +153,14 @@ impl<
         &self.agent_entries[..self.agent_entry_len]
     }
 
+    pub const fn agent_entry_capacity(&self) -> usize {
+        AGENTS
+    }
+
+    pub const fn agent_entry_count(&self) -> usize {
+        self.agent_entry_len
+    }
+
     pub fn agent_entry(&self, agent: AgentId) -> Result<AgentEntryRecord, KernelError> {
         self.find_agent_entry(agent)
     }

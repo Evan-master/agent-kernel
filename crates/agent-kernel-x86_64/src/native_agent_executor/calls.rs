@@ -4,6 +4,7 @@
 //! replies resume the same owned frame; wait, yield, and completion return
 //! control to the outer scheduler loop.
 
+mod agent_entry_retirement;
 mod agent_management;
 mod capability;
 mod capability_compaction;
@@ -126,6 +127,9 @@ pub(super) fn run(
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,
+            AgentCallRequest::RetireAgentEntry {
+                authority, target, ..
+            } => agent_entry_retirement::retire(booted, runtime, pending, authority, target)?,
             AgentCallRequest::RegisterManagedAgent {
                 authority,
                 resource,

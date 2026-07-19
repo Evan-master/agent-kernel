@@ -21,6 +21,7 @@ pub enum EventKind {
     AgentImageVerified,
     AgentImageRetired,
     AgentLaunched,
+    AgentEntryRetired,
     RuntimeAdmissionRequested,
     RuntimeAdmissionAdmitted,
     RuntimeAdmissionRejected,

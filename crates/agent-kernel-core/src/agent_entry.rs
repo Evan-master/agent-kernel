@@ -3,7 +3,7 @@
 //! This module defines the fixed-width record that represents an active agent
 //! being admitted into a resource-scoped runtime entry.
 
-use crate::{AgentId, AgentImageId, CapabilityId, IntentId, ResourceId, TaskId};
+use crate::{AgentId, AgentImageId, AgentImageKind, CapabilityId, IntentId, ResourceId, TaskId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentEntryKind {
@@ -13,6 +13,19 @@ pub enum AgentEntryKind {
     Verifier,
     FaultHandler,
     Driver,
+}
+
+impl AgentEntryKind {
+    pub const fn image_kind(self) -> AgentImageKind {
+        match self {
+            Self::Bootstrap => AgentImageKind::Bootstrap,
+            Self::Supervisor => AgentImageKind::Supervisor,
+            Self::Worker => AgentImageKind::Worker,
+            Self::Verifier => AgentImageKind::Verifier,
+            Self::FaultHandler => AgentImageKind::FaultHandler,
+            Self::Driver => AgentImageKind::Driver,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -37,5 +50,24 @@ impl AgentEntryRecord {
             intent: None,
             task: None,
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentEntryRetirement {
+    entry: AgentEntryRecord,
+}
+
+impl AgentEntryRetirement {
+    pub(crate) const fn new(entry: AgentEntryRecord) -> Self {
+        Self { entry }
+    }
+
+    pub const fn entry(self) -> AgentEntryRecord {
+        self.entry
+    }
+
+    pub const fn agent(self) -> AgentId {
+        self.entry.agent
     }
 }

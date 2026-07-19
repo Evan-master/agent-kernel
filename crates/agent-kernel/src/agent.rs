@@ -151,6 +151,14 @@ impl<
         self.core.agent_entries()
     }
 
+    pub const fn agent_entry_capacity(&self) -> usize {
+        self.core.agent_entry_capacity()
+    }
+
+    pub const fn agent_entry_count(&self) -> usize {
+        self.core.agent_entry_count()
+    }
+
     pub fn agent_images(&self) -> &[AgentImageRecord] {
         self.core.agent_images()
     }

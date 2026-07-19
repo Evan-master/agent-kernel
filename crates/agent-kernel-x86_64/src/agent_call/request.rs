@@ -263,6 +263,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         target: CapabilityId,
     },
+    RetireAgentEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        target: AgentId,
+    },
 }
 
 impl AgentCallRequest {
@@ -300,6 +308,7 @@ impl AgentCallRequest {
             Self::CompactTasks { .. } => AgentCallOperation::CompactTasks,
             Self::CompactIntents { .. } => AgentCallOperation::CompactIntents,
             Self::CompactCapability { .. } => AgentCallOperation::CompactCapability,
+            Self::RetireAgentEntry { .. } => AgentCallOperation::RetireAgentEntry,
         }
     }
 }

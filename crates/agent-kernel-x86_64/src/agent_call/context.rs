@@ -4,6 +4,7 @@
 //! replies may add bounded kernel-owned identities. Delegated capability stays
 //! private to trusted kernel code and participates in context equality.
 
+mod agent_entry_retirement;
 mod agent_management;
 mod authentication;
 mod capability;

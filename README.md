@@ -91,6 +91,11 @@ currently provides:
   Capability leaf after every live child, Task, Agent Entry, Runtime Admission,
   and unacknowledged Message reference is gone; retired child Resources can be
   cleaned through active ancestor `Rollback` authority;
+- Agent Call 33, which lets an authenticated Supervisor retire one quiescent
+  terminal Agent Entry after its native runtime context and every live kernel
+  reference are gone; the dense Entry Store shifts deterministically while the
+  Agent identity, terminal Task, delegated Capability, Image, and audit history
+  remain intact;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -136,8 +141,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 24 |
-| Admission Supervisor Agent/kernel address-space switches | 48 |
+| Admission Supervisor Agent Calls | 26 |
+| Admission Supervisor Agent/kernel address-space switches | 52 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -149,6 +154,10 @@ The reference validation profile enforces these deterministic invariants:
 | Compacted terminal Intents | 6 |
 | Active Intents after prefix compaction | 6 |
 | Intent compaction Events | 6 |
+| Agent Entry store capacity | 14 |
+| Retired Agent Entry records | 2 |
+| Active Agent Entry records after retirement | 11 |
+| Agent Entry retirement Events | 2 |
 | Runtime Admission store capacity | 16 |
 | Runtime Admission requests | 4 |
 | Runtime Admission commits | 4 |
@@ -176,7 +185,7 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 356 |
+| Ordered kernel events after Driver completion | 358 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -201,7 +210,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31, 32"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31, 32, 33"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -265,6 +274,7 @@ and nonce state before it reaches the facade.
 | `CompactTasks` | 30 | Retire an authorized terminal prefix from the active Task store |
 | `CompactIntents` | 31 | Retire an authorized terminal prefix from the active Intent store |
 | `CompactCapability` | 32 | Retire one authorized revoked leaf from the sparse Capability store |
+| `RetireAgentEntry` | 33 | Retire one authorized quiescent terminal entry from the dense Agent Entry store |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -301,7 +311,14 @@ Operation 32 requires an authenticated Supervisor and active root-scoped
 or live kernel-object reference, clears exactly one sparse slot, preserves
 monotonic IDs, and emits a `CapabilityCompacted` Event. An active target
 Resource requires exact scope; a retired target Resource accepts authority from
-an active ancestor in its immutable Resource chain.
+an active ancestor in its immutable Resource chain. Operation 33 requires an
+authenticated active Supervisor and root-scoped `Rollback` cleanup authority.
+The target must have an idle execution context, terminal retained Task or
+Intent state, no native runtime context, and no live queue, Waiter, Admission,
+received Message, Fault Handler, or Driver Binding reference. Successful
+retirement removes one dense Entry record, preserves the referenced terminal
+objects, permits a later relaunch of the same Agent, and emits an
+`AgentEntryRetired` Event carrying the complete launch identity.
 
 ## Quick Start
 
@@ -338,7 +355,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 356 events, and treat
+validate the complete serial transcript, require exactly 358 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -360,6 +377,7 @@ AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK
 AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK
+AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
@@ -372,6 +390,7 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK
 AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK
+AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
@@ -383,7 +402,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[356] driver_invocation_completed
+event[358] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -428,7 +447,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 32,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 33,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -448,16 +467,20 @@ authority.
 - authorized sparse Capability compaction with leaf-first ordering, live
   reference preflight, retired-Resource ancestor authority, monotonic IDs, hole
   reuse, and complete per-Capability Events;
+- authorized dense Agent Entry retirement with terminal-scope checks, native
+  runtime and live-reference preflight, retired-Resource ancestor authority,
+  stable retained-record order, same-identity relaunch, and complete retirement
+  Events;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 356-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 358-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- bounded retention policies for Capabilities, Agent entries, Messages,
-  Waiters, Faults, and Events;
+- bounded multi-record retention policies for Messages, Waiters, Faults, and
+  Events;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -465,8 +488,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Capability Store Compaction design](docs/superpowers/specs/2026-07-19-capability-store-compaction-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-capability-store-compaction-v1.md)
+See the current [Agent Entry Retirement design](docs/superpowers/specs/2026-07-19-agent-entry-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-agent-entry-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
