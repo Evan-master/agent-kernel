@@ -1,8 +1,8 @@
-//! Batch reclamation for every completed native CPU address-space owner.
+//! Batch reclamation for a complete set of native CPU address-space owners.
 //!
 //! This executor child preflights all pool transitions on a copied ledger,
 //! then consumes completed CPUs in the same order. Semantic transcript checks
-//! run earlier while the completion report still owns every address space.
+//! run earlier while the completion report still owns the requested batch.
 
 use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
@@ -27,7 +27,7 @@ impl NativeExecutionReport {
             || COUNT > NATIVE_ADDRESS_SPACE_CAPACITY
             || self.completed.len() != COUNT
             || !self.faulted.is_empty()
-            || expected_len != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+            || expected_len > NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
         {
             return None;
         }
@@ -58,7 +58,12 @@ impl NativeExecutionReport {
                 return None;
             }
         }
-        (self.completed.is_empty() && pool.len() == expected_len && pool.all_reclaimed_and_zero())
+        if !self.completed.is_empty() || pool.len() != expected_len {
+            return None;
+        }
+        tokens
+            .iter()
+            .all(|token| matches!(token, Some(token) if pool.owns_zeroed(token.identity())))
             .then_some(())
     }
 }

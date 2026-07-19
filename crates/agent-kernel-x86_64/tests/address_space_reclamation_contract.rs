@@ -5,6 +5,7 @@ use agent_kernel_x86_64::{
 };
 
 type TwoAddressSpacePool = AddressSpaceFramePool<{ AGENT_OWNED_FRAME_COUNT * 2 }>;
+type ThreeAddressSpacePool = AddressSpaceFramePool<{ AGENT_OWNED_FRAME_COUNT * 3 }>;
 
 #[test]
 fn reclamation_pool_prepares_atomically_and_rejects_stale_tokens() {
@@ -156,6 +157,56 @@ fn concurrent_allocations_are_agent_bound_disjoint_and_cancellable() {
         pool.frames(),
         [first.owned_frames(), second.owned_frames()].concat()
     );
+}
+
+#[test]
+fn partial_batch_reclamation_reuses_workers_without_exposing_resident_frames() {
+    let first = identity(0x1000);
+    let second = identity(0x20_000);
+    let third = identity(0x40_000);
+    let mut pool = ThreeAddressSpacePool::new();
+    assert!(pool.commit(pool.prepare(first).unwrap()));
+    assert!(pool.commit(pool.prepare(second).unwrap()));
+    assert!(pool.commit(pool.prepare(third).unwrap()));
+
+    let supervisor = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(12)).unwrap())
+        .unwrap();
+    let worker_a = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(10)).unwrap())
+        .unwrap();
+    let worker_b = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(11)).unwrap())
+        .unwrap();
+    assert!(pool.is_empty());
+
+    let supervisor_identity = supervisor.identity();
+    let worker_a_identity = worker_a.identity();
+    let worker_b_identity = worker_b.identity();
+    assert!(pool.commit(pool.prepare(worker_a.into_identity()).unwrap()));
+    assert!(pool.commit(pool.prepare(worker_b.into_identity()).unwrap()));
+    assert_eq!(pool.len(), AGENT_OWNED_FRAME_COUNT * 2);
+    assert!(supervisor_identity
+        .owned_frames()
+        .iter()
+        .all(|frame| !pool.contains(*frame)));
+
+    let next_a = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(13)).unwrap())
+        .unwrap();
+    let next_b = pool
+        .commit_allocation(pool.prepare_allocation(AgentId::new(14)).unwrap())
+        .unwrap();
+    assert_eq!(next_a.identity(), worker_b_identity);
+    assert_eq!(next_b.identity(), worker_a_identity);
+    assert!(next_a.identity().is_disjoint_from(supervisor_identity));
+    assert!(next_b.identity().is_disjoint_from(supervisor_identity));
+    assert!(pool.is_empty());
+
+    assert!(pool.cancel_allocation(next_a).is_ok());
+    assert!(pool.cancel_allocation(next_b).is_ok());
+    assert!(pool.commit(pool.prepare(supervisor.into_identity()).unwrap()));
+    assert_eq!(pool.len(), AGENT_OWNED_FRAME_COUNT * 3);
 }
 
 #[test]

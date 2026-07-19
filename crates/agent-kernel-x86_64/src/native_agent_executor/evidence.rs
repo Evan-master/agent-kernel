@@ -32,6 +32,19 @@ impl NativeRuntimeEvidence {
             && self.agent_faults == 0
     }
 
+    pub(crate) const fn proves_repeated_runtime_admission_flow(self) -> bool {
+        self.dispatches == 12
+            && self.prepared == 5
+            && self.preempted == 5
+            && self.waiting == 2
+            && self.yielded == 0
+            && self.recovered_faults == 0
+            && self.quantum_expiries == 5
+            && self.returning_quantum_expiries == 0
+            && self.returning_quantum_generation == 0
+            && self.agent_faults == 0
+    }
+
     pub(crate) const fn proves_fault_containment_phase(self) -> bool {
         self.dispatches == 13
             && self.prepared == 5

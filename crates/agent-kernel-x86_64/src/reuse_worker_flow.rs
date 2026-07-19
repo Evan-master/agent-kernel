@@ -12,7 +12,16 @@ use agent_kernel_x86_64::{agent_call::AgentCallContext, agent_image::VerifiedAge
 
 use crate::X86BootedKernel;
 
-pub(super) const REUSE_WORKERS: [AgentId; 2] = [AgentId::new(10), AgentId::new(11)];
+pub(super) const REUSE_WORKER_BATCHES: [[AgentId; 2]; 2] = [
+    [AgentId::new(10), AgentId::new(11)],
+    [AgentId::new(13), AgentId::new(14)],
+];
+pub(super) const REUSE_WORKERS: [AgentId; 4] = [
+    AgentId::new(10),
+    AgentId::new(11),
+    AgentId::new(13),
+    AgentId::new(14),
+];
 
 pub(super) struct PreparedReuseWorkerFlow {
     agent: AgentId,
@@ -49,16 +58,25 @@ impl PreparedReuseWorkerFlow {
     }
 
     pub(super) fn batch_queued(booted: &X86BootedKernel, flows: &[Self; 2]) -> bool {
-        flows[0].agent == REUSE_WORKERS[0]
-            && flows[1].agent == REUSE_WORKERS[1]
+        Self::valid_batch(flows)
             && booted.kernel().run_queue()
                 == [flows[0].run_queue_entry(), flows[1].run_queue_entry()]
     }
 
     pub(super) fn batch_unqueued(booted: &X86BootedKernel, flows: &[Self; 2]) -> bool {
-        flows[0].agent == REUSE_WORKERS[0]
-            && flows[1].agent == REUSE_WORKERS[1]
-            && booted.kernel().run_queue().is_empty()
+        Self::valid_batch(flows)
+            && flows.iter().all(|flow| {
+                !booted
+                    .kernel()
+                    .run_queue()
+                    .contains(&flow.run_queue_entry())
+            })
+    }
+
+    fn valid_batch(flows: &[Self; 2]) -> bool {
+        REUSE_WORKER_BATCHES
+            .iter()
+            .any(|batch| flows[0].agent == batch[0] && flows[1].agent == batch[1])
     }
 
     const fn run_queue_entry(&self) -> RunQueueEntry {

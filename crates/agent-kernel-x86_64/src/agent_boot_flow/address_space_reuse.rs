@@ -1,5 +1,9 @@
-//! Runtime Admission Supervisor and broker execution on reclaimed address spaces.
+//! Two resident Runtime Admission batches over reclaimed address spaces.
 
+mod batch;
+mod release;
+
+use agent_kernel_core::RunQueueEntry;
 use agent_kernel_x86_64::address_space::AGENT_OWNED_FRAME_COUNT;
 
 use crate::{
@@ -9,11 +13,10 @@ use crate::{
         NativeAddressSpaceFramePool, RuntimeMemoryPool, NATIVE_ADDRESS_SPACE_FRAME_CAPACITY,
     },
     boot_agent_images::{BootAdmissionSupervisorImage, BootReuseWorkerImage},
-    native_address_space_service::{NativeAddressSpaceAdmissionStage, NativeAddressSpaceService},
+    native_address_space_service::NativeAddressSpaceService,
     native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
     native_agent_runtime::NativeAgentRuntime,
-    native_runtime_admission_broker::NativeRuntimeAdmissionBroker,
-    reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKERS},
+    reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKER_BATCHES},
     serial_write_line, X86BootedKernel,
 };
 
@@ -27,38 +30,51 @@ pub(super) fn run(
     supervisor_contract: BootAdmissionSupervisorImage,
 ) -> Option<()> {
     if !runtime.is_empty()
+        || !booted.kernel().run_queue().is_empty()
         || !memory_pool.all_available_and_zero()
         || !address_space_pool.all_reclaimed_and_zero()
     {
         return None;
     }
 
-    let first =
-        PreparedReuseWorkerFlow::prepare_unqueued(booted, REUSE_WORKERS[0], worker_contract)?;
-    let second =
-        PreparedReuseWorkerFlow::prepare_unqueued(booted, REUSE_WORKERS[1], worker_contract)?;
-    let flows = [first, second];
-    if !PreparedReuseWorkerFlow::batch_unqueued(booted, &flows) {
+    let first_flows = prepare_batch(booted, REUSE_WORKER_BATCHES[0], worker_contract)?;
+    if !PreparedReuseWorkerFlow::batch_unqueued(booted, &first_flows)
+        || !booted.kernel().run_queue().is_empty()
+    {
         return None;
     }
+
     let supervisor =
         PreparedAdmissionSupervisorFlow::prepare(booted, supervisor_contract.digest())?;
+    let second_flows = prepare_batch(booted, REUSE_WORKER_BATCHES[1], worker_contract)?;
+    let supervisor_context = supervisor.call_context()?;
+    if !PreparedReuseWorkerFlow::batch_unqueued(booted, &second_flows)
+        || booted.kernel().run_queue()
+            != [RunQueueEntry {
+                task: supervisor_context.task(),
+                agent: ADMISSION_SUPERVISOR,
+            }]
+    {
+        return None;
+    }
+
     let supervisor_admission = NativeAddressSpaceService::admit(
         address_space_pool,
         runtime,
         cpu_runtime,
         memory_pool,
         supervisor.verified_image(booted, supervisor_contract.bytes())?,
-        supervisor.call_context()?,
+        supervisor_context,
     )?
     .ok()?;
     if supervisor_admission.agent() != ADMISSION_SUPERVISOR
-        || address_space_pool.len()
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(AGENT_OWNED_FRAME_COUNT)?
+        || address_space_pool.len() + AGENT_OWNED_FRAME_COUNT != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
         || runtime.len() != 1
+        || !runtime.contains(ADMISSION_SUPERVISOR)
     {
         return None;
     }
+
     let mut report = NativeExecutionReport::new();
     let mut evidence = NativeRuntimeEvidence::default();
     native_agent_executor::run_until_idle(
@@ -69,15 +85,27 @@ pub(super) fn run(
         &mut evidence,
         None,
     )?;
-    let targets = [flows[0].admission_target(), flows[1].admission_target()];
+    let first_targets = [
+        first_flows[0].admission_target(),
+        first_flows[1].admission_target(),
+    ];
+    let second_targets = [
+        second_flows[0].admission_target(),
+        second_flows[1].admission_target(),
+    ];
+    let all_targets = [
+        first_targets[0],
+        first_targets[1],
+        second_targets[0],
+        second_targets[1],
+    ];
     if runtime.len() != 1
         || !runtime.contains(ADMISSION_SUPERVISOR)
         || report.len() != 0
         || report.faulted_len() != 0
         || !evidence.proves_runtime_admission_wait()
-        || !supervisor.waiting_after_requests(booted, targets)
-        || address_space_pool.len()
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(AGENT_OWNED_FRAME_COUNT)?
+        || !supervisor.waiting_after_requests(booted, first_targets)
+        || address_space_pool.len() + AGENT_OWNED_FRAME_COUNT != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
         || address_space_pool.owns(supervisor_admission.identity())
         || !memory_pool.all_available_and_zero()
     {
@@ -86,89 +114,73 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK");
 
-    let first_admission = NativeRuntimeAdmissionBroker::admit_next(
+    let first_admissions = batch::admit(
         booted,
         address_space_pool,
         runtime,
         cpu_runtime,
         memory_pool,
-        worker_contract.bytes(),
-    )?
-    .ok()?;
-    if first_admission.agent() != REUSE_WORKERS[0]
-        || address_space_pool.len()
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(2 * AGENT_OWNED_FRAME_COUNT)?
-        || !supervisor_admission.is_disjoint_from(first_admission)
-        || runtime.len() != 2
+        worker_contract,
+        &first_flows,
+        supervisor_admission,
+        None,
+        true,
+    )?;
+    native_agent_executor::run_until_idle(
+        booted,
+        runtime,
+        memory_pool,
+        &mut report,
+        &mut evidence,
+        None,
+    )?;
+    if runtime.len() != 1
         || !runtime.contains(ADMISSION_SUPERVISOR)
-        || !runtime.contains(REUSE_WORKERS[0])
+        || report.len() != 2
+        || report.faulted_len() != 0
+        || !evidence.proves_resident_runtime_admission_flow()
+        || first_flows
+            .iter()
+            .any(|flow| !flow.completed_after_runtime(booted, &report, worker_contract))
+        || !supervisor.waiting_between_batches(booted, all_targets)
+        || address_space_pool.len() + 3 * AGENT_OWNED_FRAME_COUNT
+            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || !memory_pool.all_available_and_zero()
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
-    let first_requester = booted
-        .kernel()
-        .runtime_admissions()
-        .iter()
-        .find(|record| record.target == REUSE_WORKERS[0])?
-        .requester;
-    let duplicate_failure = NativeAddressSpaceService::admit(
+    release::partial(
+        booted,
+        &mut report,
         address_space_pool,
         runtime,
-        cpu_runtime,
         memory_pool,
-        flows[0].verified_image(booted, worker_contract.bytes())?,
-        flows[0].admitted_call_context(first_requester)?,
-    )?
-    .err()?;
-    let cancelled_identity = duplicate_failure.identity()?;
-    if !duplicate_failure.proves_rollback(
-        NativeAddressSpaceAdmissionStage::RuntimeRegistration,
-        REUSE_WORKERS[0],
-        cancelled_identity,
-    ) || address_space_pool.len()
-        != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(2 * AGENT_OWNED_FRAME_COUNT)?
-        || !address_space_pool.owns_zeroed(cancelled_identity)
-        || runtime.len() != 2
-        || !runtime.contains(ADMISSION_SUPERVISOR)
-        || !runtime.contains(REUSE_WORKERS[0])
-    {
-        return None;
-    }
-    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CANCEL_OK");
+        &supervisor,
+        &first_flows,
+        supervisor_admission,
+        first_admissions,
+    )?;
 
-    let second_admission = NativeRuntimeAdmissionBroker::admit_next(
+    let second_admissions = batch::admit(
         booted,
         address_space_pool,
         runtime,
         cpu_runtime,
         memory_pool,
-        worker_contract.bytes(),
-    )?
-    .ok()?;
-    if second_admission.agent() != REUSE_WORKERS[1]
-        || second_admission.identity() != cancelled_identity
-        || !supervisor_admission.is_disjoint_from(second_admission)
-        || !first_admission.is_disjoint_from(second_admission)
-        || address_space_pool.len()
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY.checked_sub(3 * AGENT_OWNED_FRAME_COUNT)?
-        || address_space_pool.owns(supervisor_admission.identity())
-        || address_space_pool.owns(first_admission.identity())
-        || address_space_pool.owns(second_admission.identity())
-        || runtime.len() != 3
-        || !runtime.contains(ADMISSION_SUPERVISOR)
-        || !runtime.contains(REUSE_WORKERS[0])
-        || !runtime.contains(REUSE_WORKERS[1])
-        || !PreparedReuseWorkerFlow::batch_queued(booted, &flows)
-    {
-        return None;
-    }
-    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_ALLOCATED_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK");
-
+        worker_contract,
+        &second_flows,
+        supervisor_admission,
+        Some([
+            first_admissions[1].identity(),
+            first_admissions[0].identity(),
+        ]),
+        false,
+    )?;
     native_agent_executor::run_until_idle(
         booted,
         runtime,
@@ -180,52 +192,46 @@ pub(super) fn run(
     if !runtime.is_empty()
         || report.len() != 3
         || report.faulted_len() != 0
-        || !evidence.proves_resident_runtime_admission_flow()
-        || flows
+        || !evidence.proves_repeated_runtime_admission_flow()
+        || second_flows
             .iter()
             .any(|flow| !flow.completed_after_runtime(booted, &report, worker_contract))
-        || !supervisor.completed_after_notifications(booted, &report, supervisor_contract, targets)
+        || !supervisor.completed_after_notifications(
+            booted,
+            &report,
+            supervisor_contract,
+            all_targets,
+        )
+        || address_space_pool.len() + 3 * AGENT_OWNED_FRAME_COUNT
+            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || !memory_pool.all_available_and_zero()
     {
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK");
-    for flow in &flows {
-        flow.verify_completed(booted)?;
-    }
-    supervisor.verify_completed(booted)?;
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
-    let release_ids = [
-        booted.kernel().runtime_admissions().first()?.id,
-        booted.kernel().runtime_admissions().get(1)?.id,
-    ];
-    let release = booted
-        .kernel()
-        .sys_prepare_runtime_admission_release_batch(release_ids)
-        .ok()?;
-    let release_event_start = booted.kernel().events().len();
-    report.reclaim_completed_address_spaces(
+    release::terminal(
+        booted,
+        &mut report,
         address_space_pool,
-        [ADMISSION_SUPERVISOR, REUSE_WORKERS[0], REUSE_WORKERS[1]],
-    )?;
-    if !address_space_pool.all_reclaimed_and_zero()
-        || !address_space_pool.owns(supervisor_admission.identity())
-        || !address_space_pool.owns(first_admission.identity())
-        || !address_space_pool.owns(second_admission.identity())
-        || !memory_pool.all_available_and_zero()
-        || booted.kernel().events().len() != release_event_start
-    {
-        return None;
-    }
-    serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK");
-    booted
-        .kernel_mut()
-        .sys_commit_runtime_admission_release_batch(release)
-        .ok()?;
-    if !supervisor.released_after_reclamation(booted, targets, release_event_start) {
-        return None;
-    }
-    serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK");
-    Some(())
+        runtime,
+        memory_pool,
+        &supervisor,
+        &second_flows,
+        supervisor_admission,
+        second_admissions,
+    )
+}
+
+fn prepare_batch(
+    booted: &mut X86BootedKernel,
+    agents: [agent_kernel_core::AgentId; 2],
+    contract: BootReuseWorkerImage,
+) -> Option<[PreparedReuseWorkerFlow; 2]> {
+    Some([
+        PreparedReuseWorkerFlow::prepare_unqueued(booted, agents[0], contract)?,
+        PreparedReuseWorkerFlow::prepare_unqueued(booted, agents[1], contract)?,
+    ])
 }
