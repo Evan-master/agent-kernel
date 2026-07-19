@@ -93,6 +93,7 @@ impl<
             action: None,
             observation: Some(observation),
             message: None,
+            message_kind: None,
             memory_cell: None,
             namespace_entry: None,
             namespace_key: None,

@@ -84,7 +84,6 @@ impl PreparedAdmissionSupervisorFlow {
             .iter()
             .find(|record| record.agent == ADMISSION_SUPERVISOR);
         let admissions = kernel.runtime_admissions();
-        let notices = kernel.messages().get(2..);
         let waiter = kernel.waiters().last();
 
         matches!(task, Some(task) if task.status == TaskStatus::Waiting
@@ -96,7 +95,7 @@ impl PreparedAdmissionSupervisorFlow {
                 if execution.state == AgentExecutionState::Waiting
                     && execution.task == Some(self.supervisor.task))
             && kernel.run_queue().is_empty()
-            && kernel.messages().len() == 4
+            && retained_boot_messages(booted)
             && kernel.waiters().len() == 4
             && matches!(kernel.waiters().get(2), Some(first)
                 if first.id.raw() == 3
@@ -124,10 +123,9 @@ impl PreparedAdmissionSupervisorFlow {
                     status,
                 )
             })
-            && matches!(notices, Some(notices) if notices.len() == 2
-            && notices.iter().enumerate().all(|(index, message)| {
-                acknowledged_notice(message, index + 3, targets[index], ADMISSION_SUPERVISOR)
-            }))
+            && targets[..2].iter().enumerate().all(|(index, target)| {
+                retired_notice(booted, index + 3, *target, ADMISSION_SUPERVISOR)
+            })
             && matches!(kernel.events().last(), Some(event)
                 if event.kind == EventKind::MessageWaitStarted
                     && event.agent == ADMISSION_SUPERVISOR
@@ -181,21 +179,40 @@ pub(super) fn admission_matches(
         && admission.failure.is_none()
 }
 
-pub(super) fn acknowledged_notice(
-    message: &agent_kernel_core::MessageRecord,
+pub(super) fn retired_notice(
+    booted: &X86BootedKernel,
     id: usize,
     target: AdmissionTarget,
     recipient: AgentId,
 ) -> bool {
-    message.id.raw() == id as u64
-        && message.sender == target.0
-        && message.recipient == recipient
-        && message.kind == MessageKind::Notify
-        && message.payload.task == Some(target.1)
-        && message.payload.resource.is_none()
-        && message.payload.capability.is_none()
-        && message.payload.intent.is_none()
-        && message.payload.action.is_none()
-        && message.payload.fault.is_none()
-        && message.status == MessageStatus::Acknowledged
+    let mut count = 0;
+    let mut matching = None;
+    for event in booted.kernel().events() {
+        if event.kind == EventKind::MessageRetired
+            && event
+                .message
+                .is_some_and(|message| message.raw() == id as u64)
+        {
+            count += 1;
+            matching = Some(event);
+        }
+    }
+    matches!((count, matching), (1, Some(event))
+        if event.agent == recipient
+            && event.target_agent == Some(target.0)
+            && event.message_kind == Some(MessageKind::Notify)
+            && event.task == Some(target.1)
+            && event.resource.is_none()
+            && event.capability.is_none()
+            && event.intent.is_none()
+            && event.action.is_none()
+            && event.fault.is_none())
+}
+
+pub(super) fn retained_boot_messages(booted: &X86BootedKernel) -> bool {
+    matches!(booted.kernel().messages(), [first, second]
+        if first.id.raw() == 1
+            && second.id.raw() == 2
+            && first.status == MessageStatus::Acknowledged
+            && second.status == MessageStatus::Acknowledged)
 }

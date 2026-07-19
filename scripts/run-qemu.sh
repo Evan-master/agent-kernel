@@ -109,10 +109,12 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK" \
   "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" \
+  "AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" \
+  "AGENT_KERNEL_NATIVE_MESSAGE_RETIREMENT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK" \
@@ -426,81 +428,85 @@ for expected in \
   "event[281] task_dispatched" \
   "event[282] message_received" \
   "event[283] message_acknowledged" \
-  "event[284] message_received" \
-  "event[285] message_acknowledged" \
-  "event[286] runtime_admission_requested" \
-  "event[287] runtime_admission_requested" \
-  "event[288] message_wait_started" \
-  "event[289] task_verified" \
-  "event[290] intent_fulfilled" \
+  "event[284] message_retired" \
+  "event[285] message_received" \
+  "event[286] message_acknowledged" \
+  "event[287] message_retired" \
+  "event[288] runtime_admission_requested" \
+  "event[289] runtime_admission_requested" \
+  "event[290] message_wait_started" \
   "event[291] task_verified" \
   "event[292] intent_fulfilled" \
-  "event[293] runtime_admission_released" \
-  "event[294] runtime_admission_released" \
-  "event[295] runtime_admission_admitted" \
-  "event[296] task_queued" \
+  "event[293] task_verified" \
+  "event[294] intent_fulfilled" \
+  "event[295] runtime_admission_released" \
+  "event[296] runtime_admission_released" \
   "event[297] runtime_admission_admitted" \
   "event[298] task_queued" \
-  "event[299] task_dispatched" \
-  "event[300] task_quantum_expired" \
+  "event[299] runtime_admission_admitted" \
+  "event[300] task_queued" \
   "event[301] task_dispatched" \
   "event[302] task_quantum_expired" \
   "event[303] task_dispatched" \
-  "event[304] task_result_submitted" \
-  "event[305] message_sent" \
-  "event[306] message_wait_woken" \
-  "event[307] task_completed" \
-  "event[308] task_dispatched" \
-  "event[309] task_result_submitted" \
-  "event[310] message_sent" \
-  "event[311] task_completed" \
-  "event[312] task_dispatched" \
-  "event[313] message_received" \
-  "event[314] message_acknowledged" \
+  "event[304] task_quantum_expired" \
+  "event[305] task_dispatched" \
+  "event[306] task_result_submitted" \
+  "event[307] message_sent" \
+  "event[308] message_wait_woken" \
+  "event[309] task_completed" \
+  "event[310] task_dispatched" \
+  "event[311] task_result_submitted" \
+  "event[312] message_sent" \
+  "event[313] task_completed" \
+  "event[314] task_dispatched" \
   "event[315] message_received" \
   "event[316] message_acknowledged" \
-  "event[317] runtime_admission_compacted" \
-  "event[318] runtime_admission_compacted" \
-  "event[319] task_compacted" \
-  "event[320] task_compacted" \
-  "event[321] task_compacted" \
-  "event[322] task_compacted" \
+  "event[317] message_retired" \
+  "event[318] message_received" \
+  "event[319] message_acknowledged" \
+  "event[320] message_retired" \
+  "event[321] runtime_admission_compacted" \
+  "event[322] runtime_admission_compacted" \
   "event[323] task_compacted" \
   "event[324] task_compacted" \
-  "event[325] intent_compacted" \
-  "event[326] intent_compacted" \
-  "event[327] intent_compacted" \
-  "event[328] intent_compacted" \
+  "event[325] task_compacted" \
+  "event[326] task_compacted" \
+  "event[327] task_compacted" \
+  "event[328] task_compacted" \
   "event[329] intent_compacted" \
   "event[330] intent_compacted" \
-  "event[331] agent_entry_retired" \
-  "event[332] agent_entry_retired" \
-  "event[333] capability_derived" \
-  "event[334] capability_revoked" \
-  "event[335] capability_compacted" \
-  "event[336] capability_compacted" \
+  "event[331] intent_compacted" \
+  "event[332] intent_compacted" \
+  "event[333] intent_compacted" \
+  "event[334] intent_compacted" \
+  "event[335] agent_entry_retired" \
+  "event[336] agent_entry_retired" \
   "event[337] capability_derived" \
-  "event[338] capability_derived" \
-  "event[339] task_result_submitted" \
-  "event[340] task_completed" \
-  "event[341] task_verified" \
-  "event[342] intent_fulfilled" \
-  "event[343] task_verified" \
-  "event[344] intent_fulfilled" \
+  "event[338] capability_revoked" \
+  "event[339] capability_compacted" \
+  "event[340] capability_compacted" \
+  "event[341] capability_derived" \
+  "event[342] capability_derived" \
+  "event[343] task_result_submitted" \
+  "event[344] task_completed" \
   "event[345] task_verified" \
   "event[346] intent_fulfilled" \
-  "event[347] runtime_admission_released" \
-  "event[348] runtime_admission_released" \
-  "event[349] device_event_raised" \
-  "event[350] device_event_delivered" \
-  "event[351] driver_invocation_queued" \
-  "event[352] driver_invocation_dispatched" \
-  "event[353] driver_invocation_ticked" \
-  "event[354] device_event_acknowledged" \
-  "event[355] driver_command_submitted" \
-  "event[356] driver_command_dispatched" \
-  "event[357] driver_command_completed" \
-  "event[358] driver_invocation_completed" \
+  "event[347] task_verified" \
+  "event[348] intent_fulfilled" \
+  "event[349] task_verified" \
+  "event[350] intent_fulfilled" \
+  "event[351] runtime_admission_released" \
+  "event[352] runtime_admission_released" \
+  "event[353] device_event_raised" \
+  "event[354] device_event_delivered" \
+  "event[355] driver_invocation_queued" \
+  "event[356] driver_invocation_dispatched" \
+  "event[357] driver_invocation_ticked" \
+  "event[358] device_event_acknowledged" \
+  "event[359] driver_command_submitted" \
+  "event[360] driver_command_dispatched" \
+  "event[361] driver_command_completed" \
+  "event[362] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -510,8 +516,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 358 ]]; then
-  printf 'expected exactly 358 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 362 ]]; then
+  printf 'expected exactly 362 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -545,6 +551,8 @@ check_marker_count "AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK" 4
+check_marker_count "AGENT_KERNEL_NATIVE_MESSAGE_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK" 2

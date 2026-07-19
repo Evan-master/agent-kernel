@@ -124,6 +124,20 @@ impl PendingAgentCallCpu {
         Some(ResumableAgentCpu(self.session))
     }
 
+    pub(crate) fn acknowledge_message_retirement(
+        mut self,
+        message: MessageId,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(request, AgentCallRequest::RetireMessage { .. })
+        })?;
+        self.session
+            .context
+            .encode_message_retirement_reply(self.session.frame.frame_mut(), nonce, message)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
     pub(crate) fn acknowledge_resource_created(
         mut self,
         outcome: ResourceCreateOutcome,

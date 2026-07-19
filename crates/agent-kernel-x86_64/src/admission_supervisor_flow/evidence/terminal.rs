@@ -4,7 +4,7 @@ use agent_kernel_core::{
     AgentExecutionState, EventKind, RuntimeAdmissionStatus, TaskStatus, WaiterKind,
 };
 
-use super::{acknowledged_notice, admission_matches, AdmissionTarget};
+use super::{admission_matches, retained_boot_messages, retired_notice, AdmissionTarget};
 use crate::{
     admission_supervisor_flow::{PreparedAdmissionSupervisorFlow, ADMISSION_SUPERVISOR},
     boot_agent_images::BootAdmissionSupervisorImage,
@@ -36,7 +36,6 @@ impl PreparedAdmissionSupervisorFlow {
             .iter()
             .find(|record| record.agent == ADMISSION_SUPERVISOR);
         let admissions = kernel.runtime_admissions();
-        let notices = kernel.messages().get(2..);
 
         matches!(task, Some(task) if task.status == TaskStatus::Completed
             && task.assignee == Some(ADMISSION_SUPERVISOR)
@@ -48,8 +47,8 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.run_queue().is_empty()
             && completed.context() == context
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 26
-            && completed.address_space_switch_count() == 52
+            && completed.call_count() == 30
+            && completed.address_space_switch_count() == 60
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1
@@ -69,16 +68,15 @@ impl PreparedAdmissionSupervisorFlow {
             && self.initial_intent_prefix_compacted(booted)
             && self.first_batch_entries_retired(booted, targets)
             && self.capability_store_compacted(booted)
-            && kernel.messages().len() == 6
+            && retained_boot_messages(booted)
             && matches!(kernel.waiters().last(), Some(waiter)
                 if waiter.id.raw() == 4
                     && waiter.agent == ADMISSION_SUPERVISOR
                     && waiter.kind == WaiterKind::Mailbox
                     && !waiter.active)
-            && matches!(notices, Some(notices) if notices.len() == 4
-            && notices.iter().enumerate().all(|(index, message)| {
-                acknowledged_notice(message, index + 3, targets[index], ADMISSION_SUPERVISOR)
-            }))
+            && targets.iter().enumerate().all(|(index, target)| {
+                retired_notice(booted, index + 3, *target, ADMISSION_SUPERVISOR)
+            })
             && matches!(kernel.events().last(), Some(event)
                 if event.kind == EventKind::TaskCompleted
                     && event.agent == ADMISSION_SUPERVISOR

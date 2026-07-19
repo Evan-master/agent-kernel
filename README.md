@@ -46,8 +46,9 @@ currently provides:
 - SHA-256-bound, fixed-size Agent Image Capsules with typed Worker, Verifier,
   FaultHandler, and Supervisor entry roles;
 - a versioned register-only Agent Call ABI with no userspace pointers;
-- blocking mailbox send/receive/acknowledge, wakeup, cooperative yield, task
-  results, target-scoped verification, and completion;
+- blocking mailbox send/receive/acknowledge, recipient-owned terminal Message
+  retirement, wakeup, cooperative yield, task results, target-scoped
+  verification, and completion;
 - containment of ring-3 `#UD`, `#GP`, and `#PF` faults while kernel-origin
   exceptions remain fatal;
 - bounded fault-time reclamation of live private runtime memory before
@@ -96,11 +97,15 @@ currently provides:
   reference are gone; the dense Entry Store shifts deterministically while the
   Agent identity, terminal Task, delegated Capability, Image, and audit history
   remain intact;
+- Agent Call 34, which lets the authenticated recipient retire one acknowledged
+  Message, return its dense Store slot, preserve retained FIFO order and
+  monotonic Message IDs, and emit complete kind and payload audit evidence;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
 - four authenticated Worker completion notifications that wake the retained
-  Supervisor call frame across two FIFO receive/acknowledgement rounds;
+  Supervisor call frame across two FIFO receive/acknowledge/retire rounds; two
+  transient slots are reused by Messages 3 through 6 across both batches;
 - two generation-bound Runtime Admission release batches that require verified,
   idle targets and preflight aggregate event capacity: batch one returns 22
   frames while the Supervisor retains eleven; the Supervisor later compacts
@@ -141,8 +146,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 26 |
-| Admission Supervisor Agent/kernel address-space switches | 52 |
+| Admission Supervisor Agent Calls | 30 |
+| Admission Supervisor Agent/kernel address-space switches | 60 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -166,6 +171,10 @@ The reference validation profile enforces these deterministic invariants:
 | Runtime Admission compaction Events | 2 |
 | Retained terminal Runtime Admission records | 2 |
 | Worker completion notifications | 4 |
+| Message store capacity | 4 |
+| Retained acknowledged boot-flow Messages | 2 |
+| Retired completion Messages | 4 |
+| Message retirement Events | 4 |
 | Resident Supervisor Mailbox waits | 2 |
 | Resident Supervisor Mailbox wakes | 2 |
 | Contained Agent faults | 4 |
@@ -185,7 +194,7 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 358 |
+| Ordered kernel events after Driver completion | 362 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -210,7 +219,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31, 32, 33"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29, 30, 31, 32, 33, 34"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -275,6 +284,7 @@ and nonce state before it reaches the facade.
 | `CompactIntents` | 31 | Retire an authorized terminal prefix from the active Intent store |
 | `CompactCapability` | 32 | Retire one authorized revoked leaf from the sparse Capability store |
 | `RetireAgentEntry` | 33 | Retire one authorized quiescent terminal entry from the dense Agent Entry store |
+| `RetireMessage` | 34 | Retire one acknowledged Message owned by the authenticated recipient |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -319,6 +329,12 @@ received Message, Fault Handler, or Driver Binding reference. Successful
 retirement removes one dense Entry record, preserves the referenced terminal
 objects, permits a later relaunch of the same Agent, and emits an
 `AgentEntryRetired` Event carrying the complete launch identity.
+Operation 34 remains in the Agent identity domain used by Send, Receive, and
+Acknowledge. The authenticated caller must exactly match the Message recipient,
+and only `Acknowledged` records with no live Namespace binding may retire.
+Dense removal preserves retained order, the next Message ID remains monotonic,
+and `MessageRetired` records the sender, recipient, kind, and every typed
+payload reference before the slot returns to the fixed Store.
 
 ## Quick Start
 
@@ -355,7 +371,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 358 events, and treat
+validate the complete serial transcript, require exactly 362 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -378,10 +394,12 @@ AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK
 AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK
+AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
+AGENT_KERNEL_NATIVE_MESSAGE_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
@@ -402,7 +420,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[358] driver_invocation_completed
+event[362] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -447,12 +465,13 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 33,
+- a ring-3 Admission Supervisor, authenticated Agent Calls 27 through 34,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
 - resident Supervisor Mailbox waiting across two admission and execution
-  batches, authenticated Worker notifications, FIFO acknowledgement, partial
+  batches, authenticated Worker notifications, FIFO acknowledgement and
+  recipient-owned Message retirement, two-slot reuse across batches, partial
   Worker reclamation, and final three-address-space reclamation;
 - opaque, generation-bound release batches that link verified idle Tasks to
   post-reclamation `RuntimeAdmissionReleased` records and ordered kernel events;
@@ -471,16 +490,19 @@ authority.
   runtime and live-reference preflight, retired-Resource ancestor authority,
   stable retained-record order, same-identity relaunch, and complete retirement
   Events;
+- recipient-owned acknowledged Message retirement with Namespace-reference
+  preflight, dense-order preservation, monotonic IDs, slot reuse, and complete
+  kind and typed-payload Event evidence;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 358-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 362-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- bounded multi-record retention policies for Messages, Waiters, Faults, and
-  Events;
+- administrative policy for pending Messages owned by retired Agents, plus
+  bounded retention for Waiters, Faults, and Events;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -488,8 +510,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Agent Entry Retirement design](docs/superpowers/specs/2026-07-19-agent-entry-retirement-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-agent-entry-retirement-v1.md)
+See the current [Message Retirement design](docs/superpowers/specs/2026-07-19-message-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-message-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
@@ -502,7 +524,8 @@ the kernel architecture and validation contracts. In particular:
   layers;
 - preserve `no_std`, determinism, fixed-capacity storage, and explicit events;
 - add failing tests before new runtime behavior;
-- route every privileged mutation through explicit capability checks;
+- gate Resource-scoped privileged mutations with explicit Capabilities and
+  identity-domain operations with exact caller authentication;
 - run the workspace, Supervisor, and relevant QEMU validation before publishing.
 
 ## License

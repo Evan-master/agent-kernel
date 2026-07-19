@@ -79,8 +79,8 @@ admission_supervisor_first_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    test r10, r10
-    je .halt
+    cmp r10, 3
+    jne .halt
     cmp r11, 10
     jne .halt
     cmp r12, 1
@@ -94,6 +94,7 @@ admission_supervisor_first_receive_return:
     test rbp, rbp
     jne .halt
 
+    push r10
     mov ecx, 9
     xor edx, edx
     xor r11d, r11d
@@ -112,8 +113,34 @@ admission_supervisor_first_acknowledgement_return:
     test r10, r10
     jne .halt
 
+    pop r10
+    mov ecx, 34
+    xor edx, edx
+    int 0x90
+.global admission_supervisor_first_message_retirement_return
+admission_supervisor_first_message_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 34
+    jne .halt
+    cmp r10, 3
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
     mov ecx, 8
     xor edx, edx
+    xor r10d, r10d
     int 0x90
 .global admission_supervisor_second_receive_return
 admission_supervisor_second_receive_return:
@@ -121,8 +148,8 @@ admission_supervisor_second_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    test r10, r10
-    je .halt
+    cmp r10, 4
+    jne .halt
     cmp r11, 11
     jne .halt
     cmp r12, 1
@@ -136,6 +163,7 @@ admission_supervisor_second_receive_return:
     test rbp, rbp
     jne .halt
 
+    push r10
     mov ecx, 9
     xor edx, edx
     xor r11d, r11d
@@ -152,6 +180,31 @@ admission_supervisor_second_acknowledgement_return:
     cmp rdx, 9
     jne .halt
     test r10, r10
+    jne .halt
+
+    pop r10
+    mov ecx, 34
+    xor edx, edx
+    int 0x90
+.global admission_supervisor_second_message_retirement_return
+admission_supervisor_second_message_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 34
+    jne .halt
+    cmp r10, 4
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
     jne .halt
 
     mov ecx, 27
@@ -216,8 +269,8 @@ admission_supervisor_third_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    test r10, r10
-    je .halt
+    cmp r10, 5
+    jne .halt
     cmp r11, 13
     jne .halt
     cmp r12, 1
@@ -231,6 +284,7 @@ admission_supervisor_third_receive_return:
     test rbp, rbp
     jne .halt
 
+    push r10
     mov ecx, 9
     xor edx, edx
     xor r11d, r11d
@@ -249,8 +303,34 @@ admission_supervisor_third_acknowledgement_return:
     test r10, r10
     jne .halt
 
+    pop r10
+    mov ecx, 34
+    xor edx, edx
+    int 0x90
+.global admission_supervisor_third_message_retirement_return
+admission_supervisor_third_message_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 34
+    jne .halt
+    cmp r10, 5
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
     mov ecx, 8
     xor edx, edx
+    xor r10d, r10d
     int 0x90
 .global admission_supervisor_fourth_receive_return
 admission_supervisor_fourth_receive_return:
@@ -258,8 +338,8 @@ admission_supervisor_fourth_receive_return:
     jne .halt
     cmp rdx, 8
     jne .halt
-    test r10, r10
-    je .halt
+    cmp r10, 6
+    jne .halt
     cmp r11, 14
     jne .halt
     cmp r12, 1
@@ -273,6 +353,7 @@ admission_supervisor_fourth_receive_return:
     test rbp, rbp
     jne .halt
 
+    push r10
     mov ecx, 9
     xor edx, edx
     xor r11d, r11d
@@ -289,6 +370,31 @@ admission_supervisor_fourth_acknowledgement_return:
     cmp rdx, 9
     jne .halt
     test r10, r10
+    jne .halt
+
+    pop r10
+    mov ecx, 34
+    xor edx, edx
+    int 0x90
+.global admission_supervisor_fourth_message_retirement_return
+admission_supervisor_fourth_message_retirement_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 34
+    jne .halt
+    cmp r10, 6
+    jne .halt
+    test r11, r11
+    jne .halt
+    test r12, r12
+    jne .halt
+    test r13, r13
+    jne .halt
+    test r14, r14
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
     jne .halt
 
     mov ecx, 29

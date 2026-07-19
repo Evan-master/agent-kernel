@@ -90,6 +90,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::MessageWaitWoken => "message_wait_woken",
         EventKind::MessageReceived => "message_received",
         EventKind::MessageAcknowledged => "message_acknowledged",
+        EventKind::MessageRetired => "message_retired",
         EventKind::MemoryCellCreated => "memory_cell_created",
         EventKind::MemoryCellRecalled => "memory_cell_recalled",
         EventKind::MemoryCellRemembered => "memory_cell_remembered",

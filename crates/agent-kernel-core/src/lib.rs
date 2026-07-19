@@ -69,6 +69,7 @@ mod mailbox_wait_store;
 mod memory;
 mod memory_store;
 mod message;
+mod message_retirement;
 mod namespace;
 mod namespace_lookup;
 mod namespace_store;
@@ -131,7 +132,8 @@ pub use id::{
 pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryValue};
 pub use message::{
-    MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageStatus,
+    MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageRetirement,
+    MessageStatus,
 };
 pub use namespace::{NamespaceEntryRecord, NamespaceKey, NamespaceObject};
 pub use observation::ObservationRecord;

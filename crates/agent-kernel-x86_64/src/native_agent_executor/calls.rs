@@ -67,6 +67,9 @@ pub(super) fn run(
             AgentCallRequest::AcknowledgeMessage { message, .. } => {
                 mailbox::acknowledge(booted, pending, message)?
             }
+            AgentCallRequest::RetireMessage { message, .. } => {
+                mailbox::retire(booted, pending, message)?
+            }
             AgentCallRequest::CreateResource {
                 authority,
                 parent,

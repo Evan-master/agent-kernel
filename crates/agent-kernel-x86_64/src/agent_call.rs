@@ -67,6 +67,7 @@ pub const AGENT_CALL_COMPACT_TASKS: u64 = 30;
 pub const AGENT_CALL_COMPACT_INTENTS: u64 = 31;
 pub const AGENT_CALL_COMPACT_CAPABILITY: u64 = 32;
 pub const AGENT_CALL_RETIRE_AGENT_ENTRY: u64 = 33;
+pub const AGENT_CALL_RETIRE_MESSAGE: u64 = 34;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -132,6 +133,7 @@ impl AgentCallRequest {
             AGENT_CALL_COMPACT_INTENTS => AgentCallOperation::CompactIntents,
             AGENT_CALL_COMPACT_CAPABILITY => AgentCallOperation::CompactCapability,
             AGENT_CALL_RETIRE_AGENT_ENTRY => AgentCallOperation::RetireAgentEntry,
+            AGENT_CALL_RETIRE_MESSAGE => AgentCallOperation::RetireMessage,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -236,6 +238,7 @@ impl AgentCallRequest {
             AgentCallOperation::CompactIntents => intent_compaction::decode(frame),
             AgentCallOperation::CompactCapability => capability_compaction::decode(frame),
             AgentCallOperation::RetireAgentEntry => agent_entry_retirement::decode(frame),
+            AgentCallOperation::RetireMessage => mailbox::decode_retirement(frame),
         }
     }
 }

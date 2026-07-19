@@ -6,7 +6,7 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, Event, KernelError, MessageId, MessageKind, MessagePayload,
-    MessageReceiveOutcome, MessageRecord, TaskId,
+    MessageReceiveOutcome, MessageRecord, MessageRetirement, TaskId,
 };
 
 use crate::AgentKernel;
@@ -91,6 +91,14 @@ impl<
         message: MessageId,
     ) -> Result<Event, KernelError> {
         self.core.acknowledge_message(agent, message)
+    }
+
+    pub fn sys_retire_message(
+        &mut self,
+        agent: AgentId,
+        message: MessageId,
+    ) -> Result<MessageRetirement, KernelError> {
+        self.core.retire_message(agent, message)
     }
 
     pub fn messages(&self) -> &[MessageRecord] {

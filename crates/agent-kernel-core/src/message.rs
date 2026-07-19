@@ -75,3 +75,22 @@ impl MessageRecord {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct MessageRetirement {
+    record: MessageRecord,
+}
+
+impl MessageRetirement {
+    pub(crate) const fn new(record: MessageRecord) -> Self {
+        Self { record }
+    }
+
+    pub const fn record(self) -> MessageRecord {
+        self.record
+    }
+
+    pub const fn message(self) -> MessageId {
+        self.record.id
+    }
+}

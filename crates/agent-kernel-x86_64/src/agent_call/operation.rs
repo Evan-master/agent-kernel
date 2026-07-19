@@ -39,4 +39,5 @@ pub enum AgentCallOperation {
     CompactIntents,
     CompactCapability,
     RetireAgentEntry,
+    RetireMessage,
 }

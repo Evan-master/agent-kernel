@@ -128,6 +128,34 @@ pub(super) fn acknowledge(
     pending.acknowledge_message()
 }
 
+pub(super) fn retire(
+    booted: &mut X86BootedKernel,
+    pending: PendingAgentCallCpu,
+    message: MessageId,
+) -> Option<ResumableAgentCpu> {
+    let context = authenticated_context(&pending)?;
+    let retirement = booted
+        .kernel_mut()
+        .sys_retire_message(context.agent(), message)
+        .ok()?;
+    let record = retirement.record();
+    let event = booted.kernel().events().last()?;
+    if retirement.message() != message
+        || record.recipient != context.agent()
+        || record.status != MessageStatus::Acknowledged
+        || message_record(booted, message).is_some()
+        || event.kind != EventKind::MessageRetired
+        || event.agent != context.agent()
+        || event.target_agent != Some(record.sender)
+        || event.message != Some(message)
+        || !state::running(booted, context)
+    {
+        return None;
+    }
+    crate::serial_write_line("AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK");
+    pending.acknowledge_message_retirement(message)
+}
+
 fn validate_received(
     booted: &X86BootedKernel,
     recipient: AgentId,

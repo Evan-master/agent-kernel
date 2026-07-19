@@ -66,6 +66,23 @@ pub(super) fn decode_acknowledgement(
     })
 }
 
+pub(super) fn decode_retirement(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<AgentCallRequest, AgentCallDecodeError> {
+    ensure_message_id_reserved_zero(frame)?;
+    let (agent, task, image, nonce) = decode_context_payload(frame)?;
+    if frame.r10 == 0 {
+        return Err(AgentCallDecodeError::InvalidPayload);
+    }
+    Ok(AgentCallRequest::RetireMessage {
+        agent,
+        task,
+        image,
+        nonce,
+        message: MessageId::new(frame.r10),
+    })
+}
+
 fn ensure_send_reserved_zero(
     frame: &PrivilegeInterruptStackFrame,
 ) -> Result<(), AgentCallDecodeError> {
@@ -77,6 +94,12 @@ fn ensure_send_reserved_zero(
 }
 
 fn ensure_acknowledgement_reserved_zero(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<(), AgentCallDecodeError> {
+    ensure_message_id_reserved_zero(frame)
+}
+
+fn ensure_message_id_reserved_zero(
     frame: &PrivilegeInterruptStackFrame,
 ) -> Result<(), AgentCallDecodeError> {
     if frame.r11 == 0 {

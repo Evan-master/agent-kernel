@@ -84,6 +84,7 @@ impl<
             action: None,
             observation: None,
             message: None,
+            message_kind: None,
             memory_cell: None,
             namespace_entry: None,
             namespace_key: None,

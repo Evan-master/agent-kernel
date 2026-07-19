@@ -12,7 +12,8 @@ use super::AgentCallContext;
 use crate::{
     agent_call::{
         mailbox::encode_message_kind, AgentCallDecodeError, AgentCallRequest,
-        AGENT_CALL_ACKNOWLEDGE_MESSAGE, AGENT_CALL_RECEIVE_MESSAGE, AGENT_CALL_SEND_MESSAGE,
+        AGENT_CALL_ACKNOWLEDGE_MESSAGE, AGENT_CALL_RECEIVE_MESSAGE, AGENT_CALL_RETIRE_MESSAGE,
+        AGENT_CALL_SEND_MESSAGE,
     },
     context::PrivilegeInterruptStackFrame,
 };
@@ -63,6 +64,20 @@ impl AgentCallContext {
         nonce: u64,
     ) -> Result<(), AgentCallDecodeError> {
         self.encode_reply(frame, nonce, AGENT_CALL_ACKNOWLEDGE_MESSAGE)
+    }
+
+    pub fn encode_message_retirement_reply(
+        self,
+        frame: &mut PrivilegeInterruptStackFrame,
+        nonce: u64,
+        message: MessageId,
+    ) -> Result<(), AgentCallDecodeError> {
+        if message.raw() == 0 {
+            return Err(AgentCallDecodeError::InvalidPayload);
+        }
+        self.encode_reply(frame, nonce, AGENT_CALL_RETIRE_MESSAGE)?;
+        frame.r10 = message.raw();
+        Ok(())
     }
 
     pub fn match_message_send(

@@ -181,6 +181,7 @@ impl<
             action: None,
             observation: None,
             message: None,
+            message_kind: None,
             memory_cell: None,
             namespace_entry: Some(entry),
             namespace_key: Some(key),

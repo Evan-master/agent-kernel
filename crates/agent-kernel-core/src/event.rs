@@ -9,9 +9,9 @@ use crate::{
     DeviceEventId, DeviceEventKind, DeviceEventPayload, DriverBindingId, DriverCommandId,
     DriverCommandKind, DriverCommandPayload, DriverCommandResult, DriverInvocationId, FaultId,
     FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId,
-    NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation, OperationSet,
-    ResourceId, RuntimeAdmissionId, SignalKey, TaskId, TaskResult, VerificationRequirement,
-    WaiterId,
+    MessageKind, NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation,
+    OperationSet, ResourceId, RuntimeAdmissionId, SignalKey, TaskId, TaskResult,
+    VerificationRequirement, WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -88,6 +88,7 @@ pub enum EventKind {
     MessageWaitWoken,
     MessageReceived,
     MessageAcknowledged,
+    MessageRetired,
     MemoryCellCreated,
     MemoryCellRecalled,
     MemoryCellRemembered,
@@ -109,6 +110,7 @@ pub struct Event {
     pub action: Option<ActionId>,
     pub observation: Option<ObservationId>,
     pub message: Option<MessageId>,
+    pub message_kind: Option<MessageKind>,
     pub memory_cell: Option<MemoryCellId>,
     pub namespace_entry: Option<NamespaceEntryId>,
     pub namespace_key: Option<NamespaceKey>,
@@ -162,6 +164,7 @@ impl Event {
             action: None,
             observation: None,
             message: None,
+            message_kind: None,
             memory_cell: None,
             namespace_entry: None,
             namespace_key: None,
