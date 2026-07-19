@@ -11,5 +11,5 @@
   admission, notification, verification, reclamation, and release rounds.
 - [x] Freeze Capsule authority and update exact counters, marker contracts, and
   both README languages.
-- [ ] Run the complete validation and artifact audit, publish public `main`, and
+- [x] Run the complete validation and artifact audit, publish public `main`, and
   keep the complete Agent Kernel goal active.
