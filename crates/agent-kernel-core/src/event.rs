@@ -85,6 +85,7 @@ pub enum EventKind {
     FaultRouted,
     FaultPolicyInstalled,
     FaultPolicyApplied,
+    FaultCompacted,
     MessageSent,
     MessageWaitStarted,
     MessageWaitWoken,

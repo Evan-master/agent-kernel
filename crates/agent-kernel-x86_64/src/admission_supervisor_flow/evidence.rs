@@ -3,6 +3,7 @@
 mod agent_entry_retirement;
 mod capability_compaction;
 mod compaction;
+mod fault_compaction;
 mod intent_compaction;
 mod release;
 mod task_compaction;

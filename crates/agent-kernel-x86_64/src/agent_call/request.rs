@@ -5,7 +5,7 @@
 //! the bare-metal executor. It performs no mutation or privileged operation.
 
 use agent_kernel_core::{
-    AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MemoryCellId, MessageId,
+    AgentId, AgentImageId, CapabilityId, FaultId, IntentId, IntentKind, MemoryCellId, MessageId,
     MessageKind, MessagePayload, OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId,
     TaskId, TaskResult, VerificationRequirement, WaiterId,
 };
@@ -310,6 +310,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         through: WaiterId,
     },
+    CompactFaults {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        through: FaultId,
+    },
 }
 
 impl AgentCallRequest {
@@ -353,6 +361,7 @@ impl AgentCallRequest {
             Self::RetireAgentRecord { .. } => AgentCallOperation::RetireAgentRecord,
             Self::RetireAgentImageRecord { .. } => AgentCallOperation::RetireAgentImageRecord,
             Self::CompactWaiters { .. } => AgentCallOperation::CompactWaiters,
+            Self::CompactFaults { .. } => AgentCallOperation::CompactFaults,
         }
     }
 }

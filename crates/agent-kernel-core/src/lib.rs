@@ -52,6 +52,7 @@ mod error;
 mod event;
 mod event_log;
 mod fault;
+mod fault_compaction;
 mod fault_handler;
 mod fault_handler_event;
 mod fault_handler_store;
@@ -128,7 +129,7 @@ pub use driver_endpoint::{DriverEndpointDescriptor, DriverEndpointKind, DriverEn
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
 pub use error::KernelError;
 pub use event::{Event, EventKind};
-pub use fault::{FaultKind, FaultRecord};
+pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
 pub use id::{

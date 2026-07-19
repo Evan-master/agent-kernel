@@ -10,6 +10,7 @@ mod agent_management;
 mod agent_record_retirement;
 mod capability;
 mod capability_compaction;
+mod fault_compaction;
 mod intent_compaction;
 mod mailbox;
 mod memory_authority;
@@ -136,6 +137,9 @@ pub(super) fn run(
             AgentCallRequest::CompactWaiters {
                 authority, through, ..
             } => waiter_compaction::compact(booted, pending, authority, through)?,
+            AgentCallRequest::CompactFaults {
+                authority, through, ..
+            } => fault_compaction::compact(booted, pending, authority, through)?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,

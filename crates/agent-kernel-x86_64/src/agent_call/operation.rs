@@ -44,4 +44,5 @@ pub enum AgentCallOperation {
     RetireAgentRecord,
     RetireAgentImageRecord,
     CompactWaiters,
+    CompactFaults,
 }

@@ -117,6 +117,10 @@ currently provides:
   inactive Waiter prefix through shared `Rollback` cleanup authority, return
   dense Store capacity, preserve monotonic Waiter IDs, and emit one complete
   audit Event per retired Waiter;
+- Agent Call 39, which lets an authenticated Supervisor compact a contiguous
+  recovered Fault prefix through shared `Rollback` cleanup authority, reject
+  live Task or Message references, clear safe Task history pointers, preserve
+  monotonic Fault IDs, and emit one complete audit Event per retired Fault;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -127,6 +131,10 @@ currently provides:
   1 through 3 after the first notification round, creates monotonic Waiter 4
   in a reclaimed slot for the second round, then retires it and leaves the
   active Store empty;
+- a four-slot x86 Fault Store proof: the Fault Worker fills the Store with
+  Faults 1 through 4, terminal Task compaction clears the live blockers, and
+  the resident Supervisor retires the full Fault prefix through Agent Call 39,
+  leaving the active Store empty while preserving all historical Events;
 - two generation-bound Runtime Admission release batches that require verified,
   idle targets and preflight aggregate event capacity: batch one returns 22
   frames while the Supervisor retains eleven; the Supervisor later compacts
@@ -183,8 +191,8 @@ The reference validation profile enforces these deterministic invariants:
 | Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 34 |
 | Resource Manager Agent/kernel address-space switches | 68 |
-| Admission Supervisor Agent Calls | 32 |
-| Admission Supervisor Agent/kernel address-space switches | 64 |
+| Admission Supervisor Agent Calls | 33 |
+| Admission Supervisor Agent/kernel address-space switches | 66 |
 | Runtime Service Worker Agent Calls | 20 |
 | Runtime Service Worker Agent/kernel address-space switches | 40 |
 | Physical quantum expiries | 15 |
@@ -221,6 +229,10 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Waiter slots | 1 |
 | Final resident Waiter records | 0 |
 | Contained Agent faults | 4 |
+| Fault store capacity | 4 |
+| Compacted recovered Fault records | 4 |
+| Fault compaction Events | 4 |
+| Final resident Fault records | 0 |
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
 | Completion-owned live regions reclaimed | 1 |
@@ -237,7 +249,7 @@ The reference validation profile enforces these deterministic invariants:
 | Reused Capability slots | 2 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 374 |
+| Ordered kernel events after Driver completion | 378 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -249,7 +261,7 @@ artifacts:
 | Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
 | Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
-| Admission Supervisor | 32 | 64 | 3,034 | `2175ce2b538a6236ce944b4599feacb49e529f6c939d53ae2c5978d26d580ff7` |
+| Admission Supervisor | 33 | 66 | 3,154 | `260768b39dec9e14d895ae0ebf14972114f7ccfb7658058d956df8d99dc3e527` |
 
 The generated Rust bytes match independently assembled machine code, and each
 complete Capsule occurs exactly once in the release ELF.
@@ -273,7 +285,7 @@ flowchart TB
     AddressService --> Runtime
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-38"| X86
+    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-39"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -343,6 +355,7 @@ and nonce state before it reaches the facade.
 | `RetireAgentRecord` | 36 | Retire one unreferenced terminal managed Agent record and aligned execution context |
 | `RetireAgentImageRecord` | 37 | Retire one unreferenced terminal Agent Image record from the dense Image Store |
 | `CompactWaiters` | 38 | Retire an authorized inactive prefix from the dense Waiter Store |
+| `CompactFaults` | 39 | Retire an authorized recovered prefix from the dense Fault Store |
 
 The native resource ABI accepts AgentOS-oriented Workspace, Memory, Service,
 Network, and Device kinds. Unknown kinds, unknown operation bits, zero handles,
@@ -423,6 +436,15 @@ retired Resources accept active ancestor scope. The transaction preflights
 aggregate Event capacity, removes the prefix in stable order, preserves the
 monotonic Waiter allocator, and emits `WaiterCompacted` with the original
 Agent, Task, Resource, signal, Waiter kind, and identity.
+Operation 39 requires an authenticated active Supervisor and shared cleanup
+authorization for every selected Fault Resource. A `Faulted` Task or a
+non-acknowledged Message that references the selected prefix blocks the whole
+transaction. Active Resources require exact `Rollback` scope; retired
+Resources accept active ancestor scope. After aggregate Event preflight, the
+transaction clears safe Task `last_fault` pointers, removes the prefix in
+stable order, preserves the monotonic Fault allocator, and emits
+`FaultCompacted` with the original Agent, Task, Resource, Fault kind, detail,
+identity, actor, and authority.
 
 ## Quick Start
 
@@ -459,7 +481,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 374 events, and treat
+validate the complete serial transcript, require exactly 378 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -475,11 +497,13 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REBUILT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_BATCH_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RUNTIME_CONCURRENCY_OK
 AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK
+AGENT_KERNEL_NATIVE_FAULT_STORE_FULL_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_REQUEST_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_DISCOVERY_OK
 AGENT_KERNEL_AGENT_CALL_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK
 AGENT_KERNEL_AGENT_CALL_TASK_COMPACTION_OK
+AGENT_KERNEL_AGENT_CALL_FAULT_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_INTENT_COMPACTION_OK
 AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK
@@ -502,6 +526,7 @@ AGENT_KERNEL_NATIVE_ADDRESS_SPACE_PARTIAL_RECLAIM_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK
 AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK
+AGENT_KERNEL_NATIVE_FAULT_COMPACTION_OK
 AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK
 AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK
 AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK
@@ -518,7 +543,11 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[374] driver_invocation_completed
+event[340] fault_compacted
+event[341] fault_compacted
+event[342] fault_compacted
+event[343] fault_compacted
+event[378] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -564,7 +593,7 @@ authority.
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
 - a ring-3 Admission Supervisor, authenticated Agent Call 27 and Calls 29
-  through 38,
+  through 39,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -607,15 +636,19 @@ authority.
 - authorized inactive Waiter-prefix compaction with aggregate Event preflight,
   shared Resource cleanup authority, stable retained order, monotonic Waiter
   IDs, bounded slot reuse, and complete per-record Event evidence;
+- authorized recovered Fault-prefix compaction with active Task and Message
+  reference preflight, safe Task-history cleanup, shared Resource cleanup
+  authority, stable retained order, monotonic Fault IDs, full Store recovery,
+  and complete per-record Event evidence;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 374-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 378-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- bounded retention and retirement policies for Faults and Events;
+- bounded retention and archival policies for Events;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -623,8 +656,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Waiter Compaction design](docs/superpowers/specs/2026-07-19-waiter-compaction-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-waiter-compaction-v1.md)
+See the current [Fault Record Retirement design](docs/superpowers/specs/2026-07-19-fault-record-retirement-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-fault-record-retirement-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 

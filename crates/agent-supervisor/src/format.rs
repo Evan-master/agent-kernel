@@ -11,8 +11,8 @@ use crate::format_driver::{
     format_driver_invocation_event,
 };
 use crate::format_fault::{
-    format_fault_handler_event, format_fault_policy_apply_event, format_fault_policy_install_event,
-    format_fault_route_event, format_task_fault_event,
+    format_fault_compaction_event, format_fault_handler_event, format_fault_policy_apply_event,
+    format_fault_policy_install_event, format_fault_route_event, format_task_fault_event,
 };
 use crate::format_signal::{
     format_mailbox_wait_started_event, format_mailbox_wait_woken_event, format_signal_event,
@@ -181,6 +181,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::FaultPolicyApplied => {
             format_fault_policy_apply_event(event, "fault_policy_applied")
         }
+        EventKind::FaultCompacted => format_fault_compaction_event(event),
         EventKind::MessageSent => format_message_event(event, "message_sent"),
         EventKind::MessageWaitStarted => {
             format_mailbox_wait_started_event(event, "message_wait_started")

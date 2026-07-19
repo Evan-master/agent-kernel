@@ -15,6 +15,7 @@ mod driver;
 mod driver_endpoint;
 mod driver_runtime;
 mod fault;
+mod fault_compaction;
 mod intent_compaction;
 mod kernel_default;
 mod mailbox;

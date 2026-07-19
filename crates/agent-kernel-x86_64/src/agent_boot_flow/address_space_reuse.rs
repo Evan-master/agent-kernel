@@ -19,7 +19,8 @@ use crate::{
     native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
     native_agent_runtime::NativeAgentRuntime,
     reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKER_BATCHES},
-    serial_write_line, X86BootedKernel, X86_RUNTIME_ADMISSION_CAPACITY, X86_TASK_CAPACITY,
+    serial_write_line, X86BootedKernel, X86_FAULT_CAPACITY, X86_RUNTIME_ADMISSION_CAPACITY,
+    X86_TASK_CAPACITY,
 };
 
 pub(super) fn run(
@@ -37,10 +38,13 @@ pub(super) fn run(
         || !address_space_pool.all_reclaimed_and_zero()
         || booted.kernel().runtime_admission_capacity() != X86_RUNTIME_ADMISSION_CAPACITY
         || X86_RUNTIME_ADMISSION_CAPACITY <= X86_TASK_CAPACITY
+        || X86_FAULT_CAPACITY != 4
+        || booted.kernel().faults().len() != X86_FAULT_CAPACITY
     {
         return None;
     }
     serial_write_line("AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_STORE_FULL_OK");
 
     let first_flows = prepare_batch(booted, REUSE_WORKER_BATCHES[0], worker_contract)?;
     if !PreparedReuseWorkerFlow::batch_unqueued(booted, &first_flows)
@@ -219,6 +223,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMPACTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_TASK_COMPACTION_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_FAULT_COMPACTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK");

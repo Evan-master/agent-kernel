@@ -24,6 +24,35 @@ pub struct FaultRecord {
     pub detail: u64,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct FaultCompaction {
+    first: FaultId,
+    through: FaultId,
+    count: usize,
+}
+
+impl FaultCompaction {
+    pub(crate) const fn new(first: FaultId, through: FaultId, count: usize) -> Self {
+        Self {
+            first,
+            through,
+            count,
+        }
+    }
+
+    pub const fn first(self) -> FaultId {
+        self.first
+    }
+
+    pub const fn through(self) -> FaultId {
+        self.through
+    }
+
+    pub const fn count(self) -> usize {
+        self.count
+    }
+}
+
 impl FaultRecord {
     pub(crate) const fn empty() -> Self {
         Self {

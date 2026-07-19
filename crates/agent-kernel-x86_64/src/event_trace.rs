@@ -87,6 +87,7 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::FaultRouted => "fault_routed",
         EventKind::FaultPolicyInstalled => "fault_policy_installed",
         EventKind::FaultPolicyApplied => "fault_policy_applied",
+        EventKind::FaultCompacted => "fault_compacted",
         EventKind::MessageSent => "message_sent",
         EventKind::MessageWaitStarted => "message_wait_started",
         EventKind::MessageWaitWoken => "message_wait_woken",
