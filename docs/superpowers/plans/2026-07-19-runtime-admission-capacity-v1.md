@@ -10,5 +10,5 @@
 - [x] Implement live-only duplicate rejection and capacity-aware release
   bounds.
 - [x] Update both README languages and milestone references.
-- [ ] Run the full validation and artifact audit, publish public `main`, and
+- [x] Run the full validation and artifact audit, publish public `main`, and
   keep the complete Agent Kernel goal active.
