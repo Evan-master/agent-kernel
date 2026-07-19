@@ -15,6 +15,7 @@ mod memory_region;
 mod runtime_admission;
 mod task_compaction;
 mod task_lifecycle;
+mod waiter_compaction;
 
 use agent_kernel_core::{
     CapabilityId, MessageId, MessageRecord, ResourceCreateOutcome, ResourceId, TaskResult, WaiterId,

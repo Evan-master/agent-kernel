@@ -237,6 +237,7 @@ impl<
             fault_policy: None,
             fault_policy_action: None,
             waiter: None,
+            waiter_kind: None,
             signal: None,
             target_agent: Some(agent),
             driver_binding: None,

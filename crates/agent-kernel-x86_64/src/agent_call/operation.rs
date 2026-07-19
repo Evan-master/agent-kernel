@@ -43,4 +43,5 @@ pub enum AgentCallOperation {
     RetireOrphanedMessage,
     RetireAgentRecord,
     RetireAgentImageRecord,
+    CompactWaiters,
 }

@@ -1,8 +1,6 @@
 //! Terminal transcript and notification proof for the resident Supervisor.
 
-use agent_kernel_core::{
-    AgentExecutionState, EventKind, RuntimeAdmissionStatus, TaskStatus, WaiterKind,
-};
+use agent_kernel_core::{AgentExecutionState, EventKind, RuntimeAdmissionStatus, TaskStatus};
 
 use super::{admission_matches, retained_boot_messages, retired_notice, AdmissionTarget};
 use crate::{
@@ -47,8 +45,8 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.run_queue().is_empty()
             && completed.context() == context
             && completed.nonce() == contract.nonce()
-            && completed.call_count() == 30
-            && completed.address_space_switch_count() == 60
+            && completed.call_count() == 32
+            && completed.address_space_switch_count() == 64
             && completed.operations() == contract.expected_operations()
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1
@@ -69,11 +67,8 @@ impl PreparedAdmissionSupervisorFlow {
             && self.first_batch_entries_retired(booted, targets)
             && self.capability_store_compacted(booted)
             && retained_boot_messages(booted)
-            && matches!(kernel.waiters().last(), Some(waiter)
-                if waiter.id.raw() == 4
-                    && waiter.agent == ADMISSION_SUPERVISOR
-                    && waiter.kind == WaiterKind::Mailbox
-                    && !waiter.active)
+            && kernel.waiters().is_empty()
+            && self.waiter_store_compacted(booted)
             && targets.iter().enumerate().all(|(index, target)| {
                 retired_notice(booted, index + 4, *target, ADMISSION_SUPERVISOR)
             })

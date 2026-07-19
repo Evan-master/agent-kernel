@@ -151,6 +151,7 @@ impl<
             fault_policy: Some(policy),
             fault_policy_action: Some(action),
             waiter: None,
+            waiter_kind: None,
             signal: None,
             target_agent,
             driver_binding: None,

@@ -23,6 +23,7 @@ mod runtime_admission;
 mod task_compaction;
 mod task_lifecycle;
 mod transcript;
+mod waiter_compaction;
 
 use agent_kernel_core::{AgentId, AgentImageId, TaskId, TaskResult};
 
@@ -73,6 +74,7 @@ pub const AGENT_CALL_RETIRE_MESSAGE: u64 = 34;
 pub const AGENT_CALL_RETIRE_ORPHANED_MESSAGE: u64 = 35;
 pub const AGENT_CALL_RETIRE_AGENT_RECORD: u64 = 36;
 pub const AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD: u64 = 37;
+pub const AGENT_CALL_COMPACT_WAITERS: u64 = 38;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -142,6 +144,7 @@ impl AgentCallRequest {
             AGENT_CALL_RETIRE_ORPHANED_MESSAGE => AgentCallOperation::RetireOrphanedMessage,
             AGENT_CALL_RETIRE_AGENT_RECORD => AgentCallOperation::RetireAgentRecord,
             AGENT_CALL_RETIRE_AGENT_IMAGE_RECORD => AgentCallOperation::RetireAgentImageRecord,
+            AGENT_CALL_COMPACT_WAITERS => AgentCallOperation::CompactWaiters,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -252,6 +255,7 @@ impl AgentCallRequest {
             AgentCallOperation::RetireAgentImageRecord => {
                 agent_image_record_retirement::decode(frame)
             }
+            AgentCallOperation::CompactWaiters => waiter_compaction::decode(frame),
         }
     }
 }

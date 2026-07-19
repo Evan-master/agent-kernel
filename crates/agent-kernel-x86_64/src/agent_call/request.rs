@@ -7,7 +7,7 @@
 use agent_kernel_core::{
     AgentId, AgentImageId, CapabilityId, IntentId, IntentKind, MemoryCellId, MessageId,
     MessageKind, MessagePayload, OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId,
-    TaskId, TaskResult, VerificationRequirement,
+    TaskId, TaskResult, VerificationRequirement, WaiterId,
 };
 
 use super::AgentCallOperation;
@@ -302,6 +302,14 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         target: AgentImageId,
     },
+    CompactWaiters {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        through: WaiterId,
+    },
 }
 
 impl AgentCallRequest {
@@ -344,6 +352,7 @@ impl AgentCallRequest {
             Self::RetireOrphanedMessage { .. } => AgentCallOperation::RetireOrphanedMessage,
             Self::RetireAgentRecord { .. } => AgentCallOperation::RetireAgentRecord,
             Self::RetireAgentImageRecord { .. } => AgentCallOperation::RetireAgentImageRecord,
+            Self::CompactWaiters { .. } => AgentCallOperation::CompactWaiters,
         }
     }
 }

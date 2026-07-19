@@ -19,6 +19,7 @@ mod resource;
 mod runtime_admission;
 mod task_compaction;
 mod task_lifecycle;
+mod waiter_compaction;
 
 use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult};
 

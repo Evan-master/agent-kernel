@@ -225,6 +225,7 @@ impl<
             fault_policy: None,
             fault_policy_action: None,
             waiter: None,
+            waiter_kind: None,
             signal: None,
             target_agent: None,
             driver_binding: None,

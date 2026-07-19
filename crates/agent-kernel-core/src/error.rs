@@ -17,6 +17,8 @@ pub enum KernelError {
     FaultHandlerStoreFull,
     FaultPolicyStoreFull,
     WaiterStoreFull,
+    WaiterNotFound,
+    WaiterCompactionNotReady,
     MessageStoreFull,
     MemoryCellStoreFull,
     NamespaceEntryStoreFull,

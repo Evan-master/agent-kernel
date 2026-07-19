@@ -25,6 +25,7 @@ mod runtime_admission;
 mod scheduler;
 mod signal;
 mod task_compaction;
+mod waiter_compaction;
 
 use agent_kernel_core::{
     ActionId, ActionRecord, AgentId, CapabilityId, CheckpointId, CheckpointRecord, Event, Intent,

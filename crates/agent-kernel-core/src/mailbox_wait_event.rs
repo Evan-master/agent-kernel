@@ -6,7 +6,7 @@
 
 use crate::{
     AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, MessageId, ResourceId,
-    TaskId, WaiterId,
+    TaskId, WaiterId, WaiterKind,
 };
 
 pub(crate) struct MailboxWaitEvent {
@@ -125,6 +125,7 @@ impl<
         event.intent = Some(intent);
         event.task = Some(fields.task);
         event.waiter = Some(fields.waiter);
+        event.waiter_kind = Some(WaiterKind::Mailbox);
         event.target_agent = fields.target_agent;
         event.message = fields.message;
         self.record(event)

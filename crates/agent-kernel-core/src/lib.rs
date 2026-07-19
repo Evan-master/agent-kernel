@@ -105,6 +105,7 @@ mod task_event;
 mod task_lookup;
 mod task_result_store;
 mod task_store;
+mod waiter_compaction;
 
 pub use action::{ActionRecord, ActionStatus};
 pub use agent::{AgentRecord, AgentRecordRetirement, AgentStatus};
@@ -151,5 +152,5 @@ pub use runtime_admission::{
     RuntimeAdmissionCompaction, RuntimeAdmissionFailure, RuntimeAdmissionPermit,
     RuntimeAdmissionRecord, RuntimeAdmissionReleaseBatch, RuntimeAdmissionStatus,
 };
-pub use signal::{SignalKey, SignalOutcome, WaiterKind, WaiterRecord};
+pub use signal::{SignalKey, SignalOutcome, WaiterCompaction, WaiterKind, WaiterRecord};
 pub use task::{Task, TaskCompaction, TaskResult, TaskStatus};

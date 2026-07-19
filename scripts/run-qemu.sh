@@ -116,6 +116,7 @@ for expected in \
   "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_MESSAGE_RETIREMENT_OK" \
   "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" \
+  "AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REQUEST_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RESIDENT_WAIT_OK" \
   "AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK" \
@@ -130,6 +131,8 @@ for expected in \
   "AGENT_KERNEL_NATIVE_INTENT_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" \
   "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" \
+  "AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK" \
+  "AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" \
   "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" \
   "AGENT_KERNEL_NATIVE_AGENT_IMAGE_SLOT_REUSE_OK" \
@@ -446,82 +449,86 @@ for expected in \
   "event[292] message_received" \
   "event[293] message_acknowledged" \
   "event[294] message_retired" \
-  "event[295] runtime_admission_requested" \
-  "event[296] runtime_admission_requested" \
-  "event[297] message_wait_started" \
-  "event[298] task_verified" \
-  "event[299] intent_fulfilled" \
-  "event[300] task_verified" \
-  "event[301] intent_fulfilled" \
-  "event[302] runtime_admission_released" \
-  "event[303] runtime_admission_released" \
-  "event[304] runtime_admission_admitted" \
-  "event[305] task_queued" \
-  "event[306] runtime_admission_admitted" \
-  "event[307] task_queued" \
-  "event[308] task_dispatched" \
-  "event[309] task_quantum_expired" \
-  "event[310] task_dispatched" \
-  "event[311] task_quantum_expired" \
-  "event[312] task_dispatched" \
-  "event[313] task_result_submitted" \
-  "event[314] message_sent" \
-  "event[315] message_wait_woken" \
-  "event[316] task_completed" \
-  "event[317] task_dispatched" \
-  "event[318] task_result_submitted" \
-  "event[319] message_sent" \
-  "event[320] task_completed" \
-  "event[321] task_dispatched" \
-  "event[322] message_received" \
-  "event[323] message_acknowledged" \
-  "event[324] message_retired" \
+  "event[295] waiter_compacted" \
+  "event[296] waiter_compacted" \
+  "event[297] waiter_compacted" \
+  "event[298] runtime_admission_requested" \
+  "event[299] runtime_admission_requested" \
+  "event[300] message_wait_started" \
+  "event[301] task_verified" \
+  "event[302] intent_fulfilled" \
+  "event[303] task_verified" \
+  "event[304] intent_fulfilled" \
+  "event[305] runtime_admission_released" \
+  "event[306] runtime_admission_released" \
+  "event[307] runtime_admission_admitted" \
+  "event[308] task_queued" \
+  "event[309] runtime_admission_admitted" \
+  "event[310] task_queued" \
+  "event[311] task_dispatched" \
+  "event[312] task_quantum_expired" \
+  "event[313] task_dispatched" \
+  "event[314] task_quantum_expired" \
+  "event[315] task_dispatched" \
+  "event[316] task_result_submitted" \
+  "event[317] message_sent" \
+  "event[318] message_wait_woken" \
+  "event[319] task_completed" \
+  "event[320] task_dispatched" \
+  "event[321] task_result_submitted" \
+  "event[322] message_sent" \
+  "event[323] task_completed" \
+  "event[324] task_dispatched" \
   "event[325] message_received" \
   "event[326] message_acknowledged" \
   "event[327] message_retired" \
-  "event[328] runtime_admission_compacted" \
-  "event[329] runtime_admission_compacted" \
-  "event[330] task_compacted" \
-  "event[331] task_compacted" \
-  "event[332] task_compacted" \
-  "event[333] task_compacted" \
+  "event[328] message_received" \
+  "event[329] message_acknowledged" \
+  "event[330] message_retired" \
+  "event[331] waiter_compacted" \
+  "event[332] runtime_admission_compacted" \
+  "event[333] runtime_admission_compacted" \
   "event[334] task_compacted" \
   "event[335] task_compacted" \
-  "event[336] intent_compacted" \
-  "event[337] intent_compacted" \
-  "event[338] intent_compacted" \
-  "event[339] intent_compacted" \
+  "event[336] task_compacted" \
+  "event[337] task_compacted" \
+  "event[338] task_compacted" \
+  "event[339] task_compacted" \
   "event[340] intent_compacted" \
   "event[341] intent_compacted" \
-  "event[342] agent_entry_retired" \
-  "event[343] agent_entry_retired" \
-  "event[344] capability_derived" \
-  "event[345] capability_revoked" \
-  "event[346] capability_compacted" \
-  "event[347] capability_compacted" \
+  "event[342] intent_compacted" \
+  "event[343] intent_compacted" \
+  "event[344] intent_compacted" \
+  "event[345] intent_compacted" \
+  "event[346] agent_entry_retired" \
+  "event[347] agent_entry_retired" \
   "event[348] capability_derived" \
-  "event[349] capability_derived" \
-  "event[350] task_result_submitted" \
-  "event[351] task_completed" \
-  "event[352] task_verified" \
-  "event[353] intent_fulfilled" \
-  "event[354] task_verified" \
-  "event[355] intent_fulfilled" \
+  "event[349] capability_revoked" \
+  "event[350] capability_compacted" \
+  "event[351] capability_compacted" \
+  "event[352] capability_derived" \
+  "event[353] capability_derived" \
+  "event[354] task_result_submitted" \
+  "event[355] task_completed" \
   "event[356] task_verified" \
   "event[357] intent_fulfilled" \
-  "event[358] runtime_admission_released" \
-  "event[359] runtime_admission_released" \
-  "event[360] agent_image_registered" \
-  "event[361] device_event_raised" \
-  "event[362] device_event_delivered" \
-  "event[363] driver_invocation_queued" \
-  "event[364] driver_invocation_dispatched" \
-  "event[365] driver_invocation_ticked" \
-  "event[366] device_event_acknowledged" \
-  "event[367] driver_command_submitted" \
-  "event[368] driver_command_dispatched" \
-  "event[369] driver_command_completed" \
-  "event[370] driver_invocation_completed" \
+  "event[358] task_verified" \
+  "event[359] intent_fulfilled" \
+  "event[360] task_verified" \
+  "event[361] intent_fulfilled" \
+  "event[362] runtime_admission_released" \
+  "event[363] runtime_admission_released" \
+  "event[364] agent_image_registered" \
+  "event[365] device_event_raised" \
+  "event[366] device_event_delivered" \
+  "event[367] driver_invocation_queued" \
+  "event[368] driver_invocation_dispatched" \
+  "event[369] driver_invocation_ticked" \
+  "event[370] device_event_acknowledged" \
+  "event[371] driver_command_submitted" \
+  "event[372] driver_command_dispatched" \
+  "event[373] driver_command_completed" \
+  "event[374] driver_invocation_completed" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -531,8 +538,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Fc 'event[' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 370 ]]; then
-  printf 'expected exactly 370 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 374 ]]; then
+  printf 'expected exactly 374 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -590,5 +597,8 @@ check_marker_count "AGENT_KERNEL_AGENT_CALL_AGENT_ENTRY_RETIREMENT_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_AGENT_ENTRY_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_CAPABILITY_COMPACTION_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_WAITER_COMPACTION_OK" 2
+check_marker_count "AGENT_KERNEL_NATIVE_WAITER_SLOT_REUSE_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" 1

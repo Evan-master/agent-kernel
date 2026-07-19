@@ -20,6 +20,7 @@ mod runtime_admission;
 mod task;
 mod task_compaction;
 mod task_lifecycle;
+mod waiter_compaction;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
@@ -132,6 +133,9 @@ pub(super) fn run(
             AgentCallRequest::CompactIntents {
                 authority, through, ..
             } => intent_compaction::compact(booted, pending, authority, through)?,
+            AgentCallRequest::CompactWaiters {
+                authority, through, ..
+            } => waiter_compaction::compact(booted, pending, authority, through)?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,

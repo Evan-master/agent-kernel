@@ -45,11 +45,12 @@ pub(crate) const X86_TASK_CAPACITY: usize = 12;
 pub(crate) const X86_INTENT_CAPACITY: usize = 12;
 pub(crate) const X86_CAPABILITY_CAPACITY: usize = 26;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
+pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     7,
     X86_CAPABILITY_CAPACITY,
-    370,
+    374,
     1,
     1,
     0,
@@ -61,7 +62,7 @@ pub(crate) type X86BootedKernel = BootedKernel<
     1,
     1,
     4,
-    4,
+    X86_WAITER_CAPACITY,
     4,
     1,
     1,

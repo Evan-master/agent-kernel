@@ -6,7 +6,7 @@
 
 use crate::{
     AgentId, CapabilityId, Event, EventKind, KernelCore, KernelError, OperationSet, ResourceId,
-    SignalKey, TaskId, VerificationRequirement, WaiterId,
+    SignalKey, TaskId, VerificationRequirement, WaiterId, WaiterKind,
 };
 
 impl<
@@ -108,6 +108,7 @@ impl<
             fault_policy: None,
             fault_policy_action: None,
             waiter,
+            waiter_kind: waiter.map(|_| WaiterKind::Signal),
             signal: Some(signal),
             target_agent,
             driver_binding: None,

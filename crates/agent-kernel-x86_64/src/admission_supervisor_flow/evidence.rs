@@ -7,6 +7,7 @@ mod intent_compaction;
 mod release;
 mod task_compaction;
 mod terminal;
+mod waiter_compaction;
 
 use agent_kernel_core::{
     AgentExecutionState, AgentId, AgentImageId, EventKind, IntentStatus, MessageKind,
@@ -96,18 +97,14 @@ impl PreparedAdmissionSupervisorFlow {
                     && execution.task == Some(self.supervisor.task))
             && kernel.run_queue().is_empty()
             && retained_boot_messages(booted)
-            && kernel.waiters().len() == 4
-            && matches!(kernel.waiters().get(2), Some(first)
-                if first.id.raw() == 3
-                    && first.agent == ADMISSION_SUPERVISOR
-                    && first.kind == WaiterKind::Mailbox
-                    && !first.active)
+            && kernel.waiters().len() == 1
             && matches!(waiter, Some(waiter)
                 if waiter.id.raw() == 4
                     && waiter.task == self.supervisor.task
                     && waiter.agent == ADMISSION_SUPERVISOR
                     && waiter.kind == WaiterKind::Mailbox
                     && waiter.active)
+            && self.first_waiter_prefix_compacted(booted)
             && admissions.len() == 4
             && admissions.iter().enumerate().all(|(index, admission)| {
                 let status = if index < 2 {

@@ -36,6 +36,35 @@ pub struct WaiterRecord {
     pub active: bool,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct WaiterCompaction {
+    first: WaiterId,
+    through: WaiterId,
+    count: usize,
+}
+
+impl WaiterCompaction {
+    pub(crate) const fn new(first: WaiterId, through: WaiterId, count: usize) -> Self {
+        Self {
+            first,
+            through,
+            count,
+        }
+    }
+
+    pub const fn first(self) -> WaiterId {
+        self.first
+    }
+
+    pub const fn through(self) -> WaiterId {
+        self.through
+    }
+
+    pub const fn count(self) -> usize {
+        self.count
+    }
+}
+
 impl WaiterRecord {
     pub(crate) const fn empty() -> Self {
         Self {

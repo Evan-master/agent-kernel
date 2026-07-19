@@ -16,7 +16,7 @@ use crate::format_fault::{
 };
 use crate::format_signal::{
     format_mailbox_wait_started_event, format_mailbox_wait_woken_event, format_signal_event,
-    format_task_signal_event,
+    format_task_signal_event, format_waiter_compaction_event,
 };
 
 pub fn format_event(event: &Event) -> String {
@@ -192,6 +192,7 @@ pub fn format_event(event: &Event) -> String {
         EventKind::OrphanedMessageRetired => {
             format_message_event(event, "orphaned_message_retired")
         }
+        EventKind::WaiterCompacted => format_waiter_compaction_event(event),
         EventKind::MemoryCellCreated => format_memory_event(event, "memory_cell_created"),
         EventKind::MemoryCellRecalled => format_memory_event(event, "memory_cell_recalled"),
         EventKind::MemoryCellRemembered => format_memory_event(event, "memory_cell_remembered"),
