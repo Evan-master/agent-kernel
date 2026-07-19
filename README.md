@@ -37,9 +37,10 @@ The reference BIOS/QEMU configuration boots directly on virtual hardware and
 currently provides:
 
 - a permanent GDT, TSS, IDT, ring-0/ring-3 boundary, and private Agent CR3 roots;
-- nine completed isolated native Agent contexts: two initial Workers, a
+- eleven completed isolated native Agent contexts: two initial Workers, a
   Verifier, a Fault Worker, a Fault Handler, a Resource Manager, an Admission
-  Supervisor, and two post-reclamation Runtime Service Workers;
+  Supervisor, and four post-reclamation Runtime Service Workers executed in
+  two sequential batches;
 - kernel-selected FIFO dispatch with physical PIT timer preemption and full CPU
   frame ownership across resume;
 - SHA-256-bound, fixed-size Agent Image Capsules with typed Worker, Verifier,
@@ -65,25 +66,25 @@ currently provides:
 - a fixed-capacity Runtime Admission object with root-scoped `Delegate`
   authorization, FIFO request preparation, generation-bound permits, bounded
   rejection causes, and atomic admission plus Task queueing;
-- Agent Call 27 and a real ring-3 Admission Supervisor Capsule that creates two
-  audited Runtime Admission requests, blocks in its Mailbox, and remains
-  resident throughout target admission and execution;
+- Agent Call 27 and a real ring-3 Admission Supervisor Capsule that creates four
+  audited Runtime Admission requests across two rounds, blocks twice in its
+  Mailbox, and retains one CPU/address-space context throughout both batches;
 - Agent Call 28, which exposes the permit-bound requester only to an admitted
   context; each Runtime Service Worker validates the reply and uses that
   identity as its completion notification recipient;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
-- authenticated Worker completion notifications that wake the retained
-  Supervisor call frame, followed by two FIFO receive/acknowledgement pairs and
-  a three-owner terminal address-space reclamation;
-- a generation-bound Runtime Admission release batch that requires verified,
-  idle targets, preflights aggregate event capacity, and atomically records two
-  `RuntimeAdmissionReleased` transitions after all 33 physical frames return;
+- four authenticated Worker completion notifications that wake the retained
+  Supervisor call frame across two FIFO receive/acknowledgement rounds;
+- two generation-bound Runtime Admission release batches that require verified,
+  idle targets and preflight aggregate event capacity: batch one returns 22
+  frames while the Supervisor retains eleven, and the terminal batch returns
+  the final 33 frames before four ordered `RuntimeAdmissionReleased` records;
 - post-build cancellation that clears and atomically restores all eleven frames
-  after duplicate runtime registration, followed by three disjoint live private
-  address spaces, FIFO ring-3 execution, verification, and 33-frame terminal
-  reclamation;
+  after duplicate runtime registration, followed by cross-batch physical reuse:
+  Agents 13 and 14 consume the exact zeroed identities released by Agents 11
+  and 10 while the Supervisor identity remains disjoint and resident;
 - policy routing to a real ring-3 Fault Handler, followed by capability-gated
   retained-page repair and same-frame resume;
 - a real ring-3 Resource Manager that creates a child Service through delegated
@@ -110,24 +111,24 @@ The reference validation profile enforces these deterministic invariants:
 
 | Evidence | Count |
 | --- | ---: |
-| Registered Agents | 12 |
-| Native ring-3 completions | 9 |
-| Kernel-selected dispatches | 30 |
+| Registered Agents | 14 |
+| Native ring-3 completions | 11 |
+| Kernel-selected dispatches | 35 |
 | Resource Manager Agent Calls | 29 |
 | Resource Manager Agent/kernel address-space switches | 58 |
-| Admission Supervisor Agent Calls | 9 |
-| Admission Supervisor Agent/kernel address-space switches | 18 |
-| Runtime Service Worker Agent Calls | 10 |
-| Runtime Service Worker Agent/kernel address-space switches | 20 |
-| Physical quantum expiries | 13 |
-| Runtime Admission requests | 2 |
-| Runtime Admission commits | 2 |
-| Runtime Admission requester discoveries | 2 |
-| Runtime Admission releases | 2 |
-| Terminal released Runtime Admission records | 2 |
-| Worker completion notifications | 2 |
-| Resident Supervisor Mailbox waits | 1 |
-| Resident Supervisor Mailbox wakes | 1 |
+| Admission Supervisor Agent Calls | 15 |
+| Admission Supervisor Agent/kernel address-space switches | 30 |
+| Runtime Service Worker Agent Calls | 20 |
+| Runtime Service Worker Agent/kernel address-space switches | 40 |
+| Physical quantum expiries | 15 |
+| Runtime Admission requests | 4 |
+| Runtime Admission commits | 4 |
+| Runtime Admission requester discoveries | 4 |
+| Runtime Admission releases | 4 |
+| Terminal released Runtime Admission records | 4 |
+| Worker completion notifications | 4 |
+| Resident Supervisor Mailbox waits | 2 |
+| Resident Supervisor Mailbox wakes | 2 |
 | Contained Agent faults | 4 |
 | Fault-owned live regions reclaimed | 1 |
 | Fault-owned physical frames reclaimed | 2 |
@@ -135,16 +136,16 @@ The reference validation profile enforces these deterministic invariants:
 | Completion-owned physical frames reclaimed | 3 |
 | Rejected native admission cancellations | 1 |
 | Frames restored by admission cancellation | 11 |
-| Native address-space reclamation completions | 9 |
-| Cumulative terminal private-frame returns | 99 |
+| Native address-space reclamation completions | 11 |
+| Cumulative terminal private-frame returns | 121 |
 | Final zeroed private address-space frame pool | 66 |
 | Resources after Manager execution | 7 |
-| Capabilities after Runtime Service Worker verification | 23 |
-| Intents after Runtime Service Worker verification | 10 |
-| Tasks after Runtime Service Worker verification | 10 |
+| Capabilities after Runtime Service Worker verification | 25 |
+| Intents after Runtime Service Worker verification | 12 |
+| Tasks after Runtime Service Worker verification | 12 |
 | MemoryCells after Manager execution | 5 |
 | Shared runtime frames returned and zeroed | 16 |
-| Ordered kernel events after Driver completion | 275 |
+| Ordered kernel events after Driver completion | 326 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -284,7 +285,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 275 events, and treat
+validate the complete serial transcript, require exactly 326 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -307,6 +308,8 @@ AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_SUPERVISOR_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK
 AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_RELEASE_OK
+AGENT_KERNEL_NATIVE_ADDRESS_SPACE_PARTIAL_RECLAIM_OK
+AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_REPEAT_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK
 AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK
 AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK
@@ -317,7 +320,7 @@ AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[275] driver_invocation_completed
+event[326] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -365,21 +368,21 @@ authority.
   fixed-capacity admission records, generation-bound permits, requester-bound
   admitted contexts, and a broker that connects audited semantic requests to
   the physical runtime service;
-- resident Supervisor Mailbox waiting across target admission and execution,
-  authenticated Worker notifications, FIFO acknowledgement, and atomic
-  three-address-space terminal reclamation;
-- an opaque, generation-bound release batch that links verified idle Tasks to
+- resident Supervisor Mailbox waiting across two admission and execution
+  batches, authenticated Worker notifications, FIFO acknowledgement, partial
+  Worker reclamation, and final three-address-space reclamation;
+- opaque, generation-bound release batches that link verified idle Tasks to
   post-reclamation `RuntimeAdmissionReleased` records and ordered kernel events;
 - complete rollback after rejected post-build admission, plus concurrent
-  ownership, FIFO ring-3 execution, semantic verification, and reclamation for
-  two disjoint Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 275-event reference profile.
+  ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
+  and exact cross-batch frame reuse for four Runtime Service Workers;
+- a fixed 2 MiB guarded kernel boot stack for the 326-event reference profile.
 
 ### Planned
 
 - dynamic page-table growth beyond the fixed private hierarchy;
-- repeated resident admission batches, bounded release-record compaction, and
-  an admission queue larger than the Task store;
+- bounded release-record compaction and an admission queue larger than the Task
+  store;
 - SMP scheduling, multi-core synchronization, or hardware TLB shootdown;
 - general storage, networking, graphics, USB, or physical hardware support;
 - an Agent package/application format beyond the current bounded Capsule format;
@@ -387,8 +390,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Runtime Admission Requester Discovery design](docs/superpowers/specs/2026-07-19-x86-runtime-admission-requester-discovery-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-x86-runtime-admission-requester-discovery-v1.md)
+See the current [Resident Runtime Admission Batches design](docs/superpowers/specs/2026-07-19-x86-resident-runtime-admission-batches-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-19-x86-resident-runtime-admission-batches-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
