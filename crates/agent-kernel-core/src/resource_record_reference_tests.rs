@@ -13,7 +13,7 @@ const AUTHORITY: CapabilityId = CapabilityId::new(1);
 
 #[test]
 fn every_persistent_non_event_resource_reference_is_rejected() {
-    for case in 0..25 {
+    for case in 0..26 {
         let mut core = core_with_target();
         install_reference(&mut core, case);
         assert_eq!(
@@ -112,42 +112,46 @@ fn install_reference(core: &mut TestCore, case: usize) {
             core.namespace_entry_len = 1;
         }
         15 => {
+            core.namespace_entries[0].object = NamespaceObject::Mount(TARGET);
+            core.namespace_entry_len = 1;
+        }
+        16 => {
             core.faults[0].resource = TARGET;
             core.fault_len = 1;
         }
-        16 => {
+        17 => {
             core.fault_handlers[0].resource = TARGET;
             core.fault_handler_len = 1;
         }
-        17 => {
+        18 => {
             core.fault_policies[0].resource = TARGET;
             core.fault_policy_len = 1;
         }
-        18 => {
+        19 => {
             core.waiters[0].resource = TARGET;
             core.waiter_len = 1;
         }
-        19 => {
+        20 => {
             core.driver_endpoints[0].resource = TARGET;
             core.driver_endpoint_len = 1;
         }
-        20 => {
+        21 => {
             core.driver_bindings[0].resource = TARGET;
             core.driver_binding_len = 1;
         }
-        21 => {
+        22 => {
             core.device_events[0].resource = TARGET;
             core.device_event_len = 1;
         }
-        22 => {
+        23 => {
             core.driver_commands[0].resource = TARGET;
             core.driver_command_len = 1;
         }
-        23 => {
+        24 => {
             core.driver_invocations[0].resource = TARGET;
             core.driver_invocation_len = 1;
         }
-        24 => {
+        25 => {
             let mut event = Event::empty();
             event.sequence = 1;
             let proposal = EventArchiveProposal::from_segment(None, &[event]).unwrap();

@@ -93,7 +93,7 @@ impl<
         if expected_revision.is_some_and(|expected| expected != current.revision) {
             return Err(KernelError::NamespaceRevisionMismatch);
         }
-        self.ensure_namespace_object_exists(replacement)?;
+        self.ensure_namespace_binding_object(current.namespace, Some(entry), replacement)?;
         let next_revision = current
             .revision
             .checked_add(1)

@@ -181,6 +181,12 @@ pub(super) fn run(
                 key,
                 ..
             } => namespace::resolve(booted, pending, authority, namespace_resource, key)?,
+            AgentCallRequest::ResolveNamespacePath {
+                root,
+                first,
+                second,
+                ..
+            } => namespace::resolve_path(booted, pending, root, first, second)?,
             AgentCallRequest::RebindNamespaceEntry {
                 authority,
                 entry,

@@ -22,7 +22,7 @@ $ scripts/run-qemu.sh --release
 [boot]       AGENT_KERNEL_QEMU_BOOT_OK
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
-[namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_COMPARE_REBIND_OK
+[namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_PATH_OK
 [audit]      AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
 [event:396]  driver_invocation_completed
 [handoff]    SUPERVISOR_HANDOFF_READY
@@ -77,7 +77,7 @@ evidence     Event / Archive Digest / Replay
 | `Verification` | 执行完成后的独立可信状态转换 |
 | `Checkpoint` | 由 Rollback 权限管理的恢复点 |
 | `Event` | 成功状态修改产生的确定性证据 |
-| `Namespace` | Workspace 内带 revision 的 Key 到对象绑定 |
+| `Namespace` | revision 绑定、显式 Workspace Mount、有界路径 |
 
 ```text
 模型运行时 / Prompt / 规划 / 外部适配器  -> 用户空间
@@ -122,7 +122,7 @@ r9  = Nonce       r10..r15, rbp = bounded operation payload
 | `10-20` | Resource、Capability、Task、Agent 生命周期 |
 | `21-28` | Runtime Memory 与 Admission |
 | `29-43` | 回收、压缩、Event 归档 |
-| `44-49` | Namespace 绑定、解析、修改、generation 比较 |
+| `44-50` | Namespace 绑定、解析、修改、比较、有界路径 |
 
 ```text
 userspace pointers : 0
@@ -151,12 +151,11 @@ failure rule       : 解码 / 鉴权 / 预检先于状态修改
 | `RetireNamespaceEntry` | 47 | `Rollback` | 删除稳定 Entry 并归还槽位 |
 | `CompareAndRebindNamespaceEntry` | 48 | `Act` | 在预期 revision 上替换 |
 | `CompareAndRetireNamespaceEntry` | 49 | `Rollback` | 在预期 revision 上回收 |
+| `ResolveNamespacePath` | 50 | 每跳 `Observe` | 解析一段或两段原生路径 |
 
 ```text
-Workspace(Resource) + Key
-        |
-        v
-NamespaceEntry { object, owner, capability, revision }
+Workspace 1 -- Key 1 / Capability A --> Mount(Workspace 3)
+Workspace 3 -- Key 2 / Capability B --> terminal Entry
 ```
 
 ## 05 / 运行矩阵
@@ -180,9 +179,9 @@ NamespaceEntry { object, owner, capability, revision }
 | 目标 | `x86_64-unknown-none` |
 | 隔离 Agent 上下文 | 11 |
 | 内核选择 Dispatch | 35 |
-| Resource Manager Calls / CR3 switches | `39 / 78` |
+| Resource Manager Calls / CR3 switches | `38 / 76` |
 | Admission Supervisor Calls / CR3 switches | `44 / 88` |
-| Namespace 容量 / 最终占用 | `1 / 1` |
+| Namespace 容量 / 最终占用 | `2 / 1` |
 | 实时 Event 容量 / 峰值 | `362 / 362` |
 | 已归档 Event | 64 |
 | 最终实时 Event / 下一序列 | `332 / 397` |
@@ -190,24 +189,25 @@ NamespaceEntry { object, owner, capability, revision }
 
 | Native Capsule | Calls | 字节 | SHA-256 |
 | --- | ---: | ---: | --- |
-| Resource Manager | 39 | 3,854 | `a34b39a50168...238be442` |
-| Admission Supervisor | 44 | 4,114 | `3acd53283d17...07c6cb42` |
+| Resource Manager | 38 | 3,789 | `24d6a22464c9...08bdcc1a` |
+| Admission Supervisor | 44 | 4,115 | `f6c4efffe3c5...6f72f3f2` |
 
 <details>
 <summary><strong>摘要 / 终端 Event 窗口</strong></summary>
 
 ```text
 resource_manager
-a34b39a50168bb128d4f4ca1d8a30b02c94087b1d47148215ca57e5e238be442
+24d6a22464c9b2cc27826c6b07a4655a5510968286eaff7c632732b408bdcc1a
 
 admission_supervisor
-3acd53283d17e77952a5742b895b2f4b578ee768faf497bce070a86397c6cb42
+f6c4efffe3c58689f8cb926399dc3fcb675e938d95bba463130495696f72f3f2
 
-event[186] namespace_entry_bound
-event[187] namespace_entry_resolved
-event[188] namespace_entry_rebound
-event[189] namespace_entry_retired
-event[190] namespace_entry_bound
+event[185] namespace_entry_bound       # root mount
+event[186] namespace_entry_bound       # child terminal
+event[187] namespace_entry_resolved    # root hop
+event[188] namespace_entry_resolved    # child hop
+event[189] namespace_entry_rebound     # terminal revision 2
+event[190] namespace_entry_retired     # root mount
 ...
 event[396] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
@@ -263,7 +263,7 @@ docs/superpowers/
 
 | 方向 | 当前 | 下一阶段 |
 | --- | --- | --- |
-| Namespace | revision compare 修改 | Mount 与有界遍历 |
+| Namespace | Mount 与有界遍历 | 三跳/四跳用户内存传输 |
 | Memory | 私有页表、页/区域复用 | 动态页表增长 |
 | Scheduling | 单核 FIFO 与 PIT | SMP、同步、TLB shootdown |
 | Durability | 有界 SHA-256 归档链 | 崩溃一致的签名存储 |
@@ -272,7 +272,7 @@ docs/superpowers/
 | Assurance | 测试、QEMU 转录、ELF 审计 | 加固与形式化验证 |
 
 最新设计记录：
-[`Native Namespace Generations V2`](docs/superpowers/specs/2026-07-20-native-namespace-generations-v2-design.md)
+[`Native Namespace Hierarchy V3`](docs/superpowers/specs/2026-07-20-native-namespace-hierarchy-v3-design.md)
 
 ## 参与贡献
 

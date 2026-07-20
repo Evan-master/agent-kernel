@@ -93,6 +93,7 @@ pub const AGENT_CALL_REBIND_NAMESPACE_ENTRY: u64 = 46;
 pub const AGENT_CALL_RETIRE_NAMESPACE_ENTRY: u64 = 47;
 pub const AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_ENTRY: u64 = 48;
 pub const AGENT_CALL_COMPARE_AND_RETIRE_NAMESPACE_ENTRY: u64 = 49;
+pub const AGENT_CALL_RESOLVE_NAMESPACE_PATH: u64 = 50;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -182,6 +183,7 @@ impl AgentCallRequest {
             AGENT_CALL_COMPARE_AND_RETIRE_NAMESPACE_ENTRY => {
                 AgentCallOperation::CompareAndRetireNamespaceEntry
             }
+            AGENT_CALL_RESOLVE_NAMESPACE_PATH => AgentCallOperation::ResolveNamespacePath,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -312,6 +314,7 @@ impl AgentCallRequest {
             AgentCallOperation::CompareAndRetireNamespaceEntry => {
                 namespace::decode_compare_retire(frame)
             }
+            AgentCallOperation::ResolveNamespacePath => namespace::decode_path(frame),
         }
     }
 }

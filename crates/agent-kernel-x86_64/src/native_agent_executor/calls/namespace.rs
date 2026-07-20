@@ -1,7 +1,8 @@
 //! Audited native handlers for Namespace bind, resolve, and rebind calls.
 
 use agent_kernel_core::{
-    CapabilityId, EventKind, NamespaceEntryId, NamespaceKey, NamespaceObject, Operation, ResourceId,
+    CapabilityId, EventKind, NamespaceEntryId, NamespaceKey, NamespaceObject, NamespacePathSegment,
+    Operation, ResourceId,
 };
 
 use super::super::state;
@@ -98,6 +99,75 @@ pub(super) fn resolve(
     }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_NAMESPACE_RESOLVE_OK");
     pending.acknowledge_namespace_resolution(record)
+}
+
+pub(super) fn resolve_path(
+    booted: &mut X86BootedKernel,
+    pending: PendingAgentCallCpu,
+    root: ResourceId,
+    first: NamespacePathSegment,
+    second: Option<NamespacePathSegment>,
+) -> Option<ResumableAgentCpu> {
+    let context = authenticated_context(&pending)?;
+    let first_record = find_by_key(booted, root, first.key())?;
+    let second_record = match second {
+        Some(segment) => {
+            let NamespaceObject::Mount(child) = first_record.object else {
+                return None;
+            };
+            Some(find_by_key(booted, child, segment.key())?)
+        }
+        None => None,
+    };
+    let expected_terminal = second_record.unwrap_or(first_record);
+    let segments = [first, second.unwrap_or(first)];
+    let depth = if second.is_some() { 2 } else { 1 };
+    let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
+    let entry_count = booted.kernel().namespace_entries().len();
+    let resolution = booted
+        .kernel_mut()
+        .sys_resolve_namespace_path(context.agent(), root, &segments[..depth])
+        .ok()?;
+    let kernel = booted.kernel();
+    let first_event = kernel.events().get(event_start)?;
+    let second_event_valid = match (second, second_record) {
+        (Some(segment), Some(record)) => valid_event(
+            kernel.events().get(event_start + 1)?,
+            next_sequence.checked_add(1)?,
+            EventKind::NamespaceEntryResolved,
+            context.agent(),
+            segment.authority(),
+            record,
+            Operation::Observe,
+        ),
+        (None, None) => true,
+        _ => false,
+    };
+    if resolution.root() != root
+        || usize::from(resolution.depth()) != depth
+        || resolution.terminal() != expected_terminal
+        || find_by_key(booted, root, first.key())? != first_record
+        || second_record.is_some_and(|record| find_by_id(booted, record.id) != Some(record))
+        || kernel.namespace_entries().len() != entry_count
+        || !valid_event(
+            first_event,
+            next_sequence,
+            EventKind::NamespaceEntryResolved,
+            context.agent(),
+            first.authority(),
+            first_record,
+            Operation::Observe,
+        )
+        || !second_event_valid
+        || kernel.events().len() != event_start + depth
+        || kernel.next_event_sequence() != next_sequence.checked_add(depth as u64)?
+        || !state::running(booted, context)
+    {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_NAMESPACE_PATH_OK");
+    pending.acknowledge_namespace_path_resolution(resolution)
 }
 
 pub(super) fn rebind(

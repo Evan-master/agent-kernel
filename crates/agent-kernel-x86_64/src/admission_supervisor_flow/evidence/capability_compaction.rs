@@ -13,36 +13,36 @@ const AUTHORITY: CapabilityId = CapabilityId::new(23);
 const INITIAL_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(13);
 const DERIVED_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(14);
 const RETIRED_MEMORY_CAPABILITY: CapabilityId = CapabilityId::new(16);
+const RETIRED_REGION_CAPABILITY: CapabilityId = CapabilityId::new(17);
 const TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(26);
-const FRESH_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(27);
-const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(28);
-const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(29);
+const SECOND_TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(27);
+const FRESH_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(28);
+const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(29);
+const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(30);
 
 impl PreparedAdmissionSupervisorFlow {
     pub(super) fn capability_store_compacted(&self, booted: &X86BootedKernel) -> bool {
         let kernel = booted.kernel();
         let report = *booted.report();
         let events = kernel.events();
-        let Some(cleanup) = events.iter().position(|event| {
-            event.kind == EventKind::CapabilityRevoked
-                && event.capability == Some(INITIAL_RESOURCE_CAPABILITY)
-                && event.operation == Some(Operation::Rollback)
+        let Some(start) = events.iter().position(|event| {
+            event.kind == EventKind::CapabilityDerived
+                && event.capability == Some(TRANSIENT_CAPABILITY)
         }) else {
             return false;
         };
-        let Some(start) = cleanup.checked_sub(2) else {
-            return false;
-        };
-        let Some(window) = events.get(start..start + 6) else {
+        let Some(window) = events.get(start..start + 7) else {
             return false;
         };
 
         kernel.capability_capacity() == X86_CAPABILITY_CAPACITY
             && kernel.capability_count() == X86_CAPABILITY_CAPACITY
-            && missing(booted, INITIAL_RESOURCE_CAPABILITY)
-            && missing(booted, DERIVED_RESOURCE_CAPABILITY)
             && missing(booted, RETIRED_MEMORY_CAPABILITY)
             && missing(booted, TRANSIENT_CAPABILITY)
+            && missing(booted, SECOND_TRANSIENT_CAPABILITY)
+            && initial_resource_capability_matches(booted)
+            && derived_resource_capability_matches(booted)
+            && retired_region_capability_matches(booted)
             && fresh_resource_capability_matches(booted)
             && retained_capability_matches(
                 kernel.capability(DELEGATE_CAPABILITY).ok(),
@@ -61,7 +61,7 @@ impl PreparedAdmissionSupervisorFlow {
                 .iter()
                 .filter(|event| event.kind == EventKind::CapabilityCompacted)
                 .count()
-                == 4
+                == 3
             && window
                 .iter()
                 .enumerate()
@@ -86,39 +86,48 @@ impl PreparedAdmissionSupervisorFlow {
             )
             && capability_event_matches(
                 window[2],
-                EventKind::CapabilityRevoked,
-                INITIAL_RESOURCE_CAPABILITY,
-                ResourceId::new(3),
-                resource_operations(),
-                Some(Operation::Rollback),
-                AgentId::new(8),
-            )
-            && capability_event_matches(
-                window[3],
-                EventKind::CapabilityCompacted,
-                DERIVED_RESOURCE_CAPABILITY,
-                ResourceId::new(3),
-                OperationSet::only(Operation::Observe),
-                Some(Operation::Rollback),
-                AgentId::new(2),
-            )
-            && capability_event_matches(
-                window[4],
-                EventKind::CapabilityCompacted,
-                INITIAL_RESOURCE_CAPABILITY,
-                ResourceId::new(3),
-                resource_operations(),
-                Some(Operation::Rollback),
-                AgentId::new(8),
-            )
-            && capability_event_matches(
-                window[5],
                 EventKind::CapabilityCompacted,
                 TRANSIENT_CAPABILITY,
                 report.bootstrap_resource,
                 OperationSet::only(Operation::Rollback),
                 Some(Operation::Rollback),
                 ADMISSION_SUPERVISOR,
+            )
+            && capability_event_matches(
+                window[3],
+                EventKind::CapabilityDerived,
+                SECOND_TRANSIENT_CAPABILITY,
+                report.bootstrap_resource,
+                OperationSet::only(Operation::Rollback),
+                None,
+                ADMISSION_SUPERVISOR,
+            )
+            && capability_event_matches(
+                window[4],
+                EventKind::CapabilityRevoked,
+                SECOND_TRANSIENT_CAPABILITY,
+                report.bootstrap_resource,
+                OperationSet::only(Operation::Rollback),
+                None,
+                ADMISSION_SUPERVISOR,
+            )
+            && capability_event_matches(
+                window[5],
+                EventKind::CapabilityCompacted,
+                SECOND_TRANSIENT_CAPABILITY,
+                report.bootstrap_resource,
+                OperationSet::only(Operation::Rollback),
+                Some(Operation::Rollback),
+                ADMISSION_SUPERVISOR,
+            )
+            && capability_event_matches(
+                window[6],
+                EventKind::CapabilityRevoked,
+                RETIRED_MEMORY_CAPABILITY,
+                ResourceId::new(4),
+                memory_operations(),
+                Some(Operation::Rollback),
+                AgentId::new(8),
             )
     }
 }
@@ -133,6 +142,36 @@ fn fresh_resource_capability_matches(booted: &X86BootedKernel) -> bool {
             && capability.resource == ResourceId::new(8)
             && capability.operations == OperationSet::only(Operation::Observe)
             && !capability.revoked
+            && capability.task.is_none()
+            && capability.parent.is_none())
+}
+
+fn initial_resource_capability_matches(booted: &X86BootedKernel) -> bool {
+    matches!(booted.kernel().capability(INITIAL_RESOURCE_CAPABILITY), Ok(capability)
+        if capability.agent == AgentId::new(8)
+            && capability.resource == ResourceId::new(3)
+            && capability.operations == resource_operations()
+            && !capability.revoked
+            && capability.task.is_none()
+            && capability.parent.is_none())
+}
+
+fn derived_resource_capability_matches(booted: &X86BootedKernel) -> bool {
+    matches!(booted.kernel().capability(DERIVED_RESOURCE_CAPABILITY), Ok(capability)
+        if capability.agent == AgentId::new(2)
+            && capability.resource == ResourceId::new(3)
+            && capability.operations == OperationSet::only(Operation::Observe)
+            && capability.revoked
+            && capability.task.is_none()
+            && capability.parent == Some(INITIAL_RESOURCE_CAPABILITY))
+}
+
+fn retired_region_capability_matches(booted: &X86BootedKernel) -> bool {
+    matches!(booted.kernel().capability(RETIRED_REGION_CAPABILITY), Ok(capability)
+        if capability.agent == AgentId::new(8)
+            && capability.resource == ResourceId::new(5)
+            && capability.operations == memory_operations()
+            && capability.revoked
             && capability.task.is_none()
             && capability.parent.is_none())
 }
@@ -158,6 +197,12 @@ const fn resource_operations() -> OperationSet {
         .with(Operation::Act)
         .with(Operation::Rollback)
         .with(Operation::Delegate)
+}
+
+const fn memory_operations() -> OperationSet {
+    OperationSet::only(Operation::Observe)
+        .with(Operation::Act)
+        .with(Operation::Rollback)
 }
 
 fn capability_event_matches(

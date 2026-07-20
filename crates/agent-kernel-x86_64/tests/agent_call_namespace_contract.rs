@@ -27,6 +27,7 @@ fn namespace_object_words_round_trip_all_native_object_kinds() {
         NamespaceObject::Task(TaskId::new(9)),
         NamespaceObject::Message(MessageId::new(9)),
         NamespaceObject::MemoryCell(MemoryCellId::new(9)),
+        NamespaceObject::Mount(ResourceId::new(9)),
     ];
 
     for (index, object) in objects.into_iter().enumerate() {
@@ -41,7 +42,7 @@ fn namespace_object_words_round_trip_all_native_object_kinds() {
 
 #[test]
 fn namespace_object_words_reject_zero_reserved_and_oversized_values() {
-    for invalid in [0, 1, 2, 3, 4, 5, 8, 14, 15] {
+    for invalid in [0, 1, 2, 3, 4, 5, 6, 8, 15] {
         assert_eq!(decode_namespace_object(invalid), None);
     }
     assert_eq!(
@@ -167,7 +168,7 @@ fn namespace_calls_reject_zero_malformed_and_reserved_payloads() {
     }
 
     let mut malformed_bind = valid_frame(AGENT_CALL_BIND_NAMESPACE_ENTRY);
-    malformed_bind.r13 = 14;
+    malformed_bind.r13 = 15;
     assert_decode_error(malformed_bind, AgentCallDecodeError::InvalidPayload);
     let mut malformed_rebind = valid_frame(AGENT_CALL_REBIND_NAMESPACE_ENTRY);
     malformed_rebind.r12 = 8;

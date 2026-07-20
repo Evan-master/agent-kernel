@@ -95,7 +95,7 @@ fn namespace_generation_calls_reject_zero_malformed_and_reserved_payloads() {
     }
 
     let mut malformed = valid_frame(AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_ENTRY);
-    malformed.r13 = 14;
+    malformed.r13 = 15;
     assert_decode_error(malformed, AgentCallDecodeError::InvalidPayload);
 
     for register in [13, 15, 16] {

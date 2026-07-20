@@ -6,9 +6,9 @@
 
 use agent_kernel_core::{
     AgentId, AgentImageId, CapabilityId, FaultId, IntentId, IntentKind, MemoryCellId, MessageId,
-    MessageKind, MessagePayload, NamespaceEntryId, NamespaceKey, NamespaceObject, OperationSet,
-    ResourceId, ResourceKind, RuntimeAdmissionId, TaskId, TaskResult, VerificationRequirement,
-    WaiterId,
+    MessageKind, MessagePayload, NamespaceEntryId, NamespaceKey, NamespaceObject,
+    NamespacePathSegment, OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId, TaskId,
+    TaskResult, VerificationRequirement, WaiterId,
 };
 
 use super::AgentCallOperation;
@@ -406,6 +406,15 @@ pub enum AgentCallRequest {
         entry: NamespaceEntryId,
         expected_revision: u64,
     },
+    ResolveNamespacePath {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        root: ResourceId,
+        first: NamespacePathSegment,
+        second: Option<NamespacePathSegment>,
+    },
 }
 
 impl AgentCallRequest {
@@ -466,6 +475,7 @@ impl AgentCallRequest {
             Self::CompareAndRetireNamespaceEntry { .. } => {
                 AgentCallOperation::CompareAndRetireNamespaceEntry
             }
+            Self::ResolveNamespacePath { .. } => AgentCallOperation::ResolveNamespacePath,
         }
     }
 }

@@ -74,7 +74,7 @@ impl<
         if self.find_namespace_entry_by_key(namespace, key).is_ok() {
             return Err(KernelError::NamespaceEntryAlreadyExists);
         }
-        self.ensure_namespace_object_exists(object)?;
+        self.ensure_namespace_binding_object(namespace, None, object)?;
         if self.namespace_entry_len >= NAMESPACE_ENTRIES {
             return Err(KernelError::NamespaceEntryStoreFull);
         }

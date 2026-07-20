@@ -335,31 +335,31 @@ for expected in \
   "event[163] capability_granted" \
   "event[164] capability_derived" \
   "event[165] capability_revoked" \
-  "event[166] resource_retired" \
-  "event[167] intent_declared" \
-  "event[168] task_created" \
-  "event[169] intent_bound" \
-  "event[170] capability_derived" \
-  "event[171] delegation" \
-  "event[172] agent_registered" \
-  "event[173] message_sent" \
-  "event[174] agent_suspended" \
-  "event[175] agent_resumed" \
-  "event[176] agent_retired" \
-  "event[177] orphaned_message_retired" \
-  "event[178] agent_record_retired" \
-  "event[179] agent_image_record_retired" \
-  "event[180] agent_registered" \
-  "event[181] resource_created" \
-  "event[182] capability_granted" \
-  "event[183] memory_cell_created" \
-  "event[184] memory_cell_recalled" \
-  "event[185] resource_retired" \
+  "event[166] intent_declared" \
+  "event[167] task_created" \
+  "event[168] intent_bound" \
+  "event[169] capability_derived" \
+  "event[170] delegation" \
+  "event[171] agent_registered" \
+  "event[172] message_sent" \
+  "event[173] agent_suspended" \
+  "event[174] agent_resumed" \
+  "event[175] agent_retired" \
+  "event[176] orphaned_message_retired" \
+  "event[177] agent_record_retired" \
+  "event[178] agent_image_record_retired" \
+  "event[179] agent_registered" \
+  "event[180] resource_created" \
+  "event[181] capability_granted" \
+  "event[182] memory_cell_created" \
+  "event[183] memory_cell_recalled" \
+  "event[184] resource_retired" \
+  "event[185] namespace_entry_bound" \
   "event[186] namespace_entry_bound" \
   "event[187] namespace_entry_resolved" \
-  "event[188] namespace_entry_rebound" \
-  "event[189] namespace_entry_retired" \
-  "event[190] namespace_entry_bound" \
+  "event[188] namespace_entry_resolved" \
+  "event[189] namespace_entry_rebound" \
+  "event[190] namespace_entry_retired" \
   "event[191] resource_created" \
   "event[192] capability_granted" \
   "event[193] memory_cell_created" \
@@ -528,11 +528,11 @@ for expected in \
   "event[356] agent_entry_retired" \
   "event[357] capability_derived" \
   "event[358] capability_revoked" \
-  "event[359] capability_revoked" \
-  "event[360] capability_compacted" \
-  "event[361] capability_compacted" \
+  "event[359] capability_compacted" \
+  "event[360] capability_derived" \
+  "event[361] capability_revoked" \
   "event[362] capability_compacted" \
-  "event[363] resource_record_retired" \
+  "event[363] capability_revoked" \
   "event[364] resource_created" \
   "event[365] capability_granted" \
   "event[366] capability_derived" \
@@ -613,15 +613,15 @@ check_marker_count "AGENT_KERNEL_AGENT_CALL_INSPECT_MEMORY_REGION_OK" 3
 check_marker_count "AGENT_KERNEL_AGENT_CALL_RELEASE_MEMORY_REGION_OK" 2
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_PAGE_OK" 2
 check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK" 2
-check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 4
-check_marker_count "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" 2
+check_marker_count "AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK" 3
+check_marker_count "AGENT_KERNEL_AGENT_CALL_RESOURCE_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_MEMORY_CELL_RECORD_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_NAMESPACE_BIND_OK" 2
-check_marker_count "AGENT_KERNEL_AGENT_CALL_NAMESPACE_RESOLVE_OK" 1
+check_marker_count "AGENT_KERNEL_AGENT_CALL_NAMESPACE_PATH_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_NAMESPACE_COMPARE_REBIND_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_NAMESPACE_COMPARE_RETIRE_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_NAMESPACE_MANAGER_OK" 1
-check_marker_count "AGENT_KERNEL_NATIVE_NAMESPACE_SLOT_REUSE_OK" 1
+check_marker_count "AGENT_KERNEL_NATIVE_NAMESPACE_HIERARCHY_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ORPHANED_MESSAGE_RETIREMENT_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK" 1

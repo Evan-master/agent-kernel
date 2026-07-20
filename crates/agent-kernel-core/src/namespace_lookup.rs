@@ -89,6 +89,64 @@ impl<
             NamespaceObject::Task(task) => self.find_task(task).map(|_| ()),
             NamespaceObject::Message(message) => self.find_message(message).map(|_| ()),
             NamespaceObject::MemoryCell(cell) => self.find_memory_cell(cell).map(|_| ()),
+            NamespaceObject::Mount(target) => self.ensure_namespace_resource(target),
+        }
+    }
+
+    pub(crate) fn ensure_namespace_binding_object(
+        &self,
+        source: ResourceId,
+        ignored: Option<NamespaceEntryId>,
+        object: NamespaceObject,
+    ) -> Result<(), KernelError> {
+        self.ensure_namespace_object_exists(object)?;
+        let NamespaceObject::Mount(target) = object else {
+            return Ok(());
+        };
+        self.ensure_namespace_mount_acyclic(source, target, ignored)
+    }
+
+    fn ensure_namespace_mount_acyclic(
+        &self,
+        source: ResourceId,
+        target: ResourceId,
+        ignored: Option<NamespaceEntryId>,
+    ) -> Result<(), KernelError> {
+        if source == target {
+            return Err(KernelError::NamespaceMountCycle);
+        }
+
+        let mut discovered = [ResourceId::new(0); NAMESPACE_ENTRIES];
+        let mut discovered_len = 0;
+        let mut cursor = 0;
+        let mut current = target;
+
+        loop {
+            for record in self.namespace_entries() {
+                if Some(record.id) == ignored || record.namespace != current {
+                    continue;
+                }
+                let NamespaceObject::Mount(next) = record.object else {
+                    continue;
+                };
+                if next == source {
+                    return Err(KernelError::NamespaceMountCycle);
+                }
+                if next == target || discovered[..discovered_len].contains(&next) {
+                    continue;
+                }
+                if discovered_len >= NAMESPACE_ENTRIES {
+                    return Err(KernelError::NamespaceMountCycle);
+                }
+                discovered[discovered_len] = next;
+                discovered_len += 1;
+            }
+
+            if cursor >= discovered_len {
+                return Ok(());
+            }
+            current = discovered[cursor];
+            cursor += 1;
         }
     }
 

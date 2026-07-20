@@ -134,6 +134,7 @@ fn put_namespace_object(hash: &mut Sha256, object: Option<NamespaceObject>) {
         NamespaceObject::Task(value) => (3, value.raw()),
         NamespaceObject::Message(value) => (4, value.raw()),
         NamespaceObject::MemoryCell(value) => (5, value.raw()),
+        NamespaceObject::Mount(value) => (6, value.raw()),
     };
     put_u8(hash, tag);
     put_u64(hash, raw);

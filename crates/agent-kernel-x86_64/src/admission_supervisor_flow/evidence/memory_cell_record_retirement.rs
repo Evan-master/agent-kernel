@@ -20,9 +20,11 @@ const AUTHORITY: CapabilityId = CapabilityId::new(23);
 const RETIRED_CELL: MemoryCellId = MemoryCellId::new(2);
 const RETIRED_RESOURCE: ResourceId = ResourceId::new(4);
 const RETIRED_CAPABILITY: CapabilityId = CapabilityId::new(16);
+const RETAINED_REGION_RESOURCE: ResourceId = ResourceId::new(5);
+const RETAINED_REGION_CAPABILITY: CapabilityId = CapabilityId::new(17);
 const FRESH_CELL: MemoryCellId = MemoryCellId::new(6);
 const FRESH_RESOURCE: ResourceId = ResourceId::new(9);
-const FRESH_CAPABILITY: CapabilityId = CapabilityId::new(30);
+const FRESH_CAPABILITY: CapabilityId = CapabilityId::new(31);
 const MEMORY_PROOF: u64 = 0x4d45_4d43_454c_4c36;
 
 impl PreparedAdmissionSupervisorFlow {
@@ -47,6 +49,9 @@ impl PreparedAdmissionSupervisorFlow {
             return false;
         };
         let Some(completed) = report.completed(ADMISSION_SUPERVISOR) else {
+            return false;
+        };
+        let Some(early_cleanup) = kernel.events().iter().find(|event| event.sequence == 363) else {
             return false;
         };
         let reclamation = completed.reclamation_log();
@@ -86,6 +91,7 @@ impl PreparedAdmissionSupervisorFlow {
             && capability.task.is_none()
             && capability.parent.is_none()
             && kernel.capability(RETIRED_CAPABILITY) == Err(KernelError::CapabilityNotFound)
+            && cleanup_event(*early_cleanup, RETIRED_CAPABILITY, RETIRED_RESOURCE)
             && kernel
                 .resources()
                 .iter()
@@ -107,8 +113,12 @@ impl PreparedAdmissionSupervisorFlow {
                 .enumerate()
                 .all(|(index, event)| event.sequence == 368 + index as u64)
             && retirement_event(events[0])
-            && capability_event(events[1], EventKind::CapabilityRevoked)
-            && capability_event(events[2], EventKind::CapabilityCompacted)
+            && cleanup_event(
+                events[1],
+                RETAINED_REGION_CAPABILITY,
+                RETAINED_REGION_RESOURCE,
+            )
+            && compaction_event(events[2])
             && resource_retirement_event(events[3])
             && resource_event(events[4], EventKind::ResourceCreated)
             && resource_event(events[5], EventKind::CapabilityGranted)
@@ -150,8 +160,19 @@ fn retirement_event(event: Event) -> bool {
         && event.target_agent == Some(AgentId::new(8))
 }
 
-fn capability_event(event: Event, kind: EventKind) -> bool {
-    event.kind == kind
+fn cleanup_event(event: Event, capability: CapabilityId, resource: ResourceId) -> bool {
+    event.kind == EventKind::CapabilityRevoked
+        && event.agent == ADMISSION_SUPERVISOR
+        && event.resource == Some(resource)
+        && event.capability == Some(capability)
+        && event.source_capability == Some(AUTHORITY)
+        && event.operation == Some(Operation::Rollback)
+        && event.operations == memory_operations()
+        && event.target_agent == Some(AgentId::new(8))
+}
+
+fn compaction_event(event: Event) -> bool {
+    event.kind == EventKind::CapabilityCompacted
         && event.agent == ADMISSION_SUPERVISOR
         && event.resource == Some(RETIRED_RESOURCE)
         && event.capability == Some(RETIRED_CAPABILITY)

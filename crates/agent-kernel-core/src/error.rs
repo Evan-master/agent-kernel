@@ -148,5 +148,9 @@ pub enum KernelError {
     NamespaceEntryAlreadyExists,
     NamespaceRevisionMismatch,
     NamespaceRevisionExhausted,
+    NamespaceMountRequired,
+    NamespaceMountCycle,
+    NamespacePathEmpty,
+    NamespacePathTooDeep,
     ResourceKindMismatch,
 }

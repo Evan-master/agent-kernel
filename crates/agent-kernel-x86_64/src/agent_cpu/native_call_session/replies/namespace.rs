@@ -1,6 +1,6 @@
 //! Namespace acknowledgement binding an authenticated request to one record.
 
-use agent_kernel_core::{NamespaceEntryRecord, NamespaceEntryRetirement};
+use agent_kernel_core::{NamespaceEntryRecord, NamespaceEntryRetirement, NamespacePathResolution};
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 
 use super::{PendingAgentCallCpu, ResumableAgentCpu};
@@ -48,6 +48,34 @@ impl PendingAgentCallCpu {
         self.session
             .context
             .encode_namespace_resolution_reply(self.session.frame.frame_mut(), nonce, record)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_namespace_path_resolution(
+        mut self,
+        resolution: NamespacePathResolution,
+    ) -> Option<ResumableAgentCpu> {
+        let record = resolution.terminal();
+        let nonce = self.authenticated_nonce_for(|request| match request {
+            AgentCallRequest::ResolveNamespacePath {
+                root,
+                first,
+                second,
+                ..
+            } => {
+                let terminal = second.unwrap_or(first);
+                let depth = if second.is_some() { 2 } else { 1 };
+                resolution.root() == root
+                    && resolution.depth() == depth
+                    && record.capability == terminal.authority()
+                    && record.key == terminal.key()
+            }
+            _ => false,
+        })?;
+        self.session
+            .context
+            .encode_namespace_path_resolution_reply(self.session.frame.frame_mut(), nonce, record)
             .ok()?;
         Some(ResumableAgentCpu(self.session))
     }

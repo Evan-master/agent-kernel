@@ -105,7 +105,9 @@ impl<
             || self.namespace_entries[..self.namespace_entry_len]
                 .iter()
                 .any(|record| {
-                    record.namespace == target || record.object == NamespaceObject::Resource(target)
+                    record.namespace == target
+                        || record.object == NamespaceObject::Resource(target)
+                        || record.object == NamespaceObject::Mount(target)
                 })
             || self.faults[..self.fault_len]
                 .iter()

@@ -6,6 +6,8 @@
 
 use crate::{AgentId, CapabilityId, MemoryCellId, MessageId, NamespaceEntryId, ResourceId, TaskId};
 
+pub const NAMESPACE_PATH_MAX_DEPTH: usize = 4;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct NamespaceKey(u64);
 
@@ -26,6 +28,56 @@ pub enum NamespaceObject {
     Task(TaskId),
     Message(MessageId),
     MemoryCell(MemoryCellId),
+    Mount(ResourceId),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NamespacePathSegment {
+    authority: CapabilityId,
+    key: NamespaceKey,
+}
+
+impl NamespacePathSegment {
+    pub const fn new(authority: CapabilityId, key: NamespaceKey) -> Self {
+        Self { authority, key }
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
+    }
+
+    pub const fn key(self) -> NamespaceKey {
+        self.key
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NamespacePathResolution {
+    root: ResourceId,
+    terminal: NamespaceEntryRecord,
+    depth: u8,
+}
+
+impl NamespacePathResolution {
+    pub(crate) const fn new(root: ResourceId, terminal: NamespaceEntryRecord, depth: u8) -> Self {
+        Self {
+            root,
+            terminal,
+            depth,
+        }
+    }
+
+    pub const fn root(self) -> ResourceId {
+        self.root
+    }
+
+    pub const fn terminal(self) -> NamespaceEntryRecord {
+        self.terminal
+    }
+
+    pub const fn depth(self) -> u8 {
+        self.depth
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

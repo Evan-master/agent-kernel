@@ -68,7 +68,7 @@ impl PreparedAdmissionSupervisorFlow {
             && self.initial_intent_prefix_compacted(booted)
             && self.first_batch_entries_retired(booted, targets)
             && self.capability_store_compacted(booted)
-            && self.resource_record_retired_and_reused(booted)
+            && self.resource_store_preserves_workspace(booted)
             && self.memory_cell_record_retired_and_reused(booted, report)
             && retained_boot_messages(booted)
             && kernel.waiters().is_empty()

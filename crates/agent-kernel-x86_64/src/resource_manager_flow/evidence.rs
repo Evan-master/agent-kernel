@@ -57,8 +57,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 39
-        && completed.address_space_switch_count() == 78
+        && completed.call_count() == 38
+        && completed.address_space_switch_count() == 76
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -76,10 +76,10 @@ pub(super) fn completed(
         && task.delegated_capability == Some(manager.task_capability)
         && task.run_ticks == 1
         && task.result == Some(image.result())
-        && resource.kind == ResourceKind::Service
+        && resource.kind == ResourceKind::Workspace
         && resource.parent == Some(booted.report().bootstrap_resource)
         && resource.owner == Some(RESOURCE_MANAGER)
-        && resource.status == ResourceStatus::Retired
+        && resource.status == ResourceStatus::Active
         && capability.agent == RESOURCE_MANAGER
         && capability.resource == image.resource()
         && capability.operations == child_operations
@@ -128,7 +128,6 @@ fn events_prove_lifecycle(
         EventKind::CapabilityGranted,
         EventKind::CapabilityDerived,
         EventKind::CapabilityRevoked,
-        EventKind::ResourceRetired,
         EventKind::IntentDeclared,
         EventKind::TaskCreated,
         EventKind::IntentBound,
@@ -149,10 +148,11 @@ fn events_prove_lifecycle(
         EventKind::MemoryCellRecalled,
         EventKind::ResourceRetired,
         EventKind::NamespaceEntryBound,
+        EventKind::NamespaceEntryBound,
+        EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryRebound,
         EventKind::NamespaceEntryRetired,
-        EventKind::NamespaceEntryBound,
         EventKind::ResourceCreated,
         EventKind::CapabilityGranted,
         EventKind::MemoryCellCreated,
@@ -198,20 +198,18 @@ fn events_prove_lifecycle(
         && tail[7].source_capability == Some(image.capability())
         && tail[7].operations == OperationSet::only(Operation::Observe)
         && tail[7].target_agent == Some(image.target_agent())
-        && tail[8].resource == Some(image.resource())
-        && tail[8].capability == Some(image.capability())
-        && task_lifecycle::events_valid(&tail[9..14], booted, manager, image)
+        && task_lifecycle::events_valid(&tail[8..13], booted, manager, image)
         && agent_management::events_valid(
             &[
-                tail[14], tail[15], tail[16], tail[17], tail[18], tail[19], tail[20], tail[22],
+                tail[13], tail[14], tail[15], tail[16], tail[17], tail[18], tail[19], tail[21],
             ],
             booted,
             manager,
             image,
         )
-        && agent_image::events_valid(&tail[21], booted, manager, image)
-        && memory_page::events_valid(&tail[23..28], booted, image)
-        && namespace::events_valid(&tail[28..33], booted, image)
+        && agent_image::events_valid(&tail[20], booted, manager, image)
+        && memory_page::events_valid(&tail[22..27], booted, image)
+        && namespace::events_valid(&tail[27..33], booted, image)
         && memory_region::events_valid(
             &[
                 tail[33], tail[34], tail[35], tail[36], tail[37], tail[38], tail[39], tail[40],
