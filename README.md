@@ -98,21 +98,26 @@ global mutable state.
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     Capsule["Verified Capsule"] --> Ring3["ring-3 Agent"]
+    Supervisor["User-space Supervisor"] --> Ring3
     Ring3 -->|"Agent Call / IRQ / Fault"| X86["x86_64 Boundary"]
     X86 --> Facade["Kernel Facade"]
     Facade --> Core["Deterministic Core"]
-    Core --> Stores["Fixed Stores"]
-    Core --> Events["Event Log + Archive"]
-    Core --> Scheduler["Task / Driver Scheduler"]
-    Scheduler --> Ring3
-    Core --> HAL["Immutable HAL"]
-    HAL --> Hardware["UART / Port / Future Devices"]
-    Core --> Broker["Runtime Admission"]
+
+    Core --> State["State + Audit"]
+    Core --> Runtime["Scheduling + Admission"]
+    Core --> Devices["HAL + Devices"]
+
+    State --> Stores["Fixed Stores"]
+    State --> Events["Event Log + Archive"]
+    Runtime --> Scheduler["Task / Driver Scheduler"]
+    Runtime --> Broker["Runtime Admission"]
     Broker --> Frames["Zeroed Frame Pool"]
-    Frames --> Ring3
-    Supervisor["User-space Supervisor"] --> Ring3
+    Devices --> HAL["Immutable HAL"]
+    HAL --> Hardware["UART / Port / Future Devices"]
+    Scheduler -.->|dispatch| Ring3
+    Frames -.->|map| Ring3
 ```
 
 ### Boundary
