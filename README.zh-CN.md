@@ -108,8 +108,9 @@ flowchart TB
     State --> Stores["Fixed Stores"]
     State --> Events["Event Log + Archive"]
     Runtime --> Scheduler["Task / Driver Scheduler"]
-    Runtime --> Broker["Runtime Admission"]
-    Runtime --> HAL["Immutable HAL"]
+    Runtime --> Services["Admission + Devices"]
+    Services --> Broker["Runtime Admission"]
+    Services --> HAL["Immutable HAL"]
     Broker --> Frames["Zeroed Frame Pool"]
     HAL --> Hardware["UART / Port / Future Devices"]
     Scheduler -.->|dispatch| Ring3
