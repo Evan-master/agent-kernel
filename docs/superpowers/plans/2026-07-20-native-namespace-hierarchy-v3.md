@@ -15,5 +15,5 @@
   evidence, Capsule bytes, digest, return offsets, and script markers.
 - [x] Run focused tests, Workspace tests, Supervisor simulation, `no_std`,
   strict Clippy, bare-metal checks, debug/release QEMU, and Release ELF audits.
-- [ ] Update both README languages and publish public `main` while keeping the
+- [x] Update both README languages and publish public `main` while keeping the
   complete Agent Kernel goal active.
