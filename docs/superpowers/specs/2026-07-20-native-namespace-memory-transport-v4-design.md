@@ -1,6 +1,6 @@
 # Native Namespace Memory Transport V4 Design
 
-Status: Implemented and verified on 2026-07-20
+Status: Implemented, verified, and published on 2026-07-20
 
 ## Objective
 
