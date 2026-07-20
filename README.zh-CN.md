@@ -16,10 +16,14 @@
 </p>
 
 ```text
-AGENT -> CAPABILITY -> RESOURCE -> EVENT
-          explicit authority
-                  |
-       deterministic / replayable / auditable
+AGENT
+  |
+CAPABILITY [explicit authority]
+  |
+RESOURCE
+  |
+EVENT [deterministic evidence]
+      [replayable / auditable]
 ```
 
 Agent Kernel 是一个用 Rust 编写的 Agent 原生操作系统内核。
