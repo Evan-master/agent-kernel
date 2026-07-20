@@ -15,5 +15,5 @@
   offsets, generated Capsule bytes, hashes, and both README languages.
 - [x] Run focused and Workspace tests, Supervisor simulation, `no_std`, strict
   Clippy, bare-metal checks, debug/release QEMU, and Release ELF audits.
-- [ ] Commit the implementation and publish public `main` while the complete
+- [x] Commit the implementation and publish public `main` while the complete
   Agent Kernel goal remains active.

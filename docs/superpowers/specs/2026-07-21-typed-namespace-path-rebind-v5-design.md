@@ -1,6 +1,6 @@
 # Typed Namespace Path Rebind V5 Design
 
-Status: Implemented and verified; publication pending on 2026-07-21
+Status: Implemented, verified, and published on 2026-07-21
 
 ## Objective
 
