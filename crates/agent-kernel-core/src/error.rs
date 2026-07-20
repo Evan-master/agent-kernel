@@ -146,5 +146,7 @@ pub enum KernelError {
     MemoryCellNotFound,
     NamespaceEntryNotFound,
     NamespaceEntryAlreadyExists,
+    NamespaceRevisionMismatch,
+    NamespaceRevisionExhausted,
     ResourceKindMismatch,
 }

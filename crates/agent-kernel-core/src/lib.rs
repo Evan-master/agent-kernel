@@ -82,6 +82,7 @@ mod message;
 mod message_retirement;
 mod namespace;
 mod namespace_entry_retirement;
+mod namespace_generation;
 mod namespace_lookup;
 mod namespace_store;
 mod observation;

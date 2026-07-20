@@ -526,19 +526,19 @@ resource_manager_entry:
     cmp rbp, 1
     jne .halt
 
-    mov ecx, 46
+    mov ecx, 48
     xor edx, edx
     mov r10d, 12
     mov r11d, 1
-    mov r12d, 65
-    xor r13d, r13d
+    mov r12d, 1
+    mov r13d, 65
     xor r14d, r14d
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
     test rcx, rcx
     jne .halt
-    cmp rdx, 46
+    cmp rdx, 48
     jne .halt
     cmp r10, 1
     jne .halt
@@ -555,11 +555,11 @@ resource_manager_entry:
     cmp rbp, 2
     jne .halt
 
-    mov ecx, 47
+    mov ecx, 49
     xor edx, edx
     mov r10d, 12
     mov r11d, 1
-    xor r12d, r12d
+    mov r12d, 2
     xor r13d, r13d
     xor r14d, r14d
     xor r15d, r15d
@@ -567,7 +567,7 @@ resource_manager_entry:
     int 0x90
     test rcx, rcx
     jne .halt
-    cmp rdx, 47
+    cmp rdx, 49
     jne .halt
     cmp r10, 1
     jne .halt

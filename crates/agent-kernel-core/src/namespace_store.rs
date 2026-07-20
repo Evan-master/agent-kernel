@@ -137,28 +137,11 @@ impl<
         entry: NamespaceEntryId,
         object: NamespaceObject,
     ) -> Result<Event, KernelError> {
-        self.ensure_agent_active(agent)?;
-        let record = self.find_namespace_entry(entry)?;
-        self.ensure_authorized(agent, capability, record.namespace, Operation::Act)?;
-        self.ensure_namespace_object_exists(object)?;
-        self.ensure_event_slots(1)?;
-
-        let namespace_entry = self.find_namespace_entry_mut(entry)?;
-        namespace_entry.object = object;
-        namespace_entry.revision += 1;
-        self.record_namespace_event(
-            EventKind::NamespaceEntryRebound,
-            agent,
-            capability,
-            record.namespace,
-            entry,
-            record.key,
-            object,
-            Operation::Act,
-        )
+        self.rebind_namespace_entry_transaction(agent, capability, entry, None, object)
+            .map(|(_, event)| event)
     }
 
-    fn record_namespace_event(
+    pub(crate) fn record_namespace_event(
         &mut self,
         kind: EventKind,
         agent: AgentId,

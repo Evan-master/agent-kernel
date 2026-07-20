@@ -387,6 +387,25 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         entry: NamespaceEntryId,
     },
+    CompareAndRebindNamespaceEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+        expected_revision: u64,
+        object: NamespaceObject,
+    },
+    CompareAndRetireNamespaceEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+        expected_revision: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -441,6 +460,12 @@ impl AgentCallRequest {
             Self::ResolveNamespaceEntry { .. } => AgentCallOperation::ResolveNamespaceEntry,
             Self::RebindNamespaceEntry { .. } => AgentCallOperation::RebindNamespaceEntry,
             Self::RetireNamespaceEntry { .. } => AgentCallOperation::RetireNamespaceEntry,
+            Self::CompareAndRebindNamespaceEntry { .. } => {
+                AgentCallOperation::CompareAndRebindNamespaceEntry
+            }
+            Self::CompareAndRetireNamespaceEntry { .. } => {
+                AgentCallOperation::CompareAndRetireNamespaceEntry
+            }
         }
     }
 }

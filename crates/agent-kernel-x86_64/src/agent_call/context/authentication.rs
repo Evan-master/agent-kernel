@@ -324,6 +324,20 @@ impl AgentCallContext {
                 image,
                 nonce,
                 ..
+            }
+            | AgentCallRequest::CompareAndRebindNamespaceEntry {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::CompareAndRetireNamespaceEntry {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
             } => self.matches_identity(agent, task, image, nonce, expected_nonce),
         }
     }

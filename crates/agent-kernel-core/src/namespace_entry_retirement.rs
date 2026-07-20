@@ -66,6 +66,26 @@ impl<
         authority: CapabilityId,
         target: NamespaceEntryId,
     ) -> Result<NamespaceEntryRetirement, KernelError> {
+        self.retire_namespace_entry_transaction(actor, authority, target, None)
+    }
+
+    pub fn compare_and_retire_namespace_entry(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        target: NamespaceEntryId,
+        expected_revision: u64,
+    ) -> Result<NamespaceEntryRetirement, KernelError> {
+        self.retire_namespace_entry_transaction(actor, authority, target, Some(expected_revision))
+    }
+
+    fn retire_namespace_entry_transaction(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        target: NamespaceEntryId,
+        expected_revision: Option<u64>,
+    ) -> Result<NamespaceEntryRetirement, KernelError> {
         self.ensure_agent_active(actor)?;
         let index = self
             .namespace_entries()
@@ -75,6 +95,9 @@ impl<
         let record = self.namespace_entries[index];
         self.ensure_namespace_resource(record.namespace)?;
         self.ensure_authorized(actor, authority, record.namespace, Operation::Rollback)?;
+        if expected_revision.is_some_and(|expected| expected != record.revision) {
+            return Err(KernelError::NamespaceRevisionMismatch);
+        }
         self.ensure_event_slots(1)?;
 
         let previous = self.namespace_entries;

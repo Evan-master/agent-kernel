@@ -146,6 +146,59 @@ pub(super) fn rebind(
     pending.acknowledge_namespace_rebinding(record)
 }
 
+pub(super) fn compare_rebind(
+    booted: &mut X86BootedKernel,
+    pending: PendingAgentCallCpu,
+    authority: CapabilityId,
+    entry: NamespaceEntryId,
+    expected_revision: u64,
+    object: NamespaceObject,
+) -> Option<ResumableAgentCpu> {
+    let context = authenticated_context(&pending)?;
+    let previous = find_by_id(booted, entry)?;
+    let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
+    let entry_count = booted.kernel().namespace_entries().len();
+    let record = booted
+        .kernel_mut()
+        .sys_compare_and_rebind_namespace_entry(
+            context.agent(),
+            authority,
+            entry,
+            expected_revision,
+            object,
+        )
+        .ok()?;
+    let kernel = booted.kernel();
+    if find_by_id(booted, entry)? != record
+        || previous.revision != expected_revision
+        || record.id != previous.id
+        || record.owner != previous.owner
+        || record.namespace != previous.namespace
+        || record.capability != previous.capability
+        || record.key != previous.key
+        || record.object != object
+        || record.revision != expected_revision.checked_add(1)?
+        || kernel.namespace_entries().len() != entry_count
+        || !valid_event(
+            kernel.events().get(event_start)?,
+            next_sequence,
+            EventKind::NamespaceEntryRebound,
+            context.agent(),
+            authority,
+            record,
+            Operation::Act,
+        )
+        || kernel.events().len() != event_start + 1
+        || kernel.next_event_sequence() != next_sequence.checked_add(1)?
+        || !state::running(booted, context)
+    {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_AGENT_CALL_NAMESPACE_COMPARE_REBIND_OK");
+    pending.acknowledge_namespace_compare_rebinding(record)
+}
+
 fn authenticated_context(
     pending: &PendingAgentCallCpu,
 ) -> Option<agent_kernel_x86_64::agent_call::AgentCallContext> {

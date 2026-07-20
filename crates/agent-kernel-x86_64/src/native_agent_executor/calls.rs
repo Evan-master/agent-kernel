@@ -190,6 +190,32 @@ pub(super) fn run(
             AgentCallRequest::RetireNamespaceEntry {
                 authority, entry, ..
             } => namespace_entry_retirement::retire(booted, pending, authority, entry)?,
+            AgentCallRequest::CompareAndRebindNamespaceEntry {
+                authority,
+                entry,
+                expected_revision,
+                object,
+                ..
+            } => namespace::compare_rebind(
+                booted,
+                pending,
+                authority,
+                entry,
+                expected_revision,
+                object,
+            )?,
+            AgentCallRequest::CompareAndRetireNamespaceEntry {
+                authority,
+                entry,
+                expected_revision,
+                ..
+            } => namespace_entry_retirement::compare_retire(
+                booted,
+                pending,
+                authority,
+                entry,
+                expected_revision,
+            )?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,

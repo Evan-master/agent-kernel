@@ -97,6 +97,23 @@ impl<
             .rebind_namespace_entry(agent, capability, entry, object)
     }
 
+    pub fn sys_compare_and_rebind_namespace_entry(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+        expected_revision: u64,
+        replacement: NamespaceObject,
+    ) -> Result<NamespaceEntryRecord, KernelError> {
+        self.core.compare_and_rebind_namespace_entry(
+            actor,
+            authority,
+            entry,
+            expected_revision,
+            replacement,
+        )
+    }
+
     pub fn sys_retire_namespace_entry(
         &mut self,
         actor: AgentId,
@@ -104,6 +121,17 @@ impl<
         entry: NamespaceEntryId,
     ) -> Result<NamespaceEntryRetirement, KernelError> {
         self.core.retire_namespace_entry(actor, authority, entry)
+    }
+
+    pub fn sys_compare_and_retire_namespace_entry(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+        expected_revision: u64,
+    ) -> Result<NamespaceEntryRetirement, KernelError> {
+        self.core
+            .compare_and_retire_namespace_entry(actor, authority, entry, expected_revision)
     }
 
     pub fn namespace_entries(&self) -> &[NamespaceEntryRecord] {

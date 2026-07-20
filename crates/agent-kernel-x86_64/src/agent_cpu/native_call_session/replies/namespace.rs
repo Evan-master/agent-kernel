@@ -97,4 +97,58 @@ impl PendingAgentCallCpu {
             .ok()?;
         Some(ResumableAgentCpu(self.session))
     }
+
+    pub(crate) fn acknowledge_namespace_compare_rebinding(
+        mut self,
+        record: NamespaceEntryRecord,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(
+                request,
+                AgentCallRequest::CompareAndRebindNamespaceEntry {
+                    entry,
+                    expected_revision,
+                    object,
+                    ..
+                } if record.id == entry
+                    && record.object == object
+                    && expected_revision.checked_add(1) == Some(record.revision)
+            )
+        })?;
+        self.session
+            .context
+            .encode_namespace_compare_rebinding_reply(self.session.frame.frame_mut(), nonce, record)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_namespace_compare_retirement(
+        mut self,
+        receipt: NamespaceEntryRetirement,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(
+                request,
+                AgentCallRequest::CompareAndRetireNamespaceEntry {
+                    agent,
+                    authority,
+                    entry,
+                    expected_revision,
+                    ..
+                } if receipt.actor() == agent
+                    && receipt.authority() == authority
+                    && receipt.namespace_entry() == entry
+                    && receipt.record().revision == expected_revision
+            )
+        })?;
+        self.session
+            .context
+            .encode_namespace_compare_retirement_reply(
+                self.session.frame.frame_mut(),
+                nonce,
+                receipt.record(),
+            )
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
 }
