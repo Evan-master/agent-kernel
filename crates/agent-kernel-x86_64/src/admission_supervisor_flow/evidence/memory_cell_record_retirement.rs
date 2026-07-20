@@ -51,7 +51,7 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(completed) = report.completed(ADMISSION_SUPERVISOR) else {
             return false;
         };
-        let Some(early_cleanup) = kernel.events().iter().find(|event| event.sequence == 372) else {
+        let Some(early_cleanup) = kernel.events().iter().find(|event| event.sequence == 376) else {
             return false;
         };
         let reclamation = completed.reclamation_log();
@@ -61,7 +61,7 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(start) = kernel
             .events()
             .iter()
-            .position(|event| event.sequence == 377)
+            .position(|event| event.sequence == 381)
         else {
             return false;
         };
@@ -111,7 +111,7 @@ impl PreparedAdmissionSupervisorFlow {
             && events
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 377 + index as u64)
+                .all(|(index, event)| event.sequence == 381 + index as u64)
             && retirement_event(events[0])
             && cleanup_event(
                 events[1],

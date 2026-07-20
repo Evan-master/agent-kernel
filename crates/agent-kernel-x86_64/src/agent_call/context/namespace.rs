@@ -7,6 +7,7 @@ use crate::{
     agent_call::{
         encode_namespace_object, AgentCallDecodeError, AGENT_CALL_BIND_NAMESPACE_ENTRY,
         AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_ENTRY,
+        AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_PATH_FROM_MEMORY,
         AGENT_CALL_COMPARE_AND_RETIRE_NAMESPACE_ENTRY, AGENT_CALL_REBIND_NAMESPACE_ENTRY,
         AGENT_CALL_RESOLVE_NAMESPACE_ENTRY, AGENT_CALL_RESOLVE_NAMESPACE_PATH,
         AGENT_CALL_RESOLVE_NAMESPACE_PATH_FROM_MEMORY, AGENT_CALL_RETIRE_NAMESPACE_ENTRY,
@@ -98,6 +99,20 @@ impl AgentCallContext {
             frame,
             nonce,
             AGENT_CALL_RESOLVE_NAMESPACE_PATH_FROM_MEMORY,
+            record,
+        )
+    }
+
+    pub fn encode_namespace_path_rebinding_reply(
+        self,
+        frame: &mut PrivilegeInterruptStackFrame,
+        nonce: u64,
+        record: NamespaceEntryRecord,
+    ) -> Result<(), AgentCallDecodeError> {
+        self.encode_namespace_entry_reply(
+            frame,
+            nonce,
+            AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_PATH_FROM_MEMORY,
             record,
         )
     }

@@ -18,7 +18,10 @@ pub mod runtime_frame_pool;
 pub mod runtime_page;
 pub mod runtime_reclamation;
 pub mod runtime_region;
+pub mod typed_call_data;
 pub mod user_memory;
+
+mod namespace_object_wire;
 
 #[cfg(target_arch = "x86_64")]
 mod native_port_io;

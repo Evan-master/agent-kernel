@@ -190,6 +190,9 @@ pub(super) fn run(
             AgentCallRequest::ResolveNamespacePathFromMemory {
                 root, generation, ..
             } => namespace::resolve_memory_path(booted, pending, root, generation)?,
+            AgentCallRequest::CompareAndRebindNamespacePathFromMemory { generation, .. } => {
+                namespace::compare_and_rebind_memory_path(booted, pending, generation)?
+            }
             AgentCallRequest::RebindNamespaceEntry {
                 authority,
                 entry,

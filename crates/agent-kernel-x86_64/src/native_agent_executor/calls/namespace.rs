@@ -1,8 +1,14 @@
 //! Audited native handlers for Namespace bind, resolve, and rebind calls.
 
+mod memory;
+
+pub(super) use memory::{
+    compare_and_rebind_path as compare_and_rebind_memory_path, resolve_path as resolve_memory_path,
+};
+
 use agent_kernel_core::{
-    CapabilityId, EventKind, NamespaceEntryId, NamespaceEntryRecord, NamespaceKey, NamespaceObject,
-    NamespacePathSegment, Operation, ResourceId, NAMESPACE_PATH_MAX_DEPTH,
+    CapabilityId, EventKind, NamespaceEntryId, NamespaceKey, NamespaceObject, NamespacePathSegment,
+    Operation, ResourceId,
 };
 
 use super::super::state;
@@ -168,78 +174,6 @@ pub(super) fn resolve_path(
     }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_NAMESPACE_PATH_OK");
     pending.acknowledge_namespace_path_resolution(resolution)
-}
-
-pub(super) fn resolve_memory_path(
-    booted: &mut X86BootedKernel,
-    pending: PendingAgentCallCpu,
-    root: ResourceId,
-    generation: u64,
-) -> Option<ResumableAgentCpu> {
-    let path = pending.authenticated_namespace_path_buffer()?;
-    if path.root() != root || path.generation() != generation {
-        return None;
-    }
-    let context = pending.context();
-    let segments = path.segments();
-    let mut records: [Option<NamespaceEntryRecord>; NAMESPACE_PATH_MAX_DEPTH] =
-        [None; NAMESPACE_PATH_MAX_DEPTH];
-    let mut current = root;
-    for (index, segment) in segments.iter().copied().enumerate() {
-        let record = find_by_key(booted, current, segment.key())?;
-        records[index] = Some(record);
-        if index + 1 < segments.len() {
-            let NamespaceObject::Mount(child) = record.object else {
-                return None;
-            };
-            current = child;
-        }
-    }
-    let terminal = records[segments.len() - 1]?;
-    let event_start = booted.kernel().events().len();
-    let next_sequence = booted.kernel().next_event_sequence();
-    let entry_count = booted.kernel().namespace_entries().len();
-    let resolution = booted
-        .kernel_mut()
-        .sys_resolve_namespace_path(context.agent(), root, segments)
-        .ok()?;
-    let kernel = booted.kernel();
-    if resolution.root() != root
-        || usize::from(resolution.depth()) != segments.len()
-        || resolution.terminal() != terminal
-        || kernel.namespace_entries().len() != entry_count
-        || kernel.events().len() != event_start + segments.len()
-        || kernel.next_event_sequence() != next_sequence.checked_add(segments.len() as u64)?
-        || !segments
-            .iter()
-            .copied()
-            .enumerate()
-            .all(|(index, segment)| {
-                let Some(record) = records[index] else {
-                    return false;
-                };
-                find_by_id(booted, record.id) == Some(record)
-                    && kernel
-                        .events()
-                        .get(event_start + index)
-                        .is_some_and(|event| {
-                            valid_event(
-                                event,
-                                next_sequence + index as u64,
-                                EventKind::NamespaceEntryResolved,
-                                context.agent(),
-                                segment.authority(),
-                                record,
-                                Operation::Observe,
-                            )
-                        })
-            })
-        || !state::running(booted, context)
-    {
-        return None;
-    }
-    serial_write_line("AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK");
-    pending.acknowledge_namespace_memory_path_resolution(resolution, path)
 }
 
 pub(super) fn rebind(

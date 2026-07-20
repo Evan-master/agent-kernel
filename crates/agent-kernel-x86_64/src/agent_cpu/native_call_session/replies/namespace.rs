@@ -1,8 +1,11 @@
 //! Namespace acknowledgement binding an authenticated request to one record.
 
-use agent_kernel_core::{NamespaceEntryRecord, NamespaceEntryRetirement, NamespacePathResolution};
+use agent_kernel_core::{
+    NamespaceEntryRecord, NamespaceEntryRetirement, NamespacePathRebinding, NamespacePathResolution,
+};
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
 use agent_kernel_x86_64::namespace_path_buffer::NamespacePathBuffer;
+use agent_kernel_x86_64::typed_call_data::NamespacePathRebindMessage;
 
 use super::{PendingAgentCallCpu, ResumableAgentCpu};
 
@@ -110,6 +113,36 @@ impl PendingAgentCallCpu {
                 nonce,
                 record,
             )
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_namespace_path_rebinding(
+        mut self,
+        receipt: NamespacePathRebinding,
+        message: NamespacePathRebindMessage,
+    ) -> Option<ResumableAgentCpu> {
+        let terminal = message.segments().last().copied()?;
+        let record = receipt.rebound();
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(
+                request,
+                AgentCallRequest::CompareAndRebindNamespacePathFromMemory {
+                    generation,
+                    ..
+                } if generation == message.generation()
+                    && receipt.root() == message.root()
+                    && receipt.depth() == message.depth()
+                    && receipt.previous().id == record.id
+                    && receipt.previous().key == terminal.key()
+                    && receipt.previous().revision == message.expected_revision()
+                    && record.object == message.replacement()
+                    && message.expected_revision().checked_add(1) == Some(record.revision)
+            )
+        })?;
+        self.session
+            .context
+            .encode_namespace_path_rebinding_reply(self.session.frame.frame_mut(), nonce, record)
             .ok()?;
         Some(ResumableAgentCpu(self.session))
     }

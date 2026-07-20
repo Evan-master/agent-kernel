@@ -205,6 +205,21 @@ impl PendingAgentCallCpu {
             .memory
             .snapshot_namespace_path(root, generation)
     }
+
+    pub(crate) fn authenticated_typed_call_data_message(
+        &self,
+    ) -> Option<agent_kernel_x86_64::typed_call_data::CallDataMessage> {
+        let generation = match self.authenticated_request()? {
+            AgentCallRequest::CompareAndRebindNamespacePathFromMemory { generation, .. } => {
+                generation
+            }
+            _ => return None,
+        };
+        self.session.memory.snapshot_typed_call_data(
+            agent_kernel_x86_64::typed_call_data::CallDataMessageKind::CompareAndRebindNamespacePath,
+            generation,
+        )
+    }
 }
 
 impl ResumableAgentCpu {

@@ -85,6 +85,7 @@ mod namespace_entry_retirement;
 mod namespace_generation;
 mod namespace_hierarchy;
 mod namespace_lookup;
+mod namespace_path_rebinding;
 mod namespace_store;
 mod observation;
 mod observation_store;
@@ -160,7 +161,8 @@ pub use message::{
 };
 pub use namespace::{
     NamespaceEntryRecord, NamespaceEntryRetirement, NamespaceKey, NamespaceObject,
-    NamespacePathResolution, NamespacePathSegment, NAMESPACE_PATH_MAX_DEPTH,
+    NamespacePathRebinding, NamespacePathResolution, NamespacePathSegment,
+    NAMESPACE_PATH_MAX_DEPTH,
 };
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};

@@ -896,23 +896,61 @@ resource_manager_entry:
     xor ebp, ebp
     int 0x90
     test rcx, rcx
-    jne .halt
+    jne .memory_path_fail
     cmp rdx, 51
-    jne .halt
+    jne .memory_path_fail
     cmp r10, 4
-    jne .halt
+    jne .memory_path_fail
     cmp r11, 8
-    jne .halt
+    jne .memory_path_fail
     cmp r12, 9
-    jne .halt
+    jne .memory_path_fail
     cmp r13, 21
-    jne .halt
+    jne .memory_path_fail
     cmp r14, 0x4e530004
-    jne .halt
+    jne .memory_path_fail
     cmp r15, 65
-    jne .halt
+    jne .memory_path_fail
     cmp rbp, 1
-    jne .halt
+    jne .memory_path_fail
+    jmp .memory_path_done
+.memory_path_fail:
+    jmp .halt
+.memory_path_done:
+
+    movabs r15, 0x0000400000011000
+    movabs r14, 0x3147534d544e4741
+    mov qword ptr [r15], r14
+    mov dword ptr [r15 + 32], 160
+    mov dword ptr [r15 + 112], 1
+    mov dword ptr [r15 + 120], 4
+    mov dword ptr [r15 + 128], 1
+    mov dword ptr [r15 + 136], 26
+
+    mov ecx, 52
+    xor edx, edx
+    mov r10d, 1
+    xor r11d, r11d
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .typed_rebind_fail
+    cmp rdx, 52
+    jne .typed_rebind_fail
+    cmp r10, 4
+    jne .typed_rebind_fail
+    cmp r15, 26
+    jne .typed_rebind_fail
+    cmp rbp, 2
+    jne .typed_rebind_fail
+    jmp .typed_rebind_done
+.typed_rebind_fail:
+    jmp .halt
+.typed_rebind_done:
 
     mov ecx, 4
     xor edx, edx

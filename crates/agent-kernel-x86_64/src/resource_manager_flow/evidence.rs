@@ -57,8 +57,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 42
-        && completed.address_space_switch_count() == 84
+        && completed.call_count() == 43
+        && completed.address_space_switch_count() == 86
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -176,6 +176,10 @@ fn events_prove_lifecycle(
         EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryRebound,
         EventKind::TaskResultSubmitted,
         EventKind::ResourceRetired,
         EventKind::TaskCompleted,
@@ -221,7 +225,7 @@ fn events_prove_lifecycle(
         && namespace::events_valid(
             &[
                 tail[27], tail[28], tail[29], tail[30], tail[49], tail[50], tail[51], tail[52],
-                tail[53], tail[54], tail[55],
+                tail[53], tail[54], tail[55], tail[56], tail[57], tail[58], tail[59],
             ],
             booted,
             image,
@@ -229,12 +233,12 @@ fn events_prove_lifecycle(
         && memory_region::events_valid(
             &[
                 tail[31], tail[32], tail[33], tail[34], tail[35], tail[36], tail[37], tail[38],
-                tail[39], tail[40], tail[41], tail[42], tail[43], tail[44], tail[57],
+                tail[39], tail[40], tail[41], tail[42], tail[43], tail[44], tail[61],
             ],
             booted,
             image,
         )
-        && tail[56].task == Some(manager.task)
-        && tail[56].task_result == Some(image.result())
-        && tail[58].task == Some(manager.task)
+        && tail[60].task == Some(manager.task)
+        && tail[60].task_result == Some(image.result())
+        && tail[62].task == Some(manager.task)
 }

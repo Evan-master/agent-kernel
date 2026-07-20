@@ -50,7 +50,7 @@ pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) const X86_FAULT_CAPACITY: usize = 4;
 pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
 pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 4;
-pub(crate) const X86_EVENT_CAPACITY: usize = 371;
+pub(crate) const X86_EVENT_CAPACITY: usize = 375;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     X86_RESOURCE_CAPACITY,

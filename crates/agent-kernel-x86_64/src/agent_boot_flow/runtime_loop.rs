@@ -338,6 +338,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_NAMESPACE_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_NAMESPACE_HIERARCHY_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_NAMESPACE_MEMORY_TRANSPORT_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_TYPED_NAMESPACE_REBIND_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK");
     let completed_agents = [

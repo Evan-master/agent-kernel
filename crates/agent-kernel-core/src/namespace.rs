@@ -81,6 +81,46 @@ impl NamespacePathResolution {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NamespacePathRebinding {
+    root: ResourceId,
+    previous: NamespaceEntryRecord,
+    rebound: NamespaceEntryRecord,
+    depth: u8,
+}
+
+impl NamespacePathRebinding {
+    pub(crate) const fn new(
+        root: ResourceId,
+        previous: NamespaceEntryRecord,
+        rebound: NamespaceEntryRecord,
+        depth: u8,
+    ) -> Self {
+        Self {
+            root,
+            previous,
+            rebound,
+            depth,
+        }
+    }
+
+    pub const fn root(self) -> ResourceId {
+        self.root
+    }
+
+    pub const fn previous(self) -> NamespaceEntryRecord {
+        self.previous
+    }
+
+    pub const fn rebound(self) -> NamespaceEntryRecord {
+        self.rebound
+    }
+
+    pub const fn depth(self) -> u8 {
+        self.depth
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct NamespaceEntryRecord {
     pub id: NamespaceEntryId,
     pub owner: AgentId,

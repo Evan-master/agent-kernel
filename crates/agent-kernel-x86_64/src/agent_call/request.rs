@@ -423,6 +423,13 @@ pub enum AgentCallRequest {
         root: ResourceId,
         generation: u64,
     },
+    CompareAndRebindNamespacePathFromMemory {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        generation: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -486,6 +493,9 @@ impl AgentCallRequest {
             Self::ResolveNamespacePath { .. } => AgentCallOperation::ResolveNamespacePath,
             Self::ResolveNamespacePathFromMemory { .. } => {
                 AgentCallOperation::ResolveNamespacePathFromMemory
+            }
+            Self::CompareAndRebindNamespacePathFromMemory { .. } => {
+                AgentCallOperation::CompareAndRebindNamespacePathFromMemory
             }
         }
     }

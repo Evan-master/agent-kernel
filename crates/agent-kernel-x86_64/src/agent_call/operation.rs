@@ -57,4 +57,5 @@ pub enum AgentCallOperation {
     CompareAndRetireNamespaceEntry,
     ResolveNamespacePath,
     ResolveNamespacePathFromMemory,
+    CompareAndRebindNamespacePathFromMemory,
 }

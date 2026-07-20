@@ -6,6 +6,7 @@
 //! Agent virtual pages are kernel-unmapped.
 
 mod address_space_reclamation;
+mod call_data;
 mod frame_allocator;
 mod page_tables;
 mod reclamation;
@@ -21,7 +22,6 @@ use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
-    namespace_path_buffer::{NamespacePathBuffer, NAMESPACE_PATH_BUFFER_BYTES},
     runtime_page::RuntimePageLedger,
     runtime_region::{RuntimeRegionLedger, RuntimeRegionObservationLog},
     user_memory::{
@@ -233,31 +233,6 @@ impl PreparedAgentMemory {
         // SAFETY: this pointer is the supervisor alias of the retained private
         // frame, whether or not the Agent leaf mapping has been activated.
         unsafe { self.lazy_data_pointer.read_volatile() }
-    }
-
-    pub(crate) fn snapshot_namespace_path(
-        &self,
-        expected_root: agent_kernel_core::ResourceId,
-        expected_generation: u64,
-    ) -> Option<NamespacePathBuffer> {
-        if !self.kernel_address_space_active() {
-            return None;
-        }
-        let frame = PhysFrame::from_start_address(PhysAddr::new(
-            self.identity.content_frames()[CALL_DATA_CONTENT_FRAME_INDEX],
-        ))
-        .ok()?;
-        if physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)? != self.call_data_pointer {
-            return None;
-        }
-
-        let mut bytes = [0; NAMESPACE_PATH_BUFFER_BYTES];
-        for (offset, byte) in bytes.iter_mut().enumerate() {
-            // SAFETY: ring 3 is stopped, the kernel CR3 is active, and this
-            // physical alias names the Agent's exclusive call-data frame.
-            *byte = unsafe { self.call_data_pointer.add(offset).read_volatile() };
-        }
-        NamespacePathBuffer::decode(&bytes, expected_root, expected_generation).ok()
     }
 
     pub(crate) fn activate_lazy_data_page(&mut self, fault_address: u64) -> Option<()> {

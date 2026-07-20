@@ -7,8 +7,8 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, Event, KernelError, NamespaceEntryId, NamespaceEntryRecord,
-    NamespaceEntryRetirement, NamespaceKey, NamespaceObject, NamespacePathResolution,
-    NamespacePathSegment, ResourceId,
+    NamespaceEntryRetirement, NamespaceKey, NamespaceObject, NamespacePathRebinding,
+    NamespacePathResolution, NamespacePathSegment, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -94,6 +94,23 @@ impl<
         segments: &[NamespacePathSegment],
     ) -> Result<NamespacePathResolution, KernelError> {
         self.core.resolve_namespace_path(actor, root, segments)
+    }
+
+    pub fn sys_compare_and_rebind_namespace_path(
+        &mut self,
+        actor: AgentId,
+        root: ResourceId,
+        segments: &[NamespacePathSegment],
+        expected_revision: u64,
+        replacement: NamespaceObject,
+    ) -> Result<NamespacePathRebinding, KernelError> {
+        self.core.compare_and_rebind_namespace_path(
+            actor,
+            root,
+            segments,
+            expected_revision,
+            replacement,
+        )
     }
 
     pub fn sys_rebind_namespace_entry(

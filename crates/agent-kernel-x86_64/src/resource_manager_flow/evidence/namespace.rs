@@ -1,4 +1,4 @@
-//! Final Store and exact Event proof for four-hop Namespace resolution.
+//! Final Store and exact Event proof for four-hop Namespace resolution and mutation.
 
 use agent_kernel_core::{
     Event, EventKind, NamespaceEntryId, NamespaceKey, NamespaceObject, Operation, ResourceId,
@@ -57,8 +57,8 @@ pub(super) fn state_valid(booted: &X86BootedKernel, image: BootResourceManagerIm
             image.path_workspace_b(),
             image.path_capability_b(),
             image.path_key_b(),
-            NamespaceObject::Agent(RESOURCE_MANAGER),
-            1,
+            NamespaceObject::Resource(image.resource()),
+            2,
         )
         && workspace_valid(booted, image.path_workspace_a())
         && workspace_valid(booted, image.path_workspace_b())
@@ -69,7 +69,7 @@ pub(super) fn events_valid(
     booted: &X86BootedKernel,
     image: BootResourceManagerImage,
 ) -> bool {
-    let [root_bound, child_bound, root_short, child_short, child_rebound, third_bound, terminal_bound, root_long, child_long, third_long, terminal_long] =
+    let [root_bound, child_bound, root_short, child_short, child_rebound, third_bound, terminal_bound, root_long, child_long, third_long, terminal_long, root_mutation, child_mutation, third_mutation, terminal_rebound] =
         events
     else {
         return false;
@@ -175,6 +175,42 @@ pub(super) fn events_valid(
         image.path_key_b(),
         NamespaceObject::Agent(RESOURCE_MANAGER),
         Operation::Observe,
+    ) && event_matches(
+        root_mutation,
+        EventKind::NamespaceEntryResolved,
+        root_resource,
+        image.resource_authority(),
+        image.root_namespace_entry(),
+        image.root_namespace_key(),
+        NamespaceObject::Mount(image.resource()),
+        Operation::Observe,
+    ) && event_matches(
+        child_mutation,
+        EventKind::NamespaceEntryResolved,
+        image.resource(),
+        image.capability(),
+        image.namespace_entry(),
+        image.namespace_key(),
+        NamespaceObject::Mount(image.path_workspace_a()),
+        Operation::Observe,
+    ) && event_matches(
+        third_mutation,
+        EventKind::NamespaceEntryResolved,
+        image.path_workspace_a(),
+        image.path_capability_a(),
+        image.path_entry_a(),
+        image.path_key_a(),
+        NamespaceObject::Mount(image.path_workspace_b()),
+        Operation::Observe,
+    ) && event_matches(
+        terminal_rebound,
+        EventKind::NamespaceEntryRebound,
+        image.path_workspace_b(),
+        image.path_capability_b(),
+        image.path_entry_b(),
+        image.path_key_b(),
+        NamespaceObject::Resource(image.resource()),
+        Operation::Act,
     )
 }
 
