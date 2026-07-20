@@ -16,15 +16,15 @@ use crate::{
     X86BootedKernel, X86_MEMORY_CELL_CAPACITY,
 };
 
-const AUTHORITY: CapabilityId = CapabilityId::new(23);
+const AUTHORITY: CapabilityId = CapabilityId::new(25);
 const RETIRED_CELL: MemoryCellId = MemoryCellId::new(2);
 const RETIRED_RESOURCE: ResourceId = ResourceId::new(4);
 const RETIRED_CAPABILITY: CapabilityId = CapabilityId::new(16);
 const RETAINED_REGION_RESOURCE: ResourceId = ResourceId::new(5);
 const RETAINED_REGION_CAPABILITY: CapabilityId = CapabilityId::new(17);
 const FRESH_CELL: MemoryCellId = MemoryCellId::new(6);
-const FRESH_RESOURCE: ResourceId = ResourceId::new(9);
-const FRESH_CAPABILITY: CapabilityId = CapabilityId::new(31);
+const FRESH_RESOURCE: ResourceId = ResourceId::new(11);
+const FRESH_CAPABILITY: CapabilityId = CapabilityId::new(33);
 const MEMORY_PROOF: u64 = 0x4d45_4d43_454c_4c36;
 
 impl PreparedAdmissionSupervisorFlow {
@@ -51,7 +51,7 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(completed) = report.completed(ADMISSION_SUPERVISOR) else {
             return false;
         };
-        let Some(early_cleanup) = kernel.events().iter().find(|event| event.sequence == 363) else {
+        let Some(early_cleanup) = kernel.events().iter().find(|event| event.sequence == 372) else {
             return false;
         };
         let reclamation = completed.reclamation_log();
@@ -61,7 +61,7 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(start) = kernel
             .events()
             .iter()
-            .position(|event| event.sequence == 368)
+            .position(|event| event.sequence == 377)
         else {
             return false;
         };
@@ -111,7 +111,7 @@ impl PreparedAdmissionSupervisorFlow {
             && events
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 368 + index as u64)
+                .all(|(index, event)| event.sequence == 377 + index as u64)
             && retirement_event(events[0])
             && cleanup_event(
                 events[1],

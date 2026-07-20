@@ -1,6 +1,9 @@
-//! Final Store and exact Event proof for hierarchical Namespace resolution.
+//! Final Store and exact Event proof for four-hop Namespace resolution.
 
-use agent_kernel_core::{Event, NamespaceObject, Operation};
+use agent_kernel_core::{
+    Event, EventKind, NamespaceEntryId, NamespaceKey, NamespaceObject, Operation, ResourceId,
+    ResourceKind, ResourceStatus,
+};
 
 use crate::{
     boot_agent_images::BootResourceManagerImage, resource_manager_flow::RESOURCE_MANAGER,
@@ -8,21 +11,57 @@ use crate::{
 };
 
 pub(super) fn state_valid(booted: &X86BootedKernel, image: BootResourceManagerImage) -> bool {
-    let entries = booted.kernel().namespace_entries();
-    let [record] = entries else {
+    let kernel = booted.kernel();
+    let entries = kernel.namespace_entries();
+    let Some(root) = find_entry(entries, image.root_namespace_entry()) else {
         return false;
     };
-    entries.len() == 1
-        && booted.kernel().namespace_entry_capacity() == X86_NAMESPACE_ENTRY_CAPACITY
-        && record.id == image.namespace_entry()
-        && record.owner == RESOURCE_MANAGER
-        && record.namespace == image.resource()
-        && record.capability == image.capability()
-        && record.key == image.namespace_key()
-        && record.object == NamespaceObject::Agent(RESOURCE_MANAGER)
-        && record.revision == 2
-        && record.id != image.retired_namespace_entry()
-        && record.key != image.retired_namespace_key()
+    let Some(child) = find_entry(entries, image.namespace_entry()) else {
+        return false;
+    };
+    let Some(third) = find_entry(entries, image.path_entry_a()) else {
+        return false;
+    };
+    let Some(terminal) = find_entry(entries, image.path_entry_b()) else {
+        return false;
+    };
+
+    entries.len() == 4
+        && kernel.namespace_entry_capacity() == X86_NAMESPACE_ENTRY_CAPACITY
+        && entry_matches(
+            root,
+            booted.report().bootstrap_resource,
+            image.resource_authority(),
+            image.root_namespace_key(),
+            NamespaceObject::Mount(image.resource()),
+            1,
+        )
+        && entry_matches(
+            child,
+            image.resource(),
+            image.capability(),
+            image.namespace_key(),
+            NamespaceObject::Mount(image.path_workspace_a()),
+            2,
+        )
+        && entry_matches(
+            third,
+            image.path_workspace_a(),
+            image.path_capability_a(),
+            image.path_key_a(),
+            NamespaceObject::Mount(image.path_workspace_b()),
+            1,
+        )
+        && entry_matches(
+            terminal,
+            image.path_workspace_b(),
+            image.path_capability_b(),
+            image.path_key_b(),
+            NamespaceObject::Agent(RESOURCE_MANAGER),
+            1,
+        )
+        && workspace_valid(booted, image.path_workspace_a())
+        && workspace_valid(booted, image.path_workspace_b())
 }
 
 pub(super) fn events_valid(
@@ -30,49 +69,163 @@ pub(super) fn events_valid(
     booted: &X86BootedKernel,
     image: BootResourceManagerImage,
 ) -> bool {
-    let [mount_bound, terminal_bound, mount_resolved, terminal_resolved, terminal_rebound, mount_retired] =
+    let [root_bound, child_bound, root_short, child_short, child_rebound, third_bound, terminal_bound, root_long, child_long, third_long, terminal_long] =
         events
     else {
         return false;
     };
-    mount_common(mount_bound, booted, image)
-        && mount_bound.kind == agent_kernel_core::EventKind::NamespaceEntryBound
-        && mount_bound.operation == Some(Operation::Act)
-        && terminal_common(terminal_bound, image)
-        && terminal_bound.kind == agent_kernel_core::EventKind::NamespaceEntryBound
-        && terminal_bound.namespace_object == Some(NamespaceObject::MemoryCell(image.memory_cell()))
-        && terminal_bound.operation == Some(Operation::Act)
-        && mount_common(mount_resolved, booted, image)
-        && mount_resolved.kind == agent_kernel_core::EventKind::NamespaceEntryResolved
-        && mount_resolved.operation == Some(Operation::Observe)
-        && terminal_common(terminal_resolved, image)
-        && terminal_resolved.kind == agent_kernel_core::EventKind::NamespaceEntryResolved
-        && terminal_resolved.namespace_object
-            == Some(NamespaceObject::MemoryCell(image.memory_cell()))
-        && terminal_resolved.operation == Some(Operation::Observe)
-        && terminal_common(terminal_rebound, image)
-        && terminal_rebound.kind == agent_kernel_core::EventKind::NamespaceEntryRebound
-        && terminal_rebound.namespace_object == Some(NamespaceObject::Agent(RESOURCE_MANAGER))
-        && terminal_rebound.operation == Some(Operation::Act)
-        && mount_common(mount_retired, booted, image)
-        && mount_retired.kind == agent_kernel_core::EventKind::NamespaceEntryRetired
-        && mount_retired.operation == Some(Operation::Rollback)
-        && mount_retired.target_agent == Some(RESOURCE_MANAGER)
+    let root_resource = booted.report().bootstrap_resource;
+
+    event_matches(
+        root_bound,
+        EventKind::NamespaceEntryBound,
+        root_resource,
+        image.resource_authority(),
+        image.root_namespace_entry(),
+        image.root_namespace_key(),
+        NamespaceObject::Mount(image.resource()),
+        Operation::Act,
+    ) && event_matches(
+        child_bound,
+        EventKind::NamespaceEntryBound,
+        image.resource(),
+        image.capability(),
+        image.namespace_entry(),
+        image.namespace_key(),
+        NamespaceObject::MemoryCell(image.memory_cell()),
+        Operation::Act,
+    ) && event_matches(
+        root_short,
+        EventKind::NamespaceEntryResolved,
+        root_resource,
+        image.resource_authority(),
+        image.root_namespace_entry(),
+        image.root_namespace_key(),
+        NamespaceObject::Mount(image.resource()),
+        Operation::Observe,
+    ) && event_matches(
+        child_short,
+        EventKind::NamespaceEntryResolved,
+        image.resource(),
+        image.capability(),
+        image.namespace_entry(),
+        image.namespace_key(),
+        NamespaceObject::MemoryCell(image.memory_cell()),
+        Operation::Observe,
+    ) && event_matches(
+        child_rebound,
+        EventKind::NamespaceEntryRebound,
+        image.resource(),
+        image.capability(),
+        image.namespace_entry(),
+        image.namespace_key(),
+        NamespaceObject::Mount(image.path_workspace_a()),
+        Operation::Act,
+    ) && event_matches(
+        third_bound,
+        EventKind::NamespaceEntryBound,
+        image.path_workspace_a(),
+        image.path_capability_a(),
+        image.path_entry_a(),
+        image.path_key_a(),
+        NamespaceObject::Mount(image.path_workspace_b()),
+        Operation::Act,
+    ) && event_matches(
+        terminal_bound,
+        EventKind::NamespaceEntryBound,
+        image.path_workspace_b(),
+        image.path_capability_b(),
+        image.path_entry_b(),
+        image.path_key_b(),
+        NamespaceObject::Agent(RESOURCE_MANAGER),
+        Operation::Act,
+    ) && event_matches(
+        root_long,
+        EventKind::NamespaceEntryResolved,
+        root_resource,
+        image.resource_authority(),
+        image.root_namespace_entry(),
+        image.root_namespace_key(),
+        NamespaceObject::Mount(image.resource()),
+        Operation::Observe,
+    ) && event_matches(
+        child_long,
+        EventKind::NamespaceEntryResolved,
+        image.resource(),
+        image.capability(),
+        image.namespace_entry(),
+        image.namespace_key(),
+        NamespaceObject::Mount(image.path_workspace_a()),
+        Operation::Observe,
+    ) && event_matches(
+        third_long,
+        EventKind::NamespaceEntryResolved,
+        image.path_workspace_a(),
+        image.path_capability_a(),
+        image.path_entry_a(),
+        image.path_key_a(),
+        NamespaceObject::Mount(image.path_workspace_b()),
+        Operation::Observe,
+    ) && event_matches(
+        terminal_long,
+        EventKind::NamespaceEntryResolved,
+        image.path_workspace_b(),
+        image.path_capability_b(),
+        image.path_entry_b(),
+        image.path_key_b(),
+        NamespaceObject::Agent(RESOURCE_MANAGER),
+        Operation::Observe,
+    )
 }
 
-fn mount_common(event: &Event, booted: &X86BootedKernel, image: BootResourceManagerImage) -> bool {
-    event.agent == RESOURCE_MANAGER
-        && event.resource == Some(booted.report().bootstrap_resource)
-        && event.capability == Some(image.resource_authority())
-        && event.namespace_entry == Some(image.retired_namespace_entry())
-        && event.namespace_key == Some(image.retired_namespace_key())
-        && event.namespace_object == Some(NamespaceObject::Mount(image.resource()))
+fn find_entry(
+    entries: &[agent_kernel_core::NamespaceEntryRecord],
+    id: NamespaceEntryId,
+) -> Option<agent_kernel_core::NamespaceEntryRecord> {
+    entries.iter().find(|record| record.id == id).copied()
 }
 
-fn terminal_common(event: &Event, image: BootResourceManagerImage) -> bool {
-    event.agent == RESOURCE_MANAGER
-        && event.resource == Some(image.resource())
-        && event.capability == Some(image.capability())
-        && event.namespace_entry == Some(image.namespace_entry())
-        && event.namespace_key == Some(image.namespace_key())
+fn entry_matches(
+    record: agent_kernel_core::NamespaceEntryRecord,
+    namespace: ResourceId,
+    capability: agent_kernel_core::CapabilityId,
+    key: NamespaceKey,
+    object: NamespaceObject,
+    revision: u64,
+) -> bool {
+    record.owner == RESOURCE_MANAGER
+        && record.namespace == namespace
+        && record.capability == capability
+        && record.key == key
+        && record.object == object
+        && record.revision == revision
+}
+
+fn workspace_valid(booted: &X86BootedKernel, id: ResourceId) -> bool {
+    booted.kernel().resources().iter().any(|resource| {
+        resource.id == id
+            && resource.kind == ResourceKind::Workspace
+            && resource.owner == Some(RESOURCE_MANAGER)
+            && resource.status == ResourceStatus::Active
+    })
+}
+
+fn event_matches(
+    event: &Event,
+    kind: EventKind,
+    resource: ResourceId,
+    capability: agent_kernel_core::CapabilityId,
+    entry: NamespaceEntryId,
+    key: NamespaceKey,
+    object: NamespaceObject,
+    operation: Operation,
+) -> bool {
+    event.kind == kind
+        && event.agent == RESOURCE_MANAGER
+        && event.resource == Some(resource)
+        && event.capability == Some(capability)
+        && event.namespace_entry == Some(entry)
+        && event.namespace_key == Some(key)
+        && event.namespace_object == Some(object)
+        && event.operation == Some(operation)
 }

@@ -12,7 +12,7 @@
   <img alt="Rust nightly" src="https://img.shields.io/badge/Rust-nightly-111111?logo=rust&logoColor=white">
   <img alt="no_std" src="https://img.shields.io/badge/core-no__std-238636">
   <img alt="x86_64" src="https://img.shields.io/badge/target-x86__64--unknown--none-0969da">
-  <img alt="QEMU" src="https://img.shields.io/badge/QEMU-events_1..396-f97316">
+  <img alt="QEMU" src="https://img.shields.io/badge/QEMU-events_1..405-f97316">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-d0d7de">
 </p>
 
@@ -22,9 +22,9 @@ $ scripts/run-qemu.sh --release
 [boot]       AGENT_KERNEL_QEMU_BOOT_OK
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
-[namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_PATH_OK
+[namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
 [audit]      AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
-[event:396]  driver_invocation_completed
+[event:405]  driver_invocation_completed
 [handoff]    SUPERVISOR_HANDOFF_READY
 ```
 
@@ -122,13 +122,14 @@ r9  = Nonce       r10..r15, rbp = bounded operation payload
 | `10-20` | Resource, Capability, Task, Agent lifecycle |
 | `21-28` | Runtime Memory and Admission |
 | `29-43` | Reclamation, compaction, Event archive |
-| `44-50` | Namespace bind, resolve, mutation, compare, bounded path |
+| `44-51` | Namespace bind, resolve, mutation, compare, bounded paths |
 
 ```text
-userspace pointers : 0
-identity source    : scheduled CPU context
-reply shape        : canonical register frame
-failure rule       : decode/auth/preflight before mutation
+userspace transport : fixed private call-data page
+arbitrary pointers  : rejected
+identity source     : scheduled CPU context
+reply shape         : canonical register frame
+failure rule        : decode/auth/preflight before mutation
 ```
 
 <details>
@@ -152,10 +153,13 @@ failure rule       : decode/auth/preflight before mutation
 | `CompareAndRebindNamespaceEntry` | 48 | `Act` | Replace at expected revision |
 | `CompareAndRetireNamespaceEntry` | 49 | `Rollback` | Retire at expected revision |
 | `ResolveNamespacePath` | 50 | `Observe` per hop | Resolve one or two native segments |
+| `ResolveNamespacePathFromMemory` | 51 | `Observe` per hop | Snapshot and resolve three or four segments |
 
 ```text
 Workspace 1 -- Key 1 / Capability A --> Mount(Workspace 3)
-Workspace 3 -- Key 2 / Capability B --> terminal Entry
+Workspace 3 -- Key 2 / Capability B --> Mount(Workspace 8)
+Workspace 8 -- Key 3 / Capability C --> Mount(Workspace 9)
+Workspace 9 -- Key 4 / Capability D --> terminal Entry
 ```
 
 ## 05 / Runtime Matrix
@@ -179,37 +183,39 @@ Workspace 3 -- Key 2 / Capability B --> terminal Entry
 | Target | `x86_64-unknown-none` |
 | Isolated Agent contexts | 11 |
 | Kernel-selected dispatches | 35 |
-| Resource Manager Calls / CR3 switches | `38 / 76` |
+| Resource Manager Calls / CR3 switches | `42 / 84` |
 | Admission Supervisor Calls / CR3 switches | `44 / 88` |
-| Namespace capacity / final occupancy | `2 / 1` |
-| Live Event capacity / peak | `362 / 362` |
+| Namespace capacity / final occupancy | `4 / 4` |
+| Live Event capacity / peak | `371 / 371` |
 | Archived Events | 64 |
-| Final live Events / next sequence | `332 / 397` |
-| Complete transcript | Events `1..396` |
+| Final live Events / next sequence | `341 / 406` |
+| Complete transcript | Events `1..405` |
 
 | Native Capsule | Calls | Bytes | SHA-256 |
 | --- | ---: | ---: | --- |
-| Resource Manager | 38 | 3,789 | `24d6a22464c9...08bdcc1a` |
-| Admission Supervisor | 44 | 4,115 | `f6c4efffe3c5...6f72f3f2` |
+| Resource Manager | 42 | 3,984 | `871151ca8509...612f73b8` |
+| Admission Supervisor | 44 | 4,115 | `4abda1fd3040...f45662dd` |
 
 <details>
 <summary><strong>Digests / terminal event window</strong></summary>
 
 ```text
 resource_manager
-24d6a22464c9b2cc27826c6b07a4655a5510968286eaff7c632732b408bdcc1a
+871151ca85099c942d442af1f4bc01b898e6a3ed85bfda73c76839cb612f73b8
 
 admission_supervisor
-f6c4efffe3c58689f8cb926399dc3fcb675e938d95bba463130495696f72f3f2
+4abda1fd30408ce5e24f1ce19dba523c04d3edc6bde2dc6ee014414ff45662dd
 
 event[185] namespace_entry_bound       # root mount
 event[186] namespace_entry_bound       # child terminal
 event[187] namespace_entry_resolved    # root hop
 event[188] namespace_entry_resolved    # child hop
-event[189] namespace_entry_rebound     # terminal revision 2
-event[190] namespace_entry_retired     # root mount
+event[207] namespace_entry_rebound     # terminal becomes Mount(Workspace 8)
+event[208] namespace_entry_bound       # Workspace 8 mount
+event[209] namespace_entry_bound       # Workspace 9 terminal
+event[210..213] namespace_entry_resolved # four-hop Call 51
 ...
-event[396] driver_invocation_completed
+event[405] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -263,7 +269,7 @@ docs/superpowers/
 
 | Track | Current | Next |
 | --- | --- | --- |
-| Namespace | Mounts and bounded traversal | Three/four-hop user-memory transport |
+| Namespace | Fixed-page transport and four-hop traversal | Typed messages and path mutation |
 | Memory | Private tables, page/region reuse | Dynamic page-table growth |
 | Scheduling | Single-core FIFO and PIT | SMP, synchronization, TLB shootdown |
 | Durability | Bounded SHA-256 archive chain | Crash-consistent signed storage |
@@ -272,7 +278,7 @@ docs/superpowers/
 | Assurance | Tests, QEMU transcript, ELF audit | Hardening and formal verification |
 
 Latest design record:
-[`Native Namespace Hierarchy V3`](docs/superpowers/specs/2026-07-20-native-namespace-hierarchy-v3-design.md)
+[`Native Namespace Memory Transport V4`](docs/superpowers/specs/2026-07-20-native-namespace-memory-transport-v4-design.md)
 
 ## Contributing
 

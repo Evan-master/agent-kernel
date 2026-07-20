@@ -29,6 +29,7 @@ pub(in crate::agent_memory) fn install(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
+    call_data_frame: PhysFrame,
 ) -> Option<InstalledAgentPageTables> {
     let agent_frame = allocator.allocate()?;
     let table_allocator = TrackedPageTableAllocator::new(allocator);
@@ -39,6 +40,7 @@ pub(in crate::agent_memory) fn install(
         signal_frame,
         stack_frames,
         lazy_data_frame,
+        call_data_frame,
         agent_frame,
         table_allocator,
     )
@@ -52,6 +54,7 @@ pub(in crate::agent_memory) fn install_reused(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
+    call_data_frame: PhysFrame,
 ) -> Option<InstalledAgentPageTables> {
     let (agent_frame, table_allocator) = ReusedPageTableAllocator::new(private_frames)?;
     install_with_allocator(
@@ -61,6 +64,7 @@ pub(in crate::agent_memory) fn install_reused(
         signal_frame,
         stack_frames,
         lazy_data_frame,
+        call_data_frame,
         agent_frame,
         table_allocator,
     )
@@ -73,6 +77,7 @@ fn install_with_allocator(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
+    call_data_frame: PhysFrame,
     agent_frame: PhysFrame,
     mut table_allocator: impl PrivatePageTableAllocator,
 ) -> Option<InstalledAgentPageTables> {
@@ -127,6 +132,13 @@ fn install_with_allocator(
                 stack_flags,
             )?;
         }
+        map_page(
+            &mut agent_mapper,
+            &mut table_allocator,
+            layout.call_data_start(),
+            call_data_frame,
+            stack_flags,
+        )?;
         if !agent_mappings_match(
             &agent_mapper,
             layout,
@@ -134,6 +146,7 @@ fn install_with_allocator(
             signal_frame,
             stack_frames,
             lazy_data_frame,
+            call_data_frame,
         ) {
             return None;
         }

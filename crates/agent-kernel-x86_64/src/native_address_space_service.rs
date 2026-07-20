@@ -2,7 +2,7 @@
 //!
 //! The service keeps one Agent-bound physical owner through frame allocation,
 //! address-space reconstruction, CPU preparation, and runtime registration.
-//! Every rejected transition clears and returns all eleven private frames.
+//! Every rejected transition clears and returns all twelve private frames.
 
 mod types;
 

@@ -19,7 +19,7 @@ admission_supervisor_describe_return:
 
     mov ecx, 27
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 10
     mov r12d, 8
     xor r13d, r13d
@@ -42,7 +42,7 @@ admission_supervisor_first_request_return:
 
     mov ecx, 27
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 11
     mov r12d, 9
     xor r13d, r13d
@@ -209,7 +209,7 @@ admission_supervisor_second_message_retirement_return:
 
     mov ecx, 38
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 3
     xor r12d, r12d
     xor r13d, r13d
@@ -240,7 +240,7 @@ admission_supervisor_first_waiter_compaction_return:
 
     mov ecx, 27
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 13
     mov r12d, 11
     xor r13d, r13d
@@ -263,7 +263,7 @@ admission_supervisor_third_request_return:
 
     mov ecx, 27
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 14
     mov r12d, 12
     xor r13d, r13d
@@ -430,7 +430,7 @@ admission_supervisor_fourth_message_retirement_return:
 
     mov ecx, 38
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 4
     xor r12d, r12d
     xor r13d, r13d
@@ -461,7 +461,7 @@ admission_supervisor_second_waiter_compaction_return:
 
     mov ecx, 29
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 2
     xor r12d, r12d
     xor r13d, r13d
@@ -492,7 +492,7 @@ admission_supervisor_compaction_return:
 
     mov ecx, 30
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 6
     xor r12d, r12d
     xor r13d, r13d
@@ -523,7 +523,7 @@ admission_supervisor_task_compaction_return:
 
     mov ecx, 39
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 4
     xor r12d, r12d
     xor r13d, r13d
@@ -554,7 +554,7 @@ admission_supervisor_fault_compaction_return:
 
     mov ecx, 31
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 6
     xor r12d, r12d
     xor r13d, r13d
@@ -585,7 +585,7 @@ admission_supervisor_intent_compaction_return:
 
     mov ecx, 33
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 10
     xor r12d, r12d
     xor r13d, r13d
@@ -616,7 +616,7 @@ admission_supervisor_first_agent_entry_retirement_return:
 
     mov ecx, 33
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 11
     xor r12d, r12d
     xor r13d, r13d
@@ -647,7 +647,7 @@ admission_supervisor_second_agent_entry_retirement_return:
 
     mov ecx, 12
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 12
     mov r12d, 16
     xor r13d, r13d
@@ -661,7 +661,7 @@ admission_supervisor_capability_derive_return:
     jne .halt
     cmp rdx, 12
     jne .halt
-    cmp r10, 26
+    cmp r10, 28
     jne .halt
     test r11, r11
     jne .halt
@@ -678,8 +678,8 @@ admission_supervisor_capability_derive_return:
 
     mov ecx, 13
     xor edx, edx
-    mov r10d, 23
-    mov r11d, 26
+    mov r10d, 25
+    mov r11d, 28
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -692,9 +692,9 @@ admission_supervisor_capability_revoke_return:
     jne .halt
     cmp rdx, 13
     jne .halt
-    cmp r10, 26
+    cmp r10, 28
     jne .halt
-    cmp r11, 23
+    cmp r11, 25
     jne .halt
     test r12, r12
     jne .halt
@@ -709,8 +709,8 @@ admission_supervisor_capability_revoke_return:
 
     mov ecx, 32
     xor edx, edx
-    mov r10d, 23
-    mov r11d, 26
+    mov r10d, 25
+    mov r11d, 28
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -723,7 +723,7 @@ admission_supervisor_first_transient_capability_compaction_return:
     jne .halt
     cmp rdx, 32
     jne .halt
-    cmp r10, 26
+    cmp r10, 28
     jne .halt
     test r11, r11
     jne .halt
@@ -740,7 +740,7 @@ admission_supervisor_first_transient_capability_compaction_return:
 
     mov ecx, 12
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 12
     mov r12d, 16
     xor r13d, r13d
@@ -754,7 +754,7 @@ admission_supervisor_second_transient_capability_derive_return:
     jne .halt
     cmp rdx, 12
     jne .halt
-    cmp r10, 27
+    cmp r10, 29
     jne .halt
     test r11, r11
     jne .halt
@@ -771,8 +771,8 @@ admission_supervisor_second_transient_capability_derive_return:
 
     mov ecx, 13
     xor edx, edx
-    mov r10d, 23
-    mov r11d, 27
+    mov r10d, 25
+    mov r11d, 29
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -785,9 +785,9 @@ admission_supervisor_second_transient_capability_revoke_return:
     jne .halt
     cmp rdx, 13
     jne .halt
-    cmp r10, 27
+    cmp r10, 29
     jne .halt
-    cmp r11, 23
+    cmp r11, 25
     jne .halt
     test r12, r12
     jne .halt
@@ -802,8 +802,8 @@ admission_supervisor_second_transient_capability_revoke_return:
 
     mov ecx, 32
     xor edx, edx
-    mov r10d, 23
-    mov r11d, 27
+    mov r10d, 25
+    mov r11d, 29
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -816,7 +816,7 @@ admission_supervisor_third_capability_compaction_return:
     jne .halt
     cmp rdx, 32
     jne .halt
-    cmp r10, 27
+    cmp r10, 29
     jne .halt
     test r11, r11
     jne .halt
@@ -833,7 +833,7 @@ admission_supervisor_third_capability_compaction_return:
 
     mov ecx, 40
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 64
     xor r12d, r12d
     xor r13d, r13d
@@ -868,7 +868,7 @@ admission_supervisor_event_archive_return:
 
     mov ecx, 42
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 16
     xor r12d, r12d
     xor r13d, r13d
@@ -899,7 +899,7 @@ admission_supervisor_memory_capability_early_cleanup_return:
 
     mov ecx, 10
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 1
     mov r12d, 3
     mov r13d, 1
@@ -913,9 +913,9 @@ admission_supervisor_resource_reuse_return:
     jne .halt
     cmp rdx, 10
     jne .halt
-    cmp r10, 8
+    cmp r10, 10
     jne .halt
-    cmp r11, 28
+    cmp r11, 30
     jne .halt
     test r12, r12
     jne .halt
@@ -930,7 +930,7 @@ admission_supervisor_resource_reuse_return:
 
     mov ecx, 12
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 12
     mov r12d, 32
     xor r13d, r13d
@@ -944,7 +944,7 @@ admission_supervisor_first_capability_reuse_return:
     jne .halt
     cmp rdx, 12
     jne .halt
-    cmp r10, 29
+    cmp r10, 31
     jne .halt
     test r11, r11
     jne .halt
@@ -961,7 +961,7 @@ admission_supervisor_first_capability_reuse_return:
 
     mov ecx, 12
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 12
     mov r12d, 16
     xor r13d, r13d
@@ -975,12 +975,12 @@ admission_supervisor_second_capability_reuse_return:
     jne .halt
     cmp rdx, 12
     jne .halt
-    cmp r10, 30
+    cmp r10, 32
     jne .halt
 
     mov cl, 43
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 2
     int 0x90
 .global admission_supervisor_memory_cell_record_retirement_return
@@ -1002,7 +1002,7 @@ admission_supervisor_memory_cell_record_retirement_return:
 
     mov cl, 42
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 17
     xor r12d, r12d
     xor r13d, r13d
@@ -1027,7 +1027,7 @@ admission_supervisor_memory_capability_cleanup_return:
 
     mov cl, 32
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 16
     int 0x90
 .global admission_supervisor_memory_capability_compaction_return
@@ -1045,7 +1045,7 @@ admission_supervisor_memory_capability_compaction_return:
 
     mov cl, 41
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 4
     int 0x90
 .global admission_supervisor_memory_resource_record_retirement_return
@@ -1065,7 +1065,7 @@ admission_supervisor_memory_resource_record_retirement_return:
 
     mov cl, 10
     xor edx, edx
-    mov r10d, 23
+    mov r10d, 25
     mov r11d, 1
     mov r12d, 2
     mov r13d, 19
@@ -1080,15 +1080,15 @@ admission_supervisor_memory_resource_reuse_return:
     jne .memory_resource_reuse_fail
     cmp rdx, 10
     jne .memory_resource_reuse_fail
-    cmp r10, 9
+    cmp r10, 11
     jne .memory_resource_reuse_fail
-    cmp r11, 31
+    cmp r11, 33
     jne .memory_resource_reuse_fail
 
     mov cl, 21
     xor edx, edx
-    mov r10d, 31
-    mov r11d, 9
+    mov r10d, 33
+    mov r11d, 11
     int 0x90
 .global admission_supervisor_memory_cell_reuse_return
 admission_supervisor_memory_cell_reuse_return:

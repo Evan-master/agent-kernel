@@ -415,6 +415,14 @@ pub enum AgentCallRequest {
         first: NamespacePathSegment,
         second: Option<NamespacePathSegment>,
     },
+    ResolveNamespacePathFromMemory {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        root: ResourceId,
+        generation: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -476,6 +484,9 @@ impl AgentCallRequest {
                 AgentCallOperation::CompareAndRetireNamespaceEntry
             }
             Self::ResolveNamespacePath { .. } => AgentCallOperation::ResolveNamespacePath,
+            Self::ResolveNamespacePathFromMemory { .. } => {
+                AgentCallOperation::ResolveNamespacePathFromMemory
+            }
         }
     }
 }

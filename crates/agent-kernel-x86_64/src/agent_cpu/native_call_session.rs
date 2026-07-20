@@ -191,6 +191,20 @@ impl PendingAgentCallCpu {
             .authenticates(self.request, nonce)
             .then_some(self.request)
     }
+
+    pub(crate) fn authenticated_namespace_path_buffer(
+        &self,
+    ) -> Option<agent_kernel_x86_64::namespace_path_buffer::NamespacePathBuffer> {
+        let (root, generation) = match self.authenticated_request()? {
+            AgentCallRequest::ResolveNamespacePathFromMemory {
+                root, generation, ..
+            } => (root, generation),
+            _ => return None,
+        };
+        self.session
+            .memory
+            .snapshot_namespace_path(root, generation)
+    }
 }
 
 impl ResumableAgentCpu {

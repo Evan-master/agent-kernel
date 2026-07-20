@@ -2,6 +2,7 @@
 
 use agent_kernel_core::{NamespaceEntryRecord, NamespaceEntryRetirement, NamespacePathResolution};
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
+use agent_kernel_x86_64::namespace_path_buffer::NamespacePathBuffer;
 
 use super::{PendingAgentCallCpu, ResumableAgentCpu};
 
@@ -76,6 +77,39 @@ impl PendingAgentCallCpu {
         self.session
             .context
             .encode_namespace_path_resolution_reply(self.session.frame.frame_mut(), nonce, record)
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_namespace_memory_path_resolution(
+        mut self,
+        resolution: NamespacePathResolution,
+        path: NamespacePathBuffer,
+    ) -> Option<ResumableAgentCpu> {
+        let record = resolution.terminal();
+        let terminal = path.segments().last().copied()?;
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(
+                request,
+                AgentCallRequest::ResolveNamespacePathFromMemory {
+                    root,
+                    generation,
+                    ..
+                } if path.root() == root
+                    && path.generation() == generation
+                    && resolution.root() == root
+                    && resolution.depth() == path.depth()
+                    && record.capability == terminal.authority()
+                    && record.key == terminal.key()
+            )
+        })?;
+        self.session
+            .context
+            .encode_namespace_memory_path_resolution_reply(
+                self.session.frame.frame_mut(),
+                nonce,
+                record,
+            )
             .ok()?;
         Some(ResumableAgentCpu(self.session))
     }

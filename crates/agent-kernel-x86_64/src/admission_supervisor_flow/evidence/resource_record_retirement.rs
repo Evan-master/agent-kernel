@@ -10,12 +10,12 @@ use crate::{
     X86BootedKernel, X86_RESOURCE_CAPACITY,
 };
 
-const AUTHORITY: CapabilityId = CapabilityId::new(23);
+const AUTHORITY: CapabilityId = CapabilityId::new(25);
 const WORKSPACE: ResourceId = ResourceId::new(3);
-const FRESH_RESOURCE: ResourceId = ResourceId::new(8);
-const FRESH_CAPABILITY: CapabilityId = CapabilityId::new(28);
-const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(29);
-const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(30);
+const FRESH_RESOURCE: ResourceId = ResourceId::new(10);
+const FRESH_CAPABILITY: CapabilityId = CapabilityId::new(30);
+const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(31);
+const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(32);
 
 impl PreparedAdmissionSupervisorFlow {
     pub(super) fn resource_store_preserves_workspace(&self, booted: &X86BootedKernel) -> bool {
@@ -41,7 +41,7 @@ impl PreparedAdmissionSupervisorFlow {
             && resources
                 .iter()
                 .map(|record| record.id.raw())
-                .eq([1, 2, 3, 5, 6, 7, 8, 9])
+                .eq([1, 2, 3, 5, 6, 7, 8, 9, 10, 11])
             && resources
                 .iter()
                 .all(|record| record.id != ResourceId::new(4))
@@ -57,7 +57,7 @@ impl PreparedAdmissionSupervisorFlow {
             && window
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 364 + index as u64)
+                .all(|(index, event)| event.sequence == 373 + index as u64)
             && resource_event_matches(window[0], EventKind::ResourceCreated)
             && resource_event_matches(window[1], EventKind::CapabilityGranted)
             && derived_event_matches(window[2], DELEGATE_CAPABILITY, Operation::Delegate)

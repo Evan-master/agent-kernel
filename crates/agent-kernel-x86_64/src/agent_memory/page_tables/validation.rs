@@ -68,6 +68,9 @@ pub(super) fn kernel_excludes_agent_region(
         && mapper
             .translate_addr(VirtAddr::new(layout.runtime_page_start()))
             .is_none()
+        && mapper
+            .translate_addr(VirtAddr::new(layout.call_data_start()))
+            .is_none()
         && (0..RUNTIME_REGION_SLOT_COUNT).all(|slot| {
             layout
                 .runtime_region_page_start(slot)
@@ -89,6 +92,7 @@ pub(super) fn agent_mappings_match(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     _lazy_data_frame: PhysFrame,
+    call_data_frame: PhysFrame,
 ) -> bool {
     let code_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
     let signal_flags =
@@ -128,6 +132,13 @@ pub(super) fn agent_mappings_match(
         && mapper
             .translate_addr(VirtAddr::new(layout.runtime_page_start()))
             .is_none()
+        && mapping_matches(
+            mapper,
+            layout.call_data_start(),
+            call_data_frame,
+            stack_flags,
+            PageTableFlags::HUGE_PAGE,
+        )
         && (0..RUNTIME_REGION_SLOT_COUNT).all(|slot| {
             layout
                 .runtime_region_page_start(slot)

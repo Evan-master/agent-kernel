@@ -57,8 +57,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 38
-        && completed.address_space_switch_count() == 76
+        && completed.call_count() == 42
+        && completed.address_space_switch_count() == 84
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -102,7 +102,7 @@ pub(super) fn completed(
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
-        && kernel.resources().len() == 7
+        && kernel.resources().len() == 9
         && kernel.run_queue().is_empty()
         && memory_pool.all_available_and_zero()
         && task_lifecycle::state_valid(booted, manager, image)
@@ -151,22 +151,31 @@ fn events_prove_lifecycle(
         EventKind::NamespaceEntryBound,
         EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryResolved,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
+        EventKind::MemoryCellCreated,
+        EventKind::MemoryCellRecalled,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
+        EventKind::MemoryCellCreated,
+        EventKind::ResourceRetired,
+        EventKind::MemoryCellRecalled,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
+        EventKind::MemoryCellCreated,
+        EventKind::MemoryCellRecalled,
+        EventKind::ResourceRetired,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
+        EventKind::ResourceCreated,
+        EventKind::CapabilityGranted,
         EventKind::NamespaceEntryRebound,
-        EventKind::NamespaceEntryRetired,
-        EventKind::ResourceCreated,
-        EventKind::CapabilityGranted,
-        EventKind::MemoryCellCreated,
-        EventKind::MemoryCellRecalled,
-        EventKind::ResourceCreated,
-        EventKind::CapabilityGranted,
-        EventKind::MemoryCellCreated,
-        EventKind::ResourceRetired,
-        EventKind::MemoryCellRecalled,
-        EventKind::ResourceCreated,
-        EventKind::CapabilityGranted,
-        EventKind::MemoryCellCreated,
-        EventKind::MemoryCellRecalled,
-        EventKind::ResourceRetired,
+        EventKind::NamespaceEntryBound,
+        EventKind::NamespaceEntryBound,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryResolved,
         EventKind::TaskResultSubmitted,
         EventKind::ResourceRetired,
         EventKind::TaskCompleted,
@@ -209,16 +218,23 @@ fn events_prove_lifecycle(
         )
         && agent_image::events_valid(&tail[20], booted, manager, image)
         && memory_page::events_valid(&tail[22..27], booted, image)
-        && namespace::events_valid(&tail[27..33], booted, image)
-        && memory_region::events_valid(
+        && namespace::events_valid(
             &[
-                tail[33], tail[34], tail[35], tail[36], tail[37], tail[38], tail[39], tail[40],
-                tail[41], tail[42], tail[43], tail[44], tail[45], tail[46], tail[48],
+                tail[27], tail[28], tail[29], tail[30], tail[49], tail[50], tail[51], tail[52],
+                tail[53], tail[54], tail[55],
             ],
             booted,
             image,
         )
-        && tail[47].task == Some(manager.task)
-        && tail[47].task_result == Some(image.result())
-        && tail[49].task == Some(manager.task)
+        && memory_region::events_valid(
+            &[
+                tail[31], tail[32], tail[33], tail[34], tail[35], tail[36], tail[37], tail[38],
+                tail[39], tail[40], tail[41], tail[42], tail[43], tail[44], tail[57],
+            ],
+            booted,
+            image,
+        )
+        && tail[56].task == Some(manager.task)
+        && tail[56].task_result == Some(image.result())
+        && tail[58].task == Some(manager.task)
 }

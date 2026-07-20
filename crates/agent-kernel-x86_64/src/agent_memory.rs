@@ -1,9 +1,9 @@
 //! Physical memory and isolated address-space preparation for one Agent.
 //!
 //! This architecture-binary module owns Agent content frames and the kernel's
-//! supervisor alias for the read-only call-release, quantum-generation, and
-//! restart-generation signal page. Its page-table child creates the distinct
-//! CR3 root and proves that Agent virtual pages are kernel-unmapped.
+//! supervisor aliases for the read-only signal page and writable call-data
+//! page. Its page-table child creates the distinct CR3 root and proves that
+//! Agent virtual pages are kernel-unmapped.
 
 mod address_space_reclamation;
 mod frame_allocator;
@@ -21,6 +21,7 @@ use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
     agent_image::VerifiedAgentImage,
+    namespace_path_buffer::{NamespacePathBuffer, NAMESPACE_PATH_BUFFER_BYTES},
     runtime_page::RuntimePageLedger,
     runtime_region::{RuntimeRegionLedger, RuntimeRegionObservationLog},
     user_memory::{
@@ -41,12 +42,14 @@ pub(crate) use self::{
 };
 
 pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
+pub(super) const CALL_DATA_CONTENT_FRAME_INDEX: usize = STACK_PAGE_COUNT + 3;
 
 pub(crate) struct PreparedAgentMemory {
     allocated_for: Option<AgentId>,
     layout: UserMemoryLayout,
     signal_pointer: *mut u8,
     lazy_data_pointer: *mut u8,
+    call_data_pointer: *mut u8,
     roots: AddressSpaceRoots,
     identity: AgentMemoryIdentity,
     entry_rip: u64,
@@ -71,13 +74,15 @@ impl PreparedAgentMemory {
             *frame = allocator.allocate()?;
         }
         let lazy_data_frame = allocator.allocate()?;
+        let call_data_frame = allocator.allocate()?;
 
-        let (signal_pointer, lazy_data_pointer) = initialize_content(
+        let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             physical_offset,
             code_frame,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
+            call_data_frame,
             image.code(),
         )?;
         let layout = UserMemoryLayout::fixed();
@@ -95,6 +100,7 @@ impl PreparedAgentMemory {
             signal_frame,
             &stack_frames,
             lazy_data_frame,
+            call_data_frame,
         )?;
         let roots = installed.roots();
         if !page_tables::kernel_is_active(roots) {
@@ -107,6 +113,7 @@ impl PreparedAgentMemory {
             content_frames[index + 2] = frame.start_address().as_u64();
         }
         content_frames[STACK_PAGE_COUNT + 2] = lazy_data_frame.start_address().as_u64();
+        content_frames[CALL_DATA_CONTENT_FRAME_INDEX] = call_data_frame.start_address().as_u64();
         let identity = AgentMemoryIdentity::new(installed.private_frames(), content_frames)?;
         if identity.root() != roots.agent_root() {
             return None;
@@ -117,6 +124,7 @@ impl PreparedAgentMemory {
             layout,
             signal_pointer,
             lazy_data_pointer,
+            call_data_pointer,
             roots,
             identity,
             entry_rip,
@@ -227,6 +235,31 @@ impl PreparedAgentMemory {
         unsafe { self.lazy_data_pointer.read_volatile() }
     }
 
+    pub(crate) fn snapshot_namespace_path(
+        &self,
+        expected_root: agent_kernel_core::ResourceId,
+        expected_generation: u64,
+    ) -> Option<NamespacePathBuffer> {
+        if !self.kernel_address_space_active() {
+            return None;
+        }
+        let frame = PhysFrame::from_start_address(PhysAddr::new(
+            self.identity.content_frames()[CALL_DATA_CONTENT_FRAME_INDEX],
+        ))
+        .ok()?;
+        if physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)? != self.call_data_pointer {
+            return None;
+        }
+
+        let mut bytes = [0; NAMESPACE_PATH_BUFFER_BYTES];
+        for (offset, byte) in bytes.iter_mut().enumerate() {
+            // SAFETY: ring 3 is stopped, the kernel CR3 is active, and this
+            // physical alias names the Agent's exclusive call-data frame.
+            *byte = unsafe { self.call_data_pointer.add(offset).read_volatile() };
+        }
+        NamespacePathBuffer::decode(&bytes, expected_root, expected_generation).ok()
+    }
+
     pub(crate) fn activate_lazy_data_page(&mut self, fault_address: u64) -> Option<()> {
         if !self.kernel_address_space_active()
             || fault_address != self.layout.lazy_data_start()
@@ -323,14 +356,16 @@ fn initialize_content(
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
+    call_data_frame: PhysFrame,
     code: &[u8],
-) -> Option<(*mut u8, *mut u8)> {
+) -> Option<(*mut u8, *mut u8, *mut u8)> {
     if code.is_empty() || code.len() > PAGE_BYTES as usize {
         return None;
     }
     let code_pointer = physical_pointer(physical_offset, code_frame)?;
     let signal_pointer = physical_pointer(physical_offset, signal_frame)?;
     let lazy_data_pointer = physical_pointer(physical_offset, lazy_data_frame)?;
+    let call_data_pointer = physical_pointer(physical_offset, call_data_frame)?;
     // SAFETY: all frames were just removed from Usable memory and are
     // exclusively owned by this preparation operation.
     unsafe {
@@ -342,6 +377,7 @@ fn initialize_content(
             physical_pointer(physical_offset, *frame)?.write_bytes(0, PAGE_BYTES as usize);
         }
         lazy_data_pointer.write_bytes(0, PAGE_BYTES as usize);
+        call_data_pointer.write_bytes(0, PAGE_BYTES as usize);
     }
     for (offset, expected) in code.iter().copied().enumerate() {
         // SAFETY: the code frame remains exclusively owned and supervisor-mapped.
@@ -349,7 +385,7 @@ fn initialize_content(
             return None;
         }
     }
-    Some((signal_pointer, lazy_data_pointer))
+    Some((signal_pointer, lazy_data_pointer, call_data_pointer))
 }
 
 pub(super) fn physical_pointer(offset: u64, frame: PhysFrame) -> Option<*mut u8> {

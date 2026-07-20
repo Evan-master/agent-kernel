@@ -1,0 +1,2 @@
+# Kernel transition and event APIs keep their audited fields explicit.
+too-many-arguments-threshold = 11

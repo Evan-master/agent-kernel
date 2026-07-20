@@ -10,6 +10,7 @@ pub mod agent_call;
 pub mod agent_image;
 pub mod context;
 pub mod interrupt;
+pub mod namespace_path_buffer;
 pub mod native_runtime;
 pub mod port;
 pub mod privilege;

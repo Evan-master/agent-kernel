@@ -17,7 +17,7 @@ use agent_kernel_x86_64::{
 
 use super::{
     initialize_content, page_is_zero, page_tables, physical_pointer, PreparedAgentMemory,
-    PHYSICAL_MEMORY_OFFSET,
+    CALL_DATA_CONTENT_FRAME_INDEX, PHYSICAL_MEMORY_OFFSET,
 };
 
 impl PreparedAgentMemory {
@@ -58,12 +58,14 @@ impl PreparedAgentMemory {
             *slot = physical_frame(address)?;
         }
         let lazy_data_frame = physical_frame(content[STACK_PAGE_COUNT + 2])?;
-        let (signal_pointer, lazy_data_pointer) = initialize_content(
+        let call_data_frame = physical_frame(content[CALL_DATA_CONTENT_FRAME_INDEX])?;
+        let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             PHYSICAL_MEMORY_OFFSET,
             code_frame,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
+            call_data_frame,
             image.code(),
         )?;
         let layout = UserMemoryLayout::fixed();
@@ -81,6 +83,7 @@ impl PreparedAgentMemory {
             signal_frame,
             &stack_frames,
             lazy_data_frame,
+            call_data_frame,
         )?;
         let roots = installed.roots();
         if installed.private_frames() != identity.page_table_frames()
@@ -95,6 +98,7 @@ impl PreparedAgentMemory {
             layout,
             signal_pointer,
             lazy_data_pointer,
+            call_data_pointer,
             roots,
             identity,
             entry_rip,

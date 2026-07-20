@@ -43,14 +43,14 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) const X86_TASK_CAPACITY: usize = 12;
 pub(crate) const X86_INTENT_CAPACITY: usize = 12;
-pub(crate) const X86_RESOURCE_CAPACITY: usize = 8;
-pub(crate) const X86_CAPABILITY_CAPACITY: usize = 28;
+pub(crate) const X86_RESOURCE_CAPACITY: usize = 10;
+pub(crate) const X86_CAPABILITY_CAPACITY: usize = 30;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
 pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) const X86_FAULT_CAPACITY: usize = 4;
 pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
-pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 2;
-pub(crate) const X86_EVENT_CAPACITY: usize = 362;
+pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 4;
+pub(crate) const X86_EVENT_CAPACITY: usize = 371;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     X86_RESOURCE_CAPACITY,

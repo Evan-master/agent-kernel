@@ -187,6 +187,9 @@ pub(super) fn run(
                 second,
                 ..
             } => namespace::resolve_path(booted, pending, root, first, second)?,
+            AgentCallRequest::ResolveNamespacePathFromMemory {
+                root, generation, ..
+            } => namespace::resolve_memory_path(booted, pending, root, generation)?,
             AgentCallRequest::RebindNamespaceEntry {
                 authority,
                 entry,

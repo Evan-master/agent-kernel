@@ -6,7 +6,9 @@ use agent_kernel_core::{
 };
 
 use super::{decode_context_payload, AgentCallDecodeError, AgentCallRequest};
-use crate::context::PrivilegeInterruptStackFrame;
+use crate::{
+    context::PrivilegeInterruptStackFrame, namespace_path_buffer::NAMESPACE_PATH_BUFFER_BYTES,
+};
 
 const OBJECT_TAG_MASK: u64 = 0b111;
 const MAX_OBJECT_ID: u64 = u64::MAX >> 3;
@@ -212,5 +214,25 @@ pub(super) fn decode_path(
             NamespaceKey::new(frame.r13),
         ),
         second,
+    })
+}
+
+pub(super) fn decode_memory_path(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<AgentCallRequest, AgentCallDecodeError> {
+    if frame.r13 != 0 || frame.r14 != 0 || frame.r15 != 0 || frame.rbp != 0 {
+        return Err(AgentCallDecodeError::ReservedNotZero);
+    }
+    let (agent, task, image, nonce) = decode_context_payload(frame)?;
+    if frame.r10 == 0 || frame.r11 == 0 || frame.r12 != NAMESPACE_PATH_BUFFER_BYTES as u64 {
+        return Err(AgentCallDecodeError::InvalidPayload);
+    }
+    Ok(AgentCallRequest::ResolveNamespacePathFromMemory {
+        agent,
+        task,
+        image,
+        nonce,
+        root: ResourceId::new(frame.r10),
+        generation: frame.r11,
     })
 }

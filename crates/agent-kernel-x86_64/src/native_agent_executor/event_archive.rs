@@ -10,7 +10,7 @@ use super::NativeExecutionReport;
 use crate::{X86BootedKernel, X86_EVENT_CAPACITY};
 
 pub(crate) const NATIVE_EVENT_ARCHIVE_CAPACITY: usize = 64;
-const TERMINAL_EVENT_SEQUENCE: u64 = 396;
+const TERMINAL_EVENT_SEQUENCE: u64 = 405;
 
 pub(crate) struct NativeEventArchive {
     events: [Option<Event>; NATIVE_EVENT_ARCHIVE_CAPACITY],

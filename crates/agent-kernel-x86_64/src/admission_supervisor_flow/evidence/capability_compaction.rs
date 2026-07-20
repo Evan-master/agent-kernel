@@ -9,16 +9,16 @@ use crate::{
     X86BootedKernel, X86_CAPABILITY_CAPACITY,
 };
 
-const AUTHORITY: CapabilityId = CapabilityId::new(23);
+const AUTHORITY: CapabilityId = CapabilityId::new(25);
 const INITIAL_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(13);
 const DERIVED_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(14);
 const RETIRED_MEMORY_CAPABILITY: CapabilityId = CapabilityId::new(16);
 const RETIRED_REGION_CAPABILITY: CapabilityId = CapabilityId::new(17);
-const TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(26);
-const SECOND_TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(27);
-const FRESH_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(28);
-const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(29);
-const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(30);
+const TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(28);
+const SECOND_TRANSIENT_CAPABILITY: CapabilityId = CapabilityId::new(29);
+const FRESH_RESOURCE_CAPABILITY: CapabilityId = CapabilityId::new(30);
+const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(31);
+const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(32);
 
 impl PreparedAdmissionSupervisorFlow {
     pub(super) fn capability_store_compacted(&self, booted: &X86BootedKernel) -> bool {
@@ -65,7 +65,7 @@ impl PreparedAdmissionSupervisorFlow {
             && window
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 357 + index as u64)
+                .all(|(index, event)| event.sequence == 366 + index as u64)
             && capability_event_matches(
                 window[0],
                 EventKind::CapabilityDerived,
@@ -139,7 +139,7 @@ fn missing(booted: &X86BootedKernel, capability: CapabilityId) -> bool {
 fn fresh_resource_capability_matches(booted: &X86BootedKernel) -> bool {
     matches!(booted.kernel().capability(FRESH_RESOURCE_CAPABILITY), Ok(capability)
         if capability.agent == ADMISSION_SUPERVISOR
-            && capability.resource == ResourceId::new(8)
+            && capability.resource == ResourceId::new(10)
             && capability.operations == OperationSet::only(Operation::Observe)
             && !capability.revoked
             && capability.task.is_none()

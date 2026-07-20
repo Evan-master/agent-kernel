@@ -29,6 +29,23 @@ fn user_region_has_code_signal_guard_four_stack_pages_and_lazy_data() {
 }
 
 #[test]
+fn call_data_page_follows_the_reserved_runtime_region_without_shifting_existing_pages() {
+    let layout = UserMemoryLayout::fixed();
+
+    assert_eq!(layout.call_data_start(), 0x0000_4000_0001_1000);
+    assert_eq!(layout.call_data_start(), layout.runtime_region_end());
+    assert_eq!(
+        layout.call_data_end(),
+        layout.call_data_start() + PAGE_BYTES
+    );
+    assert!(layout.contains_call_data(layout.call_data_start()));
+    assert!(layout.contains_call_data(layout.call_data_end() - 1));
+    assert!(!layout.contains_call_data(layout.call_data_start() - 1));
+    assert!(!layout.contains_call_data(layout.call_data_end()));
+    assert_eq!(layout.last_mapped_p4_index(), layout.p4_index());
+}
+
+#[test]
 fn signal_page_separates_call_release_from_physical_quantum_generation() {
     assert_eq!(AGENT_CALL_RELEASE_OFFSET, 0);
     assert_eq!(PHYSICAL_QUANTUM_GENERATION_OFFSET, 1);

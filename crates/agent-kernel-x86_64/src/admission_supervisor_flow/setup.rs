@@ -105,8 +105,8 @@ fn prepared_state_valid(booted: &X86BootedKernel, supervisor: AdmissionSuperviso
     supervisor.intent.raw() == 10
         && supervisor.task.raw() == 10
         && supervisor.image.raw() == 12
-        && supervisor.task_capability.raw() == 22
-        && supervisor.admission_authority.raw() == 23
+        && supervisor.task_capability.raw() == 24
+        && supervisor.admission_authority.raw() == 25
         && matches!(task, Some(task)
             if task.status == TaskStatus::Accepted
                 && task.delegated_capability == Some(supervisor.task_capability)

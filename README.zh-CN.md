@@ -12,7 +12,7 @@
   <img alt="Rust nightly" src="https://img.shields.io/badge/Rust-nightly-111111?logo=rust&logoColor=white">
   <img alt="no_std" src="https://img.shields.io/badge/core-no__std-238636">
   <img alt="x86_64" src="https://img.shields.io/badge/target-x86__64--unknown--none-0969da">
-  <img alt="QEMU" src="https://img.shields.io/badge/QEMU-events_1..396-f97316">
+  <img alt="QEMU" src="https://img.shields.io/badge/QEMU-events_1..405-f97316">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-d0d7de">
 </p>
 
@@ -22,9 +22,9 @@ $ scripts/run-qemu.sh --release
 [boot]       AGENT_KERNEL_QEMU_BOOT_OK
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
-[namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_PATH_OK
+[namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
 [audit]      AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
-[event:396]  driver_invocation_completed
+[event:405]  driver_invocation_completed
 [handoff]    SUPERVISOR_HANDOFF_READY
 ```
 
@@ -122,13 +122,14 @@ r9  = Nonce       r10..r15, rbp = bounded operation payload
 | `10-20` | Resource、Capability、Task、Agent 生命周期 |
 | `21-28` | Runtime Memory 与 Admission |
 | `29-43` | 回收、压缩、Event 归档 |
-| `44-50` | Namespace 绑定、解析、修改、比较、有界路径 |
+| `44-51` | Namespace 绑定、解析、修改、比较、有界路径 |
 
 ```text
-userspace pointers : 0
-identity source    : 已调度 CPU 上下文
-reply shape        : 规范寄存器帧
-failure rule       : 解码 / 鉴权 / 预检先于状态修改
+userspace transport : 固定私有 call-data 页
+arbitrary pointers  : 拒绝
+identity source     : 已调度 CPU 上下文
+reply shape         : 规范寄存器帧
+failure rule        : 解码 / 鉴权 / 预检先于状态修改
 ```
 
 <details>
@@ -152,10 +153,13 @@ failure rule       : 解码 / 鉴权 / 预检先于状态修改
 | `CompareAndRebindNamespaceEntry` | 48 | `Act` | 在预期 revision 上替换 |
 | `CompareAndRetireNamespaceEntry` | 49 | `Rollback` | 在预期 revision 上回收 |
 | `ResolveNamespacePath` | 50 | 每跳 `Observe` | 解析一段或两段原生路径 |
+| `ResolveNamespacePathFromMemory` | 51 | 每跳 `Observe` | 快照并解析三段或四段路径 |
 
 ```text
 Workspace 1 -- Key 1 / Capability A --> Mount(Workspace 3)
-Workspace 3 -- Key 2 / Capability B --> terminal Entry
+Workspace 3 -- Key 2 / Capability B --> Mount(Workspace 8)
+Workspace 8 -- Key 3 / Capability C --> Mount(Workspace 9)
+Workspace 9 -- Key 4 / Capability D --> terminal Entry
 ```
 
 ## 05 / 运行矩阵
@@ -179,37 +183,39 @@ Workspace 3 -- Key 2 / Capability B --> terminal Entry
 | 目标 | `x86_64-unknown-none` |
 | 隔离 Agent 上下文 | 11 |
 | 内核选择 Dispatch | 35 |
-| Resource Manager Calls / CR3 switches | `38 / 76` |
+| Resource Manager Calls / CR3 switches | `42 / 84` |
 | Admission Supervisor Calls / CR3 switches | `44 / 88` |
-| Namespace 容量 / 最终占用 | `2 / 1` |
-| 实时 Event 容量 / 峰值 | `362 / 362` |
+| Namespace 容量 / 最终占用 | `4 / 4` |
+| 实时 Event 容量 / 峰值 | `371 / 371` |
 | 已归档 Event | 64 |
-| 最终实时 Event / 下一序列 | `332 / 397` |
-| 完整转录 | Events `1..396` |
+| 最终实时 Event / 下一序列 | `341 / 406` |
+| 完整转录 | Events `1..405` |
 
 | Native Capsule | Calls | 字节 | SHA-256 |
 | --- | ---: | ---: | --- |
-| Resource Manager | 38 | 3,789 | `24d6a22464c9...08bdcc1a` |
-| Admission Supervisor | 44 | 4,115 | `f6c4efffe3c5...6f72f3f2` |
+| Resource Manager | 42 | 3,984 | `871151ca8509...612f73b8` |
+| Admission Supervisor | 44 | 4,115 | `4abda1fd3040...f45662dd` |
 
 <details>
 <summary><strong>摘要 / 终端 Event 窗口</strong></summary>
 
 ```text
 resource_manager
-24d6a22464c9b2cc27826c6b07a4655a5510968286eaff7c632732b408bdcc1a
+871151ca85099c942d442af1f4bc01b898e6a3ed85bfda73c76839cb612f73b8
 
 admission_supervisor
-f6c4efffe3c58689f8cb926399dc3fcb675e938d95bba463130495696f72f3f2
+4abda1fd30408ce5e24f1ce19dba523c04d3edc6bde2dc6ee014414ff45662dd
 
 event[185] namespace_entry_bound       # root mount
 event[186] namespace_entry_bound       # child terminal
 event[187] namespace_entry_resolved    # root hop
 event[188] namespace_entry_resolved    # child hop
-event[189] namespace_entry_rebound     # terminal revision 2
-event[190] namespace_entry_retired     # root mount
+event[207] namespace_entry_rebound     # terminal 更新为 Mount(Workspace 8)
+event[208] namespace_entry_bound       # Workspace 8 mount
+event[209] namespace_entry_bound       # Workspace 9 terminal
+event[210..213] namespace_entry_resolved # 四跳 Call 51
 ...
-event[396] driver_invocation_completed
+event[405] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -263,7 +269,7 @@ docs/superpowers/
 
 | 方向 | 当前 | 下一阶段 |
 | --- | --- | --- |
-| Namespace | Mount 与有界遍历 | 三跳/四跳用户内存传输 |
+| Namespace | 固定页传输与四跳遍历 | 类型化消息与路径修改 |
 | Memory | 私有页表、页/区域复用 | 动态页表增长 |
 | Scheduling | 单核 FIFO 与 PIT | SMP、同步、TLB shootdown |
 | Durability | 有界 SHA-256 归档链 | 崩溃一致的签名存储 |
@@ -272,7 +278,7 @@ docs/superpowers/
 | Assurance | 测试、QEMU 转录、ELF 审计 | 加固与形式化验证 |
 
 最新设计记录：
-[`Native Namespace Hierarchy V3`](docs/superpowers/specs/2026-07-20-native-namespace-hierarchy-v3-design.md)
+[`Native Namespace Memory Transport V4`](docs/superpowers/specs/2026-07-20-native-namespace-memory-transport-v4-design.md)
 
 ## 参与贡献
 
