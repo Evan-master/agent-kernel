@@ -1,7 +1,7 @@
-<h1 align="center">Agent Kernel</h1>
+<h1 align="center">AGENT KERNEL</h1>
 
 <p align="center">
-  <strong>Agent-native · Capability-gated · Event-driven · Rust bare-metal kernel</strong>
+  <code>agent-native / capability-gated / event-sourced / bare metal</code>
 </p>
 
 <p align="center">
@@ -9,273 +9,215 @@
 </p>
 
 <p align="center">
-  <img alt="Rust nightly" src="https://img.shields.io/badge/Rust-nightly-000000?logo=rust&logoColor=white">
-  <img alt="no std" src="https://img.shields.io/badge/kernel-no__std-2ea44f">
-  <img alt="x86_64 target" src="https://img.shields.io/badge/target-x86__64--unknown--none-007acc">
-  <img alt="QEMU verified" src="https://img.shields.io/badge/QEMU-Events_1--396-ff6b00">
+  <img alt="Rust nightly" src="https://img.shields.io/badge/Rust-nightly-111111?logo=rust&logoColor=white">
+  <img alt="no_std" src="https://img.shields.io/badge/Core-no__std-2ea44f">
+  <img alt="x86_64" src="https://img.shields.io/badge/target-x86__64--unknown--none-007acc">
+  <img alt="QEMU" src="https://img.shields.io/badge/QEMU-Events_1..396-f97316">
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-f5f5f5">
 </p>
 
 ```text
-AGENT
-  |
-CAPABILITY
-  `- explicit authority
-  |
-RESOURCE
-  |
-EVENT
-  |- deterministic evidence
-  `- replayable / auditable
+agent@kernel:~$ scripts/run-qemu.sh --release
+
+[boot]      AGENT_KERNEL_QEMU_BOOT_OK
+[ring-3]    AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
+[namespace] AGENT_KERNEL_AGENT_CALL_NAMESPACE_COMPARE_REBIND_OK
+[audit]     AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
+[event]     396 driver_invocation_completed
+[handoff]   SUPERVISOR_HANDOFF_READY
 ```
 
 Agent Kernel is an agent-native operating-system kernel written in Rust.
-
-It boots directly on x86_64 virtual hardware and treats Agents, Capabilities,
-Intents, Tasks, Verification, Rollback, and Events as primary system objects.
+It boots on x86_64 hardware and executes isolated ring-3 Agent Capsules.
 
 > [!IMPORTANT]
-> Active kernel development. The QEMU reference target executes isolated
-> ring-3 Agent Capsules; the ABI, hardware coverage, and production security
-> model continue to evolve.
+> Active kernel development. The ABI, device coverage, and assurance model are evolving.
 
-```console
-$ scripts/run-qemu.sh --release
-AGENT_KERNEL_QEMU_BOOT_OK
-AGENT_KERNEL_NATIVE_NAMESPACE_MANAGER_OK
-AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
-event[396] driver_invocation_completed
-SUPERVISOR_HANDOFF_READY
-```
+[`MODEL`](#01--kernel-model) · [`ARCH`](#02--architecture) ·
+[`ABI`](#03--agent-call-abi) · [`PROOF`](#05--verified-profile) ·
+[`BUILD`](#06--build-and-boot) · [`ROADMAP`](#08--roadmap)
 
-## Navigate
+## 00 / Live System
 
-[Kernel Contract](#kernel-contract) · [Running System](#running-system) ·
-[Architecture](#architecture) · [Agent Call ABI](#agent-call-abi) ·
-[Proof Profile](#proof-profile) · [Quick Start](#quick-start) · [Roadmap](#roadmap)
-
-## Kernel Contract
-
-| Object | Kernel meaning |
+| Signal | Current reference profile |
 | --- | --- |
-| `Agent` | Executable, schedulable, authenticated authority subject |
-| `Resource` | Controlled Workspace, Memory, Service, Network, Device, or other object |
-| `Capability` | Explicit Agent operations on one Resource; attenuable, derivable, revocable |
-| `Intent` | Typed declaration of desired work |
-| `Task` | Schedulable execution unit created from an Intent |
-| `Verification` | Trust decision kept separate from execution completion |
-| `Checkpoint / Rollback` | First-class recovery and cleanup authority |
-| `Event` | Ordered deterministic evidence for every successful mutation |
-| `Namespace` | Workspace directory from fixed-width keys to typed kernel objects |
+| CPU boundary | BIOS boot, ring 0 kernel, isolated ring 3 Agents |
+| State model | Fixed-capacity, deterministic, heap-free Core Stores |
+| Authority | Explicit Capability scope, derivation, attenuation, revocation |
+| Audit | Ordered Events, SHA-256 archive chain, exact replay |
+| Recovery | Checkpoint, Rollback, fault routing, repair, restart |
+| Native I/O | UART IRQ, Port I/O, immutable HAL requests, Driver invocation |
+
+## 01 / Kernel Model
 
 ```text
-Observe  Act  Verify  Checkpoint  Rollback  Delegate
-   |      |      |        |           |          |
-   +------+------+- Capability ------+----------+
+AGENT --presents--> CAPABILITY --controls--> RESOURCE
+  |                                      |
+  +--------------- emits EVENT <--------+
 ```
 
-The native model has no ambient superuser. High authority is explicit and
-remains visible in the audit chain.
+| Primitive | Kernel contract |
+| --- | --- |
+| `Agent` | Authenticated authority subject with schedulable execution state |
+| `Capability` | Explicit operations on one Resource; derivable and revocable |
+| `Intent` | Typed declaration of desired work |
+| `Task` | Schedulable unit bound to an Intent and delegated authority |
+| `Verification` | Trust transition kept separate from execution completion |
+| `Checkpoint` | Recovery point governed by explicit Rollback authority |
+| `Event` | Deterministic evidence for each successful state mutation |
+| `Namespace` | Revisioned key-to-object binding inside a Workspace |
 
-## Running System
+```text
+Observe | Act | Verify | Checkpoint | Rollback | Delegate
+```
 
-| Subsystem | Current capability | QEMU proof |
-| --- | --- | --- |
-| Boot and privilege | BIOS boot, GDT, TSS, IDT, ring-0/ring-3 call gate | `AGENT_KERNEL_GDT_TSS_OK` |
-| Isolation and scheduling | Private Agent CR3 roots, FIFO dispatch, PIT preemption, CPU resume | `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` |
-| Agent execution | SHA-256 Capsules, typed entries, 11 completed contexts | `AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK` |
-| Memory | Private tables, page/region allocation, First-Fit reuse, zeroed frame pool | `AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK` |
-| Faults | ring-3 `#UD`, `#GP`, `#PF` containment, routing, repair, recovery | `AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK` |
-| IPC | Blocking Mailbox, wakeup, acknowledgement, Message retirement | `AGENT_KERNEL_NATIVE_MAILBOX_IPC_OK` |
-| Managers | Resource, Capability, Task, Agent, Memory, Namespace | `AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK` |
-| Runtime Admission | Permits, broker, release batches, address-space rebuild | `AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_COMMIT_OK` |
-| Driver | UART IRQ, Endpoint, HAL request, Port I/O, Invocation | `AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK` |
-| Audit | Fixed Event Log, SHA-256 archive chain, exact replay | `AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
+High authority remains explicit in Capability records and the Event chain.
 
-Every Core Store has an explicit fixed capacity. `agent-kernel-core` and
-`agent-kernel` remain `no_std`, heap-free, host-I/O-free, and free of hidden
-global mutable state.
-
-## Architecture
+## 02 / Architecture
 
 ```mermaid
-flowchart TB
-    Capsule["Verified Capsule"] --> Ring3["ring-3 Agent"]
-    Supervisor["User-space Supervisor"] --> Ring3
-    Ring3 -->|"Agent Call / IRQ / Fault"| X86["x86_64 Boundary"]
-    X86 --> Facade["Kernel Facade"]
+flowchart LR
+    Capsule["Verified Capsule"] --> Agent["ring-3 Agent"]
+    Agent -->|"int 0x90 / IRQ / Fault"| Boundary["x86_64 Boundary"]
+    Boundary --> Facade["no_std Facade"]
     Facade --> Core["Deterministic Core"]
-
-    Core --> Runtime["Execution + I/O"]
-    Core --> State["State + Audit"]
-
-    Runtime --> Scheduler["Task / Driver Scheduler"]
-    Runtime --> Services["Admission + Devices"]
-    Services --> Broker["Runtime Admission"]
-    Services --> HAL["Immutable HAL"]
-    Broker --> Frames["Zeroed Frame Pool"]
-    HAL --> Hardware["UART / Port / Future Devices"]
-    State --> Stores["Fixed Stores"]
-    State --> Events["Event Log + Archive"]
+    Core --> Stores["Fixed Stores"]
+    Core --> Events["Event Log"]
+    Core --> Runtime["Scheduler / Admission / HAL"]
+    Runtime --> Hardware["CPU / Memory / UART / Ports"]
 ```
 
-### Boundary
-
-| Layer | Responsibility |
+| Layer | Owns |
 | --- | --- |
-| Kernel space | Identity, authority, scheduling, isolation, reclamation, deterministic state, audit |
-| User space | LLM inference, prompts, planning, policy, model runtime, external adapters |
-| HAL | Immutable device requests already authorized by the kernel |
+| Kernel space | Identity, authority, scheduling, isolation, recovery, audit |
+| User space | Planning, prompts, model runtime, policy, external adapters |
+| HAL | Immutable device requests authorized before dispatch |
 
-## Agent Call ABI
+LLM inference stays outside kernel space. Core transitions remain bounded,
+deterministic, and replayable.
 
-Agent Calls cross ring 3 through a fixed register frame. The current ABI exposes
-47 operations.
+## 03 / Agent Call ABI
+
+Agent Calls cross ring 3 through a fixed register frame. The current ABI has
+49 operations and accepts no userspace pointers.
 
 ```text
-rax = magic     rbx = ABI version     rcx = operation / status
-r8  = Agent     rdi = Task            rsi = Image
-r9  = Nonce     r10..r15, rbp = bounded operation payload
+rax = magic      rbx = ABI version      rcx = operation / status
+r8  = Agent      rdi = Task             rsi = Image
+r9  = Nonce      r10..r15, rbp = bounded operation payload
 ```
 
-No userspace pointer enters the ABI. Mutating requests must match the Agent,
-Task, Image, and Nonce held by the scheduler. Reserved registers must be zero.
+| IDs | Protocol family |
+| ---: | --- |
+| `1-9` | Execution, verification, Mailbox IPC |
+| `10-20` | Resource, Capability, Task, Agent lifecycle |
+| `21-28` | Runtime Memory and Admission |
+| `29-43` | Reclamation, compaction, Event archive |
+| `44-49` | Namespace bind, resolve, force mutation, generation compare |
 
-| ID range | Protocol family | Primary operations |
-| ---: | --- | --- |
-| `1-9` | Execution / IPC | Context, Yield, Result, Verify, Mailbox, Complete |
-| `10-16` | Resource / Work | Resource, Capability, Intent, Task, Delegation |
-| `17-20` | Agent Manager | Register, Suspend, Resume, Retire |
-| `21-26` | Runtime Memory | Page and Region Allocate, Inspect, Release |
-| `27-28` | Runtime Admission | Request and trusted requester discovery |
-| `29-43` | Lifecycle / Archive | Store reclamation, Event archive, cleanup revocation |
-| `44-47` | Namespace Manager | Bind, Resolve, Rebind, Retire |
-
-### Namespace Calls
+### Namespace Protocol
 
 | Call | ID | Authority | Result |
 | --- | ---: | --- | --- |
-| `BindNamespaceEntry` | 44 | `Act` | Allocate a monotonic Entry ID and return the full record |
-| `ResolveNamespaceEntry` | 45 | `Observe` | Return the full record and append audit evidence |
-| `RebindNamespaceEntry` | 46 | `Act` | Replace the typed object and advance its revision |
-| `RetireNamespaceEntry` | 47 | `Rollback` | Remove stably from the dense Store and return capacity |
+| `BindNamespaceEntry` | 44 | `Act` | Allocate a monotonic Entry ID |
+| `ResolveNamespaceEntry` | 45 | `Observe` | Return the record and append audit evidence |
+| `RebindNamespaceEntry` | 46 | `Act` | Force replacement and advance revision |
+| `RetireNamespaceEntry` | 47 | `Rollback` | Force stable removal and return the slot |
+| `CompareAndRebindNamespaceEntry` | 48 | `Act` | Replace only at the expected revision |
+| `CompareAndRetireNamespaceEntry` | 49 | `Rollback` | Retire only at the expected revision |
 
-Objects use `(object_id << 3) | tag` and cover Agent, Resource, Task, Message,
-and MemoryCell. Zero IDs, reserved tags, oversized IDs, and non-zero reserved
-registers fail closed.
+Reserved registers, malformed packed objects, stale revisions, and authority
+mismatches fail before mutation.
 
 <details>
 <summary><strong>ABI invariants</strong></summary>
 
-- Call identity comes from the scheduled execution context.
+- Identity comes from the scheduled execution context.
 - Core rechecks Capability scope and operation bits.
-- Multi-record transactions preflight capacity and live references.
-- Every successful mutation appends an Event.
+- Transactions preflight capacity, references, and Event slots.
 - Canonical replies clear unrelated registers.
-- Capsule, CPU-frame, or evidence mismatch terminates validation.
+- Capsule, CPU-frame, or transcript mismatch terminates validation.
 
 </details>
 
-## Proof Profile
+## 04 / Implemented Runtime
 
-### Reference Profile
+| Subsystem | Native path | QEMU evidence |
+| --- | --- | --- |
+| Isolation | Private CR3 roots, GDT/TSS/IDT, ring transitions | `MULTI_AGENT_ISOLATION_OK` |
+| Scheduling | FIFO dispatch, PIT preemption, CPU resume | `MULTI_AGENT_CONTEXT_SWITCH_OK` |
+| Faults | `#UD`, `#GP`, `#PF`, route, repair, restart | `NATIVE_AGENT_FAULT_RESTART_OK` |
+| IPC | Blocking Mailbox, wake, acknowledge, retire | `NATIVE_MAILBOX_IPC_OK` |
+| Memory | Page/region allocation, First-Fit reuse, zeroed frames | `NATIVE_MEMORY_CONCURRENCY_OK` |
+| Managers | Resource, Capability, Task, Agent, Memory, Namespace | `NATIVE_RESOURCE_MANAGER_AGENT_OK` |
+| Admission | Resident Supervisor, permits, release batches | `NATIVE_RUNTIME_ADMISSION_COMMIT_OK` |
+| Driver | UART IRQ through HAL request and Invocation | `DRIVER_INVOCATION_FLOW_OK` |
+| Audit | Full log, archive checkpoint, SHA-256 replay | `NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
+
+## 05 / Verified Profile
 
 | Metric | Value |
 | --- | ---: |
-| Architecture | `x86_64-unknown-none` |
-| Completed isolated Agent contexts | 11 |
+| Target | `x86_64-unknown-none` |
+| Isolated Agent contexts completed | 11 |
 | Kernel-selected dispatches | 35 |
 | Resource Manager Calls / CR3 switches | `39 / 78` |
 | Admission Supervisor Calls / CR3 switches | `44 / 88` |
 | Namespace Store capacity / final occupancy | `1 / 1` |
-| Live Event capacity / pre-archive occupancy | `362 / 362` |
+| Live Event capacity / peak occupancy | `362 / 362` |
 | Archived Events | 64 |
 | Final live Events / next sequence | `332 / 397` |
 | Complete transcript | Events `1..396` |
-| Private address-space frames returned and zeroed | 66 |
-| Shared runtime frames returned and zeroed | 16 |
 
-### Native Capsules
+| Native Capsule | Calls | Bytes | SHA-256 |
+| --- | ---: | ---: | --- |
+| Resource Manager | 39 | 3,854 | `a34b39a50168...238be442` |
+| Admission Supervisor | 44 | 4,114 | `3acd53283d17...07c6cb42` |
 
-| Capsule | Calls | Switches | Bytes |
-| --- | ---: | ---: | ---: |
-| Resource Manager | 39 | 78 | 3,848 |
-| Admission Supervisor | 44 | 88 | 4,114 |
-
-The Rust arrays match independently assembled machine code byte for byte. Each
-complete Capsule occurs exactly once in the Release ELF.
+Fresh assembly matches each Rust byte array. The complete Resource Manager
+Capsule and its code body each occur once in the Release ELF.
 
 <details>
-<summary><strong>Show full Capsule digests</strong></summary>
+<summary><strong>Full Capsule digests and Event window</strong></summary>
 
 ```text
 resource_manager
-8914b2dc4f1a1c5d93d6d7315ee5e289579fdbeee543b70f121abcce2a8bced6
+a34b39a50168bb128d4f4ca1d8a30b02c94087b1d47148215ca57e5e238be442
 
 admission_supervisor
 3acd53283d17e77952a5742b895b2f4b578ee768faf497bce070a86397c6cb42
-```
 
-</details>
-
-<details>
-<summary><strong>Show the key Event window</strong></summary>
-
-```text
 event[186] namespace_entry_bound
 event[187] namespace_entry_resolved
 event[188] namespace_entry_rebound
 event[189] namespace_entry_retired
 event[190] namespace_entry_bound
 ...
-event[363] resource_record_retired
-event[368] memory_cell_record_retired
 event[396] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
-`scripts/run-qemu.sh` checks all 396 Event numbers, kinds, ordering, marker
-counts, and the QEMU debug-exit status.
-
 </details>
 
-## Quick Start
+## 06 / Build And Boot
 
-### Requirements
-
-- Rust managed by `rustup`;
-- the pinned nightly toolchain, `rust-src`, LLVM tools, and
-  `x86_64-unknown-none` target;
-- `qemu-system-x86_64`.
-
-```bash
-# macOS
-brew install qemu
-```
-
-### Build And Test
+**Requirements:** Rust via `rustup`, the pinned nightly toolchain, LLVM tools,
+the `x86_64-unknown-none` target, and `qemu-system-x86_64`.
 
 ```bash
 git clone https://github.com/Evan-master/agent-kernel.git
 cd agent-kernel
 
-cargo fmt --all -- --check
 cargo test --workspace
 cargo run -p agent-supervisor
-```
 
-### Boot The Bare-Metal Target
-
-```bash
-# Debug
+# Full bare-metal transcript validation
 scripts/run-qemu.sh
-
-# Release + complete transcript validation
 scripts/run-qemu.sh --release
 ```
 
-### Bare-Metal Compile Check
-
 ```bash
+# Bare-metal compile gate
 cargo check \
   -p agent-kernel-x86_64 \
   --features bare-metal \
@@ -283,58 +225,42 @@ cargo check \
   --target x86_64-unknown-none
 ```
 
-## Workspace
+## 07 / Repository Map
 
 ```text
 crates/
-|- agent-kernel-core/    no_std object model, authority, lifecycle, scheduler, Events
-|- agent-kernel/         no_std syscall-style facade
-|- agent-kernel-hal/     immutable device-request protocol
-|- agent-kernel-boot/    bootstrap and fixed-capacity configuration
-|- agent-kernel-x86_64/  bare-metal boot, isolation, IRQ, fault, Agent Call
+|- agent-kernel-core/    deterministic no_std model and Stores
+|- agent-kernel/         no_std syscall-style Facade
+|- agent-kernel-hal/     immutable device request protocol
+|- agent-kernel-boot/    bootstrap and capacity profile
+|- agent-kernel-x86_64/  boot, isolation, IRQ, faults, Agent Calls
 |- agent-kernel-image/   BIOS image builder
-`- agent-supervisor/     host Supervisor and virtual-device backend
+`- agent-supervisor/     host Supervisor and virtual device backend
+
+docs/superpowers/
+|- specs/                approved architecture records
+`- plans/                milestone implementation plans
 ```
 
-## Security And Failure Model
+## 08 / Roadmap
 
-- Resource access always crosses an explicit Capability.
-- Task-scoped authority cannot become generic Resource authority.
-- Derived authority cannot exceed its source; ancestor revocation invalidates
-  descendants.
-- Architecture code mutates Core only through the public Facade.
-- Capacity, authority, live references, and Event slots are checked before
-  transactional mutation.
-- Malformed Capsules, call frames, Event sequences, and physical ownership
-  evidence fail closed.
-
-## Roadmap
-
-| Area | Current state | Next stage |
+| Track | Current | Next |
 | --- | --- | --- |
-| Core model | AgentOS objects, Capabilities, Events, Rollback | Hierarchical Namespace, concurrent revision protocol |
-| Memory | Fixed private tables, pages/regions, frame reclamation | Dynamic page-table growth, general mapping service |
-| Scheduling | Single-core FIFO, PIT preemption | SMP, synchronization, TLB shootdown |
-| Durability | Bounded Event archive and SHA-256 chain | Crash-consistent storage, signed receipts, transparency log |
-| Devices | UART, Port I/O, HAL Driver chain | Storage, Network, Graphics, USB |
-| Agent software | Fixed-width Capsule | Package format, loader, production Supervisor |
-| Compatibility | Deferred | Isolated POSIX/Linux/Windows subsystem |
-| Assurance | Tests and replayable evidence | Security hardening, formal verification, stable ABI |
+| Namespace | Revisioned compare mutations | Hierarchy, mounts, bounded traversal |
+| Memory | Fixed private tables, page/region reuse | Dynamic page-table growth |
+| Scheduling | Single-core FIFO and PIT | SMP, synchronization, TLB shootdown |
+| Durability | Bounded SHA-256 archive chain | Crash-consistent signed storage |
+| Devices | UART and Port I/O | Storage, Network, Graphics, USB |
+| Agent software | Fixed-width Capsule | Package format and production loader |
+| Assurance | Tests, QEMU transcript, ELF audit | Hardening, formal verification, stable ABI |
 
-The complete Agent Kernel goal remains active. Current milestone records:
-
-- [Native Namespace Manager V1 design](docs/superpowers/specs/2026-07-20-native-namespace-manager-v1-design.md)
-- [Native Namespace Manager V1 implementation plan](docs/superpowers/plans/2026-07-20-native-namespace-manager-v1.md)
-- [All design records](docs/superpowers/specs/)
+Current design record:
+[Native Namespace Generations V2](docs/superpowers/specs/2026-07-20-native-namespace-generations-v2-design.md).
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) before changing code. The core requirements are:
-
-1. Preserve the agent-native model and explicit authority boundaries.
-2. Keep Core and Facade `no_std`, fixed-capacity, and deterministic.
-3. Add a failing test before new runtime behavior.
-4. Run Workspace, Supervisor, and relevant QEMU validation before publishing.
+Read [`AGENTS.md`](AGENTS.md) before changing code. Runtime changes require a
+failing test first, explicit authority, deterministic Events, and relevant QEMU proof.
 
 ## License
 
