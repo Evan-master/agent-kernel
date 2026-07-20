@@ -1,6 +1,8 @@
 # Native Namespace Manager V1 Design
 
-Status: Implementation verified, publication pending
+Status: Implemented, verified, and published
+
+Publication: public `main`, implementation commit `1154c9e`
 
 ## Objective
 
