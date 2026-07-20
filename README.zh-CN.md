@@ -103,15 +103,14 @@ flowchart TB
     Facade --> Core["Deterministic Core"]
 
     Core --> State["State + Audit"]
-    Core --> Runtime["Scheduling + Admission"]
-    Core --> Devices["HAL + Devices"]
+    Core --> Runtime["Execution + I/O"]
 
     State --> Stores["Fixed Stores"]
     State --> Events["Event Log + Archive"]
     Runtime --> Scheduler["Task / Driver Scheduler"]
     Runtime --> Broker["Runtime Admission"]
+    Runtime --> HAL["Immutable HAL"]
     Broker --> Frames["Zeroed Frame Pool"]
-    Devices --> HAL["Immutable HAL"]
     HAL --> Hardware["UART / Port / Future Devices"]
     Scheduler -.->|dispatch| Ring3
     Frames -.->|map| Ring3
