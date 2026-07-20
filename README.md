@@ -18,12 +18,14 @@
 ```text
 AGENT
   |
-CAPABILITY [explicit authority]
+CAPABILITY
+  `- explicit authority
   |
 RESOURCE
   |
-EVENT [deterministic evidence]
-      [replayable / auditable]
+EVENT
+  |- deterministic evidence
+  `- replayable / auditable
 ```
 
 Agent Kernel is an agent-native operating-system kernel written in Rust.
