@@ -14,7 +14,7 @@ use x86_64::{
 };
 
 use agent_kernel_x86_64::{
-    address_space::{AGENT_P4_INDEX, P4_ENTRY_COUNT},
+    address_space::{AGENT_CODE_PAGE_COUNT, AGENT_P4_INDEX, P4_ENTRY_COUNT},
     runtime_region::RUNTIME_REGION_SLOT_COUNT,
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
@@ -53,12 +53,13 @@ pub(super) fn kernel_excludes_agent_region(
     // performs translations; no Agent mapper reference exists concurrently.
     let mapper =
         unsafe { OffsetPageTable::new(&mut *kernel_pointer, VirtAddr::new(physical_offset)) };
-    mapper
-        .translate_addr(VirtAddr::new(layout.code_start()))
+    (0..AGENT_CODE_PAGE_COUNT).all(|page| {
+        layout
+            .code_page_start(page)
+            .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
+    }) && mapper
+        .translate_addr(VirtAddr::new(layout.signal_start()))
         .is_none()
-        && mapper
-            .translate_addr(VirtAddr::new(layout.signal_start()))
-            .is_none()
         && mapper
             .translate_addr(VirtAddr::new(layout.guard_start()))
             .is_none()
@@ -88,7 +89,7 @@ pub(super) fn kernel_excludes_agent_region(
 pub(super) fn agent_mappings_match(
     mapper: &OffsetPageTable<'_>,
     layout: UserMemoryLayout,
-    code_frame: PhysFrame,
+    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     _lazy_data_frame: PhysFrame,
@@ -98,21 +99,31 @@ pub(super) fn agent_mappings_match(
     let signal_flags =
         PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE;
     let stack_flags = signal_flags | PageTableFlags::WRITABLE;
-    mapping_matches(
-        mapper,
-        layout.code_start(),
-        code_frame,
-        code_flags,
-        PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
-    ) && mapping_matches(
-        mapper,
-        layout.signal_start(),
-        signal_frame,
-        signal_flags,
-        PageTableFlags::WRITABLE,
-    ) && mapper
-        .translate_addr(VirtAddr::new(layout.guard_start()))
-        .is_none()
+    code_frames
+        .iter()
+        .copied()
+        .enumerate()
+        .all(|(index, frame)| {
+            layout.code_page_start(index).is_some_and(|address| {
+                mapping_matches(
+                    mapper,
+                    address,
+                    frame,
+                    code_flags,
+                    PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
+                )
+            })
+        })
+        && mapping_matches(
+            mapper,
+            layout.signal_start(),
+            signal_frame,
+            signal_flags,
+            PageTableFlags::WRITABLE,
+        )
+        && mapper
+            .translate_addr(VirtAddr::new(layout.guard_start()))
+            .is_none()
         && stack_frames
             .iter()
             .copied()

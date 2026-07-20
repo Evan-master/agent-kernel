@@ -20,8 +20,10 @@ use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
-    address_space::{AddressSpaceRoots, AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT},
-    agent_image::VerifiedAgentImage,
+    address_space::{
+        AddressSpaceRoots, AgentMemoryIdentity, AGENT_CODE_PAGE_COUNT, AGENT_CONTENT_FRAME_COUNT,
+    },
+    agent_image::{VerifiedAgentImage, MAX_AGENT_CODE_BYTES},
     runtime_page::RuntimePageLedger,
     runtime_region::{RuntimeRegionLedger, RuntimeRegionObservationLog},
     user_memory::{
@@ -42,7 +44,12 @@ pub(crate) use self::{
 };
 
 pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
-pub(super) const CALL_DATA_CONTENT_FRAME_INDEX: usize = STACK_PAGE_COUNT + 3;
+pub(super) const CODE_CONTENT_FRAME_START_INDEX: usize = 0;
+pub(super) const SIGNAL_CONTENT_FRAME_INDEX: usize = AGENT_CODE_PAGE_COUNT;
+pub(super) const STACK_CONTENT_FRAME_START_INDEX: usize = SIGNAL_CONTENT_FRAME_INDEX + 1;
+pub(super) const LAZY_DATA_CONTENT_FRAME_INDEX: usize =
+    STACK_CONTENT_FRAME_START_INDEX + STACK_PAGE_COUNT;
+pub(super) const CALL_DATA_CONTENT_FRAME_INDEX: usize = LAZY_DATA_CONTENT_FRAME_INDEX + 1;
 
 pub(crate) struct PreparedAgentMemory {
     allocated_for: Option<AgentId>,
@@ -66,9 +73,12 @@ impl PreparedAgentMemory {
             return None;
         }
         let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
-        let code_frame = allocator.allocate()?;
-        let signal_frame = allocator.allocate()?;
         let zero_frame = PhysFrame::from_start_address(PhysAddr::new(0)).ok()?;
+        let mut code_frames = [zero_frame; AGENT_CODE_PAGE_COUNT];
+        for frame in &mut code_frames {
+            *frame = allocator.allocate()?;
+        }
+        let signal_frame = allocator.allocate()?;
         let mut stack_frames = [zero_frame; STACK_PAGE_COUNT];
         for frame in &mut stack_frames {
             *frame = allocator.allocate()?;
@@ -78,7 +88,7 @@ impl PreparedAgentMemory {
 
         let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             physical_offset,
-            code_frame,
+            &code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -96,7 +106,7 @@ impl PreparedAgentMemory {
             physical_offset,
             &mut allocator,
             layout,
-            code_frame,
+            &code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -107,12 +117,15 @@ impl PreparedAgentMemory {
             return None;
         }
         let mut content_frames = [0; AGENT_CONTENT_FRAME_COUNT];
-        content_frames[0] = code_frame.start_address().as_u64();
-        content_frames[1] = signal_frame.start_address().as_u64();
-        for (index, frame) in stack_frames.iter().enumerate() {
-            content_frames[index + 2] = frame.start_address().as_u64();
+        for (index, frame) in code_frames.iter().enumerate() {
+            content_frames[CODE_CONTENT_FRAME_START_INDEX + index] = frame.start_address().as_u64();
         }
-        content_frames[STACK_PAGE_COUNT + 2] = lazy_data_frame.start_address().as_u64();
+        content_frames[SIGNAL_CONTENT_FRAME_INDEX] = signal_frame.start_address().as_u64();
+        for (index, frame) in stack_frames.iter().enumerate() {
+            content_frames[STACK_CONTENT_FRAME_START_INDEX + index] =
+                frame.start_address().as_u64();
+        }
+        content_frames[LAZY_DATA_CONTENT_FRAME_INDEX] = lazy_data_frame.start_address().as_u64();
         content_frames[CALL_DATA_CONTENT_FRAME_INDEX] = call_data_frame.start_address().as_u64();
         let identity = AgentMemoryIdentity::new(installed.private_frames(), content_frames)?;
         if identity.root() != roots.agent_root() {
@@ -242,7 +255,7 @@ impl PreparedAgentMemory {
         {
             return None;
         }
-        let frame_address = self.identity.content_frames()[STACK_PAGE_COUNT + 2];
+        let frame_address = self.identity.content_frames()[LAZY_DATA_CONTENT_FRAME_INDEX];
         let frame = PhysFrame::from_start_address(PhysAddr::new(frame_address)).ok()?;
         if physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)? != self.lazy_data_pointer {
             return None;
@@ -262,13 +275,15 @@ impl PreparedAgentMemory {
             return None;
         }
         let frames = self.identity.content_frames();
-        let signal_frame = PhysFrame::from_start_address(PhysAddr::new(frames[1])).ok()?;
+        let signal_frame =
+            PhysFrame::from_start_address(PhysAddr::new(frames[SIGNAL_CONTENT_FRAME_INDEX]))
+                .ok()?;
         if physical_pointer(PHYSICAL_MEMORY_OFFSET, signal_frame)? != self.signal_pointer
             || !clear_page(self.signal_pointer)
         {
             return None;
         }
-        for frame_address in &frames[2..] {
+        for frame_address in &frames[STACK_CONTENT_FRAME_START_INDEX..] {
             let frame = PhysFrame::from_start_address(PhysAddr::new(*frame_address)).ok()?;
             if !clear_page(physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)?) {
                 return None;
@@ -327,26 +342,33 @@ pub(super) fn page_is_zero(pointer: *mut u8) -> bool {
 
 fn initialize_content(
     physical_offset: u64,
-    code_frame: PhysFrame,
+    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
     call_data_frame: PhysFrame,
     code: &[u8],
 ) -> Option<(*mut u8, *mut u8, *mut u8)> {
-    if code.is_empty() || code.len() > PAGE_BYTES as usize {
+    if code.is_empty() || code.len() > MAX_AGENT_CODE_BYTES {
         return None;
     }
-    let code_pointer = physical_pointer(physical_offset, code_frame)?;
     let signal_pointer = physical_pointer(physical_offset, signal_frame)?;
     let lazy_data_pointer = physical_pointer(physical_offset, lazy_data_frame)?;
     let call_data_pointer = physical_pointer(physical_offset, call_data_frame)?;
     // SAFETY: all frames were just removed from Usable memory and are
     // exclusively owned by this preparation operation.
     unsafe {
-        code_pointer.write_bytes(0, PAGE_BYTES as usize);
-        code.as_ptr()
-            .copy_to_nonoverlapping(code_pointer, code.len());
+        for (page, frame) in code_frames.iter().copied().enumerate() {
+            let code_pointer = physical_pointer(physical_offset, frame)?;
+            code_pointer.write_bytes(0, PAGE_BYTES as usize);
+            let start = page * PAGE_BYTES as usize;
+            if start < code.len() {
+                let end = code.len().min(start + PAGE_BYTES as usize);
+                code[start..end]
+                    .as_ptr()
+                    .copy_to_nonoverlapping(code_pointer, end - start);
+            }
+        }
         signal_pointer.write_bytes(0, PAGE_BYTES as usize);
         for frame in stack_frames {
             physical_pointer(physical_offset, *frame)?.write_bytes(0, PAGE_BYTES as usize);
@@ -354,10 +376,17 @@ fn initialize_content(
         lazy_data_pointer.write_bytes(0, PAGE_BYTES as usize);
         call_data_pointer.write_bytes(0, PAGE_BYTES as usize);
     }
-    for (offset, expected) in code.iter().copied().enumerate() {
-        // SAFETY: the code frame remains exclusively owned and supervisor-mapped.
-        if unsafe { code_pointer.add(offset).read_volatile() } != expected {
-            return None;
+    for (page, frame) in code_frames.iter().copied().enumerate() {
+        let start = page * PAGE_BYTES as usize;
+        if start < code.len() {
+            let end = code.len().min(start + PAGE_BYTES as usize);
+            let code_pointer = physical_pointer(physical_offset, frame)?;
+            for (offset, expected) in code[start..end].iter().copied().enumerate() {
+                // SAFETY: the code frame remains exclusively owned and supervisor-mapped.
+                if unsafe { code_pointer.add(offset).read_volatile() } != expected {
+                    return None;
+                }
+            }
         }
     }
     Some((signal_pointer, lazy_data_pointer, call_data_pointer))

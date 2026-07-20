@@ -5,7 +5,7 @@
 reuse_worker_entry:
     push rbx
     pop rbx
-    movabs rax, 0x0000400000001000
+    movabs rax, 0x0000400000004000
 .wait_for_release:
     cmp byte ptr [rax], 0
     je .wait_for_release

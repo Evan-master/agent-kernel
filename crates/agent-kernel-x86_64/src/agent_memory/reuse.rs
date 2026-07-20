@@ -7,7 +7,7 @@
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
-    address_space::AgentMemoryIdentity,
+    address_space::{AgentMemoryIdentity, AGENT_CODE_PAGE_COUNT},
     address_space_reclamation::AllocatedAddressSpaceFrames,
     agent_image::VerifiedAgentImage,
     runtime_page::RuntimePageLedger,
@@ -17,10 +17,13 @@ use agent_kernel_x86_64::{
 
 use super::{
     initialize_content, page_is_zero, page_tables, physical_pointer, PreparedAgentMemory,
-    CALL_DATA_CONTENT_FRAME_INDEX, PHYSICAL_MEMORY_OFFSET,
+    CALL_DATA_CONTENT_FRAME_INDEX, CODE_CONTENT_FRAME_START_INDEX, LAZY_DATA_CONTENT_FRAME_INDEX,
+    PHYSICAL_MEMORY_OFFSET, SIGNAL_CONTENT_FRAME_INDEX, STACK_CONTENT_FRAME_START_INDEX,
 };
 
 impl PreparedAgentMemory {
+    // Failed reconstruction returns all physical frames to the caller intact.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn prepare_reused(
         frames: AllocatedAddressSpaceFrames,
         image: VerifiedAgentImage<'_>,
@@ -47,21 +50,32 @@ impl PreparedAgentMemory {
         }
 
         let content = identity.content_frames();
-        let code_frame = physical_frame(content[0])?;
-        let signal_frame = physical_frame(content[1])?;
-        let first_stack_frame = physical_frame(content[2])?;
-        let mut stack_frames = [first_stack_frame; STACK_PAGE_COUNT];
-        for (slot, address) in stack_frames
-            .iter_mut()
-            .zip(content[2..2 + STACK_PAGE_COUNT].iter().copied())
-        {
+        let first_code_frame = physical_frame(content[CODE_CONTENT_FRAME_START_INDEX])?;
+        let mut code_frames = [first_code_frame; AGENT_CODE_PAGE_COUNT];
+        for (slot, address) in code_frames.iter_mut().zip(
+            content[CODE_CONTENT_FRAME_START_INDEX
+                ..CODE_CONTENT_FRAME_START_INDEX + AGENT_CODE_PAGE_COUNT]
+                .iter()
+                .copied(),
+        ) {
             *slot = physical_frame(address)?;
         }
-        let lazy_data_frame = physical_frame(content[STACK_PAGE_COUNT + 2])?;
+        let signal_frame = physical_frame(content[SIGNAL_CONTENT_FRAME_INDEX])?;
+        let first_stack_frame = physical_frame(content[STACK_CONTENT_FRAME_START_INDEX])?;
+        let mut stack_frames = [first_stack_frame; STACK_PAGE_COUNT];
+        for (slot, address) in stack_frames.iter_mut().zip(
+            content[STACK_CONTENT_FRAME_START_INDEX
+                ..STACK_CONTENT_FRAME_START_INDEX + STACK_PAGE_COUNT]
+                .iter()
+                .copied(),
+        ) {
+            *slot = physical_frame(address)?;
+        }
+        let lazy_data_frame = physical_frame(content[LAZY_DATA_CONTENT_FRAME_INDEX])?;
         let call_data_frame = physical_frame(content[CALL_DATA_CONTENT_FRAME_INDEX])?;
         let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             PHYSICAL_MEMORY_OFFSET,
-            code_frame,
+            &code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -79,7 +93,7 @@ impl PreparedAgentMemory {
             PHYSICAL_MEMORY_OFFSET,
             identity.page_table_frames(),
             layout,
-            code_frame,
+            &code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,

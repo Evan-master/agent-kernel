@@ -43,6 +43,10 @@ impl<'a> VerifiedAgentImage<'a> {
     pub const fn entry_offset(&self) -> u32 {
         self.capsule.entry_offset()
     }
+
+    pub const fn code_page_count(&self) -> usize {
+        self.capsule.code_page_count()
+    }
 }
 
 fn image_kind_matches(record: AgentImageKind, header: u16) -> bool {

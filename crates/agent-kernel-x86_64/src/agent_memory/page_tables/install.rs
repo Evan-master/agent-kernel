@@ -7,7 +7,9 @@ use x86_64::{
 };
 
 use agent_kernel_x86_64::{
-    address_space::{AddressSpaceRoots, AGENT_P4_INDEX, AGENT_PAGE_TABLE_FRAME_COUNT},
+    address_space::{
+        AddressSpaceRoots, AGENT_CODE_PAGE_COUNT, AGENT_P4_INDEX, AGENT_PAGE_TABLE_FRAME_COUNT,
+    },
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
 
@@ -25,7 +27,7 @@ pub(in crate::agent_memory) fn install(
     physical_offset: u64,
     allocator: &mut BootFrameAllocator<'_>,
     layout: UserMemoryLayout,
-    code_frame: PhysFrame,
+    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -36,7 +38,7 @@ pub(in crate::agent_memory) fn install(
     install_with_allocator(
         physical_offset,
         layout,
-        code_frame,
+        code_frames,
         signal_frame,
         stack_frames,
         lazy_data_frame,
@@ -50,7 +52,7 @@ pub(in crate::agent_memory) fn install_reused(
     physical_offset: u64,
     private_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
     layout: UserMemoryLayout,
-    code_frame: PhysFrame,
+    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -60,7 +62,7 @@ pub(in crate::agent_memory) fn install_reused(
     install_with_allocator(
         physical_offset,
         layout,
-        code_frame,
+        code_frames,
         signal_frame,
         stack_frames,
         lazy_data_frame,
@@ -73,7 +75,7 @@ pub(in crate::agent_memory) fn install_reused(
 fn install_with_allocator(
     physical_offset: u64,
     layout: UserMemoryLayout,
-    code_frame: PhysFrame,
+    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -109,13 +111,15 @@ fn install_with_allocator(
         // physical window, and mapped frames are exclusive to this Agent slot.
         let mut agent_mapper =
             unsafe { OffsetPageTable::new(&mut *agent_pointer, VirtAddr::new(physical_offset)) };
-        map_page(
-            &mut agent_mapper,
-            &mut table_allocator,
-            layout.code_start(),
-            code_frame,
-            code_flags,
-        )?;
+        for (index, frame) in code_frames.iter().copied().enumerate() {
+            map_page(
+                &mut agent_mapper,
+                &mut table_allocator,
+                layout.code_page_start(index)?,
+                frame,
+                code_flags,
+            )?;
+        }
         map_page(
             &mut agent_mapper,
             &mut table_allocator,
@@ -142,7 +146,7 @@ fn install_with_allocator(
         if !agent_mappings_match(
             &agent_mapper,
             layout,
-            code_frame,
+            code_frames,
             signal_frame,
             stack_frames,
             lazy_data_frame,

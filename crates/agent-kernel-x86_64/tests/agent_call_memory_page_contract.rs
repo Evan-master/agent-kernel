@@ -13,7 +13,7 @@ const NONCE: u64 = 0xf66c_e006;
 const CAPABILITY: CapabilityId = CapabilityId::new(14);
 const RESOURCE: ResourceId = ResourceId::new(3);
 const CELL: MemoryCellId = MemoryCellId::new(1);
-const VIRTUAL_BASE: u64 = 0x0000_4000_0000_8000;
+const VIRTUAL_BASE: u64 = 0x0000_4000_0000_b000;
 const PROOF_VALUE: u64 = 0x4d45_4d50_4147_4531;
 
 #[test]

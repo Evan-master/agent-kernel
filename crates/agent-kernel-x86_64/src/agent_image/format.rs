@@ -142,6 +142,12 @@ impl<'a> AgentImageCapsule<'a> {
     pub const fn entry_offset(&self) -> u32 {
         self.header.entry_offset
     }
+
+    pub const fn code_page_count(&self) -> usize {
+        self.code
+            .len()
+            .div_ceil(crate::user_memory::PAGE_BYTES as usize)
+    }
 }
 
 fn read_u16(bytes: &[u8], offset: usize) -> u16 {

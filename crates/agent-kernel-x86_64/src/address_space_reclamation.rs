@@ -142,6 +142,8 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         })
     }
 
+    // The error path must return the complete no-heap owner for atomic retry.
+    #[allow(clippy::result_large_err)]
     pub fn cancel_allocation(
         &mut self,
         owner: AllocatedAddressSpaceFrames,

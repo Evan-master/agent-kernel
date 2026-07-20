@@ -238,6 +238,9 @@ fn identity(base: u64) -> AgentMemoryIdentity {
             base + 0x9000,
             base + 0xa000,
             base + 0xb000,
+            base + 0xc000,
+            base + 0xd000,
+            base + 0xe000,
         ],
     )
     .unwrap()

@@ -326,6 +326,7 @@ pub(super) fn run(
         memory_pool,
         resource_manager_image,
     )?;
+    serial_write_line("AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");

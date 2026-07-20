@@ -4,7 +4,7 @@ use agent_kernel_core::{
 };
 use agent_kernel_x86_64::agent_image::{
     sha256_digest, AgentImageCapsule, AgentImageLoadError, VerifiedAgentImage,
-    AGENT_IMAGE_HEADER_BYTES, MAX_AGENT_CODE_BYTES,
+    AGENT_IMAGE_HEADER_BYTES, MAX_AGENT_CODE_BYTES, MAX_AGENT_CODE_PAGES,
 };
 
 const ABI_VERSION: u16 = 1;
@@ -34,7 +34,33 @@ fn native_capsule_parses_exact_x86_worker_header_and_code() {
     assert_eq!(parsed.header().abi_version(), ABI_VERSION);
     assert_eq!(parsed.header().entry_version(), ENTRY_VERSION);
     assert_eq!(parsed.entry_offset(), 1);
+    assert_eq!(parsed.code_page_count(), 1);
     assert_eq!(parsed.code(), &[0x90, 0xcd, 0x90]);
+}
+
+#[test]
+fn native_capsule_accepts_digest_bound_code_across_four_pages() {
+    assert_eq!(MAX_AGENT_CODE_PAGES, 4);
+    assert_eq!(MAX_AGENT_CODE_BYTES, 16_384);
+
+    for (length, entry, pages) in [
+        (4096, 4095, 1),
+        (4097, 4096, 2),
+        (MAX_AGENT_CODE_BYTES, MAX_AGENT_CODE_BYTES - 1, 4),
+    ] {
+        let mut code = vec![0x90; length];
+        code[entry] = 0xcc;
+        let bytes = capsule(&code, 1, 1, 0, ABI_VERSION, ENTRY_VERSION, entry as u32);
+        let parsed = AgentImageCapsule::parse(&bytes).unwrap();
+        assert_eq!(parsed.code().len(), length);
+        assert_eq!(parsed.entry_offset(), entry as u32);
+        assert_eq!(parsed.code_page_count(), pages);
+
+        let record = record(sha256_digest(&bytes), AgentImageStatus::Verified);
+        let verified = VerifiedAgentImage::verify(record, &bytes).unwrap();
+        assert_eq!(verified.code_page_count(), pages);
+        assert_eq!(verified.code()[entry], 0xcc);
+    }
 }
 
 #[test]

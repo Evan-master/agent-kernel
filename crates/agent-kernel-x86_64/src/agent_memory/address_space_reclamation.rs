@@ -60,6 +60,8 @@ impl NativeAddressSpaceFramePool {
         (owner.identity() == identity).then_some(owner)
     }
 
+    // Cancellation retains the complete frame owner until zeroing can commit.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn cancel_zeroed_allocation(
         &mut self,
         owner: AllocatedAddressSpaceFrames,
