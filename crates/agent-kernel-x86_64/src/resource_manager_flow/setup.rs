@@ -45,7 +45,8 @@ pub(super) fn prepare(
             report.bootstrap_agent,
             report.bootstrap_capability,
             RESOURCE_MANAGER,
-            OperationSet::only(Operation::Act)
+            OperationSet::only(Operation::Observe)
+                .with(Operation::Act)
                 .with(Operation::Rollback)
                 .with(Operation::Delegate),
         )
@@ -145,7 +146,8 @@ fn prepared_state_valid(
             if authority.agent == RESOURCE_MANAGER
                 && authority.resource == report.bootstrap_resource
                 && authority.operations
-                    == OperationSet::only(Operation::Act)
+                    == OperationSet::only(Operation::Observe)
+                        .with(Operation::Act)
                         .with(Operation::Rollback)
                         .with(Operation::Delegate)
                 && !authority.revoked

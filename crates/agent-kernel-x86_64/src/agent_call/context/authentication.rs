@@ -296,6 +296,34 @@ impl AgentCallContext {
                 image,
                 nonce,
                 ..
+            }
+            | AgentCallRequest::BindNamespaceEntry {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::ResolveNamespaceEntry {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::RebindNamespaceEntry {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::RetireNamespaceEntry {
+                agent,
+                task,
+                image,
+                nonce,
+                ..
             } => self.matches_identity(agent, task, image, nonce, expected_nonce),
         }
     }

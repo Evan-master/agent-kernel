@@ -67,7 +67,7 @@ fn bind_driver_rejects_inactive_driver_without_allocation() {
 }
 
 #[test]
-fn bind_driver_rejects_non_device_resource_without_mutation() {
+fn bind_driver_accepts_workspace_control_plane_resource() {
     let mut core = BindingKernel::<8, 1>::new();
     let owner = AgentId::new(1);
     let driver = AgentId::new(2);
@@ -79,12 +79,35 @@ fn bind_driver_rejects_non_device_resource_without_mutation() {
     let capability = core
         .grant_capability(owner, workspace, OperationSet::only(Operation::Delegate))
         .unwrap();
+    let binding = core
+        .bind_driver(owner, capability, workspace, driver)
+        .expect("Workspace control plane should accept an explicit driver binding");
+
+    assert_eq!(binding, DriverBindingId::new(1));
+    assert_eq!(core.driver_bindings()[0].resource, workspace);
+    assert_eq!(
+        core.driver_bindings()[0].resource_kind,
+        ResourceKind::Workspace
+    );
+}
+
+#[test]
+fn bind_driver_rejects_non_driver_resource_without_mutation() {
+    let mut core = BindingKernel::<8, 1>::new();
+    let owner = AgentId::new(1);
+    let driver = AgentId::new(2);
+    core.register_agent(owner).unwrap();
+    core.register_agent(driver).unwrap();
+    let memory = core.register_resource(ResourceKind::Memory, None).unwrap();
+    let capability = core
+        .grant_capability(owner, memory, OperationSet::only(Operation::Delegate))
+        .unwrap();
     let events_before = core.events().len();
 
-    let result = core.bind_driver(owner, capability, workspace, driver);
+    let result = core.bind_driver(owner, capability, memory, driver);
 
     assert_eq!(result, Err(KernelError::ResourceKindMismatch));
-    assert_eq!(core.driver_bindings().len(), 0);
+    assert!(core.driver_bindings().is_empty());
     assert_eq!(core.events().len(), events_before);
 }
 

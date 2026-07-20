@@ -81,6 +81,7 @@ mod memory_store;
 mod message;
 mod message_retirement;
 mod namespace;
+mod namespace_entry_retirement;
 mod namespace_lookup;
 mod namespace_store;
 mod observation;
@@ -155,7 +156,9 @@ pub use message::{
     MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageRetirement,
     MessageStatus, OrphanedMessageRetirement,
 };
-pub use namespace::{NamespaceEntryRecord, NamespaceKey, NamespaceObject};
+pub use namespace::{
+    NamespaceEntryRecord, NamespaceEntryRetirement, NamespaceKey, NamespaceObject,
+};
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};
 pub use resource::{

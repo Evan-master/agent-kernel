@@ -468,6 +468,151 @@ resource_manager_entry:
     cmp r12, 1
     jne .halt
 
+    mov ecx, 44
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 1
+    mov r12d, 0x4e530001
+    mov r13d, 21
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 44
+    jne .halt
+    cmp r10, 1
+    jne .halt
+    cmp r11, 8
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    cmp r13, 12
+    jne .halt
+    cmp r14, 0x4e530001
+    jne .halt
+    cmp r15, 21
+    jne .halt
+    cmp rbp, 1
+    jne .halt
+
+    mov ecx, 45
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 1
+    mov r12d, 0x4e530001
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 45
+    jne .halt
+    cmp r10, 1
+    jne .halt
+    cmp r11, 8
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    cmp r13, 12
+    jne .halt
+    cmp r14, 0x4e530001
+    jne .halt
+    cmp r15, 21
+    jne .halt
+    cmp rbp, 1
+    jne .halt
+
+    mov ecx, 46
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 1
+    mov r12d, 65
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 46
+    jne .halt
+    cmp r10, 1
+    jne .halt
+    cmp r11, 8
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    cmp r13, 12
+    jne .halt
+    cmp r14, 0x4e530001
+    jne .halt
+    cmp r15, 65
+    jne .halt
+    cmp rbp, 2
+    jne .halt
+
+    mov ecx, 47
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 1
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 47
+    jne .halt
+    cmp r10, 1
+    jne .halt
+    cmp r11, 8
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    cmp r13, 12
+    jne .halt
+    cmp r14, 0x4e530001
+    jne .halt
+    cmp r15, 65
+    jne .halt
+    cmp rbp, 2
+    jne .halt
+
+    mov ecx, 44
+    xor edx, edx
+    mov r10d, 12
+    mov r11d, 1
+    mov r12d, 0x4e530002
+    mov r13d, 10
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 44
+    jne .halt
+    cmp r10, 2
+    jne .halt
+    cmp r11, 8
+    jne .halt
+    cmp r12, 1
+    jne .halt
+    cmp r13, 12
+    jne .halt
+    cmp r14, 0x4e530002
+    jne .halt
+    cmp r15, 10
+    jne .halt
+    cmp rbp, 1
+    jne .halt
+
     mov ecx, 10
     xor edx, edx
     mov r10d, 12

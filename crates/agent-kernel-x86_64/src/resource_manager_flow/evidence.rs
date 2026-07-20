@@ -4,6 +4,7 @@ mod agent_image;
 mod agent_management;
 mod memory_page;
 mod memory_region;
+mod namespace;
 mod task_lifecycle;
 
 use agent_kernel_core::{
@@ -56,8 +57,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 34
-        && completed.address_space_switch_count() == 68
+        && completed.call_count() == 39
+        && completed.address_space_switch_count() == 78
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && completed.physical_quantum_generation() == 1
@@ -94,7 +95,8 @@ pub(super) fn completed(
         && authority.agent == RESOURCE_MANAGER
         && authority.resource == booted.report().bootstrap_resource
         && authority.operations
-            == OperationSet::only(Operation::Act)
+            == OperationSet::only(Operation::Observe)
+                .with(Operation::Act)
                 .with(Operation::Rollback)
                 .with(Operation::Delegate)
         && !authority.revoked
@@ -107,6 +109,7 @@ pub(super) fn completed(
         && agent_management::state_valid(booted, manager, image)
         && agent_image::state_valid(booted, manager, image)
         && memory_page::state_valid(booted, image)
+        && namespace::state_valid(booted, image)
         && memory_region::state_valid(booted, image)
         && events_prove_lifecycle(booted, manager, image)
 }
@@ -145,6 +148,11 @@ fn events_prove_lifecycle(
         EventKind::MemoryCellCreated,
         EventKind::MemoryCellRecalled,
         EventKind::ResourceRetired,
+        EventKind::NamespaceEntryBound,
+        EventKind::NamespaceEntryResolved,
+        EventKind::NamespaceEntryRebound,
+        EventKind::NamespaceEntryRetired,
+        EventKind::NamespaceEntryBound,
         EventKind::ResourceCreated,
         EventKind::CapabilityGranted,
         EventKind::MemoryCellCreated,
@@ -203,15 +211,16 @@ fn events_prove_lifecycle(
         )
         && agent_image::events_valid(&tail[21], booted, manager, image)
         && memory_page::events_valid(&tail[23..28], booted, image)
+        && namespace::events_valid(&tail[28..33], booted, image)
         && memory_region::events_valid(
             &[
-                tail[28], tail[29], tail[30], tail[31], tail[32], tail[33], tail[34], tail[35],
-                tail[36], tail[37], tail[38], tail[39], tail[40], tail[41], tail[43],
+                tail[33], tail[34], tail[35], tail[36], tail[37], tail[38], tail[39], tail[40],
+                tail[41], tail[42], tail[43], tail[44], tail[45], tail[46], tail[48],
             ],
             booted,
             image,
         )
-        && tail[42].task == Some(manager.task)
-        && tail[42].task_result == Some(image.result())
-        && tail[44].task == Some(manager.task)
+        && tail[47].task == Some(manager.task)
+        && tail[47].task_result == Some(image.result())
+        && tail[49].task == Some(manager.task)
 }

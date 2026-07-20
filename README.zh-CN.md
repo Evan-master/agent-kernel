@@ -106,15 +106,21 @@ Agent 为中心的系统需要不同的控制面：
   建立授权路径；
 - Agent Call 43，允许已启动 Supervisor 在全部语义、CPU、页表和物理帧绑定清除后，
   回收一条终态且无引用的 MemoryCell 记录，同时保持 ID 单调增长和完整定宽审计证据；
-- 64 条记录的架构归档交接：357 个实时 Event 槽位全部占用时捕获 Event 1 至 64，
-  在 ring 3 校验检查点，从 Event 358 继续执行，最终将归档迭代器与实时迭代器合并
-  为 Event 1 至 391 的精确转录；
+- Agent Call 44 至 47，为原生 Namespace 提供绑定、解析、改绑和回收操作，使用严格
+  类型化对象编码、Workspace 作用域授权、完整记录回复、稳定稠密槽位恢复、单调
+  Namespace Entry ID，并为每次操作生成一条有序 Event；
+- 64 条记录的架构归档交接：362 个实时 Event 槽位全部占用时捕获 Event 1 至 64，
+  在 ring 3 校验检查点，从 Event 363 继续执行，最终将归档迭代器与实时迭代器合并
+  为 Event 1 至 396 的精确转录；
 - 七槽 Resource Store 容量恢复证明：通过清理路径撤销 Capability 13，按子节点
   优先顺序压缩 Capability 14、13、26，回收 Resource 3 记录，再在归还槽位创建
   单调递增的 Resource 8；
 - 五槽 MemoryCell Store 容量恢复证明：回收 MemoryCell 2，撤销并压缩 Capability
   16，回收 Memory Resource 4，随后在归还槽位创建 Resource 9、Capability 30 与
   MemoryCell 6；
+- Resource Manager Capsule 中的一槽 Namespace Store 容量恢复证明：把 Entry 1
+  绑定到 MemoryCell 2，完成解析后改绑到 Agent 8 并推进到 revision 2，通过
+  `Rollback` 回收该条目，再在归还槽位把单调递增的 Entry 2 绑定到 Workspace 1；
 - x86 准入 Broker，负责校验 Permit 绑定的 Capsule、驱动既有地址空间服务、
   提交语义准入，并在语义提交无法继续时完整恢复物理运行时事务；
 - 四条受认证 Worker 完成通知，分两轮唤醒保留的 Supervisor 调用帧，并完成 FIFO
@@ -171,8 +177,8 @@ Agent 为中心的系统需要不同的控制面：
 | Agent Image 记录回收事件 | 1 |
 | 原生 ring-3 完成上下文 | 11 |
 | 内核选择的 Dispatch | 35 |
-| Resource Manager Agent Call | 34 |
-| Resource Manager Agent/内核地址空间切换 | 68 |
+| Resource Manager Agent Call | 39 |
+| Resource Manager Agent/内核地址空间切换 | 78 |
 | Admission Supervisor Agent Call | 44 |
 | Admission Supervisor Agent/内核地址空间切换 | 88 |
 | Runtime Service Worker Agent Call | 20 |
@@ -236,14 +242,18 @@ Agent 为中心的系统需要不同的控制面：
 | 最终驻留 MemoryCell | 5 |
 | 已回收 MemoryCell 记录 | 1 |
 | 已复用 MemoryCell 槽位 | 1 |
+| Namespace Entry Store 容量 | 1 |
+| 最终驻留 Namespace Entry | 1 |
+| 已回收 Namespace Entry | 1 |
+| 已复用 Namespace Entry 槽位 | 1 |
 | 已归还并清零的共享运行时帧 | 16 |
-| 实时 Event Log 容量 | 357 |
-| 归档提交前实时 Event 占用量 | 357 |
+| 实时 Event Log 容量 | 362 |
+| 归档提交前实时 Event 占用量 | 362 |
 | 架构归档中的 Event | 64 |
-| 最终实时 Event 占用量 | 327 |
-| 最终下一 Event 序列号 | 392 |
+| 最终实时 Event 占用量 | 332 |
+| 最终下一 Event 序列号 | 397 |
 | 保留的 Event 归档检查点 | 1 |
-| Driver 完成后的有序内核事件 | 391 |
+| Driver 完成后的有序内核事件 | 396 |
 
 `scripts/run-qemu.sh` 会逐条校验事件顺序，同时拒绝缺失标记、多余事件、异常的
 QEMU 退出状态以及任何 fail-closed 启动路径。
@@ -252,7 +262,7 @@ QEMU 退出状态以及任何 fail-closed 启动路径。
 
 | Capsule | Agent Call | 地址空间切换 | Capsule 字节数 | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
-| Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
+| Resource Manager | 39 | 78 | 3,848 | `8914b2dc4f1a1c5d93d6d7315ee5e289579fdbeee543b70f121abcce2a8bced6` |
 | Admission Supervisor | 44 | 88 | 4,114 | `3acd53283d17e77952a5742b895b2f4b578ee768faf497bce070a86397c6cb42` |
 
 生成的 Rust 字节与独立汇编产物完全一致，每个完整 Capsule 在 release ELF 中恰好
@@ -279,7 +289,7 @@ flowchart TB
     X86 --> Archive["有界外部 Event 归档"]
     Core --> HAL["不可变 HAL 请求"]
     HAL --> Device["架构或宿主设备后端"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Call 27、29-43"| X86
+    Supervisor["ring-3 Supervisor"] -->|"Agent Call 27、29-47"| X86
     Workers["已准入 ring-3 Worker"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -475,7 +485,7 @@ scripts/run-qemu.sh --release
 ```
 
 脚本会构建裸机目标、生成 BIOS 镜像、启动 QEMU、检查完整串口记录、要求恰好
-391 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
+396 个事件，并把内核 debug-exit 状态也作为契约的一部分。成功运行包含以下证明行：
 
 ```text
 AGENT_KERNEL_NATIVE_FAULT_MEMORY_RECLAIMED_OK
@@ -544,33 +554,40 @@ AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
 AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
+AGENT_KERNEL_NATIVE_NAMESPACE_MANAGER_OK
+AGENT_KERNEL_NATIVE_NAMESPACE_SLOT_REUSE_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[340] fault_compacted
-event[341] fault_compacted
-event[342] fault_compacted
-event[343] fault_compacted
-event[354] capability_revoked
-event[355] capability_compacted
-event[356] capability_compacted
-event[357] capability_compacted
-event[358] resource_record_retired
-event[359] resource_created
-event[360] capability_granted
-event[361] capability_derived
-event[362] capability_derived
-event[363] memory_cell_record_retired
-event[364] capability_revoked
-event[365] capability_compacted
-event[366] resource_record_retired
-event[367] resource_created
-event[368] capability_granted
-event[369] memory_cell_created
-event[370] task_result_submitted
-event[371] resource_retired
-event[372] task_completed
-event[391] driver_invocation_completed
+event[186] namespace_entry_bound
+event[187] namespace_entry_resolved
+event[188] namespace_entry_rebound
+event[189] namespace_entry_retired
+event[190] namespace_entry_bound
+event[345] fault_compacted
+event[346] fault_compacted
+event[347] fault_compacted
+event[348] fault_compacted
+event[359] capability_revoked
+event[360] capability_compacted
+event[361] capability_compacted
+event[362] capability_compacted
+event[363] resource_record_retired
+event[364] resource_created
+event[365] capability_granted
+event[366] capability_derived
+event[367] capability_derived
+event[368] memory_cell_record_retired
+event[369] capability_revoked
+event[370] capability_compacted
+event[371] resource_record_retired
+event[372] resource_created
+event[373] capability_granted
+event[374] memory_cell_created
+event[375] task_result_submitted
+event[376] resource_retired
+event[377] task_completed
+event[396] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -609,7 +626,7 @@ SUPERVISOR_HANDOFF_READY
   清零后的帧转移到固定容量池；
 - 从回收池分配绑定 Agent 和代数的完整 11 帧身份，并由事务式运行时服务负责私有
   页表层级重建、CPU 准备和原生运行时登记；
-- ring-3 Admission Supervisor、受认证 Agent Call 27 与 29 至 43、固定容量准入记录、
+- ring-3 Supervisor、受认证 Agent Call 27 与 29 至 47、固定容量准入记录、
   独立容量配置、终态重试、代数绑定 Permit、requester 绑定的准入上下文，以及
   连接可审计语义请求和物理运行时服务的 Broker；
 - 跨越两个准入与执行批次的常驻 Supervisor Mailbox 等待、受认证 Worker 通知、
@@ -632,6 +649,9 @@ SUPERVISOR_HANDOFF_READY
 - 经过授权的稠密 MemoryCell 记录回收，执行终态 Memory Resource 校验、Core 与
   原生实时引用预检、活跃祖先授权、单调 ID 和稳定保留顺序，生成定宽回执，完成
   槽位复用并保留完整 Event 证据；
+- 原生 Namespace 绑定、解析、改绑和稳定稠密回收，使用 Workspace 作用域
+  Capability、五种类型化对象、完整记录 ABI 回复、单调 Entry ID、一槽复用和完整
+  Event 证据；
 - 经过授权的稠密 Agent Entry 回收，执行终态范围校验、原生运行时与实时引用预检、
   退休 Resource 祖先授权、稳定的保留记录顺序、同身份重新启动，并生成完整回收事件；
 - 接收方所有的已确认 Message 回收，执行 Namespace 引用预检，保持稠密顺序和
@@ -652,10 +672,10 @@ SUPERVISOR_HANDOFF_READY
   增长，恢复完整 Store 容量，并生成完整逐记录 Event 证据；
 - 两阶段 Event 前缀归档，包含完整字段规范 SHA-256 编码、Supervisor 根作用域授权、
   稳定实时前缀释放、Event 序列单调性、链式检查点、有界 x86 交接缓冲，以及截至
-  Event 391 的精确归档/实时重放；
+  Event 396 的精确归档/实时重放；
 - 在页表重建后的准入拒绝路径完成全部帧回滚，并让四个 Runtime Service Worker
   分两批完成并发持有、FIFO ring-3 执行、语义验证、局部回收与精确跨批次帧复用；
-- 为包含 391 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
+- 为包含 396 个事件的参考配置提供固定 2 MiB 带保护页内核启动栈。
 
 ### 后续规划
 
@@ -668,8 +688,8 @@ SUPERVISOR_HANDOFF_READY
 - POSIX、Linux 或 Windows 兼容层；
 - 生产安全加固、形式化验证和稳定 ABI 承诺。
 
-最新里程碑的完整契约见 [Memory Cell 记录回收设计](docs/superpowers/specs/2026-07-19-memory-cell-record-retirement-v1-design.md)
-和 [实现计划](docs/superpowers/plans/2026-07-19-memory-cell-record-retirement-v1.md)。
+最新里程碑的完整契约见 [Native Namespace Manager 设计](docs/superpowers/specs/2026-07-20-native-namespace-manager-v1-design.md)
+和 [实现计划](docs/superpowers/plans/2026-07-20-native-namespace-manager-v1.md)。
 历史设计记录保留在 `docs/superpowers/specs/`。
 
 ## 参与贡献

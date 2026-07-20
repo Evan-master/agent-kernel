@@ -65,7 +65,7 @@ impl PreparedAdmissionSupervisorFlow {
             && window
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 352 + index as u64)
+                .all(|(index, event)| event.sequence == 357 + index as u64)
             && capability_event_matches(
                 window[0],
                 EventKind::CapabilityDerived,

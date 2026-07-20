@@ -49,4 +49,8 @@ pub enum AgentCallOperation {
     RetireResourceRecord,
     RevokeCapabilityForCleanup,
     RetireMemoryCellRecord,
+    BindNamespaceEntry,
+    ResolveNamespaceEntry,
+    RebindNamespaceEntry,
+    RetireNamespaceEntry,
 }

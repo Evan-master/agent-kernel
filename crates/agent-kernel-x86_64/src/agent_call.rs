@@ -20,6 +20,7 @@ mod mailbox;
 mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
+mod namespace;
 mod operation;
 mod request;
 mod resource;
@@ -35,6 +36,7 @@ use agent_kernel_core::{AgentId, AgentImageId, TaskId, TaskResult};
 use crate::context::PrivilegeInterruptStackFrame;
 
 pub use context::AgentCallContext;
+pub use namespace::{decode_namespace_object, encode_namespace_object};
 pub use operation::AgentCallOperation;
 pub use request::AgentCallRequest;
 pub use transcript::{AgentCallTranscript, AgentCallTranscriptError};
@@ -85,6 +87,10 @@ pub const AGENT_CALL_ARCHIVE_EVENTS: u64 = 40;
 pub const AGENT_CALL_RETIRE_RESOURCE_RECORD: u64 = 41;
 pub const AGENT_CALL_REVOKE_CAPABILITY_FOR_CLEANUP: u64 = 42;
 pub const AGENT_CALL_RETIRE_MEMORY_CELL_RECORD: u64 = 43;
+pub const AGENT_CALL_BIND_NAMESPACE_ENTRY: u64 = 44;
+pub const AGENT_CALL_RESOLVE_NAMESPACE_ENTRY: u64 = 45;
+pub const AGENT_CALL_REBIND_NAMESPACE_ENTRY: u64 = 46;
+pub const AGENT_CALL_RETIRE_NAMESPACE_ENTRY: u64 = 47;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -164,6 +170,10 @@ impl AgentCallRequest {
                 AgentCallOperation::RevokeCapabilityForCleanup
             }
             AGENT_CALL_RETIRE_MEMORY_CELL_RECORD => AgentCallOperation::RetireMemoryCellRecord,
+            AGENT_CALL_BIND_NAMESPACE_ENTRY => AgentCallOperation::BindNamespaceEntry,
+            AGENT_CALL_RESOLVE_NAMESPACE_ENTRY => AgentCallOperation::ResolveNamespaceEntry,
+            AGENT_CALL_REBIND_NAMESPACE_ENTRY => AgentCallOperation::RebindNamespaceEntry,
+            AGENT_CALL_RETIRE_NAMESPACE_ENTRY => AgentCallOperation::RetireNamespaceEntry,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -284,6 +294,10 @@ impl AgentCallRequest {
             AgentCallOperation::RetireMemoryCellRecord => {
                 memory_cell_record_retirement::decode(frame)
             }
+            AgentCallOperation::BindNamespaceEntry => namespace::decode_bind(frame),
+            AgentCallOperation::ResolveNamespaceEntry => namespace::decode_resolve(frame),
+            AgentCallOperation::RebindNamespaceEntry => namespace::decode_rebind(frame),
+            AgentCallOperation::RetireNamespaceEntry => namespace::decode_retire(frame),
         }
     }
 }

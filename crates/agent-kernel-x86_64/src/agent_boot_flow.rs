@@ -8,7 +8,7 @@ mod address_space_reuse;
 mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
-use agent_kernel_core::{EventKind, TaskId, TaskStatus};
+use agent_kernel_core::{ActionId, AgentId, EventKind, ResourceKind, TaskId, TaskStatus};
 use agent_kernel_x86_64::agent_image::{AgentImageCapsule, VerifiedAgentImage};
 use bootloader_api::BootInfo;
 
@@ -39,7 +39,8 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let resource_manager_image = boot_agent_images::resource_manager();
     let reuse_worker_image = boot_agent_images::reuse_worker();
     let admission_supervisor_image = boot_agent_images::admission_supervisor();
-    let Ok(mut booted) = X86BootedKernel::boot(BootConfig::default()) else {
+    let boot_config = BootConfig::new(AgentId::new(1), ResourceKind::Workspace, ActionId::new(1));
+    let Ok(mut booted) = X86BootedKernel::boot(boot_config) else {
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
     let Some(driver_setup) = PortDriverSetup::prepare(&mut booted, COM1) else {

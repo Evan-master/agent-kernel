@@ -64,6 +64,10 @@ impl<
         &self.namespace_entries[..self.namespace_entry_len]
     }
 
+    pub const fn namespace_entry_capacity(&self) -> usize {
+        NAMESPACE_ENTRIES
+    }
+
     pub(crate) fn ensure_namespace_resource(
         &self,
         namespace: ResourceId,

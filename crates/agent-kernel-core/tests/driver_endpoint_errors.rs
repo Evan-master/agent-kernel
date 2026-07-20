@@ -26,22 +26,33 @@ fn prepare<const EVENTS: usize>(
 }
 
 #[test]
-fn endpoint_requires_device_like_resource_and_delegate_authority() {
+fn endpoint_accepts_workspace_control_plane_and_requires_delegate_authority() {
     let (mut workspace_core, installer, workspace, capability) = prepare::<8>(
         ResourceKind::Workspace,
         OperationSet::only(Operation::Delegate),
     );
-    let events_before = workspace_core.events().len();
-    assert_eq!(
-        workspace_core.register_driver_endpoint(
+    workspace_core
+        .register_driver_endpoint(
             installer,
             capability,
             workspace,
             DriverEndpointDescriptor::virtual_channel(1),
+        )
+        .expect("Workspace control plane accepts an explicit endpoint");
+
+    let (mut memory_core, installer, memory, capability) = prepare::<8>(
+        ResourceKind::Memory,
+        OperationSet::only(Operation::Delegate),
+    );
+    assert_eq!(
+        memory_core.register_driver_endpoint(
+            installer,
+            capability,
+            memory,
+            DriverEndpointDescriptor::virtual_channel(1),
         ),
         Err(KernelError::ResourceKindMismatch)
     );
-    assert_eq!(workspace_core.events().len(), events_before);
 
     let (mut device_core, installer, device, capability) =
         prepare::<8>(ResourceKind::Device, OperationSet::only(Operation::Act));

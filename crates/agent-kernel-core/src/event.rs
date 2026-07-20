@@ -102,6 +102,7 @@ pub enum EventKind {
     NamespaceEntryBound,
     NamespaceEntryResolved,
     NamespaceEntryRebound,
+    NamespaceEntryRetired,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

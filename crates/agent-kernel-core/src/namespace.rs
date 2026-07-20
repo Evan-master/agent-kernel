@@ -39,6 +39,43 @@ pub struct NamespaceEntryRecord {
     pub revision: u64,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NamespaceEntryRetirement {
+    record: NamespaceEntryRecord,
+    actor: AgentId,
+    authority: CapabilityId,
+}
+
+impl NamespaceEntryRetirement {
+    pub(crate) const fn new(
+        record: NamespaceEntryRecord,
+        actor: AgentId,
+        authority: CapabilityId,
+    ) -> Self {
+        Self {
+            record,
+            actor,
+            authority,
+        }
+    }
+
+    pub const fn record(self) -> NamespaceEntryRecord {
+        self.record
+    }
+
+    pub const fn namespace_entry(self) -> NamespaceEntryId {
+        self.record.id
+    }
+
+    pub const fn actor(self) -> AgentId {
+        self.actor
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
+    }
+}
+
 impl NamespaceEntryRecord {
     pub(crate) const fn empty() -> Self {
         Self {

@@ -334,6 +334,8 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_RECORD_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_AGENT_IMAGE_RECORD_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_NAMESPACE_MANAGER_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_NAMESPACE_SLOT_REUSE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK");
     let completed_agents = [

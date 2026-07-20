@@ -19,6 +19,7 @@ mod mailbox;
 mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
+mod namespace;
 mod resource;
 mod resource_record_retirement;
 mod runtime_admission;

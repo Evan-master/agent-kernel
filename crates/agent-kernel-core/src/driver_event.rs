@@ -112,11 +112,13 @@ impl<
 
     pub(crate) fn ensure_driver_resource(kind: ResourceKind) -> Result<(), KernelError> {
         match kind {
-            ResourceKind::Device | ResourceKind::Network | ResourceKind::Service => Ok(()),
             ResourceKind::Workspace
-            | ResourceKind::Memory
-            | ResourceKind::File
-            | ResourceKind::Process => Err(KernelError::ResourceKindMismatch),
+            | ResourceKind::Device
+            | ResourceKind::Network
+            | ResourceKind::Service => Ok(()),
+            ResourceKind::Memory | ResourceKind::File | ResourceKind::Process => {
+                Err(KernelError::ResourceKindMismatch)
+            }
         }
     }
 

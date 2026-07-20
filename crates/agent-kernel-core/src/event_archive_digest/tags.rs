@@ -93,6 +93,7 @@ pub(super) const fn event_kind(value: EventKind) -> u16 {
         EventKind::NamespaceEntryBound => 82,
         EventKind::NamespaceEntryResolved => 83,
         EventKind::NamespaceEntryRebound => 84,
+        EventKind::NamespaceEntryRetired => 87,
     }
 }
 

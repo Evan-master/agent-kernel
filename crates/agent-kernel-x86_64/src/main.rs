@@ -49,7 +49,8 @@ pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
 pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) const X86_FAULT_CAPACITY: usize = 4;
 pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
-pub(crate) const X86_EVENT_CAPACITY: usize = 357;
+pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 1;
+pub(crate) const X86_EVENT_CAPACITY: usize = 362;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     X86_RESOURCE_CAPACITY,
@@ -72,6 +73,7 @@ pub(crate) type X86BootedKernel = BootedKernel<
     1,
     X86_MEMORY_CELL_CAPACITY,
     X86_RUNTIME_ADMISSION_CAPACITY,
+    X86_NAMESPACE_ENTRY_CAPACITY,
 >;
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {

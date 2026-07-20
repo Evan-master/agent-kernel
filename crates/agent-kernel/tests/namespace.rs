@@ -22,7 +22,8 @@ fn namespace_syscalls_bind_resolve_rebind_and_expose_entries() {
             workspace,
             OperationSet::empty()
                 .with(Operation::Observe)
-                .with(Operation::Act),
+                .with(Operation::Act)
+                .with(Operation::Rollback),
         )
         .expect("workspace capability should fit");
     let key = NamespaceKey::new(11);
@@ -42,15 +43,31 @@ fn namespace_syscalls_bind_resolve_rebind_and_expose_entries() {
     let event = kernel
         .sys_rebind_namespace_entry(agent, capability, entry, NamespaceObject::Agent(agent))
         .expect("namespace entry should rebind");
+    let retirement = kernel
+        .sys_retire_namespace_entry(agent, capability, entry)
+        .expect("namespace entry should retire");
+    let fresh = kernel
+        .sys_bind_namespace_entry(
+            agent,
+            capability,
+            workspace,
+            NamespaceKey::new(12),
+            NamespaceObject::Resource(workspace),
+        )
+        .expect("retired capacity should be reusable");
 
     assert_eq!(entry, NamespaceEntryId::new(1));
     assert_eq!(resolved, NamespaceObject::Resource(workspace));
-    assert_eq!(
-        kernel.namespace_entries()[0].object,
-        NamespaceObject::Agent(agent)
-    );
-    assert_eq!(kernel.namespace_entries()[0].revision, 2);
+    assert_eq!(retirement.record().object, NamespaceObject::Agent(agent));
+    assert_eq!(retirement.record().revision, 2);
     assert_eq!(kernel.events()[2].kind, EventKind::NamespaceEntryBound);
     assert_eq!(kernel.events()[3].kind, EventKind::NamespaceEntryResolved);
     assert_eq!(event.kind, EventKind::NamespaceEntryRebound);
+    assert_eq!(retirement.namespace_entry(), entry);
+    assert_eq!(retirement.record().revision, 2);
+    assert_eq!(kernel.events()[5].kind, EventKind::NamespaceEntryRetired);
+    assert_eq!(kernel.events()[6].kind, EventKind::NamespaceEntryBound);
+    assert_eq!(fresh, NamespaceEntryId::new(2));
+    assert_eq!(kernel.namespace_entries().len(), 1);
+    assert_eq!(kernel.namespace_entries()[0].id, fresh);
 }

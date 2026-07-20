@@ -52,7 +52,7 @@ impl PreparedAdmissionSupervisorFlow {
             && window
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 358 + index as u64)
+                .all(|(index, event)| event.sequence == 363 + index as u64)
             && retirement_event_matches(window[0])
             && resource_event_matches(window[1], EventKind::ResourceCreated)
             && resource_event_matches(window[2], EventKind::CapabilityGranted)

@@ -104,5 +104,6 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::NamespaceEntryBound => "namespace_entry_bound",
         EventKind::NamespaceEntryResolved => "namespace_entry_resolved",
         EventKind::NamespaceEntryRebound => "namespace_entry_rebound",
+        EventKind::NamespaceEntryRetired => "namespace_entry_retired",
     }
 }

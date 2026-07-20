@@ -19,6 +19,8 @@ mod memory_authority;
 mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
+mod namespace;
+mod namespace_entry_retirement;
 mod resource;
 mod resource_record_retirement;
 mod runtime_admission;
@@ -166,6 +168,28 @@ pub(super) fn run(
                 authority,
                 target,
             )?,
+            AgentCallRequest::BindNamespaceEntry {
+                authority,
+                namespace: namespace_resource,
+                key,
+                object,
+                ..
+            } => namespace::bind(booted, pending, authority, namespace_resource, key, object)?,
+            AgentCallRequest::ResolveNamespaceEntry {
+                authority,
+                namespace: namespace_resource,
+                key,
+                ..
+            } => namespace::resolve(booted, pending, authority, namespace_resource, key)?,
+            AgentCallRequest::RebindNamespaceEntry {
+                authority,
+                entry,
+                object,
+                ..
+            } => namespace::rebind(booted, pending, authority, entry, object)?,
+            AgentCallRequest::RetireNamespaceEntry {
+                authority, entry, ..
+            } => namespace_entry_retirement::retire(booted, pending, authority, entry)?,
             AgentCallRequest::CompactCapability {
                 authority, target, ..
             } => capability_compaction::compact(booted, pending, authority, target)?,

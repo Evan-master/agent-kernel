@@ -16,6 +16,7 @@ mod intent_compaction;
 mod memory_cell_record_retirement;
 mod memory_page;
 mod memory_region;
+mod namespace;
 mod resource_record_retirement;
 mod runtime_admission;
 mod task_compaction;

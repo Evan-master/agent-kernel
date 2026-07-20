@@ -7,7 +7,7 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, Event, KernelError, NamespaceEntryId, NamespaceEntryRecord,
-    NamespaceKey, NamespaceObject, ResourceId,
+    NamespaceEntryRetirement, NamespaceKey, NamespaceObject, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -97,7 +97,20 @@ impl<
             .rebind_namespace_entry(agent, capability, entry, object)
     }
 
+    pub fn sys_retire_namespace_entry(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+    ) -> Result<NamespaceEntryRetirement, KernelError> {
+        self.core.retire_namespace_entry(actor, authority, entry)
+    }
+
     pub fn namespace_entries(&self) -> &[NamespaceEntryRecord] {
         self.core.namespace_entries()
+    }
+
+    pub const fn namespace_entry_capacity(&self) -> usize {
+        self.core.namespace_entry_capacity()
     }
 }

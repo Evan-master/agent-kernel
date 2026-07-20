@@ -210,6 +210,9 @@ pub fn format_event(event: &Event) -> String {
         EventKind::NamespaceEntryRebound => {
             format_namespace_event(event, "namespace_entry_rebound")
         }
+        EventKind::NamespaceEntryRetired => {
+            format_namespace_event(event, "namespace_entry_retired")
+        }
     }
 }
 

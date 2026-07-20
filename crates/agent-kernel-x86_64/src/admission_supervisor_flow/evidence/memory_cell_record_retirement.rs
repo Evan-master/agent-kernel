@@ -56,7 +56,7 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(start) = kernel
             .events()
             .iter()
-            .position(|event| event.sequence == 363)
+            .position(|event| event.sequence == 368)
         else {
             return false;
         };
@@ -105,7 +105,7 @@ impl PreparedAdmissionSupervisorFlow {
             && events
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 363 + index as u64)
+                .all(|(index, event)| event.sequence == 368 + index as u64)
             && retirement_event(events[0])
             && capability_event(events[1], EventKind::CapabilityRevoked)
             && capability_event(events[2], EventKind::CapabilityCompacted)

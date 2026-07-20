@@ -84,6 +84,7 @@ pub struct BootedKernel<
     const FAULT_POLICIES: usize = 0,
     const MEMORY_CELLS: usize = 0,
     const RUNTIME_ADMISSIONS: usize = TASKS,
+    const NAMESPACE_ENTRIES: usize = 0,
 > {
     kernel: AgentKernel<
         AGENTS,
@@ -98,7 +99,7 @@ pub struct BootedKernel<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
-        0,
+        NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
@@ -135,6 +136,7 @@ impl<
         const FAULT_POLICIES: usize,
         const MEMORY_CELLS: usize,
         const RUNTIME_ADMISSIONS: usize,
+        const NAMESPACE_ENTRIES: usize,
     >
     BootedKernel<
         AGENTS,
@@ -158,6 +160,7 @@ impl<
         FAULT_POLICIES,
         MEMORY_CELLS,
         RUNTIME_ADMISSIONS,
+        NAMESPACE_ENTRIES,
     >
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
@@ -243,7 +246,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
-        0,
+        NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,
@@ -273,7 +276,7 @@ impl<
         RUN_QUEUE,
         MESSAGES,
         MEMORY_CELLS,
-        0,
+        NAMESPACE_ENTRIES,
         FAULTS,
         FAULT_HANDLERS,
         FAULT_POLICIES,

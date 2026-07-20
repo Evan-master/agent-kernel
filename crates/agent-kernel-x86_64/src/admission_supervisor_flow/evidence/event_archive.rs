@@ -47,14 +47,14 @@ impl PreparedAdmissionSupervisorFlow {
                 .events()
                 .enumerate()
                 .all(|(index, event)| event.sequence == index as u64 + 1)
-            && live.len() == 308
+            && live.len() == 313
             && live.first().is_some_and(|event| event.sequence == 65)
             && live.last().is_some_and(|event| {
-                event.sequence == 372
+                event.sequence == 377
                     && event.kind == EventKind::TaskCompleted
                     && event.agent == ADMISSION_SUPERVISOR
                     && event.task == Some(self.supervisor.task)
             })
-            && kernel.next_event_sequence() == 373
+            && kernel.next_event_sequence() == 378
     }
 }

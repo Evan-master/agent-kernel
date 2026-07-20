@@ -6,8 +6,9 @@
 
 use agent_kernel_core::{
     AgentId, AgentImageId, CapabilityId, FaultId, IntentId, IntentKind, MemoryCellId, MessageId,
-    MessageKind, MessagePayload, OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId,
-    TaskId, TaskResult, VerificationRequirement, WaiterId,
+    MessageKind, MessagePayload, NamespaceEntryId, NamespaceKey, NamespaceObject, OperationSet,
+    ResourceId, ResourceKind, RuntimeAdmissionId, TaskId, TaskResult, VerificationRequirement,
+    WaiterId,
 };
 
 use super::AgentCallOperation;
@@ -350,6 +351,42 @@ pub enum AgentCallRequest {
         authority: CapabilityId,
         target: MemoryCellId,
     },
+    BindNamespaceEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        namespace: ResourceId,
+        key: NamespaceKey,
+        object: NamespaceObject,
+    },
+    ResolveNamespaceEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        namespace: ResourceId,
+        key: NamespaceKey,
+    },
+    RebindNamespaceEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+        object: NamespaceObject,
+    },
+    RetireNamespaceEntry {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        authority: CapabilityId,
+        entry: NamespaceEntryId,
+    },
 }
 
 impl AgentCallRequest {
@@ -400,6 +437,10 @@ impl AgentCallRequest {
                 AgentCallOperation::RevokeCapabilityForCleanup
             }
             Self::RetireMemoryCellRecord { .. } => AgentCallOperation::RetireMemoryCellRecord,
+            Self::BindNamespaceEntry { .. } => AgentCallOperation::BindNamespaceEntry,
+            Self::ResolveNamespaceEntry { .. } => AgentCallOperation::ResolveNamespaceEntry,
+            Self::RebindNamespaceEntry { .. } => AgentCallOperation::RebindNamespaceEntry,
+            Self::RetireNamespaceEntry { .. } => AgentCallOperation::RetireNamespaceEntry,
         }
     }
 }

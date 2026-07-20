@@ -138,16 +138,24 @@ currently provides:
   unreferenced MemoryCell record after every semantic, CPU, page-table, and
   physical-frame binding has been removed, while preserving monotonic IDs and
   complete fixed-width audit evidence;
+- Agent Calls 44 through 47, which expose native Namespace bind, resolve,
+  rebind, and retirement with strict typed-object encoding, Workspace-scoped
+  authority, complete-record replies, stable dense slot recovery, monotonic
+  Namespace Entry IDs, and one ordered Event per operation;
 - a 64-record architecture archive handoff that captures Events 1 through 64
-  while all 357 live Event slots are occupied, verifies the checkpoint in
-  ring 3, resumes execution at Event 358, and later merges archived and live
-  iterators into the exact Event 1 through 391 transcript;
+  while all 362 live Event slots are occupied, verifies the checkpoint in
+  ring 3, resumes execution at Event 363, and later merges archived and live
+  iterators into the exact Event 1 through 396 transcript;
 - a seven-slot Resource Store recovery proof that cleanup-revokes Capability
   13, compacts Capabilities 14, 13, and 26 in child-first order, retires
   Resource record 3, then creates monotonic Resource 8 in the returned slot;
 - a five-slot MemoryCell Store recovery proof that retires MemoryCell 2,
   cleanup-revokes and compacts Capability 16, retires Memory Resource 4, then
   creates Resource 9, Capability 30, and MemoryCell 6 in the returned slots;
+- a one-slot Namespace Store recovery proof in the Resource Manager Capsule:
+  bind Entry 1 to MemoryCell 2, resolve it, rebind it to Agent 8 at revision
+  2, retire it through `Rollback`, then bind monotonic Entry 2 to Workspace 1
+  in the returned slot;
 - an x86 admission broker that verifies each permit-bound Capsule, drives the
   existing address-space service, commits semantic admission, and restores the
   physical runtime transaction if the semantic commit cannot proceed;
@@ -216,8 +224,8 @@ The reference validation profile enforces these deterministic invariants:
 | Agent Image record retirement Events | 1 |
 | Native ring-3 completions | 11 |
 | Kernel-selected dispatches | 35 |
-| Resource Manager Agent Calls | 34 |
-| Resource Manager Agent/kernel address-space switches | 68 |
+| Resource Manager Agent Calls | 39 |
+| Resource Manager Agent/kernel address-space switches | 78 |
 | Admission Supervisor Agent Calls | 44 |
 | Admission Supervisor Agent/kernel address-space switches | 88 |
 | Runtime Service Worker Agent Calls | 20 |
@@ -281,14 +289,18 @@ The reference validation profile enforces these deterministic invariants:
 | Final resident MemoryCells | 5 |
 | Retired MemoryCell records | 1 |
 | Reused MemoryCell slots | 1 |
+| Namespace Entry store capacity | 1 |
+| Final resident Namespace Entries | 1 |
+| Retired Namespace Entries | 1 |
+| Reused Namespace Entry slots | 1 |
 | Shared runtime frames returned and zeroed | 16 |
-| Live Event Log capacity | 357 |
-| Live Event occupancy before archive | 357 |
+| Live Event Log capacity | 362 |
+| Live Event occupancy before archive | 362 |
 | Events in the architecture archive | 64 |
-| Final live Event occupancy | 327 |
-| Final next Event sequence | 392 |
+| Final live Event occupancy | 332 |
+| Final next Event sequence | 397 |
 | Retained Event archive checkpoints | 1 |
-| Ordered kernel events after Driver completion | 391 |
+| Ordered kernel events after Driver completion | 396 |
 
 `scripts/run-qemu.sh` validates every event in order and rejects missing
 markers, extra events, an unexpected QEMU exit status, or any fail-closed boot
@@ -299,7 +311,7 @@ artifacts:
 
 | Capsule | Agent Calls | Address-space switches | Capsule bytes | SHA-256 |
 | --- | ---: | ---: | ---: | --- |
-| Resource Manager | 34 | 68 | 3,195 | `d86e0918da3eb102ba24d382812c60cf005829888b508817bbd51ea34925af9e` |
+| Resource Manager | 39 | 78 | 3,848 | `8914b2dc4f1a1c5d93d6d7315ee5e289579fdbeee543b70f121abcce2a8bced6` |
 | Admission Supervisor | 44 | 88 | 4,114 | `3acd53283d17e77952a5742b895b2f4b578ee768faf497bce070a86397c6cb42` |
 
 The generated Rust bytes match independently assembled machine code, and each
@@ -326,7 +338,7 @@ flowchart TB
     X86 --> Archive["Bounded external Event archive"]
     Core --> HAL["Immutable HAL request"]
     HAL --> Device["Architecture or host device backend"]
-    Supervisor["ring-3 Admission Supervisor"] -->|"Agent Calls 27, 29-43"| X86
+    Supervisor["ring-3 Supervisors"] -->|"Agent Calls 27, 29-47"| X86
     Workers["Admitted ring-3 Workers"] -->|"Agent Call 28"| X86
     Workers -->|"Notify / Mailbox"| Supervisor
 ```
@@ -558,7 +570,7 @@ scripts/run-qemu.sh --release
 ```
 
 The scripts build the freestanding target, create a BIOS image, start QEMU,
-validate the complete serial transcript, require exactly 391 events, and treat
+validate the complete serial transcript, require exactly 396 events, and treat
 the kernel's debug-exit status as part of the contract. A successful run
 includes these proof lines:
 
@@ -629,33 +641,40 @@ AGENT_KERNEL_NATIVE_CAPABILITY_MANAGER_OK
 AGENT_KERNEL_NATIVE_TASK_MANAGER_OK
 AGENT_KERNEL_NATIVE_AGENT_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_PAGE_MANAGER_OK
+AGENT_KERNEL_NATIVE_NAMESPACE_MANAGER_OK
+AGENT_KERNEL_NATIVE_NAMESPACE_SLOT_REUSE_OK
 AGENT_KERNEL_NATIVE_MEMORY_REGION_MANAGER_OK
 AGENT_KERNEL_NATIVE_MEMORY_CONCURRENCY_OK
 AGENT_KERNEL_DRIVER_INVOCATION_FLOW_OK
-event[340] fault_compacted
-event[341] fault_compacted
-event[342] fault_compacted
-event[343] fault_compacted
-event[354] capability_revoked
-event[355] capability_compacted
-event[356] capability_compacted
-event[357] capability_compacted
-event[358] resource_record_retired
-event[359] resource_created
-event[360] capability_granted
-event[361] capability_derived
-event[362] capability_derived
-event[363] memory_cell_record_retired
-event[364] capability_revoked
-event[365] capability_compacted
-event[366] resource_record_retired
-event[367] resource_created
-event[368] capability_granted
-event[369] memory_cell_created
-event[370] task_result_submitted
-event[371] resource_retired
-event[372] task_completed
-event[391] driver_invocation_completed
+event[186] namespace_entry_bound
+event[187] namespace_entry_resolved
+event[188] namespace_entry_rebound
+event[189] namespace_entry_retired
+event[190] namespace_entry_bound
+event[345] fault_compacted
+event[346] fault_compacted
+event[347] fault_compacted
+event[348] fault_compacted
+event[359] capability_revoked
+event[360] capability_compacted
+event[361] capability_compacted
+event[362] capability_compacted
+event[363] resource_record_retired
+event[364] resource_created
+event[365] capability_granted
+event[366] capability_derived
+event[367] capability_derived
+event[368] memory_cell_record_retired
+event[369] capability_revoked
+event[370] capability_compacted
+event[371] resource_record_retired
+event[372] resource_created
+event[373] capability_granted
+event[374] memory_cell_created
+event[375] task_result_submitted
+event[376] resource_retired
+event[377] task_completed
+event[396] driver_invocation_completed
 SUPERVISOR_HANDOFF_READY
 ```
 
@@ -700,8 +719,7 @@ authority.
 - Agent-bound, generation-checked eleven-frame allocation from that pool and a
   transactional runtime service spanning private hierarchy reconstruction,
   CPU preparation, and native runtime registration;
-- a ring-3 Admission Supervisor, authenticated Agent Call 27 and Calls 29
-  through 43,
+- ring-3 Supervisors, authenticated Agent Call 27 and Calls 29 through 47,
   independently configured fixed-capacity admission records, terminal retry,
   generation-bound permits, requester-bound admitted contexts, and a broker
   that connects audited semantic requests to the physical runtime service;
@@ -732,6 +750,9 @@ authority.
   checks, Core and native live-reference preflight, active ancestor authority,
   monotonic IDs, stable retained order, fixed-width receipts, slot reuse, and
   complete Event evidence;
+- native Namespace bind, resolve, rebind, and stable dense retirement with
+  Workspace-scoped Capabilities, five typed object kinds, full-record ABI
+  replies, monotonic Entry IDs, one-slot reuse, and complete Event evidence;
 - authorized dense Agent Entry retirement with terminal-scope checks, native
   runtime and live-reference preflight, retired-Resource ancestor authority,
   stable retained-record order, same-identity relaunch, and complete retirement
@@ -761,11 +782,11 @@ authority.
 - two-phase Event prefix archival with canonical full-field SHA-256 encoding,
   root Supervisor authorization, stable live-prefix release, monotonic Event
   sequencing, chained checkpoints, a bounded x86 handoff buffer, and exact
-  archived/live replay through Event 391;
+  archived/live replay through Event 396;
 - complete rollback after rejected post-build admission, plus concurrent
   ownership, FIFO ring-3 execution, semantic verification, partial reclamation,
   and exact cross-batch frame reuse for four Runtime Service Workers;
-- a fixed 2 MiB guarded kernel boot stack for the 391-event reference profile.
+- a fixed 2 MiB guarded kernel boot stack for the 396-event reference profile.
 
 ### Planned
 
@@ -779,8 +800,8 @@ authority.
 - POSIX/Linux/Windows compatibility layers;
 - production security hardening, formal verification, or stable ABI guarantees.
 
-See the current [Memory Cell Record Retirement design](docs/superpowers/specs/2026-07-19-memory-cell-record-retirement-v1-design.md)
-and [implementation plan](docs/superpowers/plans/2026-07-19-memory-cell-record-retirement-v1.md)
+See the current [Native Namespace Manager design](docs/superpowers/specs/2026-07-20-native-namespace-manager-v1-design.md)
+and [implementation plan](docs/superpowers/plans/2026-07-20-native-namespace-manager-v1.md)
 for the latest milestone contract. Earlier design records remain under
 `docs/superpowers/specs/`.
 
