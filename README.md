@@ -116,8 +116,6 @@ flowchart TB
     HAL --> Hardware["UART / Port / Future Devices"]
     State --> Stores["Fixed Stores"]
     State --> Events["Event Log + Archive"]
-    Scheduler -.->|dispatch| Ring3
-    Frames -.->|map| Ring3
 ```
 
 ### Boundary
