@@ -18,6 +18,7 @@
 agent-kernel@bare-metal:~$ boot --profile native
 [ OK ] capability authority online
 [ OK ] per-agent address spaces online
+[ OK ] 64 KiB agent code window online
 [ OK ] right-sized code-frame ownership online
 [ OK ] deterministic event chain online
 kernel://supervisor/handoff-ready
@@ -107,28 +108,29 @@ HAL      immutable request ──> driver binding ──> hardware
 ```text
 Capsule v1
 ┌──────────────┬──────────────┬──────────────────────────────────┐
-│ magic / ABI  │ length / SHA │ position-independent x86_64 code │
+│ magic / ABI  │ length / SHA │ fixed-layout x86_64 code         │
 └──────────────┴──────────────┴──────────────────────────────────┘
         verify ──> allocate ──> map RX ──> enter ring 3
 ```
 
 ```text
 USER MAP
-0x4000_0000_0000  code window       RX
-                  signal page       R + NX
-                  guard page        unmapped
-                  stack pages       RW + NX
-                  lazy page         on demand
-                  runtime pages     capability governed
-                  call-data page    typed fixed records
+0x4000_0000_0000..ffff  code / 16 pages      RX
+0x4000_0001_0000        signal page          R + NX
+0x4000_0001_1000        guard page           unmapped
+0x4000_0001_2000..5fff  stack / 4 pages      RW + NX
+0x4000_0001_6000        lazy page            on demand
+0x4000_0001_7000        runtime page         capability governed
+0x4000_0001_8000..ffff  runtime / 8 pages    capability governed
+0x4000_0002_0000        call-data page       typed fixed records
 ```
 
 ```text
-V7 PROFILE
-CODE WINDOW       16 KiB / 4-page bounded RX window
-PHYSICAL IDENTITY 12..15 frames / exact Capsule size
-CROSS-PAGE PROOF  Resource Manager completes from page 2
-POOL INVENTORY    73 sealed frames / atomic resize + reuse
+V8 PROFILE
+CODE WINDOW       64 KiB / 16-page bounded RX window
+PHYSICAL IDENTITY 12..27 frames / exact Capsule size
+CROSS-PAGE PROOF  Resource Manager completes from page 5
+POOL INVENTORY    76 sealed frames / atomic resize + reuse
 ```
 
 ## `04 / AGENT CALL ABI`
@@ -197,17 +199,17 @@ QEMU TRANSCRIPT   Events 1..409
 WORKSPACE TESTS   216 groups / 745 passed
 DISPATCH          35 kernel-selected
 AGENT CONTEXTS    11 isolated
-CAPSULE WINDOW    4 pages / 16 KiB
-FRAMES PER AGENT  12..15 / active code pages 1..4
-BOOT FRAME POOL   73 sealed / zeroed on full return
+CAPSULE WINDOW    16 pages / 64 KiB
+FRAMES PER AGENT  12..27 / active code pages 1..16
+BOOT FRAME POOL   76 sealed / zeroed on full return
 EVENT STORE       375 peak / 345 final / 64 archived
 NEXT SEQUENCE     410
 ```
 
 | Native Capsule | Calls | Bytes | SHA-256 |
 | :--- | ---: | ---: | :--- |
-| Resource Manager | 43 | 4,189 | `9578c20e0548...486f4f32` |
-| Admission Supervisor | 44 | 4,115 | `30910d4dd14e...03df637f` |
+| Resource Manager | 43 | 16,480 | `3a8764b8c986...bdca8dc6e` |
+| Admission Supervisor | 44 | 4,115 | `e09598b938db...c3bc04b01` |
 
 <details>
 <summary><code>OPEN RAW BOOT PROOF</code></summary>
@@ -219,6 +221,7 @@ $ scripts/run-qemu.sh --release
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
 [capsule]    AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK
+[capsule:5]  AGENT_KERNEL_NATIVE_FIFTH_CODE_PAGE_OK
 [frames]     AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK
 [namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
 [mutation]   AGENT_KERNEL_AGENT_CALL_NAMESPACE_TYPED_REBIND_OK
@@ -274,15 +277,15 @@ docs/superpowers/
 [x] ring-3 Capsules + per-Agent address spaces
 [x] deterministic Events + archive replay
 [x] typed Namespace + bounded path mutation
-[x] four-page Agent Capsules + cross-page execution
+[x] sixteen-page Agent Capsules + fifth-page execution
 [x] right-sized executable frame ownership
-[>] larger executable window + segmented packages
+[>] segmented packages + relocations + signatures
 [ ] SMP + synchronization + TLB shootdown
 [ ] storage / network / graphics / USB
 [ ] signed durable state + formal verification
 ```
 
-`CURRENT SPEC` · [`Right-sized Agent Code Ownership V7`](docs/superpowers/specs/2026-07-21-right-sized-agent-code-v7-design.md)
+`CURRENT SPEC` · [`Expanded Agent Capsule V8`](docs/superpowers/specs/2026-07-21-expanded-agent-capsule-v8-design.md)
 
 ## `10 / ENGINEERING GATE`
 

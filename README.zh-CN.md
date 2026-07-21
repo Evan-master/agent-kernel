@@ -18,6 +18,7 @@
 agent-kernel@bare-metal:~$ boot --profile native
 [ OK ] capability authority online
 [ OK ] per-agent address spaces online
+[ OK ] 64 KiB agent code window online
 [ OK ] right-sized code-frame ownership online
 [ OK ] deterministic event chain online
 kernel://supervisor/handoff-ready
@@ -107,28 +108,29 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 ```text
 Capsule v1
 ┌──────────────┬──────────────┬──────────────────────────────────┐
-│ magic / ABI  │ length / SHA │ position-independent x86_64 code │
+│ magic / ABI  │ length / SHA │ fixed-layout x86_64 code         │
 └──────────────┴──────────────┴──────────────────────────────────┘
         verify ──> allocate ──> map RX ──> enter ring 3
 ```
 
 ```text
 用户地址空间
-0x4000_0000_0000  code window       RX
-                  signal page       R + NX
-                  guard page        未映射
-                  stack pages       RW + NX
-                  lazy page         按需映射
-                  runtime pages     Capability 治理
-                  call-data page    类型化固定记录
+0x4000_0000_0000..ffff  code / 16 页        RX
+0x4000_0001_0000        signal page         R + NX
+0x4000_0001_1000        guard page          未映射
+0x4000_0001_2000..5fff  stack / 4 页        RW + NX
+0x4000_0001_6000        lazy page           按需映射
+0x4000_0001_7000        runtime page        Capability 治理
+0x4000_0001_8000..ffff  runtime / 8 页      Capability 治理
+0x4000_0002_0000        call-data page      类型化固定记录
 ```
 
 ```text
-V7 PROFILE
-CODE WINDOW       16 KiB / 4 页有界 RX 窗口
-PHYSICAL IDENTITY 12..15 帧 / 精确匹配 Capsule
-CROSS-PAGE PROOF  Resource Manager 从第 2 页完成执行
-POOL INVENTORY    73 帧封存库存 / 原子重组与复用
+V8 PROFILE
+CODE WINDOW       64 KiB / 16 页有界 RX 窗口
+PHYSICAL IDENTITY 12..27 帧 / 精确匹配 Capsule
+CROSS-PAGE PROOF  Resource Manager 从第 5 页完成执行
+POOL INVENTORY    76 帧封存库存 / 原子重组与复用
 ```
 
 ## `04 / AGENT CALL ABI`
@@ -197,17 +199,17 @@ QEMU TRANSCRIPT   Events 1..409
 WORKSPACE TESTS   216 组 / 745 个通过
 DISPATCH          35 次内核选择
 AGENT CONTEXTS    11 个隔离上下文
-CAPSULE WINDOW    4 页 / 16 KiB
-FRAMES PER AGENT  12..15 / 活动代码页 1..4
-BOOT FRAME POOL   73 帧封存 / 全量归还后清零
+CAPSULE WINDOW    16 页 / 64 KiB
+FRAMES PER AGENT  12..27 / 活动代码页 1..16
+BOOT FRAME POOL   76 帧封存 / 全量归还后清零
 EVENT STORE       峰值 375 / 最终 345 / 已归档 64
 NEXT SEQUENCE     410
 ```
 
 | Native Capsule | Calls | 字节 | SHA-256 |
 | :--- | ---: | ---: | :--- |
-| Resource Manager | 43 | 4,189 | `9578c20e0548...486f4f32` |
-| Admission Supervisor | 44 | 4,115 | `30910d4dd14e...03df637f` |
+| Resource Manager | 43 | 16,480 | `3a8764b8c986...bdca8dc6e` |
+| Admission Supervisor | 44 | 4,115 | `e09598b938db...c3bc04b01` |
 
 <details>
 <summary><code>打开原始启动证据</code></summary>
@@ -219,6 +221,7 @@ $ scripts/run-qemu.sh --release
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
 [capsule]    AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK
+[capsule:5]  AGENT_KERNEL_NATIVE_FIFTH_CODE_PAGE_OK
 [frames]     AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK
 [namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
 [mutation]   AGENT_KERNEL_AGENT_CALL_NAMESPACE_TYPED_REBIND_OK
@@ -274,15 +277,15 @@ docs/superpowers/
 [x] ring-3 Capsule + 每 Agent 独立地址空间
 [x] 确定性 Event + 归档重放
 [x] 类型化 Namespace + 有界路径修改
-[x] 四页 Agent Capsule + 跨页执行
+[x] 十六页 Agent Capsule + 第五页执行
 [x] 按镜像尺寸分配可执行帧
-[>] 更大的可执行窗口 + 分段软件包
+[>] 分段软件包 + 重定位 + 签名
 [ ] SMP + 同步 + TLB shootdown
 [ ] Storage / Network / Graphics / USB
 [ ] 签名持久状态 + 形式化验证
 ```
 
-`当前 SPEC` · [`Right-sized Agent Code Ownership V7`](docs/superpowers/specs/2026-07-21-right-sized-agent-code-v7-design.md)
+`当前 SPEC` · [`Expanded Agent Capsule V8`](docs/superpowers/specs/2026-07-21-expanded-agent-capsule-v8-design.md)
 
 ## `10 / 工程门禁`
 
