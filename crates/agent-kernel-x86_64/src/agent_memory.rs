@@ -21,7 +21,8 @@ use x86_64::{structures::paging::PhysFrame, PhysAddr};
 use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{
-        AddressSpaceRoots, AgentMemoryIdentity, AGENT_CODE_PAGE_COUNT, AGENT_CONTENT_FRAME_COUNT,
+        AddressSpaceRoots, AgentMemoryIdentity, AGENT_CODE_PAGE_CAPACITY,
+        AGENT_CONTENT_FRAME_CAPACITY,
     },
     agent_image::{VerifiedAgentImage, MAX_AGENT_CODE_BYTES},
     runtime_page::RuntimePageLedger,
@@ -38,19 +39,11 @@ use self::frame_allocator::BootFrameAllocator;
 pub(crate) use self::{
     address_space_reclamation::{
         NativeAddressSpaceFramePool, ReclaimedAgentAddressSpace, NATIVE_ADDRESS_SPACE_CAPACITY,
-        NATIVE_ADDRESS_SPACE_FRAME_CAPACITY,
     },
     runtime_pool::{RuntimeMemoryPool, RuntimePhysicalFrameSet},
 };
 
 pub(crate) const PHYSICAL_MEMORY_OFFSET: u64 = 0xffff_8000_0000_0000;
-pub(super) const CODE_CONTENT_FRAME_START_INDEX: usize = 0;
-pub(super) const SIGNAL_CONTENT_FRAME_INDEX: usize = AGENT_CODE_PAGE_COUNT;
-pub(super) const STACK_CONTENT_FRAME_START_INDEX: usize = SIGNAL_CONTENT_FRAME_INDEX + 1;
-pub(super) const LAZY_DATA_CONTENT_FRAME_INDEX: usize =
-    STACK_CONTENT_FRAME_START_INDEX + STACK_PAGE_COUNT;
-pub(super) const CALL_DATA_CONTENT_FRAME_INDEX: usize = LAZY_DATA_CONTENT_FRAME_INDEX + 1;
-
 pub(crate) struct PreparedAgentMemory {
     allocated_for: Option<AgentId>,
     layout: UserMemoryLayout,
@@ -74,10 +67,12 @@ impl PreparedAgentMemory {
         }
         let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
         let zero_frame = PhysFrame::from_start_address(PhysAddr::new(0)).ok()?;
-        let mut code_frames = [zero_frame; AGENT_CODE_PAGE_COUNT];
-        for frame in &mut code_frames {
+        let code_page_count = image.code_page_count();
+        let mut code_frame_storage = [zero_frame; AGENT_CODE_PAGE_CAPACITY];
+        for frame in &mut code_frame_storage[..code_page_count] {
             *frame = allocator.allocate()?;
         }
+        let code_frames = &code_frame_storage[..code_page_count];
         let signal_frame = allocator.allocate()?;
         let mut stack_frames = [zero_frame; STACK_PAGE_COUNT];
         for frame in &mut stack_frames {
@@ -88,7 +83,7 @@ impl PreparedAgentMemory {
 
         let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             physical_offset,
-            &code_frames,
+            code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -106,7 +101,7 @@ impl PreparedAgentMemory {
             physical_offset,
             &mut allocator,
             layout,
-            &code_frames,
+            code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -116,18 +111,21 @@ impl PreparedAgentMemory {
         if !page_tables::kernel_is_active(roots) {
             return None;
         }
-        let mut content_frames = [0; AGENT_CONTENT_FRAME_COUNT];
+        let mut content_frames = [0; AGENT_CONTENT_FRAME_CAPACITY];
         for (index, frame) in code_frames.iter().enumerate() {
-            content_frames[CODE_CONTENT_FRAME_START_INDEX + index] = frame.start_address().as_u64();
+            content_frames[index] = frame.start_address().as_u64();
         }
-        content_frames[SIGNAL_CONTENT_FRAME_INDEX] = signal_frame.start_address().as_u64();
+        let signal_index = code_page_count;
+        content_frames[signal_index] = signal_frame.start_address().as_u64();
+        let stack_start = signal_index + 1;
         for (index, frame) in stack_frames.iter().enumerate() {
-            content_frames[STACK_CONTENT_FRAME_START_INDEX + index] =
-                frame.start_address().as_u64();
+            content_frames[stack_start + index] = frame.start_address().as_u64();
         }
-        content_frames[LAZY_DATA_CONTENT_FRAME_INDEX] = lazy_data_frame.start_address().as_u64();
-        content_frames[CALL_DATA_CONTENT_FRAME_INDEX] = call_data_frame.start_address().as_u64();
-        let identity = AgentMemoryIdentity::new(installed.private_frames(), content_frames)?;
+        content_frames[stack_start + STACK_PAGE_COUNT] = lazy_data_frame.start_address().as_u64();
+        content_frames[stack_start + STACK_PAGE_COUNT + 1] =
+            call_data_frame.start_address().as_u64();
+        let identity =
+            AgentMemoryIdentity::new(installed.private_frames(), content_frames, code_page_count)?;
         if identity.root() != roots.agent_root() {
             return None;
         }
@@ -255,7 +253,7 @@ impl PreparedAgentMemory {
         {
             return None;
         }
-        let frame_address = self.identity.content_frames()[LAZY_DATA_CONTENT_FRAME_INDEX];
+        let frame_address = self.identity.lazy_data_frame();
         let frame = PhysFrame::from_start_address(PhysAddr::new(frame_address)).ok()?;
         if physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)? != self.lazy_data_pointer {
             return None;
@@ -274,17 +272,18 @@ impl PreparedAgentMemory {
         if next_generation > MAX_AGENT_RESTART_GENERATION {
             return None;
         }
-        let frames = self.identity.content_frames();
         let signal_frame =
-            PhysFrame::from_start_address(PhysAddr::new(frames[SIGNAL_CONTENT_FRAME_INDEX]))
-                .ok()?;
+            PhysFrame::from_start_address(PhysAddr::new(self.identity.signal_frame())).ok()?;
         if physical_pointer(PHYSICAL_MEMORY_OFFSET, signal_frame)? != self.signal_pointer
             || !clear_page(self.signal_pointer)
         {
             return None;
         }
-        for frame_address in &frames[STACK_CONTENT_FRAME_START_INDEX..] {
-            let frame = PhysFrame::from_start_address(PhysAddr::new(*frame_address)).ok()?;
+        for frame_address in self.identity.stack_frames().into_iter().chain([
+            self.identity.lazy_data_frame(),
+            self.identity.call_data_frame(),
+        ]) {
+            let frame = PhysFrame::from_start_address(PhysAddr::new(frame_address)).ok()?;
             if !clear_page(physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)?) {
                 return None;
             }
@@ -342,14 +341,17 @@ pub(super) fn page_is_zero(pointer: *mut u8) -> bool {
 
 fn initialize_content(
     physical_offset: u64,
-    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
+    code_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
     call_data_frame: PhysFrame,
     code: &[u8],
 ) -> Option<(*mut u8, *mut u8, *mut u8)> {
-    if code.is_empty() || code.len() > MAX_AGENT_CODE_BYTES {
+    if code.is_empty()
+        || code.len() > MAX_AGENT_CODE_BYTES
+        || code_frames.len() != code.len().div_ceil(PAGE_BYTES as usize)
+    {
         return None;
     }
     let signal_pointer = physical_pointer(physical_offset, signal_frame)?;

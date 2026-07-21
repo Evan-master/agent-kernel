@@ -30,6 +30,8 @@ use crate::{
     X86BootedKernel, COM1,
 };
 
+const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 73;
+
 pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: PrivilegeBoundary) -> ! {
     let worker_a = boot_agent_images::worker_a();
     let worker_b = boot_agent_images::worker_b();
@@ -263,10 +265,14 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         runtime_plan,
     )
     .is_none()
+        || !address_space_frame_pool.seal_inventory()
         || !address_space_frame_pool.all_reclaimed_and_zero()
+        || address_space_frame_pool.inventory_frame_count()
+            != Some(INITIAL_ADDRESS_SPACE_FRAME_INVENTORY)
     {
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
     }
+    serial_write_line("AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK");
     if verify_initial_task_prefix(&mut booted).is_none() {
         fatal_boot("AGENT_KERNEL_TASK_PREFIX_VERIFICATION_ERROR");
     }
@@ -354,6 +360,17 @@ fn validate_agent_memory(memories: [&PreparedAgentMemory; 6]) {
         {
             fatal_boot("AGENT_KERNEL_MULTI_AGENT_MEMORY_ERROR");
         }
+    }
+    let expected_code_pages = [1, 1, 1, 1, 1, 2];
+    if memories
+        .iter()
+        .zip(expected_code_pages)
+        .any(|(memory, pages)| {
+            memory.identity().code_page_count() != pages
+                || memory.identity().owned_frame_count() != pages + 11
+        })
+    {
+        fatal_boot("AGENT_KERNEL_AGENT_CODE_FRAME_PROFILE_ERROR");
     }
     if memories.iter().any(|memory| !memory.signal_is_clear()) {
         fatal_boot("AGENT_KERNEL_MULTI_AGENT_MEMORY_ERROR");

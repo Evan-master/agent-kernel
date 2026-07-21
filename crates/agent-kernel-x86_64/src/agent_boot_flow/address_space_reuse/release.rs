@@ -4,13 +4,9 @@
 //! commits each permit only after exact zeroed ownership returns, and preserves
 //! the resident Supervisor through the partial first-batch boundary.
 
-use agent_kernel_x86_64::address_space::AGENT_OWNED_FRAME_COUNT;
-
 use crate::{
     admission_supervisor_flow::{PreparedAdmissionSupervisorFlow, ADMISSION_SUPERVISOR},
-    agent_memory::{
-        NativeAddressSpaceFramePool, RuntimeMemoryPool, NATIVE_ADDRESS_SPACE_FRAME_CAPACITY,
-    },
+    agent_memory::{NativeAddressSpaceFramePool, RuntimeMemoryPool},
     native_address_space_service::NativeAddressSpaceAdmission,
     native_agent_executor::NativeExecutionReport,
     native_agent_runtime::NativeAgentRuntime,
@@ -46,7 +42,8 @@ pub(super) fn partial(
     report.reclaim_completed_address_spaces(pool, [targets[0].0, targets[1].0])?;
     if report.len() != 0
         || report.faulted_len() != 0
-        || pool.len() + AGENT_OWNED_FRAME_COUNT != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || pool.len() + supervisor_admission.identity().owned_frame_count()
+            != pool.inventory_frame_count()?
         || !pool.owns_zeroed(admissions[0].identity())
         || !pool.owns_zeroed(admissions[1].identity())
         || pool.owns(supervisor_admission.identity())

@@ -4,7 +4,7 @@
 //! rollback for the retained first-batch cancellation probe, and validates
 //! disjoint frame ownership before exposing the queued batch.
 
-use agent_kernel_x86_64::address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT};
+use agent_kernel_x86_64::address_space::AgentMemoryIdentity;
 
 use crate::{
     admission_supervisor_flow::ADMISSION_SUPERVISOR,
@@ -49,7 +49,7 @@ pub(super) fn admit(
     .ok()?;
     if first.agent() != first_target
         || !resident.is_disjoint_from(first)
-        || pool.len() + AGENT_OWNED_FRAME_COUNT != initial_pool_len
+        || pool.len() + first.identity().owned_frame_count() != initial_pool_len
         || runtime.len() != initial_runtime_len + 1
         || !runtime.contains(ADMISSION_SUPERVISOR)
         || !runtime.contains(first_target)
@@ -78,7 +78,7 @@ pub(super) fn admit(
             NativeAddressSpaceAdmissionStage::RuntimeRegistration,
             first_target,
             identity,
-        ) || pool.len() + AGENT_OWNED_FRAME_COUNT != initial_pool_len
+        ) || pool.len() + first.identity().owned_frame_count() != initial_pool_len
             || !pool.owns_zeroed(identity)
             || runtime.len() != initial_runtime_len + 1
             || !runtime.contains(ADMISSION_SUPERVISOR)
@@ -105,7 +105,8 @@ pub(super) fn admit(
         || cancelled_identity.is_some_and(|identity| second.identity() != identity)
         || !resident.is_disjoint_from(second)
         || !first.is_disjoint_from(second)
-        || pool.len() + 2 * AGENT_OWNED_FRAME_COUNT != initial_pool_len
+        || pool.len() + first.identity().owned_frame_count() + second.identity().owned_frame_count()
+            != initial_pool_len
         || pool.owns(first.identity())
         || pool.owns(second.identity())
         || runtime.len() != initial_runtime_len + 2

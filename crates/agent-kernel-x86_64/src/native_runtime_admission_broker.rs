@@ -4,10 +4,7 @@ use agent_kernel_core::{
     EventKind, RunQueueEntry, RuntimeAdmissionFailure, RuntimeAdmissionRecord,
     RuntimeAdmissionStatus,
 };
-use agent_kernel_x86_64::{
-    address_space::AGENT_OWNED_FRAME_COUNT, agent_call::AgentCallContext,
-    agent_image::VerifiedAgentImage,
-};
+use agent_kernel_x86_64::{agent_call::AgentCallContext, agent_image::VerifiedAgentImage};
 
 use crate::{
     agent_cpu::AgentCpuRuntime,
@@ -123,7 +120,7 @@ fn admitted_state_valid(
         && admission.agent() == record.target
         && runtime.len() == initial_runtime_len + 1
         && runtime.contains(record.target)
-        && pool.len() + AGENT_OWNED_FRAME_COUNT == initial_pool_len
+        && pool.len() + admission.identity().owned_frame_count() == initial_pool_len
         && booted.kernel().run_queue().len() == initial_queue_len + 1
         && booted.kernel().run_queue().last()
             == Some(&RunQueueEntry {
@@ -148,7 +145,7 @@ fn rollback_registered(
     let reclaimed = runtime
         .take_prepared(admission.agent())?
         .reclaim_unstarted_address_space(pool)?;
-    (reclaimed.matches(admission.agent(), admission.identity().root())
+    (reclaimed.matches(admission.agent(), admission.identity())
         && pool.len() == initial_pool_len
         && runtime.len() == initial_runtime_len
         && !runtime.contains(admission.agent()))

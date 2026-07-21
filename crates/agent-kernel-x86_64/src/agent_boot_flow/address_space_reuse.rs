@@ -3,17 +3,10 @@
 mod batch;
 mod release;
 
-use agent_kernel_core::{
-    AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
-};
-use agent_kernel_x86_64::address_space::AGENT_OWNED_FRAME_COUNT;
-
 use crate::{
     admission_supervisor_flow::{PreparedAdmissionSupervisorFlow, ADMISSION_SUPERVISOR},
     agent_cpu::AgentCpuRuntime,
-    agent_memory::{
-        NativeAddressSpaceFramePool, RuntimeMemoryPool, NATIVE_ADDRESS_SPACE_FRAME_CAPACITY,
-    },
+    agent_memory::{NativeAddressSpaceFramePool, RuntimeMemoryPool},
     boot_agent_images::{BootAdmissionSupervisorImage, BootReuseWorkerImage},
     native_address_space_service::NativeAddressSpaceService,
     native_agent_executor::{
@@ -23,6 +16,9 @@ use crate::{
     reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKER_BATCHES},
     serial_write_line, X86BootedKernel, X86_FAULT_CAPACITY, X86_RUNTIME_ADMISSION_CAPACITY,
     X86_TASK_CAPACITY,
+};
+use agent_kernel_core::{
+    AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
 };
 
 pub(super) fn run(
@@ -34,10 +30,12 @@ pub(super) fn run(
     worker_contract: BootReuseWorkerImage,
     supervisor_contract: BootAdmissionSupervisorImage,
 ) -> Option<NativeEventArchive> {
+    let inventory_frame_count = address_space_pool.inventory_frame_count()?;
     if !runtime.is_empty()
         || !booted.kernel().run_queue().is_empty()
         || !memory_pool.all_available_and_zero()
         || !address_space_pool.all_reclaimed_and_zero()
+        || address_space_pool.len() != inventory_frame_count
         || booted.kernel().runtime_admission_capacity() != X86_RUNTIME_ADMISSION_CAPACITY
         || X86_RUNTIME_ADMISSION_CAPACITY <= X86_TASK_CAPACITY
         || X86_FAULT_CAPACITY != 4
@@ -79,7 +77,8 @@ pub(super) fn run(
     )?
     .ok()?;
     if supervisor_admission.agent() != ADMISSION_SUPERVISOR
-        || address_space_pool.len() + AGENT_OWNED_FRAME_COUNT != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || address_space_pool.len() + supervisor_admission.identity().owned_frame_count()
+            != inventory_frame_count
         || runtime.len() != 1
         || !runtime.contains(ADMISSION_SUPERVISOR)
     {
@@ -116,7 +115,8 @@ pub(super) fn run(
         || report.faulted_len() != 0
         || !evidence.proves_runtime_admission_wait()
         || !supervisor.waiting_after_requests(booted, first_targets)
-        || address_space_pool.len() + AGENT_OWNED_FRAME_COUNT != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || address_space_pool.len() + supervisor_admission.identity().owned_frame_count()
+            != inventory_frame_count
         || address_space_pool.owns(supervisor_admission.identity())
         || !memory_pool.all_available_and_zero()
     {
@@ -154,8 +154,11 @@ pub(super) fn run(
             .iter()
             .any(|flow| !flow.completed_after_runtime(booted, &report, worker_contract))
         || !supervisor.waiting_between_batches(booted, all_targets)
-        || address_space_pool.len() + 3 * AGENT_OWNED_FRAME_COUNT
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || address_space_pool.len()
+            + supervisor_admission.identity().owned_frame_count()
+            + first_admissions[0].identity().owned_frame_count()
+            + first_admissions[1].identity().owned_frame_count()
+            != inventory_frame_count
         || !memory_pool.all_available_and_zero()
     {
         return None;
@@ -214,8 +217,11 @@ pub(super) fn run(
             supervisor_contract,
             all_targets,
         )
-        || address_space_pool.len() + 3 * AGENT_OWNED_FRAME_COUNT
-            != NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        || address_space_pool.len()
+            + supervisor_admission.identity().owned_frame_count()
+            + second_admissions[0].identity().owned_frame_count()
+            + second_admissions[1].identity().owned_frame_count()
+            != inventory_frame_count
         || !memory_pool.all_available_and_zero()
     {
         return None;

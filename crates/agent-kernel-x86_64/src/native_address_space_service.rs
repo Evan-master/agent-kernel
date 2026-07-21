@@ -2,14 +2,13 @@
 //!
 //! The service keeps one Agent-bound physical owner through frame allocation,
 //! address-space reconstruction, CPU preparation, and runtime registration.
-//! Every rejected transition clears and returns all twelve private frames.
+//! Every rejected transition clears and returns the complete variable owner.
 
 mod types;
 
 use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
-    address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT},
-    agent_call::AgentCallContext,
+    address_space::AgentMemoryIdentity, agent_call::AgentCallContext,
     agent_image::VerifiedAgentImage,
 };
 
@@ -55,12 +54,13 @@ impl NativeAddressSpaceService {
         let initial_pool_len = pool.len();
         let initial_runtime_len = runtime.len();
         let agent = context.agent();
-        let Some(owner) = pool.allocate_zeroed(agent) else {
+        let Some(owner) = pool.allocate_zeroed(agent, image.code_page_count()) else {
             return Some(Err(NativeAddressSpaceAdmissionFailure::allocation(agent)));
         };
         let identity = owner.identity();
+        let owned_frame_count = identity.owned_frame_count();
         if owner.agent() != agent
-            || pool.len() != initial_pool_len.checked_sub(AGENT_OWNED_FRAME_COUNT)?
+            || pool.len() != initial_pool_len.checked_sub(owned_frame_count)?
             || pool.owns(identity)
         {
             return rollback_owner(pool, owner, initial_pool_len);
@@ -109,7 +109,7 @@ impl NativeAddressSpaceService {
             let reclaimed = rejected
                 .into_prepared()?
                 .reclaim_unstarted_address_space(pool)?;
-            if !reclaimed.matches(agent, identity.root())
+            if !reclaimed.matches(agent, identity)
                 || runtime.len() != initial_runtime_len
                 || !pool_restored(pool, initial_pool_len, identity)
             {
@@ -124,7 +124,7 @@ impl NativeAddressSpaceService {
 
         (runtime.len() == initial_runtime_len.checked_add(1)?
             && runtime.contains(agent)
-            && pool.len() == initial_pool_len.checked_sub(AGENT_OWNED_FRAME_COUNT)?
+            && pool.len() == initial_pool_len.checked_sub(owned_frame_count)?
             && !pool.owns(identity))
         .then_some(Ok(NativeAddressSpaceAdmission { agent, identity }))
     }
@@ -167,7 +167,7 @@ fn rollback_memory(
 ) -> Option<Result<NativeAddressSpaceAdmission, NativeAddressSpaceAdmissionFailure>> {
     let reclaimed = memory.cancel_address_space(pool)?;
     (reclaimed.root() == identity.root()
-        && reclaimed.frame_count() == AGENT_OWNED_FRAME_COUNT
+        && reclaimed.frame_count() == identity.owned_frame_count()
         && pool_restored(pool, initial_pool_len, identity))
     .then_some(Err(NativeAddressSpaceAdmissionFailure::rolled_back(
         stage, agent, identity,

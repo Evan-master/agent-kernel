@@ -6,13 +6,11 @@
 
 use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
-    address_space::AGENT_OWNED_FRAME_COUNT, address_space_reclamation::AddressSpaceReclamation,
+    address_space::AgentMemoryIdentity, address_space_reclamation::AddressSpaceReclamation,
 };
 
 use super::NativeExecutionReport;
-use crate::agent_memory::{
-    NativeAddressSpaceFramePool, NATIVE_ADDRESS_SPACE_CAPACITY, NATIVE_ADDRESS_SPACE_FRAME_CAPACITY,
-};
+use crate::agent_memory::{NativeAddressSpaceFramePool, NATIVE_ADDRESS_SPACE_CAPACITY};
 
 impl NativeExecutionReport {
     pub(crate) fn reclaim_completed_address_spaces<const COUNT: usize>(
@@ -20,41 +18,38 @@ impl NativeExecutionReport {
         pool: &mut NativeAddressSpaceFramePool,
         agents: [AgentId; COUNT],
     ) -> Option<()> {
-        let expected_len = pool
-            .len()
-            .checked_add(COUNT.checked_mul(AGENT_OWNED_FRAME_COUNT)?)?;
         if COUNT == 0
             || COUNT > NATIVE_ADDRESS_SPACE_CAPACITY
             || self.completed.len() != COUNT
             || !self.faulted.is_empty()
-            || expected_len > NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
         {
             return None;
         }
 
         let mut preview = *pool;
         let mut tokens: [Option<AddressSpaceReclamation>; COUNT] = [None; COUNT];
-        let mut roots = [0; COUNT];
+        let mut identities: [Option<AgentMemoryIdentity>; COUNT] = [None; COUNT];
         for (index, agent) in agents.iter().copied().enumerate() {
             if agent.raw() == 0 || agents[..index].contains(&agent) {
                 return None;
             }
             let cpu = self.completed.get(agent).ok()?;
             let token = cpu.prepare_address_space_reclamation(&preview)?;
-            roots[index] = token.identity().root();
+            identities[index] = Some(token.identity());
             if !preview.preview_commit(token) {
                 return None;
             }
             tokens[index] = Some(token);
         }
-        if preview.len() != expected_len {
+        let expected_len = preview.len();
+        if expected_len <= pool.len() {
             return None;
         }
 
         for (index, agent) in agents.iter().copied().enumerate() {
             let cpu = self.completed.take(agent).ok()?;
             let reclaimed = cpu.reclaim_address_space(pool, tokens[index]?)?;
-            if !reclaimed.matches(agent, roots[index]) {
+            if !reclaimed.matches(agent, identities[index]?) {
                 return None;
             }
         }

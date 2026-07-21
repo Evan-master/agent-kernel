@@ -7,9 +7,13 @@
 pub const PAGE_TABLE_BYTES: u64 = 4096;
 pub const P4_ENTRY_COUNT: usize = 512;
 pub const AGENT_PAGE_TABLE_FRAME_COUNT: usize = 4;
-pub const AGENT_CODE_PAGE_COUNT: usize = 4;
-pub const AGENT_CONTENT_FRAME_COUNT: usize = AGENT_CODE_PAGE_COUNT + 7;
-pub const AGENT_OWNED_FRAME_COUNT: usize = AGENT_PAGE_TABLE_FRAME_COUNT + AGENT_CONTENT_FRAME_COUNT;
+pub const AGENT_CODE_PAGE_CAPACITY: usize = 4;
+pub const AGENT_STACK_FRAME_COUNT: usize = 4;
+pub const AGENT_NON_CODE_FRAME_COUNT: usize = AGENT_STACK_FRAME_COUNT + 3;
+pub const AGENT_CONTENT_FRAME_CAPACITY: usize =
+    AGENT_CODE_PAGE_CAPACITY + AGENT_NON_CODE_FRAME_COUNT;
+pub const AGENT_OWNED_FRAME_CAPACITY: usize =
+    AGENT_PAGE_TABLE_FRAME_COUNT + AGENT_CONTENT_FRAME_CAPACITY;
 pub const AGENT_REGION_BASE: u64 = 0x0000_4000_0000_0000;
 pub const AGENT_P4_INDEX: usize = p4_index(AGENT_REGION_BASE);
 
@@ -34,14 +38,60 @@ pub struct AddressSpaceRoots {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct AgentMemoryIdentity {
     page_table_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
-    content_frames: [u64; AGENT_CONTENT_FRAME_COUNT],
+    content_frames: [u64; AGENT_CONTENT_FRAME_CAPACITY],
+    code_page_count: u8,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentFrameSet<const CAPACITY: usize> {
+    frames: [u64; CAPACITY],
+    len: usize,
+}
+
+impl<const CAPACITY: usize> AgentFrameSet<CAPACITY> {
+    const fn new(frames: [u64; CAPACITY], len: usize) -> Self {
+        Self { frames, len }
+    }
+
+    pub fn as_slice(&self) -> &[u64] {
+        &self.frames[..self.len]
+    }
+
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+impl<const CAPACITY: usize> core::ops::Deref for AgentFrameSet<CAPACITY> {
+    type Target = [u64];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl<const CAPACITY: usize> IntoIterator for AgentFrameSet<CAPACITY> {
+    type Item = u64;
+    type IntoIter = core::iter::Take<core::array::IntoIter<u64, CAPACITY>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.frames.into_iter().take(self.len)
+    }
 }
 
 impl AgentMemoryIdentity {
     pub const fn new(
         page_table_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
-        content_frames: [u64; AGENT_CONTENT_FRAME_COUNT],
+        content_frames: [u64; AGENT_CONTENT_FRAME_CAPACITY],
+        code_page_count: usize,
     ) -> Option<Self> {
+        let Some(content_frame_count) = agent_content_frame_count(code_page_count) else {
+            return None;
+        };
         let mut table = 0;
         while table < AGENT_PAGE_TABLE_FRAME_COUNT {
             if !valid_root(page_table_frames[table]) {
@@ -57,7 +107,7 @@ impl AgentMemoryIdentity {
             table += 1;
         }
         let mut content = 0;
-        while content < AGENT_CONTENT_FRAME_COUNT {
+        while content < content_frame_count {
             if !valid_root(content_frames[content]) {
                 return None;
             }
@@ -77,9 +127,16 @@ impl AgentMemoryIdentity {
             }
             content += 1;
         }
+        while content < AGENT_CONTENT_FRAME_CAPACITY {
+            if content_frames[content] != 0 {
+                return None;
+            }
+            content += 1;
+        }
         Some(Self {
             page_table_frames,
             content_frames,
+            code_page_count: code_page_count as u8,
         })
     }
 
@@ -91,30 +148,75 @@ impl AgentMemoryIdentity {
         self.page_table_frames
     }
 
-    pub const fn content_frames(self) -> [u64; AGENT_CONTENT_FRAME_COUNT] {
-        self.content_frames
+    pub const fn code_page_count(self) -> usize {
+        self.code_page_count as usize
     }
 
-    pub const fn owned_frames(self) -> [u64; AGENT_OWNED_FRAME_COUNT] {
-        let mut frames = [0; AGENT_OWNED_FRAME_COUNT];
+    pub const fn code_frames(self) -> AgentFrameSet<AGENT_CODE_PAGE_CAPACITY> {
+        let mut frames = [0; AGENT_CODE_PAGE_CAPACITY];
+        let mut index = 0;
+        while index < self.code_page_count() {
+            frames[index] = self.content_frames[index];
+            index += 1;
+        }
+        AgentFrameSet::new(frames, self.code_page_count())
+    }
+
+    pub const fn content_frames(self) -> AgentFrameSet<AGENT_CONTENT_FRAME_CAPACITY> {
+        AgentFrameSet::new(self.content_frames, self.content_frame_count())
+    }
+
+    pub const fn content_frame_count(self) -> usize {
+        self.code_page_count() + AGENT_NON_CODE_FRAME_COUNT
+    }
+
+    pub const fn owned_frame_count(self) -> usize {
+        AGENT_PAGE_TABLE_FRAME_COUNT + self.content_frame_count()
+    }
+
+    pub const fn signal_frame(self) -> u64 {
+        self.content_frames[self.code_page_count()]
+    }
+
+    pub const fn stack_frames(self) -> [u64; AGENT_STACK_FRAME_COUNT] {
+        let mut frames = [0; AGENT_STACK_FRAME_COUNT];
+        let start = self.code_page_count() + 1;
+        let mut index = 0;
+        while index < AGENT_STACK_FRAME_COUNT {
+            frames[index] = self.content_frames[start + index];
+            index += 1;
+        }
+        frames
+    }
+
+    pub const fn lazy_data_frame(self) -> u64 {
+        self.content_frames[self.code_page_count() + 1 + AGENT_STACK_FRAME_COUNT]
+    }
+
+    pub const fn call_data_frame(self) -> u64 {
+        self.content_frames[self.code_page_count() + 2 + AGENT_STACK_FRAME_COUNT]
+    }
+
+    pub const fn owned_frames(self) -> AgentFrameSet<AGENT_OWNED_FRAME_CAPACITY> {
+        let mut frames = [0; AGENT_OWNED_FRAME_CAPACITY];
         let mut index = 0;
         while index < AGENT_PAGE_TABLE_FRAME_COUNT {
             frames[index] = self.page_table_frames[index];
             index += 1;
         }
         let mut content = 0;
-        while content < AGENT_CONTENT_FRAME_COUNT {
+        while content < self.content_frame_count() {
             frames[AGENT_PAGE_TABLE_FRAME_COUNT + content] = self.content_frames[content];
             content += 1;
         }
-        frames
+        AgentFrameSet::new(frames, self.owned_frame_count())
     }
 
     pub const fn contains(self, frame: u64) -> bool {
         let frames = self.owned_frames();
         let mut index = 0;
-        while index < AGENT_OWNED_FRAME_COUNT {
-            if frames[index] == frame {
+        while index < frames.len() {
+            if frames.frames[index] == frame {
                 return true;
             }
             index += 1;
@@ -126,10 +228,10 @@ impl AgentMemoryIdentity {
         let left_frames = self.owned_frames();
         let right_frames = other.owned_frames();
         let mut left = 0;
-        while left < AGENT_OWNED_FRAME_COUNT {
+        while left < left_frames.len() {
             let mut right = 0;
-            while right < AGENT_OWNED_FRAME_COUNT {
-                if left_frames[left] == right_frames[right] {
+            while right < right_frames.len() {
+                if left_frames.frames[left] == right_frames.frames[right] {
                     return false;
                 }
                 right += 1;
@@ -137,6 +239,21 @@ impl AgentMemoryIdentity {
             left += 1;
         }
         true
+    }
+}
+
+pub const fn agent_content_frame_count(code_page_count: usize) -> Option<usize> {
+    if code_page_count == 0 || code_page_count > AGENT_CODE_PAGE_CAPACITY {
+        None
+    } else {
+        Some(code_page_count + AGENT_NON_CODE_FRAME_COUNT)
+    }
+}
+
+pub const fn agent_owned_frame_count(code_page_count: usize) -> Option<usize> {
+    match agent_content_frame_count(code_page_count) {
+        Some(content) => Some(AGENT_PAGE_TABLE_FRAME_COUNT + content),
+        None => None,
     }
 }
 

@@ -1,9 +1,9 @@
 //! Read-only evidence accessors for address-space ownership transitions.
 //!
 //! Constructors and generation fields remain private to the parent ledger.
-//! This child exposes only Agent, identity, and fixed frame-count evidence.
+//! This child exposes only Agent, identity, and exact frame-count evidence.
 
-use crate::address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT};
+use crate::address_space::AgentMemoryIdentity;
 
 use super::{AddressSpaceAllocation, AddressSpaceReclamation, AllocatedAddressSpaceFrames};
 
@@ -13,7 +13,7 @@ impl AddressSpaceReclamation {
     }
 
     pub const fn frame_count(self) -> usize {
-        AGENT_OWNED_FRAME_COUNT
+        self.identity.owned_frame_count()
     }
 }
 

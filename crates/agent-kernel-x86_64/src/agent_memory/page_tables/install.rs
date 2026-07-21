@@ -8,7 +8,7 @@ use x86_64::{
 
 use agent_kernel_x86_64::{
     address_space::{
-        AddressSpaceRoots, AGENT_CODE_PAGE_COUNT, AGENT_P4_INDEX, AGENT_PAGE_TABLE_FRAME_COUNT,
+        AddressSpaceRoots, AGENT_CODE_PAGE_CAPACITY, AGENT_P4_INDEX, AGENT_PAGE_TABLE_FRAME_COUNT,
     },
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
@@ -27,7 +27,7 @@ pub(in crate::agent_memory) fn install(
     physical_offset: u64,
     allocator: &mut BootFrameAllocator<'_>,
     layout: UserMemoryLayout,
-    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
+    code_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -52,7 +52,7 @@ pub(in crate::agent_memory) fn install_reused(
     physical_offset: u64,
     private_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
     layout: UserMemoryLayout,
-    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
+    code_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -75,7 +75,7 @@ pub(in crate::agent_memory) fn install_reused(
 fn install_with_allocator(
     physical_offset: u64,
     layout: UserMemoryLayout,
-    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
+    code_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -83,6 +83,9 @@ fn install_with_allocator(
     agent_frame: PhysFrame,
     mut table_allocator: impl PrivatePageTableAllocator,
 ) -> Option<InstalledAgentPageTables> {
+    if code_frames.is_empty() || code_frames.len() > AGENT_CODE_PAGE_CAPACITY {
+        return None;
+    }
     let (kernel_frame, control) = Cr3::read_raw();
     let roots = AddressSpaceRoots::new(
         kernel_frame.start_address().as_u64(),

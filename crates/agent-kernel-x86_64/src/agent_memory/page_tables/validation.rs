@@ -14,7 +14,7 @@ use x86_64::{
 };
 
 use agent_kernel_x86_64::{
-    address_space::{AGENT_CODE_PAGE_COUNT, AGENT_P4_INDEX, P4_ENTRY_COUNT},
+    address_space::{AGENT_CODE_PAGE_CAPACITY, AGENT_P4_INDEX, P4_ENTRY_COUNT},
     runtime_region::RUNTIME_REGION_SLOT_COUNT,
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
@@ -53,7 +53,7 @@ pub(super) fn kernel_excludes_agent_region(
     // performs translations; no Agent mapper reference exists concurrently.
     let mapper =
         unsafe { OffsetPageTable::new(&mut *kernel_pointer, VirtAddr::new(physical_offset)) };
-    (0..AGENT_CODE_PAGE_COUNT).all(|page| {
+    (0..AGENT_CODE_PAGE_CAPACITY).all(|page| {
         layout
             .code_page_start(page)
             .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
@@ -89,7 +89,7 @@ pub(super) fn kernel_excludes_agent_region(
 pub(super) fn agent_mappings_match(
     mapper: &OffsetPageTable<'_>,
     layout: UserMemoryLayout,
-    code_frames: &[PhysFrame; AGENT_CODE_PAGE_COUNT],
+    code_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     _lazy_data_frame: PhysFrame,
@@ -99,20 +99,27 @@ pub(super) fn agent_mappings_match(
     let signal_flags =
         PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE;
     let stack_flags = signal_flags | PageTableFlags::WRITABLE;
-    code_frames
-        .iter()
-        .copied()
-        .enumerate()
-        .all(|(index, frame)| {
-            layout.code_page_start(index).is_some_and(|address| {
-                mapping_matches(
-                    mapper,
-                    address,
-                    frame,
-                    code_flags,
-                    PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
-                )
+    !code_frames.is_empty()
+        && code_frames.len() <= AGENT_CODE_PAGE_CAPACITY
+        && code_frames
+            .iter()
+            .copied()
+            .enumerate()
+            .all(|(index, frame)| {
+                layout.code_page_start(index).is_some_and(|address| {
+                    mapping_matches(
+                        mapper,
+                        address,
+                        frame,
+                        code_flags,
+                        PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
+                    )
+                })
             })
+        && (code_frames.len()..AGENT_CODE_PAGE_CAPACITY).all(|index| {
+            layout
+                .code_page_start(index)
+                .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
         })
         && mapping_matches(
             mapper,

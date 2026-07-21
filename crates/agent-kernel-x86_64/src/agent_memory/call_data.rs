@@ -12,9 +12,7 @@ use agent_kernel_x86_64::{
     typed_call_data::{CallDataMessage, CallDataMessageKind, TYPED_CALL_DATA_BYTES},
 };
 
-use super::{
-    physical_pointer, PreparedAgentMemory, CALL_DATA_CONTENT_FRAME_INDEX, PHYSICAL_MEMORY_OFFSET,
-};
+use super::{physical_pointer, PreparedAgentMemory, PHYSICAL_MEMORY_OFFSET};
 
 impl PreparedAgentMemory {
     pub(crate) fn snapshot_namespace_path(
@@ -42,10 +40,8 @@ impl PreparedAgentMemory {
         {
             return None;
         }
-        let frame = PhysFrame::from_start_address(PhysAddr::new(
-            self.identity.content_frames()[CALL_DATA_CONTENT_FRAME_INDEX],
-        ))
-        .ok()?;
+        let frame =
+            PhysFrame::from_start_address(PhysAddr::new(self.identity.call_data_frame())).ok()?;
         if physical_pointer(PHYSICAL_MEMORY_OFFSET, frame)? != self.call_data_pointer {
             return None;
         }

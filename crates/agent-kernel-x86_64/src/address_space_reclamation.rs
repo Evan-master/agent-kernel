@@ -1,4 +1,4 @@
-//! Fixed-capacity ownership ledger for reclaimed native address-space frames.
+//! Bounded ownership ledger for reclaimed native address-space frames.
 //!
 //! This architecture-library module provides read-only preparation, stale-token
 //! rejection, atomic whole-address-space commits, and one-shot frame transfer.
@@ -9,8 +9,8 @@ mod types;
 use agent_kernel_core::AgentId;
 
 use crate::address_space::{
-    AgentMemoryIdentity, AGENT_CONTENT_FRAME_COUNT, AGENT_OWNED_FRAME_COUNT,
-    AGENT_PAGE_TABLE_FRAME_COUNT,
+    agent_content_frame_count, agent_owned_frame_count, AgentMemoryIdentity,
+    AGENT_CONTENT_FRAME_CAPACITY, AGENT_PAGE_TABLE_FRAME_COUNT,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -51,13 +51,9 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
     }
 
     pub fn prepare(&self, identity: AgentMemoryIdentity) -> Option<AddressSpaceReclamation> {
-        let end = self.len.checked_add(AGENT_OWNED_FRAME_COUNT)?;
-        if end > CAPACITY
-            || identity
-                .owned_frames()
-                .iter()
-                .any(|frame| self.contains(*frame))
-        {
+        let owned_frames = identity.owned_frames();
+        let end = self.len.checked_add(owned_frames.len())?;
+        if end > CAPACITY || owned_frames.iter().any(|frame| self.contains(*frame)) {
             return None;
         }
         Some(AddressSpaceReclamation {
@@ -73,25 +69,17 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         {
             return false;
         }
-        let Some(end) = self.len.checked_add(AGENT_OWNED_FRAME_COUNT) else {
+        let owned_frames = reclamation.identity.owned_frames();
+        let Some(end) = self.len.checked_add(owned_frames.len()) else {
             return false;
         };
         let Some(next_generation) = self.generation.checked_add(1) else {
             return false;
         };
-        if end > CAPACITY
-            || reclamation
-                .identity
-                .owned_frames()
-                .iter()
-                .any(|frame| self.contains(*frame))
-        {
+        if end > CAPACITY || owned_frames.iter().any(|frame| self.contains(*frame)) {
             return false;
         }
-        for (slot, frame) in self.frames[self.len..end]
-            .iter_mut()
-            .zip(reclamation.identity.owned_frames())
-        {
+        for (slot, frame) in self.frames[self.len..end].iter_mut().zip(owned_frames) {
             *slot = frame;
         }
         self.len = end;
@@ -99,21 +87,27 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         true
     }
 
-    pub fn prepare_allocation(&self, agent: AgentId) -> Option<AddressSpaceAllocation> {
+    pub fn prepare_allocation(
+        &self,
+        agent: AgentId,
+        code_page_count: usize,
+    ) -> Option<AddressSpaceAllocation> {
         if agent.raw() == 0 {
             return None;
         }
-        let start = self.len.checked_sub(AGENT_OWNED_FRAME_COUNT)?;
+        let owned_frame_count = agent_owned_frame_count(code_page_count)?;
+        let content_frame_count = agent_content_frame_count(code_page_count)?;
+        let start = self.len.checked_sub(owned_frame_count)?;
         let mut page_table_frames = [0; AGENT_PAGE_TABLE_FRAME_COUNT];
         page_table_frames
             .copy_from_slice(&self.frames[start..start + AGENT_PAGE_TABLE_FRAME_COUNT]);
-        let mut content_frames = [0; AGENT_CONTENT_FRAME_COUNT];
-        content_frames.copy_from_slice(
-            &self.frames[start + AGENT_PAGE_TABLE_FRAME_COUNT..start + AGENT_OWNED_FRAME_COUNT],
+        let mut content_frames = [0; AGENT_CONTENT_FRAME_CAPACITY];
+        content_frames[..content_frame_count].copy_from_slice(
+            &self.frames[start + AGENT_PAGE_TABLE_FRAME_COUNT..start + owned_frame_count],
         );
         Some(AddressSpaceAllocation {
             agent,
-            identity: AgentMemoryIdentity::new(page_table_frames, content_frames)?,
+            identity: AgentMemoryIdentity::new(page_table_frames, content_frames, code_page_count)?,
             expected_len: self.len,
             expected_generation: self.generation,
         })
@@ -127,9 +121,9 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         {
             return None;
         }
-        let start = self.len.checked_sub(AGENT_OWNED_FRAME_COUNT)?;
         let selected = allocation.identity.owned_frames();
-        if self.frames[start..self.len] != selected {
+        let start = self.len.checked_sub(selected.len())?;
+        if self.frames[start..self.len] != *selected {
             return None;
         }
         let next_generation = self.generation.checked_add(1)?;

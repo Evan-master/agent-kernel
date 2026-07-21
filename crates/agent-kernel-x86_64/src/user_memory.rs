@@ -6,7 +6,7 @@
 
 use crate::address_space::{p4_index, AGENT_REGION_BASE};
 
-pub use crate::address_space::AGENT_CODE_PAGE_COUNT;
+pub use crate::address_space::AGENT_CODE_PAGE_CAPACITY;
 
 pub const PAGE_BYTES: u64 = 4096;
 pub const STACK_PAGE_COUNT: usize = 4;
@@ -35,7 +35,7 @@ pub struct UserMemoryLayout {
 impl UserMemoryLayout {
     pub const fn fixed() -> Self {
         let code_start = AGENT_REGION_BASE;
-        let signal_start = code_start + PAGE_BYTES * AGENT_CODE_PAGE_COUNT as u64;
+        let signal_start = code_start + PAGE_BYTES * AGENT_CODE_PAGE_CAPACITY as u64;
         let guard_start = signal_start + PAGE_BYTES;
         let stack_bottom = guard_start + PAGE_BYTES;
         let stack_top = stack_bottom + PAGE_BYTES * STACK_PAGE_COUNT as u64;
@@ -66,7 +66,7 @@ impl UserMemoryLayout {
     }
 
     pub const fn code_page_start(self, page: usize) -> Option<u64> {
-        if page >= AGENT_CODE_PAGE_COUNT {
+        if page >= AGENT_CODE_PAGE_CAPACITY {
             None
         } else {
             Some(self.code_start + PAGE_BYTES * page as u64)

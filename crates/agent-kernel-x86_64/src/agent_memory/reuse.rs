@@ -7,7 +7,7 @@
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
-    address_space::{AgentMemoryIdentity, AGENT_CODE_PAGE_COUNT},
+    address_space::{AgentMemoryIdentity, AGENT_CODE_PAGE_CAPACITY},
     address_space_reclamation::AllocatedAddressSpaceFrames,
     agent_image::VerifiedAgentImage,
     runtime_page::RuntimePageLedger,
@@ -17,8 +17,7 @@ use agent_kernel_x86_64::{
 
 use super::{
     initialize_content, page_is_zero, page_tables, physical_pointer, PreparedAgentMemory,
-    CALL_DATA_CONTENT_FRAME_INDEX, CODE_CONTENT_FRAME_START_INDEX, LAZY_DATA_CONTENT_FRAME_INDEX,
-    PHYSICAL_MEMORY_OFFSET, SIGNAL_CONTENT_FRAME_INDEX, STACK_CONTENT_FRAME_START_INDEX,
+    PHYSICAL_MEMORY_OFFSET,
 };
 
 impl PreparedAgentMemory {
@@ -45,37 +44,34 @@ impl PreparedAgentMemory {
         identity: AgentMemoryIdentity,
         image: VerifiedAgentImage<'_>,
     ) -> Option<Self> {
-        if !identity.owned_frames().into_iter().all(frame_is_zero) {
+        if identity.code_page_count() != image.code_page_count()
+            || !identity.owned_frames().into_iter().all(frame_is_zero)
+        {
             return None;
         }
 
-        let content = identity.content_frames();
-        let first_code_frame = physical_frame(content[CODE_CONTENT_FRAME_START_INDEX])?;
-        let mut code_frames = [first_code_frame; AGENT_CODE_PAGE_COUNT];
-        for (slot, address) in code_frames.iter_mut().zip(
-            content[CODE_CONTENT_FRAME_START_INDEX
-                ..CODE_CONTENT_FRAME_START_INDEX + AGENT_CODE_PAGE_COUNT]
-                .iter()
-                .copied(),
-        ) {
+        let code_addresses = identity.code_frames();
+        let first_code_frame = physical_frame(code_addresses[0])?;
+        let mut code_frame_storage = [first_code_frame; AGENT_CODE_PAGE_CAPACITY];
+        for (slot, address) in code_frame_storage
+            .iter_mut()
+            .zip(code_addresses.iter().copied())
+        {
             *slot = physical_frame(address)?;
         }
-        let signal_frame = physical_frame(content[SIGNAL_CONTENT_FRAME_INDEX])?;
-        let first_stack_frame = physical_frame(content[STACK_CONTENT_FRAME_START_INDEX])?;
+        let code_frames = &code_frame_storage[..identity.code_page_count()];
+        let signal_frame = physical_frame(identity.signal_frame())?;
+        let stack_addresses = identity.stack_frames();
+        let first_stack_frame = physical_frame(stack_addresses[0])?;
         let mut stack_frames = [first_stack_frame; STACK_PAGE_COUNT];
-        for (slot, address) in stack_frames.iter_mut().zip(
-            content[STACK_CONTENT_FRAME_START_INDEX
-                ..STACK_CONTENT_FRAME_START_INDEX + STACK_PAGE_COUNT]
-                .iter()
-                .copied(),
-        ) {
+        for (slot, address) in stack_frames.iter_mut().zip(stack_addresses) {
             *slot = physical_frame(address)?;
         }
-        let lazy_data_frame = physical_frame(content[LAZY_DATA_CONTENT_FRAME_INDEX])?;
-        let call_data_frame = physical_frame(content[CALL_DATA_CONTENT_FRAME_INDEX])?;
+        let lazy_data_frame = physical_frame(identity.lazy_data_frame())?;
+        let call_data_frame = physical_frame(identity.call_data_frame())?;
         let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             PHYSICAL_MEMORY_OFFSET,
-            &code_frames,
+            code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -93,7 +89,7 @@ impl PreparedAgentMemory {
             PHYSICAL_MEMORY_OFFSET,
             identity.page_table_frames(),
             layout,
-            &code_frames,
+            code_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,

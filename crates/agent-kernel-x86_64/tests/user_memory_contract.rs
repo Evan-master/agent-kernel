@@ -1,5 +1,5 @@
 use agent_kernel_x86_64::user_memory::{
-    UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_CODE_PAGE_COUNT,
+    UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_CODE_PAGE_CAPACITY,
     AGENT_RESTART_GENERATION_OFFSET, FIRST_AGENT_RESTART_GENERATION, LAZY_DATA_PROOF_VALUE,
     MAX_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
     SECOND_AGENT_RESTART_GENERATION, STACK_PAGE_COUNT, THIRD_AGENT_RESTART_GENERATION,
@@ -8,19 +8,19 @@ use agent_kernel_x86_64::user_memory::{
 #[test]
 fn user_region_has_four_code_pages_signal_guard_stack_and_lazy_data() {
     let layout = UserMemoryLayout::fixed();
-    assert_eq!(AGENT_CODE_PAGE_COUNT, 4);
+    assert_eq!(AGENT_CODE_PAGE_CAPACITY, 4);
     assert_eq!(layout.code_start(), 0x0000_4000_0000_0000);
     assert_eq!(
         layout.code_end(),
-        layout.code_start() + PAGE_BYTES * AGENT_CODE_PAGE_COUNT as u64
+        layout.code_start() + PAGE_BYTES * AGENT_CODE_PAGE_CAPACITY as u64
     );
-    for page in 0..AGENT_CODE_PAGE_COUNT {
+    for page in 0..AGENT_CODE_PAGE_CAPACITY {
         assert_eq!(
             layout.code_page_start(page),
             Some(layout.code_start() + PAGE_BYTES * page as u64)
         );
     }
-    assert_eq!(layout.code_page_start(AGENT_CODE_PAGE_COUNT), None);
+    assert_eq!(layout.code_page_start(AGENT_CODE_PAGE_CAPACITY), None);
     assert_eq!(layout.signal_start(), layout.code_end());
     assert_eq!(layout.guard_start(), layout.signal_start() + PAGE_BYTES);
     assert_eq!(layout.stack_bottom(), layout.guard_start() + PAGE_BYTES);

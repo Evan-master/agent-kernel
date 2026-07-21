@@ -7,7 +7,7 @@
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
-    address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_COUNT},
+    address_space::{AgentMemoryIdentity, AGENT_OWNED_FRAME_CAPACITY},
     address_space_reclamation::{
         AddressSpaceFramePool, AddressSpaceReclamation, AllocatedAddressSpaceFrames,
     },
@@ -19,11 +19,12 @@ use super::{
 
 pub(crate) const NATIVE_ADDRESS_SPACE_CAPACITY: usize = 6;
 pub(crate) const NATIVE_ADDRESS_SPACE_FRAME_CAPACITY: usize =
-    NATIVE_ADDRESS_SPACE_CAPACITY * AGENT_OWNED_FRAME_COUNT;
+    NATIVE_ADDRESS_SPACE_CAPACITY * AGENT_OWNED_FRAME_CAPACITY;
 
 #[derive(Copy, Clone)]
 pub(crate) struct NativeAddressSpaceFramePool {
     ledger: AddressSpaceFramePool<NATIVE_ADDRESS_SPACE_FRAME_CAPACITY>,
+    sealed_frame_count: Option<usize>,
 }
 
 #[derive(Copy, Clone)]
@@ -36,22 +37,25 @@ impl NativeAddressSpaceFramePool {
     pub(crate) const fn new() -> Self {
         Self {
             ledger: AddressSpaceFramePool::new(),
+            sealed_frame_count: None,
         }
     }
 
     pub(crate) fn prepare(&self, identity: AgentMemoryIdentity) -> Option<AddressSpaceReclamation> {
-        self.ledger.prepare(identity)
+        let reclamation = self.ledger.prepare(identity)?;
+        self.can_accept(reclamation).then_some(reclamation)
     }
 
     pub(crate) fn preview_commit(&mut self, reclamation: AddressSpaceReclamation) -> bool {
-        self.ledger.commit(reclamation)
+        self.can_accept(reclamation) && self.ledger.commit(reclamation)
     }
 
     pub(crate) fn allocate_zeroed(
         &mut self,
         agent: agent_kernel_core::AgentId,
+        code_page_count: usize,
     ) -> Option<AllocatedAddressSpaceFrames> {
-        let allocation = self.ledger.prepare_allocation(agent)?;
+        let allocation = self.ledger.prepare_allocation(agent, code_page_count)?;
         let identity = allocation.identity();
         if !identity.owned_frames().into_iter().all(frame_is_zero) {
             return None;
@@ -75,7 +79,14 @@ impl NativeAddressSpaceFramePool {
         if !identity.owned_frames().into_iter().all(frame_is_zero) {
             return Err(owner);
         }
-        self.ledger.cancel_allocation(owner).map(|()| identity)
+        let Some(reclamation) = self.prepare(identity) else {
+            return Err(owner);
+        };
+        if !self.commit_zeroed(reclamation) {
+            return Err(owner);
+        }
+        let _transferred_identity = owner.into_identity();
+        Ok(identity)
     }
 
     fn commit_zeroed(&mut self, reclamation: AddressSpaceReclamation) -> bool {
@@ -84,11 +95,23 @@ impl NativeAddressSpaceFramePool {
             .owned_frames()
             .into_iter()
             .all(frame_is_zero)
+            && self.can_accept(reclamation)
             && self.ledger.commit(reclamation)
     }
 
+    pub(crate) fn seal_inventory(&mut self) -> bool {
+        if self.sealed_frame_count.is_some()
+            || self.ledger.is_empty()
+            || !self.ledger.frames().iter().copied().all(frame_is_zero)
+        {
+            return false;
+        }
+        self.sealed_frame_count = Some(self.ledger.len());
+        true
+    }
+
     pub(crate) fn all_reclaimed_and_zero(&self) -> bool {
-        self.ledger.len() == NATIVE_ADDRESS_SPACE_FRAME_CAPACITY
+        self.sealed_frame_count == Some(self.ledger.len())
             && self.ledger.frames().iter().copied().all(frame_is_zero)
     }
 
@@ -105,6 +128,19 @@ impl NativeAddressSpaceFramePool {
 
     pub(crate) const fn len(&self) -> usize {
         self.ledger.len()
+    }
+
+    pub(crate) const fn inventory_frame_count(&self) -> Option<usize> {
+        self.sealed_frame_count
+    }
+
+    fn can_accept(&self, reclamation: AddressSpaceReclamation) -> bool {
+        self.sealed_frame_count.is_none_or(|limit| {
+            self.ledger
+                .len()
+                .checked_add(reclamation.frame_count())
+                .is_some_and(|end| end <= limit)
+        })
     }
 }
 

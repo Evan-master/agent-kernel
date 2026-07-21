@@ -14,7 +14,7 @@ pub use format::{AgentImageCapsule, AgentImageHeader};
 pub use verification::VerifiedAgentImage;
 
 pub const AGENT_IMAGE_HEADER_BYTES: usize = 32;
-pub const MAX_AGENT_CODE_PAGES: usize = crate::address_space::AGENT_CODE_PAGE_COUNT;
+pub const MAX_AGENT_CODE_PAGES: usize = crate::address_space::AGENT_CODE_PAGE_CAPACITY;
 pub const MAX_AGENT_CODE_BYTES: usize =
     crate::user_memory::PAGE_BYTES as usize * MAX_AGENT_CODE_PAGES;
 

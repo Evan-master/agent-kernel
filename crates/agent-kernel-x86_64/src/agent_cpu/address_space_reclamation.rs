@@ -4,7 +4,7 @@
 //! owner while delegating page clearing and pool mutation to Agent memory.
 
 use agent_kernel_x86_64::{
-    address_space::AGENT_OWNED_FRAME_COUNT, address_space_reclamation::AddressSpaceReclamation,
+    address_space::AgentMemoryIdentity, address_space_reclamation::AddressSpaceReclamation,
 };
 
 use super::{CompletedAgentCpu, PreparedAgentCpu};
@@ -57,9 +57,13 @@ impl PreparedAgentCpu {
 }
 
 impl ReclaimedAgentCpuAddressSpace {
-    pub(crate) const fn matches(self, agent: agent_kernel_core::AgentId, root: u64) -> bool {
+    pub(crate) const fn matches(
+        self,
+        agent: agent_kernel_core::AgentId,
+        identity: AgentMemoryIdentity,
+    ) -> bool {
         self.agent.raw() == agent.raw()
-            && self.root == root
-            && self.frame_count == AGENT_OWNED_FRAME_COUNT
+            && self.root == identity.root()
+            && self.frame_count == identity.owned_frame_count()
     }
 }
