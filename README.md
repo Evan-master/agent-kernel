@@ -2,7 +2,7 @@
 
 # `AGENT KERNEL`
 
-### `A native operating substrate for autonomous agents.`
+### `Native kernel substrate for autonomous agents.`
 
 **English** / [简体中文](README.zh-CN.md)
 
@@ -15,32 +15,37 @@
 </p>
 
 <pre>
-agent-kernel@bare-metal:~$ boot --profile native
-[ OK ] capability authority online
-[ OK ] per-agent address spaces online
-[ OK ] 64 KiB agent code window online
-[ OK ] right-sized code-frame ownership online
-[ OK ] deterministic event chain online
+agent-kernel@ring0:~$ boot --profile package-v2
+[ OK ] capability authority ........ online
+[ OK ] isolated Agent address spaces online
+[ OK ] segmented RX / R+NX packages  online
+[ OK ] bounded ABS64 relocation ..... online
+[ OK ] deterministic Event archive .. online
 kernel://supervisor/handoff-ready
 </pre>
 
 </div>
 
 ```text
-┌─ SYSTEM // AGENT-KERNEL ───────────────────────────────────────┐
-│ MODEL     agent-first       CORE      no_std / heap-free       │
-│ TARGET    x86_64 bare metal ABI       0.1 / unstable           │
-│ MACHINE   BIOS / ring 0+3   EVIDENCE  tests / QEMU / ELF       │
-│ STATUS    active development LICENSE  MIT                      │
-└────────────────────────────────────────────────────────────────┘
+┌─ AGENT KERNEL // V9 ──────────────────────────────────────────┐
+│ CORE      no_std / heap-free    TARGET    x86_64 bare metal   │
+│ MODE      ring 0 + ring 3       FORMAT    Package v2          │
+│ AUTH      Capabilities          EVIDENCE  Tests / QEMU / ELF  │
+│ STATUS    Active development    LICENSE   MIT                 │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-`MODEL` · `MACHINE` · `CAPSULE` · `ABI` · `EVIDENCE` · `BOOT`
+`MODEL` · `MACHINE` · `PACKAGE` · `ABI` · `EVIDENCE` · `BOOT`
 
 ## `00 / KERNEL SIGNAL`
 
-Agent Kernel is an original operating-system kernel organized around agents,
-capabilities, resources, verifiable work, recovery, and deterministic evidence.
+| Channel | Definition |
+| :--- | :--- |
+| `SUBJECT` | Agent identity bound to Task, Image, and execution nonce |
+| `AUTHORITY` | Explicit, derivable, revocable Capabilities |
+| `WORK` | Intent → Action → Observation → Verification |
+| `STATE` | Resource, Namespace, Checkpoint, Rollback |
+| `EVIDENCE` | Ordered Events, archive digest, exact replay |
 
 ```text
 AGENT ──presents──> CAPABILITY ──controls──> RESOURCE
@@ -48,16 +53,16 @@ AGENT ──presents──> CAPABILITY ──controls──> RESOURCE
   └──────────────── emits EVENT <─────────────────┘
 ```
 
-| Contract | Kernel invariant |
-| :--- | :--- |
-| `IDENTITY` | Every call binds Agent, Task, Image, and Nonce |
-| `AUTHORITY` | Every protected operation requires a Capability |
-| `MUTATION` | Every successful transition emits an ordered Event |
-| `ISOLATION` | Every native Agent owns a CR3 root and ring-3 context |
-| `RECOVERY` | Checkpoint, Rollback, fault routing, repair, restart |
-| `I/O` | Authorized HAL requests reach native IRQ and port paths |
-
 ## `01 / NATIVE MODEL`
+
+| Kernel invariant | Enforced contract |
+| :--- | :--- |
+| `IDENTITY` | Calls inherit the currently scheduled Agent context |
+| `AUTHORITY` | Protected transitions require matching Capabilities |
+| `MUTATION` | Successful state changes append deterministic Events |
+| `ISOLATION` | Every native Agent owns a CR3 root and ring-3 frame |
+| `RECOVERY` | Fault routing, repair, restart, Checkpoint, Rollback |
+| `I/O` | Authorized HAL requests reach native IRQ and port paths |
 
 ```text
 IDENTITY    Agent / Task / Image / ExecutionContext
@@ -68,21 +73,10 @@ STRUCTURE   Workspace / Namespace / Entry / Revision
 EVIDENCE    Event / ArchiveDigest / Replay
 ```
 
-| Primitive | Responsibility |
-| :--- | :--- |
-| `Agent` | Authenticated authority subject with schedulable state |
-| `Capability` | Derivable and revocable access to one Resource |
-| `Intent` | Typed declaration of desired work |
-| `Task` | Schedulable work bound to delegated authority |
-| `Verification` | Independent trust transition after execution |
-| `Checkpoint` | Recovery point governed by Rollback authority |
-| `Event` | Deterministic evidence for successful mutation |
-| `Namespace` | Revisioned bindings, Workspace mounts, bounded paths |
-
 ## `02 / MACHINE PATH`
 
 ```text
-RING 3   verified Capsule ──> Agent ──> int 0x90 / IRQ / Fault
+RING 3   verified Package ──> Agent ──> int 0x90 / IRQ / Fault
                                          │
 ──────────────── privilege boundary ─────┼──────────────────────
                                          ▼
@@ -95,7 +89,7 @@ CORE     deterministic transition ──> fixed Store ──> Event
 HAL      immutable request ──> driver binding ──> hardware
 ```
 
-| Layer | Ownership |
+| Crate | Boundary |
 | :--- | :--- |
 | `agent-kernel-core` | Domain records, fixed Stores, deterministic transitions |
 | `agent-kernel` | `no_std` syscall-style facade |
@@ -103,37 +97,58 @@ HAL      immutable request ──> driver binding ──> hardware
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-supervisor` | Host simulation and user-space orchestration |
 
-## `03 / AGENT CAPSULE`
+## `03 / PACKAGE V2`
 
 ```text
-Capsule v1
-┌──────────────┬──────────────┬──────────────────────────────────┐
-│ magic / ABI  │ length / SHA │ fixed-layout x86_64 code         │
-└──────────────┴──────────────┴──────────────────────────────────┘
-        verify ──> allocate ──> map RX ──> enter ring 3
+AGNTIMG\0 // Package v2
+┌──────────────┬───────────────────┬──────────────────┐
+│ header / 48B │ 2 segment records │ ABS64 records    │
+├──────────────┴───────────────────┴──────────────────┤
+│ code / 1..64 KiB / R+X                             │
+├─────────────────────────────────────────────────────┤
+│ rodata / 1..64 KiB / R+NX                          │
+└─────────────────────────────────────────────────────┘
 ```
 
 ```text
-USER MAP
+SHA-256 verify
+      ↓
+allocate exact frames → copy segments → patch private code alias
+      ↓
+map code RX → map rodata R+NX → enter ring 3
+```
+
+| Contract | V9 bound |
+| :--- | :--- |
+| `SEGMENTS` | Exactly two: code, rodata |
+| `RELOCATIONS` | `0..64`, sorted, non-overlapping, page-contained |
+| `SYMBOL` | `rodata_base + nonnegative addend` |
+| `PLACEHOLDER` | Eight zero bytes in the immutable package |
+| `DIGEST` | Binds the complete pre-relocation package |
+| `LEGACY` | Capsule v1 remains accepted during inventory migration |
+
+## `04 / USER MAP`
+
+```text
 0x4000_0000_0000..ffff  code / 16 pages      RX
-0x4000_0001_0000        signal page          R + NX
-0x4000_0001_1000        guard page           unmapped
-0x4000_0001_2000..5fff  stack / 4 pages      RW + NX
-0x4000_0001_6000        lazy page            on demand
-0x4000_0001_7000        runtime page         capability governed
-0x4000_0001_8000..ffff  runtime / 8 pages    capability governed
-0x4000_0002_0000        call-data page       typed fixed records
+0x4000_0001_0000..ffff  rodata / 16 pages    R + NX
+0x4000_0002_0000        signal page          R + NX
+0x4000_0002_1000        guard page           unmapped
+0x4000_0002_2000..5fff  stack / 4 pages      RW + NX
+0x4000_0002_6000        lazy page            on demand
+0x4000_0002_7000        runtime page         capability governed
+0x4000_0002_8000..ffff  runtime / 8 pages    capability governed
+0x4000_0003_0000        call-data page       typed fixed records
 ```
 
 ```text
-V8 PROFILE
-CODE WINDOW       64 KiB / 16-page bounded RX window
-PHYSICAL IDENTITY 12..27 frames / exact Capsule size
-CROSS-PAGE PROOF  Resource Manager completes from page 5
-POOL INVENTORY    76 sealed frames / atomic resize + reuse
+FRAME IDENTITY
+page tables   4     code      1..16     rodata    0..16
+signal        1     stack         4     lazy          1
+call data     1     owned     12..43     pool         77
 ```
 
-## `04 / AGENT CALL ABI`
+## `05 / AGENT CALL ABI`
 
 ```text
 ┌─ REGISTER FRAME ────────────────────────────────────────────────┐
@@ -145,7 +160,7 @@ POOL INVENTORY    76 sealed frames / atomic resize + reuse
 
 | Call IDs | Protocol family |
 | ---: | :--- |
-| `1-9` | Execution, verification, Mailbox IPC |
+| `1-9` | Execution, Verification, Mailbox IPC |
 | `10-20` | Resource, Capability, Task, Agent lifecycle |
 | `21-28` | Runtime Memory and Admission |
 | `29-43` | Reclamation, compaction, Event archive |
@@ -156,11 +171,18 @@ TRANSPORT  private call-data page + typed records
 POINTERS   arbitrary userspace pointers rejected
 IDENTITY   derived from the scheduled CPU context
 REPLY      canonical register frame
-ORDER      decode -> authenticate -> preflight -> mutate
+ORDER      decode → authenticate → preflight → mutate
 ```
 
 <details>
 <summary><code>NAMESPACE // CALLS 44..52</code></summary>
+
+```text
+Workspace 1 --Cap A--> Mount(3) --Cap B--> Mount(8)
+Workspace 8 --Cap C--> Mount(9) --Cap D--> Resource(3)
+
+snapshot → decode → authenticate hops → compare → rebind
+```
 
 | Path | Contract |
 | :--- | :--- |
@@ -169,19 +191,13 @@ ORDER      decode -> authenticate -> preflight -> mutate
 | Bounded path | One to four segments with per-hop authority |
 | Memory transport | Kernel snapshot before decode and validation |
 
-```text
-Workspace 1 --Cap A--> Mount(3) --Cap B--> Mount(8)
-Workspace 8 --Cap C--> Mount(9) --Cap D--> Resource(3)
-
-snapshot -> decode -> authenticate hops -> compare -> rebind
-```
-
 </details>
 
-## `05 / NATIVE MATRIX`
+## `06 / NATIVE MATRIX`
 
 | Subsystem | Native mechanism | QEMU signal |
 | :--- | :--- | :--- |
+| Package | v2 parser, full digest, ABS64 relocation | `NATIVE_SEGMENTED_PACKAGE_OK` |
 | Isolation | CR3, GDT/TSS/IDT, ring transitions | `MULTI_AGENT_ISOLATION_OK` |
 | Scheduling | FIFO dispatch, PIT preemption, CPU resume | `MULTI_AGENT_CONTEXT_SWITCH_OK` |
 | Faults | `#UD`, `#GP`, `#PF`, repair, restart | `NATIVE_AGENT_FAULT_RESTART_OK` |
@@ -192,24 +208,20 @@ snapshot -> decode -> authenticate hops -> compare -> rebind
 | Driver | UART IRQ, HAL request, native Invocation | `DRIVER_INVOCATION_FLOW_OK` |
 | Audit | SHA-256 archive chain and exact replay | `NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
 
-## `06 / VERIFIED PROFILE`
+## `07 / VERIFIED PROFILE`
 
 ```text
-QEMU TRANSCRIPT   Events 1..409
-WORKSPACE TESTS   216 groups / 745 passed
-DISPATCH          35 kernel-selected
-AGENT CONTEXTS    11 isolated
-CAPSULE WINDOW    16 pages / 64 KiB
-FRAMES PER AGENT  12..27 / active code pages 1..16
-BOOT FRAME POOL   76 sealed / zeroed on full return
+QEMU TRANSCRIPT   Events 1..409      DISPATCH          35
+AGENT CONTEXTS    11 isolated       NEXT SEQUENCE     410
+CODE WINDOW       16 pages / 64 KiB RODATA WINDOW     16 pages / 64 KiB
+FRAMES PER AGENT  12..43            BOOT FRAME POOL   77 sealed
 EVENT STORE       375 peak / 345 final / 64 archived
-NEXT SEQUENCE     410
 ```
 
-| Native Capsule | Calls | Bytes | SHA-256 |
-| :--- | ---: | ---: | :--- |
-| Resource Manager | 43 | 16,480 | `3a8764b8c986...bdca8dc6e` |
-| Admission Supervisor | 44 | 4,115 | `e09598b938db...c3bc04b01` |
+| Native image | Format | Calls | Image bytes | SHA-256 |
+| :--- | :--- | ---: | ---: | :--- |
+| Resource Manager | Package v2 | 43 | 16,634 | `14f09265ccbb...db7b646` |
+| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5a657ca1ecde...9339078` |
 
 <details>
 <summary><code>OPEN RAW BOOT PROOF</code></summary>
@@ -218,13 +230,12 @@ NEXT SEQUENCE     410
 $ scripts/run-qemu.sh --release
 
 [boot]       AGENT_KERNEL_QEMU_BOOT_OK
+[package]    AGENT_KERNEL_NATIVE_SEGMENTED_PACKAGE_OK
+[rodata]     AGENT_KERNEL_NATIVE_RODATA_NX_OK
+[relocation] AGENT_KERNEL_NATIVE_RELOCATION_OK
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
-[capsule]    AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK
-[capsule:5]  AGENT_KERNEL_NATIVE_FIFTH_CODE_PAGE_OK
-[frames]     AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK
 [namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
-[mutation]   AGENT_KERNEL_AGENT_CALL_NAMESPACE_TYPED_REBIND_OK
 [audit]      AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
 [event:409]  driver_invocation_completed
 [handoff]    SUPERVISOR_HANDOFF_READY
@@ -232,13 +243,14 @@ $ scripts/run-qemu.sh --release
 
 </details>
 
-## `07 / BUILD + BOOT`
+## `08 / BUILD + BOOT`
 
 ```console
 $ git clone https://github.com/Evan-master/agent-kernel.git
 $ cd agent-kernel
 $ cargo test --workspace
 $ cargo run -p agent-supervisor
+$ scripts/audit-agent-images.rb --assembly
 ```
 
 ```console
@@ -253,7 +265,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-## `08 / SOURCE MAP`
+## `09 / SOURCE MAP`
 
 ```text
 crates/
@@ -270,24 +282,24 @@ docs/superpowers/
 └─ plans/                milestone plans
 ```
 
-## `09 / ROADMAP`
+## `10 / ROADMAP`
 
 ```text
-[x] agent-native authority model
-[x] ring-3 Capsules + per-Agent address spaces
+[x] Agent-native authority model
+[x] ring-3 Agents + per-Agent address spaces
 [x] deterministic Events + archive replay
 [x] typed Namespace + bounded path mutation
-[x] sixteen-page Agent Capsules + fifth-page execution
-[x] right-sized executable frame ownership
-[>] segmented packages + relocations + signatures
+[x] 64 KiB code windows + exact frame ownership
+[x] Package v2 + RX/R+NX segments + ABS64 relocation
+[>] package signatures + signer trust policy
 [ ] SMP + synchronization + TLB shootdown
 [ ] storage / network / graphics / USB
 [ ] signed durable state + formal verification
 ```
 
-`CURRENT SPEC` · [`Expanded Agent Capsule V8`](docs/superpowers/specs/2026-07-21-expanded-agent-capsule-v8-design.md)
+`CURRENT SPEC` · [`Segmented Agent Package V9`](docs/superpowers/specs/2026-07-21-segmented-agent-package-v9-design.md)
 
-## `10 / ENGINEERING GATE`
+## `11 / ENGINEERING GATE`
 
 | Gate | Requirement |
 | :--- | :--- |
