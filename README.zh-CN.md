@@ -18,7 +18,7 @@
 agent-kernel@bare-metal:~$ boot --profile native
 [ OK ] capability authority online
 [ OK ] per-agent address spaces online
-[ OK ] four-page ring-3 capsules online
+[ OK ] right-sized code-frame ownership online
 [ OK ] deterministic event chain online
 kernel://supervisor/handoff-ready
 </pre>
@@ -115,7 +115,7 @@ Capsule v1
 ```text
 用户地址空间
 0x4000_0000_0000  code window       RX
-                  signal page       RW + NX
+                  signal page       R + NX
                   guard page        未映射
                   stack pages       RW + NX
                   lazy page         按需映射
@@ -124,11 +124,11 @@ Capsule v1
 ```
 
 ```text
-V6 PROFILE
-CODE WINDOW       16 KiB / 4 个 RX 页
-PHYSICAL IDENTITY 每个 Agent 15 帧
+V7 PROFILE
+CODE WINDOW       16 KiB / 4 页有界 RX 窗口
+PHYSICAL IDENTITY 12..15 帧 / 精确匹配 Capsule
 CROSS-PAGE PROOF  Resource Manager 从第 2 页完成执行
-FORMAT CONTRACT   Capsule v1 头部 + 全镜像 SHA-256
+POOL INVENTORY    73 帧封存库存 / 原子重组与复用
 ```
 
 ## `04 / AGENT CALL ABI`
@@ -194,11 +194,12 @@ Workspace 8 --Cap C--> Mount(9) --Cap D--> Resource(3)
 
 ```text
 QEMU TRANSCRIPT   Events 1..409
-WORKSPACE TESTS   216 组 / 743 个通过
+WORKSPACE TESTS   216 组 / 745 个通过
 DISPATCH          35 次内核选择
 AGENT CONTEXTS    11 个隔离上下文
 CAPSULE WINDOW    4 页 / 16 KiB
-FRAMES PER AGENT  15
+FRAMES PER AGENT  12..15 / 活动代码页 1..4
+BOOT FRAME POOL   73 帧封存 / 全量归还后清零
 EVENT STORE       峰值 375 / 最终 345 / 已归档 64
 NEXT SEQUENCE     410
 ```
@@ -218,6 +219,7 @@ $ scripts/run-qemu.sh --release
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
 [capsule]    AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK
+[frames]     AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK
 [namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
 [mutation]   AGENT_KERNEL_AGENT_CALL_NAMESPACE_TYPED_REBIND_OK
 [audit]      AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
@@ -273,13 +275,14 @@ docs/superpowers/
 [x] 确定性 Event + 归档重放
 [x] 类型化 Namespace + 有界路径修改
 [x] 四页 Agent Capsule + 跨页执行
-[>] 动态可执行内存增长
+[x] 按镜像尺寸分配可执行帧
+[>] 更大的可执行窗口 + 分段软件包
 [ ] SMP + 同步 + TLB shootdown
 [ ] Storage / Network / Graphics / USB
 [ ] 签名持久状态 + 形式化验证
 ```
 
-`当前 SPEC` · [`Multi-page Agent Capsule V6`](docs/superpowers/specs/2026-07-21-multi-page-agent-capsule-v6-design.md)
+`当前 SPEC` · [`Right-sized Agent Code Ownership V7`](docs/superpowers/specs/2026-07-21-right-sized-agent-code-v7-design.md)
 
 ## `10 / 工程门禁`
 

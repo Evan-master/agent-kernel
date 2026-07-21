@@ -18,7 +18,7 @@
 agent-kernel@bare-metal:~$ boot --profile native
 [ OK ] capability authority online
 [ OK ] per-agent address spaces online
-[ OK ] four-page ring-3 capsules online
+[ OK ] right-sized code-frame ownership online
 [ OK ] deterministic event chain online
 kernel://supervisor/handoff-ready
 </pre>
@@ -115,7 +115,7 @@ Capsule v1
 ```text
 USER MAP
 0x4000_0000_0000  code window       RX
-                  signal page       RW + NX
+                  signal page       R + NX
                   guard page        unmapped
                   stack pages       RW + NX
                   lazy page         on demand
@@ -124,11 +124,11 @@ USER MAP
 ```
 
 ```text
-V6 PROFILE
-CODE WINDOW       16 KiB / 4 RX pages
-PHYSICAL IDENTITY 15 frames per Agent
+V7 PROFILE
+CODE WINDOW       16 KiB / 4-page bounded RX window
+PHYSICAL IDENTITY 12..15 frames / exact Capsule size
 CROSS-PAGE PROOF  Resource Manager completes from page 2
-FORMAT CONTRACT   Capsule v1 header + full-image SHA-256
+POOL INVENTORY    73 sealed frames / atomic resize + reuse
 ```
 
 ## `04 / AGENT CALL ABI`
@@ -194,11 +194,12 @@ snapshot -> decode -> authenticate hops -> compare -> rebind
 
 ```text
 QEMU TRANSCRIPT   Events 1..409
-WORKSPACE TESTS   216 groups / 743 passed
+WORKSPACE TESTS   216 groups / 745 passed
 DISPATCH          35 kernel-selected
 AGENT CONTEXTS    11 isolated
 CAPSULE WINDOW    4 pages / 16 KiB
-FRAMES PER AGENT  15
+FRAMES PER AGENT  12..15 / active code pages 1..4
+BOOT FRAME POOL   73 sealed / zeroed on full return
 EVENT STORE       375 peak / 345 final / 64 archived
 NEXT SEQUENCE     410
 ```
@@ -218,6 +219,7 @@ $ scripts/run-qemu.sh --release
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
 [agents]     AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK
 [capsule]    AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK
+[frames]     AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK
 [namespace]  AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK
 [mutation]   AGENT_KERNEL_AGENT_CALL_NAMESPACE_TYPED_REBIND_OK
 [audit]      AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK
@@ -273,13 +275,14 @@ docs/superpowers/
 [x] deterministic Events + archive replay
 [x] typed Namespace + bounded path mutation
 [x] four-page Agent Capsules + cross-page execution
-[>] dynamic executable memory growth
+[x] right-sized executable frame ownership
+[>] larger executable window + segmented packages
 [ ] SMP + synchronization + TLB shootdown
 [ ] storage / network / graphics / USB
 [ ] signed durable state + formal verification
 ```
 
-`CURRENT SPEC` · [`Multi-page Agent Capsule V6`](docs/superpowers/specs/2026-07-21-multi-page-agent-capsule-v6-design.md)
+`CURRENT SPEC` · [`Right-sized Agent Code Ownership V7`](docs/superpowers/specs/2026-07-21-right-sized-agent-code-v7-design.md)
 
 ## `10 / ENGINEERING GATE`
 
