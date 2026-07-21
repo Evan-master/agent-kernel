@@ -3,8 +3,9 @@
 use agent_kernel_core::{AgentImageKind, AgentImageRecord, AgentImageStatus};
 
 use super::{
-    sha256_digest, AgentImageCapsule, AgentImageLoadError, AGENT_IMAGE_KIND_FAULT_HANDLER,
-    AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
+    sha256_digest, AgentImageCapsule, AgentImageFormat, AgentImageLoadError, AgentImageRelocation,
+    AGENT_IMAGE_KIND_FAULT_HANDLER, AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER,
+    AGENT_IMAGE_KIND_WORKER,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -40,12 +41,32 @@ impl<'a> VerifiedAgentImage<'a> {
         self.capsule.code()
     }
 
+    pub const fn format(&self) -> AgentImageFormat {
+        self.capsule.format()
+    }
+
+    pub const fn rodata(&self) -> &'a [u8] {
+        self.capsule.rodata()
+    }
+
     pub const fn entry_offset(&self) -> u32 {
         self.capsule.entry_offset()
     }
 
     pub const fn code_page_count(&self) -> usize {
         self.capsule.code_page_count()
+    }
+
+    pub const fn rodata_page_count(&self) -> usize {
+        self.capsule.rodata_page_count()
+    }
+
+    pub const fn relocation_count(&self) -> usize {
+        self.capsule.relocation_count()
+    }
+
+    pub fn relocation(&self, index: usize) -> Option<AgentImageRelocation> {
+        self.capsule.relocation(index)
     }
 }
 

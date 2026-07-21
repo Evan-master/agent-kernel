@@ -3,7 +3,14 @@
 .section .text
 .global resource_manager_entry
 resource_manager_entry:
-    movabs rax, 0x0000400000010000
+    movabs r15, 0x0000000000000000
+    movabs r14, 0x454b5f544e454741
+    cmp qword ptr [r15], r14
+    jne .halt
+    xor r14d, r14d
+    xor r15d, r15d
+
+    movabs rax, 0x0000400000020000
 .wait_for_quantum:
     cmp byte ptr [rax + 1], 1
     jb .wait_for_quantum
@@ -395,7 +402,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 2
     jne .halt
-    movabs r15, 0x0000400000017000
+    movabs r15, 0x0000400000027000
     cmp r11, r15
     jne .halt
     cmp r12, 4096
@@ -571,7 +578,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 3
     jne .halt
-    movabs r15, 0x0000400000018000
+    movabs r15, 0x0000400000028000
     cmp r11, r15
     jne .halt
     cmp r12, 12288
@@ -648,7 +655,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 4
     jne .halt
-    movabs r15, 0x000040000001b000
+    movabs r15, 0x000040000002b000
     cmp r11, r15
     jne .halt
     cmp r12, 8192
@@ -748,7 +755,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 5
     jne .halt
-    movabs r15, 0x0000400000018000
+    movabs r15, 0x0000400000028000
     cmp r11, r15
     jne .halt
     cmp r12, 12288
@@ -868,7 +875,7 @@ resource_manager_entry:
     xor ebp, ebp
     int 0x90
 
-    movabs r15, 0x0000400000020000
+    movabs r15, 0x0000400000030000
     movabs r14, 0x313548544150534e
     mov qword ptr [r15], r14
     mov qword ptr [r15 + 8], 1
@@ -918,7 +925,7 @@ resource_manager_entry:
     jmp .halt
 .memory_path_done:
 
-    movabs r15, 0x0000400000020000
+    movabs r15, 0x0000400000030000
     movabs r14, 0x3147534d544e4741
     mov qword ptr [r15], r14
     mov dword ptr [r15 + 32], 160
@@ -969,3 +976,8 @@ resource_manager_entry:
     int 0x90
 .halt:
     jmp .halt
+
+.section .rodata
+.global resource_manager_rodata
+resource_manager_rodata:
+    .asciz "AGENT_KERNEL_PACKAGE_V2_RODATA"

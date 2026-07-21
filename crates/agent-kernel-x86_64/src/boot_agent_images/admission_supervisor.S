@@ -3,7 +3,7 @@
 .section .text
 .global admission_supervisor_entry
 admission_supervisor_entry:
-    movabs rax, 0x0000400000010000
+    movabs rax, 0x0000400000020000
 .wait_for_release:
     cmp byte ptr [rax], 0
     je .wait_for_release
@@ -853,16 +853,16 @@ admission_supervisor_event_archive_return:
     jne .halt
     cmp r12, 64
     jne .halt
-    movabs r12, 0x2694c3f16fc3f821
+    movabs r12, 0xec72ca2f18dfdf64
     cmp r13, r12
     jne .halt
-    movabs r12, 0xee89eb221a8d5c27
+    movabs r12, 0xe1e332af9e880408
     cmp r14, r12
     jne .halt
-    movabs r12, 0x9abd9f924dd91747
+    movabs r12, 0xa6c5477a0f27d6ae
     cmp r15, r12
     jne .halt
-    movabs r12, 0xa7d793a563068049
+    movabs r12, 0x50c4bbbdff067ca1
     cmp rbp, r12
     jne .halt
 
@@ -1102,7 +1102,7 @@ admission_supervisor_memory_cell_reuse_return:
     jne .memory_cell_reuse_fail
     cmp r10, 6
     jne .memory_cell_reuse_fail
-    movabs rax, 0x0000400000017000
+    movabs rax, 0x0000400000027000
     cmp r11, rax
     jne .memory_cell_reuse_fail
 

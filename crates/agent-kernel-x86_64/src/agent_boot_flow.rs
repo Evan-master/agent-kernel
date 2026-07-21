@@ -30,7 +30,7 @@ use crate::{
     X86BootedKernel, COM1,
 };
 
-const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 76;
+const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 77;
 
 pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: PrivilegeBoundary) -> ! {
     let worker_a = boot_agent_images::worker_a();
@@ -362,12 +362,14 @@ fn validate_agent_memory(memories: [&PreparedAgentMemory; 6]) {
         }
     }
     let expected_code_pages = [1, 1, 1, 1, 1, 5];
+    let expected_rodata_pages = [0, 0, 0, 0, 0, 1];
     if memories
         .iter()
-        .zip(expected_code_pages)
-        .any(|(memory, pages)| {
-            memory.identity().code_page_count() != pages
-                || memory.identity().owned_frame_count() != pages + 11
+        .zip(expected_code_pages.into_iter().zip(expected_rodata_pages))
+        .any(|(memory, (code_pages, rodata_pages))| {
+            memory.identity().code_page_count() != code_pages
+                || memory.identity().rodata_page_count() != rodata_pages
+                || memory.identity().owned_frame_count() != code_pages + rodata_pages + 11
         })
     {
         fatal_boot("AGENT_KERNEL_AGENT_CODE_FRAME_PROFILE_ERROR");

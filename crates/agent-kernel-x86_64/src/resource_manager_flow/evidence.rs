@@ -62,6 +62,7 @@ pub(super) fn completed(
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && image.spans_fifth_code_page()
+        && image.has_segmented_rodata()
         && completed.physical_quantum_generation() == 1
         && completed.restart_generation() == 0
         && completed.lazy_data_byte() == 0

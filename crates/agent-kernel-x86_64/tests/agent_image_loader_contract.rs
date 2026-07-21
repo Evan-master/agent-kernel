@@ -71,7 +71,7 @@ fn native_capsule_rejects_unknown_or_noncanonical_header_fields() {
     let cases = [
         (mutated(&valid, 0, b'X'), AgentImageLoadError::InvalidMagic),
         (
-            mutated_u16(&valid, 8, 2),
+            mutated_u16(&valid, 8, 3),
             AgentImageLoadError::UnsupportedFormatVersion,
         ),
         (

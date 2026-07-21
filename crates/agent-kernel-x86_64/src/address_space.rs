@@ -8,10 +8,11 @@ pub const PAGE_TABLE_BYTES: u64 = 4096;
 pub const P4_ENTRY_COUNT: usize = 512;
 pub const AGENT_PAGE_TABLE_FRAME_COUNT: usize = 4;
 pub const AGENT_CODE_PAGE_CAPACITY: usize = 16;
+pub const AGENT_RODATA_PAGE_CAPACITY: usize = 16;
 pub const AGENT_STACK_FRAME_COUNT: usize = 4;
-pub const AGENT_NON_CODE_FRAME_COUNT: usize = AGENT_STACK_FRAME_COUNT + 3;
+pub const AGENT_FIXED_CONTENT_FRAME_COUNT: usize = AGENT_STACK_FRAME_COUNT + 3;
 pub const AGENT_CONTENT_FRAME_CAPACITY: usize =
-    AGENT_CODE_PAGE_CAPACITY + AGENT_NON_CODE_FRAME_COUNT;
+    AGENT_CODE_PAGE_CAPACITY + AGENT_RODATA_PAGE_CAPACITY + AGENT_FIXED_CONTENT_FRAME_COUNT;
 pub const AGENT_OWNED_FRAME_CAPACITY: usize =
     AGENT_PAGE_TABLE_FRAME_COUNT + AGENT_CONTENT_FRAME_CAPACITY;
 pub const AGENT_REGION_BASE: u64 = 0x0000_4000_0000_0000;
@@ -40,6 +41,7 @@ pub struct AgentMemoryIdentity {
     page_table_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
     content_frames: [u64; AGENT_CONTENT_FRAME_CAPACITY],
     code_page_count: u8,
+    rodata_page_count: u8,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -88,8 +90,11 @@ impl AgentMemoryIdentity {
         page_table_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
         content_frames: [u64; AGENT_CONTENT_FRAME_CAPACITY],
         code_page_count: usize,
+        rodata_page_count: usize,
     ) -> Option<Self> {
-        let Some(content_frame_count) = agent_content_frame_count(code_page_count) else {
+        let Some(content_frame_count) =
+            agent_content_frame_count(code_page_count, rodata_page_count)
+        else {
             return None;
         };
         let mut table = 0;
@@ -137,6 +142,7 @@ impl AgentMemoryIdentity {
             page_table_frames,
             content_frames,
             code_page_count: code_page_count as u8,
+            rodata_page_count: rodata_page_count as u8,
         })
     }
 
@@ -152,6 +158,10 @@ impl AgentMemoryIdentity {
         self.code_page_count as usize
     }
 
+    pub const fn rodata_page_count(self) -> usize {
+        self.rodata_page_count as usize
+    }
+
     pub const fn code_frames(self) -> AgentFrameSet<AGENT_CODE_PAGE_CAPACITY> {
         let mut frames = [0; AGENT_CODE_PAGE_CAPACITY];
         let mut index = 0;
@@ -162,12 +172,23 @@ impl AgentMemoryIdentity {
         AgentFrameSet::new(frames, self.code_page_count())
     }
 
+    pub const fn rodata_frames(self) -> AgentFrameSet<AGENT_RODATA_PAGE_CAPACITY> {
+        let mut frames = [0; AGENT_RODATA_PAGE_CAPACITY];
+        let start = self.code_page_count();
+        let mut index = 0;
+        while index < self.rodata_page_count() {
+            frames[index] = self.content_frames[start + index];
+            index += 1;
+        }
+        AgentFrameSet::new(frames, self.rodata_page_count())
+    }
+
     pub const fn content_frames(self) -> AgentFrameSet<AGENT_CONTENT_FRAME_CAPACITY> {
         AgentFrameSet::new(self.content_frames, self.content_frame_count())
     }
 
     pub const fn content_frame_count(self) -> usize {
-        self.code_page_count() + AGENT_NON_CODE_FRAME_COUNT
+        self.code_page_count() + self.rodata_page_count() + AGENT_FIXED_CONTENT_FRAME_COUNT
     }
 
     pub const fn owned_frame_count(self) -> usize {
@@ -175,12 +196,12 @@ impl AgentMemoryIdentity {
     }
 
     pub const fn signal_frame(self) -> u64 {
-        self.content_frames[self.code_page_count()]
+        self.content_frames[self.code_page_count() + self.rodata_page_count()]
     }
 
     pub const fn stack_frames(self) -> [u64; AGENT_STACK_FRAME_COUNT] {
         let mut frames = [0; AGENT_STACK_FRAME_COUNT];
-        let start = self.code_page_count() + 1;
+        let start = self.code_page_count() + self.rodata_page_count() + 1;
         let mut index = 0;
         while index < AGENT_STACK_FRAME_COUNT {
             frames[index] = self.content_frames[start + index];
@@ -190,11 +211,13 @@ impl AgentMemoryIdentity {
     }
 
     pub const fn lazy_data_frame(self) -> u64 {
-        self.content_frames[self.code_page_count() + 1 + AGENT_STACK_FRAME_COUNT]
+        self.content_frames
+            [self.code_page_count() + self.rodata_page_count() + 1 + AGENT_STACK_FRAME_COUNT]
     }
 
     pub const fn call_data_frame(self) -> u64 {
-        self.content_frames[self.code_page_count() + 2 + AGENT_STACK_FRAME_COUNT]
+        self.content_frames
+            [self.code_page_count() + self.rodata_page_count() + 2 + AGENT_STACK_FRAME_COUNT]
     }
 
     pub const fn owned_frames(self) -> AgentFrameSet<AGENT_OWNED_FRAME_CAPACITY> {
@@ -242,16 +265,25 @@ impl AgentMemoryIdentity {
     }
 }
 
-pub const fn agent_content_frame_count(code_page_count: usize) -> Option<usize> {
-    if code_page_count == 0 || code_page_count > AGENT_CODE_PAGE_CAPACITY {
+pub const fn agent_content_frame_count(
+    code_page_count: usize,
+    rodata_page_count: usize,
+) -> Option<usize> {
+    if code_page_count == 0
+        || code_page_count > AGENT_CODE_PAGE_CAPACITY
+        || rodata_page_count > AGENT_RODATA_PAGE_CAPACITY
+    {
         None
     } else {
-        Some(code_page_count + AGENT_NON_CODE_FRAME_COUNT)
+        Some(code_page_count + rodata_page_count + AGENT_FIXED_CONTENT_FRAME_COUNT)
     }
 }
 
-pub const fn agent_owned_frame_count(code_page_count: usize) -> Option<usize> {
-    match agent_content_frame_count(code_page_count) {
+pub const fn agent_owned_frame_count(
+    code_page_count: usize,
+    rodata_page_count: usize,
+) -> Option<usize> {
+    match agent_content_frame_count(code_page_count, rodata_page_count) {
         Some(content) => Some(AGENT_PAGE_TABLE_FRAME_COUNT + content),
         None => None,
     }

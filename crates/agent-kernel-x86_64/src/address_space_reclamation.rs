@@ -91,12 +91,13 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         &self,
         agent: AgentId,
         code_page_count: usize,
+        rodata_page_count: usize,
     ) -> Option<AddressSpaceAllocation> {
         if agent.raw() == 0 {
             return None;
         }
-        let owned_frame_count = agent_owned_frame_count(code_page_count)?;
-        let content_frame_count = agent_content_frame_count(code_page_count)?;
+        let owned_frame_count = agent_owned_frame_count(code_page_count, rodata_page_count)?;
+        let content_frame_count = agent_content_frame_count(code_page_count, rodata_page_count)?;
         let start = self.len.checked_sub(owned_frame_count)?;
         let mut page_table_frames = [0; AGENT_PAGE_TABLE_FRAME_COUNT];
         page_table_frames
@@ -107,7 +108,12 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         );
         Some(AddressSpaceAllocation {
             agent,
-            identity: AgentMemoryIdentity::new(page_table_frames, content_frames, code_page_count)?,
+            identity: AgentMemoryIdentity::new(
+                page_table_frames,
+                content_frames,
+                code_page_count,
+                rodata_page_count,
+            )?,
             expected_len: self.len,
             expected_generation: self.generation,
         })

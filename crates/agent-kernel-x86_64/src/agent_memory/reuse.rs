@@ -7,7 +7,7 @@
 use x86_64::{structures::paging::PhysFrame, PhysAddr};
 
 use agent_kernel_x86_64::{
-    address_space::{AgentMemoryIdentity, AGENT_CODE_PAGE_CAPACITY},
+    address_space::{AgentMemoryIdentity, AGENT_CODE_PAGE_CAPACITY, AGENT_RODATA_PAGE_CAPACITY},
     address_space_reclamation::AllocatedAddressSpaceFrames,
     agent_image::VerifiedAgentImage,
     runtime_page::RuntimePageLedger,
@@ -45,6 +45,7 @@ impl PreparedAgentMemory {
         image: VerifiedAgentImage<'_>,
     ) -> Option<Self> {
         if identity.code_page_count() != image.code_page_count()
+            || identity.rodata_page_count() != image.rodata_page_count()
             || !identity.owned_frames().into_iter().all(frame_is_zero)
         {
             return None;
@@ -60,6 +61,15 @@ impl PreparedAgentMemory {
             *slot = physical_frame(address)?;
         }
         let code_frames = &code_frame_storage[..identity.code_page_count()];
+        let rodata_addresses = identity.rodata_frames();
+        let mut rodata_frame_storage = [first_code_frame; AGENT_RODATA_PAGE_CAPACITY];
+        for (slot, address) in rodata_frame_storage
+            .iter_mut()
+            .zip(rodata_addresses.iter().copied())
+        {
+            *slot = physical_frame(address)?;
+        }
+        let rodata_frames = &rodata_frame_storage[..identity.rodata_page_count()];
         let signal_frame = physical_frame(identity.signal_frame())?;
         let stack_addresses = identity.stack_frames();
         let first_stack_frame = physical_frame(stack_addresses[0])?;
@@ -72,11 +82,12 @@ impl PreparedAgentMemory {
         let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             PHYSICAL_MEMORY_OFFSET,
             code_frames,
+            rodata_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
             call_data_frame,
-            image.code(),
+            image,
         )?;
         let layout = UserMemoryLayout::fixed();
         let entry_rip = layout
@@ -90,6 +101,7 @@ impl PreparedAgentMemory {
             identity.page_table_frames(),
             layout,
             code_frames,
+            rodata_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,

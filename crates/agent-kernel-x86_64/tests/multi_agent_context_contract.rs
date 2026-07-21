@@ -16,6 +16,7 @@ fn agent_memory_identities_reject_aliases_and_prove_disjoint_frames() {
         [0x200_000, 0x201_000, 0x202_000, 0x203_000],
         overlapping_content,
         4,
+        0,
     )
     .unwrap();
     let table_overlapping = AgentMemoryIdentity::new(
@@ -27,12 +28,13 @@ fn agent_memory_identities_reject_aliases_and_prove_disjoint_frames() {
         ],
         content_frames(0x304_000, 4),
         4,
+        0,
     )
     .unwrap();
 
-    assert_eq!(AGENT_CONTENT_FRAME_CAPACITY, 23);
+    assert_eq!(AGENT_CONTENT_FRAME_CAPACITY, 39);
     assert_eq!(AGENT_PAGE_TABLE_FRAME_COUNT, 4);
-    assert_eq!(AGENT_OWNED_FRAME_CAPACITY, 27);
+    assert_eq!(AGENT_OWNED_FRAME_CAPACITY, 43);
     assert!(first.is_disjoint_from(second));
     assert!(!first.is_disjoint_from(overlapping));
     assert!(!first.is_disjoint_from(table_overlapping));
@@ -47,21 +49,26 @@ fn agent_memory_identities_reject_aliases_and_prove_disjoint_frames() {
         [0x1000, 0x2000, 0x2000, 0x4000],
         content_frames(0x5000, 4),
         4,
+        0,
     )
     .is_none());
     let mut table_alias = content_frames(0x5000, 4);
     table_alias[0] = 0x1000;
-    assert!(AgentMemoryIdentity::new([0x1000, 0x2000, 0x3000, 0x4000], table_alias, 4,).is_none());
+    assert!(
+        AgentMemoryIdentity::new([0x1000, 0x2000, 0x3000, 0x4000], table_alias, 4, 0,).is_none()
+    );
     assert!(AgentMemoryIdentity::new(
         [0x1001, 0x2000, 0x3000, 0x4000],
         content_frames(0x5000, 4),
         4,
+        0,
     )
     .is_none());
     let zero_root = AgentMemoryIdentity::new(
         [0, 0x401_000, 0x402_000, 0x403_000],
         content_frames(0x404_000, 4),
         4,
+        0,
     )
     .unwrap();
     let mut zero_content_frames = content_frames(0x504_000, 4);
@@ -70,6 +77,7 @@ fn agent_memory_identities_reject_aliases_and_prove_disjoint_frames() {
         [0x500_000, 0x501_000, 0x502_000, 0x503_000],
         zero_content_frames,
         4,
+        0,
     )
     .unwrap();
     assert_eq!(zero_root.root(), 0);
@@ -85,9 +93,10 @@ fn agent_memory_identity_owns_only_the_active_code_prefix() {
     let sixteen_pages = identity_with_code_pages(0x200_000, 16);
 
     assert_eq!(AGENT_CODE_PAGE_CAPACITY, 16);
-    assert_eq!(AGENT_CONTENT_FRAME_CAPACITY, 23);
-    assert_eq!(AGENT_OWNED_FRAME_CAPACITY, 27);
+    assert_eq!(AGENT_CONTENT_FRAME_CAPACITY, 39);
+    assert_eq!(AGENT_OWNED_FRAME_CAPACITY, 43);
     assert_eq!(one_page.code_page_count(), 1);
+    assert_eq!(one_page.rodata_page_count(), 0);
     assert_eq!(one_page.content_frames().len(), 8);
     assert_eq!(one_page.owned_frame_count(), 12);
     assert_eq!(two_pages.owned_frame_count(), 13);
@@ -108,11 +117,13 @@ fn agent_memory_identity_owns_only_the_active_code_prefix() {
         [0x200_000, 0x201_000, 0x202_000, 0x203_000],
         noncanonical,
         1,
+        0,
     )
     .is_none());
     assert!(AgentMemoryIdentity::new(
         [0x200_000, 0x201_000, 0x202_000, 0x203_000],
         [0; AGENT_CONTENT_FRAME_CAPACITY],
+        0,
         0,
     )
     .is_none());
@@ -120,6 +131,7 @@ fn agent_memory_identity_owns_only_the_active_code_prefix() {
         [0x200_000, 0x201_000, 0x202_000, 0x203_000],
         [0; AGENT_CONTENT_FRAME_CAPACITY],
         AGENT_CODE_PAGE_CAPACITY + 1,
+        0,
     )
     .is_none());
 }
@@ -129,6 +141,7 @@ fn identity_with_code_pages(base: u64, code_page_count: usize) -> AgentMemoryIde
         [base, base + 0x1000, base + 0x2000, base + 0x3000],
         content_frames(base + 0x4000, code_page_count),
         code_page_count,
+        0,
     )
     .unwrap()
 }
@@ -145,12 +158,12 @@ fn content_frames(start: u64, code_page_count: usize) -> [u64; AGENT_CONTENT_FRA
 fn saved_agent_frame_owns_a_complete_privilege_frame_by_value() {
     let mut hardware: PrivilegeInterruptStackFrame = unsafe { core::mem::zeroed() };
     hardware.rip = 0x4000_0000_0042;
-    hardware.user_rsp = 0x4000_0001_6000;
+    hardware.user_rsp = 0x4000_0002_6000;
     let saved = SavedAgentFrame::new(hardware);
     hardware.rip = 0;
 
     assert_eq!(hardware.rip, 0);
     assert_eq!(SAVED_AGENT_FRAME_BYTES, 160);
     assert_eq!(saved.frame().rip, 0x4000_0000_0042);
-    assert_eq!(saved.frame().user_rsp, 0x4000_0001_6000);
+    assert_eq!(saved.frame().user_rsp, 0x4000_0002_6000);
 }

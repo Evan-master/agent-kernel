@@ -2,7 +2,7 @@ use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{
         AgentMemoryIdentity, AGENT_CODE_PAGE_CAPACITY, AGENT_CONTENT_FRAME_CAPACITY,
-        AGENT_OWNED_FRAME_CAPACITY,
+        AGENT_OWNED_FRAME_CAPACITY, AGENT_RODATA_PAGE_CAPACITY,
     },
     address_space_reclamation::AddressSpaceFramePool,
 };
@@ -88,7 +88,11 @@ fn complete_address_space_allocation_is_atomic_and_generation_bound() {
     assert!(pool.commit(second_reclamation));
 
     let allocation = pool
-        .prepare_allocation(AgentId::new(10), AGENT_CODE_PAGE_CAPACITY)
+        .prepare_allocation(
+            AgentId::new(10),
+            AGENT_CODE_PAGE_CAPACITY,
+            AGENT_RODATA_PAGE_CAPACITY,
+        )
         .unwrap();
     let stale_replay = allocation;
     assert_eq!(allocation.identity(), second);
@@ -119,7 +123,11 @@ fn allocated_address_space_with_frame_zero_can_be_restored_exactly() {
     assert!(pool.commit(reclamation));
 
     let allocation = pool
-        .prepare_allocation(AgentId::new(10), AGENT_CODE_PAGE_CAPACITY)
+        .prepare_allocation(
+            AgentId::new(10),
+            AGENT_CODE_PAGE_CAPACITY,
+            AGENT_RODATA_PAGE_CAPACITY,
+        )
         .unwrap();
     let replay = allocation;
     let owner = pool.commit_allocation(allocation).unwrap();
@@ -143,20 +151,36 @@ fn concurrent_allocations_are_agent_bound_disjoint_and_cancellable() {
     assert!(pool.commit(pool.prepare(second).unwrap()));
 
     assert!(pool
-        .prepare_allocation(AgentId::new(0), AGENT_CODE_PAGE_CAPACITY)
+        .prepare_allocation(
+            AgentId::new(0),
+            AGENT_CODE_PAGE_CAPACITY,
+            AGENT_RODATA_PAGE_CAPACITY,
+        )
         .is_none());
     let first_allocation = pool
-        .prepare_allocation(AgentId::new(10), AGENT_CODE_PAGE_CAPACITY)
+        .prepare_allocation(
+            AgentId::new(10),
+            AGENT_CODE_PAGE_CAPACITY,
+            AGENT_RODATA_PAGE_CAPACITY,
+        )
         .unwrap();
     let stale_other_agent = pool
-        .prepare_allocation(AgentId::new(11), AGENT_CODE_PAGE_CAPACITY)
+        .prepare_allocation(
+            AgentId::new(11),
+            AGENT_CODE_PAGE_CAPACITY,
+            AGENT_RODATA_PAGE_CAPACITY,
+        )
         .unwrap();
     let first_owner = pool.commit_allocation(first_allocation).unwrap();
     assert!(pool.commit_allocation(stale_other_agent).is_none());
     let second_owner = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(11), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(11),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
 
@@ -193,20 +217,32 @@ fn partial_batch_reclamation_reuses_workers_without_exposing_resident_frames() {
 
     let supervisor = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(12), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(12),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     let worker_a = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(10), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(10),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     let worker_b = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(11), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(11),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     assert!(pool.is_empty());
@@ -224,14 +260,22 @@ fn partial_batch_reclamation_reuses_workers_without_exposing_resident_frames() {
 
     let next_a = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(13), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(13),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     let next_b = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(14), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(14),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     assert_eq!(next_a.identity(), worker_b_identity);
@@ -254,8 +298,12 @@ fn failed_cancellation_returns_the_noncopy_owner_without_pool_mutation() {
     assert!(pool.commit(pool.prepare(first).unwrap()));
     let owner = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(10), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(10),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     assert!(pool.commit(pool.prepare(second).unwrap()));
@@ -273,7 +321,7 @@ fn allocation_recomposes_exact_identity_size_from_reclaimed_frames() {
     assert!(pool.commit(pool.prepare(original).unwrap()));
 
     let small = pool
-        .commit_allocation(pool.prepare_allocation(AgentId::new(20), 1).unwrap())
+        .commit_allocation(pool.prepare_allocation(AgentId::new(20), 1, 0).unwrap())
         .unwrap();
     assert_eq!(small.identity().code_page_count(), 1);
     assert_eq!(small.identity().owned_frame_count(), 12);
@@ -283,8 +331,12 @@ fn allocation_recomposes_exact_identity_size_from_reclaimed_frames() {
 
     let restored = pool
         .commit_allocation(
-            pool.prepare_allocation(AgentId::new(21), AGENT_CODE_PAGE_CAPACITY)
-                .unwrap(),
+            pool.prepare_allocation(
+                AgentId::new(21),
+                AGENT_CODE_PAGE_CAPACITY,
+                AGENT_RODATA_PAGE_CAPACITY,
+            )
+            .unwrap(),
         )
         .unwrap();
     assert_eq!(restored.identity(), original);
@@ -292,13 +344,17 @@ fn allocation_recomposes_exact_identity_size_from_reclaimed_frames() {
 
 fn identity(base: u64, code_page_count: usize) -> AgentMemoryIdentity {
     let mut content = [0; AGENT_CONTENT_FRAME_CAPACITY];
-    for (index, frame) in content[..code_page_count + 7].iter_mut().enumerate() {
+    for (index, frame) in content[..code_page_count + AGENT_RODATA_PAGE_CAPACITY + 7]
+        .iter_mut()
+        .enumerate()
+    {
         *frame = base + (index as u64 + 4) * 0x1000;
     }
     AgentMemoryIdentity::new(
         [base, base + 0x1000, base + 0x2000, base + 0x3000],
         content,
         code_page_count,
+        AGENT_RODATA_PAGE_CAPACITY,
     )
     .unwrap()
 }

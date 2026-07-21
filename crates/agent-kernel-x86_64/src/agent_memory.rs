@@ -22,7 +22,7 @@ use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{
     address_space::{
         AddressSpaceRoots, AgentMemoryIdentity, AGENT_CODE_PAGE_CAPACITY,
-        AGENT_CONTENT_FRAME_CAPACITY,
+        AGENT_CONTENT_FRAME_CAPACITY, AGENT_RODATA_PAGE_CAPACITY,
     },
     agent_image::{VerifiedAgentImage, MAX_AGENT_CODE_BYTES},
     runtime_page::RuntimePageLedger,
@@ -68,11 +68,17 @@ impl PreparedAgentMemory {
         let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
         let zero_frame = PhysFrame::from_start_address(PhysAddr::new(0)).ok()?;
         let code_page_count = image.code_page_count();
+        let rodata_page_count = image.rodata_page_count();
         let mut code_frame_storage = [zero_frame; AGENT_CODE_PAGE_CAPACITY];
         for frame in &mut code_frame_storage[..code_page_count] {
             *frame = allocator.allocate()?;
         }
         let code_frames = &code_frame_storage[..code_page_count];
+        let mut rodata_frame_storage = [zero_frame; AGENT_RODATA_PAGE_CAPACITY];
+        for frame in &mut rodata_frame_storage[..rodata_page_count] {
+            *frame = allocator.allocate()?;
+        }
+        let rodata_frames = &rodata_frame_storage[..rodata_page_count];
         let signal_frame = allocator.allocate()?;
         let mut stack_frames = [zero_frame; STACK_PAGE_COUNT];
         for frame in &mut stack_frames {
@@ -84,11 +90,12 @@ impl PreparedAgentMemory {
         let (signal_pointer, lazy_data_pointer, call_data_pointer) = initialize_content(
             physical_offset,
             code_frames,
+            rodata_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
             call_data_frame,
-            image.code(),
+            image,
         )?;
         let layout = UserMemoryLayout::fixed();
         let entry_rip = layout
@@ -102,6 +109,7 @@ impl PreparedAgentMemory {
             &mut allocator,
             layout,
             code_frames,
+            rodata_frames,
             signal_frame,
             &stack_frames,
             lazy_data_frame,
@@ -115,7 +123,10 @@ impl PreparedAgentMemory {
         for (index, frame) in code_frames.iter().enumerate() {
             content_frames[index] = frame.start_address().as_u64();
         }
-        let signal_index = code_page_count;
+        for (index, frame) in rodata_frames.iter().enumerate() {
+            content_frames[code_page_count + index] = frame.start_address().as_u64();
+        }
+        let signal_index = code_page_count + rodata_page_count;
         content_frames[signal_index] = signal_frame.start_address().as_u64();
         let stack_start = signal_index + 1;
         for (index, frame) in stack_frames.iter().enumerate() {
@@ -124,8 +135,12 @@ impl PreparedAgentMemory {
         content_frames[stack_start + STACK_PAGE_COUNT] = lazy_data_frame.start_address().as_u64();
         content_frames[stack_start + STACK_PAGE_COUNT + 1] =
             call_data_frame.start_address().as_u64();
-        let identity =
-            AgentMemoryIdentity::new(installed.private_frames(), content_frames, code_page_count)?;
+        let identity = AgentMemoryIdentity::new(
+            installed.private_frames(),
+            content_frames,
+            code_page_count,
+            rodata_page_count,
+        )?;
         if identity.root() != roots.agent_root() {
             return None;
         }
@@ -342,15 +357,19 @@ pub(super) fn page_is_zero(pointer: *mut u8) -> bool {
 fn initialize_content(
     physical_offset: u64,
     code_frames: &[PhysFrame],
+    rodata_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
     call_data_frame: PhysFrame,
-    code: &[u8],
+    image: VerifiedAgentImage<'_>,
 ) -> Option<(*mut u8, *mut u8, *mut u8)> {
+    let code = image.code();
+    let rodata = image.rodata();
     if code.is_empty()
         || code.len() > MAX_AGENT_CODE_BYTES
         || code_frames.len() != code.len().div_ceil(PAGE_BYTES as usize)
+        || rodata_frames.len() != rodata.len().div_ceil(PAGE_BYTES as usize)
     {
         return None;
     }
@@ -369,6 +388,17 @@ fn initialize_content(
                 code[start..end]
                     .as_ptr()
                     .copy_to_nonoverlapping(code_pointer, end - start);
+            }
+        }
+        for (page, frame) in rodata_frames.iter().copied().enumerate() {
+            let rodata_pointer = physical_pointer(physical_offset, frame)?;
+            rodata_pointer.write_bytes(0, PAGE_BYTES as usize);
+            let start = page * PAGE_BYTES as usize;
+            if start < rodata.len() {
+                let end = rodata.len().min(start + PAGE_BYTES as usize);
+                rodata[start..end]
+                    .as_ptr()
+                    .copy_to_nonoverlapping(rodata_pointer, end - start);
             }
         }
         signal_pointer.write_bytes(0, PAGE_BYTES as usize);
@@ -391,7 +421,64 @@ fn initialize_content(
             }
         }
     }
+    for (page, frame) in rodata_frames.iter().copied().enumerate() {
+        let start = page * PAGE_BYTES as usize;
+        if start < rodata.len() {
+            let end = rodata.len().min(start + PAGE_BYTES as usize);
+            let rodata_pointer = physical_pointer(physical_offset, frame)?;
+            for (offset, expected) in rodata[start..end].iter().copied().enumerate() {
+                // SAFETY: the rodata frame remains exclusively owned and supervisor-mapped.
+                if unsafe { rodata_pointer.add(offset).read_volatile() } != expected {
+                    return None;
+                }
+            }
+        }
+    }
+    apply_relocations(physical_offset, code_frames, image)?;
     Some((signal_pointer, lazy_data_pointer, call_data_pointer))
+}
+
+fn apply_relocations(
+    physical_offset: u64,
+    code_frames: &[PhysFrame],
+    image: VerifiedAgentImage<'_>,
+) -> Option<()> {
+    let rodata_start = UserMemoryLayout::fixed().rodata_start();
+    let rodata_end = rodata_start.checked_add(image.rodata().len() as u64)?;
+    for index in 0..image.relocation_count() {
+        let relocation = image.relocation(index)?;
+        let target = relocation.target_offset() as usize;
+        let page = target / PAGE_BYTES as usize;
+        let offset = target % PAGE_BYTES as usize;
+        let frame = *code_frames.get(page)?;
+        let pointer = physical_pointer(physical_offset, frame)?;
+        let value = relocation.resolve(rodata_start)?;
+        if value < rodata_start || value >= rodata_end {
+            return None;
+        }
+        let bytes = value.to_le_bytes();
+        for index in 0..bytes.len() {
+            // SAFETY: package validation keeps the complete target word inside
+            // this exclusive code frame and requires a zero placeholder.
+            if unsafe { pointer.add(offset + index).read_volatile() } != 0 {
+                return None;
+            }
+        }
+        // SAFETY: the target is an exclusive supervisor alias. The Agent RX
+        // mapping is not active until page-table installation completes.
+        unsafe {
+            bytes
+                .as_ptr()
+                .copy_to_nonoverlapping(pointer.add(offset), bytes.len());
+        }
+        for (index, expected) in bytes.iter().copied().enumerate() {
+            // SAFETY: the same validated target remains exclusively owned.
+            if unsafe { pointer.add(offset + index).read_volatile() } != expected {
+                return None;
+            }
+        }
+    }
+    Some(())
 }
 
 pub(super) fn physical_pointer(offset: u64, frame: PhysFrame) -> Option<*mut u8> {

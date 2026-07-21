@@ -54,8 +54,11 @@ impl NativeAddressSpaceFramePool {
         &mut self,
         agent: agent_kernel_core::AgentId,
         code_page_count: usize,
+        rodata_page_count: usize,
     ) -> Option<AllocatedAddressSpaceFrames> {
-        let allocation = self.ledger.prepare_allocation(agent, code_page_count)?;
+        let allocation =
+            self.ledger
+                .prepare_allocation(agent, code_page_count, rodata_page_count)?;
         let identity = allocation.identity();
         if !identity.owned_frames().into_iter().all(frame_is_zero) {
             return None;

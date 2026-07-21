@@ -1,10 +1,17 @@
-//! Structural parser for the fixed-width Agent Image Capsule V0 header.
+//! Structural parser and normalized view for Agent image formats.
 
 use super::{
-    AgentImageLoadError, AGENT_IMAGE_ARCH_X86_64, AGENT_IMAGE_FORMAT_VERSION,
-    AGENT_IMAGE_HEADER_BYTES, AGENT_IMAGE_KIND_FAULT_HANDLER, AGENT_IMAGE_KIND_SUPERVISOR,
-    AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER, AGENT_IMAGE_MAGIC, MAX_AGENT_CODE_BYTES,
+    package_v2, AgentImageLoadError, AgentImageRelocation, AGENT_IMAGE_ARCH_X86_64,
+    AGENT_IMAGE_FORMAT_VERSION, AGENT_IMAGE_HEADER_BYTES, AGENT_IMAGE_KIND_FAULT_HANDLER,
+    AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
+    AGENT_IMAGE_MAGIC, AGENT_PACKAGE_RELOCATION_BYTES, MAX_AGENT_CODE_BYTES,
 };
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AgentImageFormat {
+    CapsuleV1,
+    PackageV2,
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct AgentImageHeader {
@@ -15,6 +22,8 @@ pub struct AgentImageHeader {
     entry_version: u16,
     entry_offset: u32,
     code_length: u32,
+    rodata_length: u32,
+    relocation_count: u16,
 }
 
 impl AgentImageHeader {
@@ -45,13 +54,48 @@ impl AgentImageHeader {
     pub const fn code_length(self) -> u32 {
         self.code_length
     }
+
+    pub const fn rodata_length(self) -> u32 {
+        self.rodata_length
+    }
+
+    pub const fn relocation_count(self) -> u16 {
+        self.relocation_count
+    }
+
+    pub(super) const fn new(
+        format_version: u16,
+        architecture: u16,
+        image_kind: u16,
+        abi_version: u16,
+        entry_version: u16,
+        entry_offset: u32,
+        code_length: u32,
+        rodata_length: u32,
+        relocation_count: u16,
+    ) -> Self {
+        Self {
+            format_version,
+            architecture,
+            image_kind,
+            abi_version,
+            entry_version,
+            entry_offset,
+            code_length,
+            rodata_length,
+            relocation_count,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct AgentImageCapsule<'a> {
+    format: AgentImageFormat,
     header: AgentImageHeader,
     raw: &'a [u8],
     code: &'a [u8],
+    rodata: &'a [u8],
+    relocations: &'a [u8],
 }
 
 impl<'a> AgentImageCapsule<'a> {
@@ -64,6 +108,9 @@ impl<'a> AgentImageCapsule<'a> {
         }
 
         let format_version = read_u16(bytes, 8);
+        if format_version == 2 {
+            return package_v2::parse(bytes);
+        }
         let architecture = read_u16(bytes, 10);
         let image_kind = read_u16(bytes, 12);
         let flags = read_u16(bytes, 14);
@@ -119,12 +166,38 @@ impl<'a> AgentImageCapsule<'a> {
             entry_version,
             entry_offset,
             code_length,
+            rodata_length: 0,
+            relocation_count: 0,
         };
         Ok(Self {
+            format: AgentImageFormat::CapsuleV1,
             header,
             raw: bytes,
             code: &bytes[AGENT_IMAGE_HEADER_BYTES..],
+            rodata: &[],
+            relocations: &[],
         })
+    }
+
+    pub(super) const fn package_v2(
+        header: AgentImageHeader,
+        raw: &'a [u8],
+        code: &'a [u8],
+        rodata: &'a [u8],
+        relocations: &'a [u8],
+    ) -> Self {
+        Self {
+            format: AgentImageFormat::PackageV2,
+            header,
+            raw,
+            code,
+            rodata,
+            relocations,
+        }
+    }
+
+    pub const fn format(&self) -> AgentImageFormat {
+        self.format
     }
 
     pub const fn header(&self) -> AgentImageHeader {
@@ -139,6 +212,10 @@ impl<'a> AgentImageCapsule<'a> {
         self.code
     }
 
+    pub const fn rodata(&self) -> &'a [u8] {
+        self.rodata
+    }
+
     pub const fn entry_offset(&self) -> u32 {
         self.header.entry_offset
     }
@@ -148,17 +225,43 @@ impl<'a> AgentImageCapsule<'a> {
             .len()
             .div_ceil(crate::user_memory::PAGE_BYTES as usize)
     }
+
+    pub const fn rodata_page_count(&self) -> usize {
+        self.rodata
+            .len()
+            .div_ceil(crate::user_memory::PAGE_BYTES as usize)
+    }
+
+    pub const fn relocation_count(&self) -> usize {
+        self.relocations.len() / AGENT_PACKAGE_RELOCATION_BYTES
+    }
+
+    pub fn relocation(&self, index: usize) -> Option<AgentImageRelocation> {
+        let start = index.checked_mul(AGENT_PACKAGE_RELOCATION_BYTES)?;
+        let end = start.checked_add(AGENT_PACKAGE_RELOCATION_BYTES)?;
+        AgentImageRelocation::parse(self.relocations.get(start..end)?)
+    }
 }
 
-fn read_u16(bytes: &[u8], offset: usize) -> u16 {
+pub(super) fn read_u16(bytes: &[u8], offset: usize) -> u16 {
     u16::from_le_bytes([bytes[offset], bytes[offset + 1]])
 }
 
-fn read_u32(bytes: &[u8], offset: usize) -> u32 {
+pub(super) fn read_u32(bytes: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes([
         bytes[offset],
         bytes[offset + 1],
         bytes[offset + 2],
         bytes[offset + 3],
     ])
+}
+
+pub(super) const fn supported_image_kind(image_kind: u16) -> bool {
+    matches!(
+        image_kind,
+        AGENT_IMAGE_KIND_WORKER
+            | AGENT_IMAGE_KIND_VERIFIER
+            | AGENT_IMAGE_KIND_FAULT_HANDLER
+            | AGENT_IMAGE_KIND_SUPERVISOR
+    )
 }

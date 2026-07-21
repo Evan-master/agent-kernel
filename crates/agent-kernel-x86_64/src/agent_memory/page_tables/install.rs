@@ -9,6 +9,7 @@ use x86_64::{
 use agent_kernel_x86_64::{
     address_space::{
         AddressSpaceRoots, AGENT_CODE_PAGE_CAPACITY, AGENT_P4_INDEX, AGENT_PAGE_TABLE_FRAME_COUNT,
+        AGENT_RODATA_PAGE_CAPACITY,
     },
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
@@ -28,6 +29,7 @@ pub(in crate::agent_memory) fn install(
     allocator: &mut BootFrameAllocator<'_>,
     layout: UserMemoryLayout,
     code_frames: &[PhysFrame],
+    rodata_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -39,6 +41,7 @@ pub(in crate::agent_memory) fn install(
         physical_offset,
         layout,
         code_frames,
+        rodata_frames,
         signal_frame,
         stack_frames,
         lazy_data_frame,
@@ -53,6 +56,7 @@ pub(in crate::agent_memory) fn install_reused(
     private_frames: [u64; AGENT_PAGE_TABLE_FRAME_COUNT],
     layout: UserMemoryLayout,
     code_frames: &[PhysFrame],
+    rodata_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -63,6 +67,7 @@ pub(in crate::agent_memory) fn install_reused(
         physical_offset,
         layout,
         code_frames,
+        rodata_frames,
         signal_frame,
         stack_frames,
         lazy_data_frame,
@@ -76,6 +81,7 @@ fn install_with_allocator(
     physical_offset: u64,
     layout: UserMemoryLayout,
     code_frames: &[PhysFrame],
+    rodata_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     lazy_data_frame: PhysFrame,
@@ -83,7 +89,10 @@ fn install_with_allocator(
     agent_frame: PhysFrame,
     mut table_allocator: impl PrivatePageTableAllocator,
 ) -> Option<InstalledAgentPageTables> {
-    if code_frames.is_empty() || code_frames.len() > AGENT_CODE_PAGE_CAPACITY {
+    if code_frames.is_empty()
+        || code_frames.len() > AGENT_CODE_PAGE_CAPACITY
+        || rodata_frames.len() > AGENT_RODATA_PAGE_CAPACITY
+    {
         return None;
     }
     let (kernel_frame, control) = Cr3::read_raw();
@@ -123,6 +132,15 @@ fn install_with_allocator(
                 code_flags,
             )?;
         }
+        for (index, frame) in rodata_frames.iter().copied().enumerate() {
+            map_page(
+                &mut agent_mapper,
+                &mut table_allocator,
+                layout.rodata_page_start(index)?,
+                frame,
+                signal_flags,
+            )?;
+        }
         map_page(
             &mut agent_mapper,
             &mut table_allocator,
@@ -150,6 +168,7 @@ fn install_with_allocator(
             &agent_mapper,
             layout,
             code_frames,
+            rodata_frames,
             signal_frame,
             stack_frames,
             lazy_data_frame,

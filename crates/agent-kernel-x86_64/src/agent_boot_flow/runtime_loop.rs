@@ -5,6 +5,7 @@
 
 mod evidence;
 
+use agent_kernel_core::AgentId;
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentFault};
 
 use self::evidence::{
@@ -328,6 +329,25 @@ pub(super) fn run(
     .is_none()
     {
         serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_EXECUTION_ERROR");
+        write_runtime_count(
+            "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_RUNTIME_COUNT=",
+            runtime.len(),
+        );
+        write_runtime_count(
+            "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_REPORT_COUNT=",
+            report.len(),
+        );
+        write_runtime_count(
+            "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_FAULT_COUNT=",
+            report.faulted_len(),
+        );
+        if let Some(context) = resource_manager.call_context() {
+            write_named_fault(
+                &report,
+                context.agent(),
+                "AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_FAULT",
+            );
+        }
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_EXECUTION_OK");
@@ -347,6 +367,9 @@ pub(super) fn run(
     )?;
     serial_write_line("AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_FIFTH_CODE_PAGE_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_SEGMENTED_PACKAGE_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_RODATA_NX_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_RELOCATION_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");
@@ -379,34 +402,45 @@ pub(super) fn run(
 
 fn write_worker_fault(report: &NativeExecutionReport, contexts: [AgentCallContext; 2]) {
     for (index, context) in contexts.iter().enumerate() {
-        let Some(faulted) = report.faulted(context.agent()) else {
-            continue;
-        };
-        if index == 0 {
-            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_A_FAULT");
+        let marker = if index == 0 {
+            "AGENT_KERNEL_NATIVE_WORKER_A_FAULT"
         } else {
-            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_B_FAULT");
+            "AGENT_KERNEL_NATIVE_WORKER_B_FAULT"
+        };
+        write_named_fault(report, context.agent(), marker);
+    }
+}
+
+fn write_named_fault(report: &NativeExecutionReport, agent: AgentId, marker: &str) {
+    let Some(faulted) = report.faulted(agent) else {
+        return;
+    };
+    serial_write_line(marker);
+    match faulted.fault() {
+        NativeAgentFault::InvalidOpcode => {
+            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_INVALID_OPCODE");
         }
-        match faulted.fault() {
-            NativeAgentFault::InvalidOpcode => {
-                serial_write_line("AGENT_KERNEL_NATIVE_WORKER_INVALID_OPCODE");
-            }
-            NativeAgentFault::GeneralProtection { .. } => {
-                serial_write_line("AGENT_KERNEL_NATIVE_WORKER_GENERAL_PROTECTION");
-            }
-            NativeAgentFault::PageFault { address, .. } => {
-                serial_write_line("AGENT_KERNEL_NATIVE_WORKER_PAGE_FAULT");
-                serial_write_str("AGENT_KERNEL_NATIVE_WORKER_FAULT_ADDRESS=");
-                serial_write_u64(address);
-                serial_write_line("");
-            }
+        NativeAgentFault::GeneralProtection { .. } => {
+            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_GENERAL_PROTECTION");
         }
-        if let Some(offset) = faulted.fault_offset() {
-            serial_write_str("AGENT_KERNEL_NATIVE_WORKER_FAULT_OFFSET=");
-            serial_write_u64(u64::from(offset));
+        NativeAgentFault::PageFault { address, .. } => {
+            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_PAGE_FAULT");
+            serial_write_str("AGENT_KERNEL_NATIVE_WORKER_FAULT_ADDRESS=");
+            serial_write_u64(address);
             serial_write_line("");
         }
     }
+    if let Some(offset) = faulted.fault_offset() {
+        serial_write_str("AGENT_KERNEL_NATIVE_WORKER_FAULT_OFFSET=");
+        serial_write_u64(u64::from(offset));
+        serial_write_line("");
+    }
+}
+
+fn write_runtime_count(marker: &str, count: usize) {
+    serial_write_str(marker);
+    serial_write_u64(count as u64);
+    serial_write_line("");
 }
 
 fn write_worker_markers() {

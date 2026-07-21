@@ -54,7 +54,9 @@ impl NativeAddressSpaceService {
         let initial_pool_len = pool.len();
         let initial_runtime_len = runtime.len();
         let agent = context.agent();
-        let Some(owner) = pool.allocate_zeroed(agent, image.code_page_count()) else {
+        let Some(owner) =
+            pool.allocate_zeroed(agent, image.code_page_count(), image.rodata_page_count())
+        else {
             return Some(Err(NativeAddressSpaceAdmissionFailure::allocation(agent)));
         };
         let identity = owner.identity();

@@ -14,7 +14,9 @@ use x86_64::{
 };
 
 use agent_kernel_x86_64::{
-    address_space::{AGENT_CODE_PAGE_CAPACITY, AGENT_P4_INDEX, P4_ENTRY_COUNT},
+    address_space::{
+        AGENT_CODE_PAGE_CAPACITY, AGENT_P4_INDEX, AGENT_RODATA_PAGE_CAPACITY, P4_ENTRY_COUNT,
+    },
     runtime_region::RUNTIME_REGION_SLOT_COUNT,
     user_memory::{UserMemoryLayout, PAGE_BYTES, STACK_PAGE_COUNT},
 };
@@ -57,6 +59,10 @@ pub(super) fn kernel_excludes_agent_region(
         layout
             .code_page_start(page)
             .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
+    }) && (0..AGENT_RODATA_PAGE_CAPACITY).all(|page| {
+        layout
+            .rodata_page_start(page)
+            .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
     }) && mapper
         .translate_addr(VirtAddr::new(layout.signal_start()))
         .is_none()
@@ -90,6 +96,7 @@ pub(super) fn agent_mappings_match(
     mapper: &OffsetPageTable<'_>,
     layout: UserMemoryLayout,
     code_frames: &[PhysFrame],
+    rodata_frames: &[PhysFrame],
     signal_frame: PhysFrame,
     stack_frames: &[PhysFrame; STACK_PAGE_COUNT],
     _lazy_data_frame: PhysFrame,
@@ -119,6 +126,26 @@ pub(super) fn agent_mappings_match(
         && (code_frames.len()..AGENT_CODE_PAGE_CAPACITY).all(|index| {
             layout
                 .code_page_start(index)
+                .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
+        })
+        && rodata_frames
+            .iter()
+            .copied()
+            .enumerate()
+            .all(|(index, frame)| {
+                layout.rodata_page_start(index).is_some_and(|address| {
+                    mapping_matches(
+                        mapper,
+                        address,
+                        frame,
+                        signal_flags,
+                        PageTableFlags::WRITABLE | PageTableFlags::HUGE_PAGE,
+                    )
+                })
+            })
+        && (rodata_frames.len()..AGENT_RODATA_PAGE_CAPACITY).all(|index| {
+            layout
+                .rodata_page_start(index)
                 .is_some_and(|address| mapper.translate_addr(VirtAddr::new(address)).is_none())
         })
         && mapping_matches(

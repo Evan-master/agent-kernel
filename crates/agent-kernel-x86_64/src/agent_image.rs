@@ -5,18 +5,28 @@
 //! kernel image record. Mapping and execution remain binary-layer concerns.
 
 mod format;
+mod package_v2;
+mod relocation;
 mod verification;
 
 use agent_kernel_core::AgentImageDigest;
 use sha2::{Digest, Sha256};
 
-pub use format::{AgentImageCapsule, AgentImageHeader};
+pub use format::{AgentImageCapsule, AgentImageFormat, AgentImageHeader};
+pub use relocation::AgentImageRelocation;
 pub use verification::VerifiedAgentImage;
 
 pub const AGENT_IMAGE_HEADER_BYTES: usize = 32;
+pub const AGENT_PACKAGE_V2_HEADER_BYTES: usize = 48;
+pub const AGENT_PACKAGE_SEGMENT_DESCRIPTOR_BYTES: usize = 24;
+pub const AGENT_PACKAGE_RELOCATION_BYTES: usize = 24;
 pub const MAX_AGENT_CODE_PAGES: usize = crate::address_space::AGENT_CODE_PAGE_CAPACITY;
 pub const MAX_AGENT_CODE_BYTES: usize =
     crate::user_memory::PAGE_BYTES as usize * MAX_AGENT_CODE_PAGES;
+pub const MAX_AGENT_RODATA_PAGES: usize = crate::address_space::AGENT_RODATA_PAGE_CAPACITY;
+pub const MAX_AGENT_RODATA_BYTES: usize =
+    crate::user_memory::PAGE_BYTES as usize * MAX_AGENT_RODATA_PAGES;
+pub const MAX_AGENT_RELOCATIONS: usize = 64;
 
 pub(crate) const AGENT_IMAGE_MAGIC: &[u8; 8] = b"AGNTIMG\0";
 pub(crate) const AGENT_IMAGE_FORMAT_VERSION: u16 = 1;
@@ -37,6 +47,22 @@ pub enum AgentImageLoadError {
     InvalidVersion,
     ReservedNotZero,
     InvalidCodeLength,
+    InvalidSegmentCount,
+    InvalidSegmentTable,
+    InvalidSegmentKind,
+    InvalidSegmentFlags,
+    InvalidSegmentAlignment,
+    InvalidSegmentLength,
+    InvalidSegmentLayout,
+    InvalidRelocationCount,
+    InvalidRelocationTable,
+    UnsupportedRelocationKind,
+    InvalidRelocationTarget,
+    InvalidRelocationSymbol,
+    InvalidRelocationAddend,
+    RelocationOrderInvalid,
+    RelocationOverlap,
+    RelocationPlaceholderNotZero,
     LengthMismatch,
     EntryOutOfRange,
     ImageNotVerified,

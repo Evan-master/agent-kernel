@@ -9,7 +9,7 @@ use agent_kernel_core::{CapabilityId, Event};
 use super::super::{state, NativeExecutionReport};
 use crate::{
     agent_cpu::{PendingAgentCallCpu, ResumableAgentCpu},
-    serial_write_line, X86BootedKernel, X86_EVENT_CAPACITY,
+    serial_write_line, serial_write_str, serial_write_u64, X86BootedKernel, X86_EVENT_CAPACITY,
 };
 
 pub(super) fn archive(
@@ -63,6 +63,17 @@ pub(super) fn archive(
     }
     report.record_event_archive(event_len, &previous[..checkpoint.count()], checkpoint)?;
 
+    let digest = checkpoint.digest().words_le();
+    write_digest_word("AGENT_KERNEL_EVENT_ARCHIVE_DIGEST_0=", digest[0]);
+    write_digest_word("AGENT_KERNEL_EVENT_ARCHIVE_DIGEST_1=", digest[1]);
+    write_digest_word("AGENT_KERNEL_EVENT_ARCHIVE_DIGEST_2=", digest[2]);
+    write_digest_word("AGENT_KERNEL_EVENT_ARCHIVE_DIGEST_3=", digest[3]);
     serial_write_line("AGENT_KERNEL_AGENT_CALL_EVENT_ARCHIVE_OK");
     pending.acknowledge_event_archive(checkpoint)
+}
+
+fn write_digest_word(marker: &str, word: u64) {
+    serial_write_str(marker);
+    serial_write_u64(word);
+    serial_write_line("");
 }

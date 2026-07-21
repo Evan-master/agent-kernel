@@ -6,7 +6,7 @@
 
 use crate::address_space::{p4_index, AGENT_REGION_BASE};
 
-pub use crate::address_space::AGENT_CODE_PAGE_CAPACITY;
+pub use crate::address_space::{AGENT_CODE_PAGE_CAPACITY, AGENT_RODATA_PAGE_CAPACITY};
 
 pub const PAGE_BYTES: u64 = 4096;
 pub const STACK_PAGE_COUNT: usize = 4;
@@ -22,6 +22,7 @@ pub const LAZY_DATA_PROOF_VALUE: u8 = 0x5a;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {
     code_start: u64,
+    rodata_start: u64,
     signal_start: u64,
     guard_start: u64,
     stack_bottom: u64,
@@ -35,7 +36,8 @@ pub struct UserMemoryLayout {
 impl UserMemoryLayout {
     pub const fn fixed() -> Self {
         let code_start = AGENT_REGION_BASE;
-        let signal_start = code_start + PAGE_BYTES * AGENT_CODE_PAGE_CAPACITY as u64;
+        let rodata_start = code_start + PAGE_BYTES * AGENT_CODE_PAGE_CAPACITY as u64;
+        let signal_start = rodata_start + PAGE_BYTES * AGENT_RODATA_PAGE_CAPACITY as u64;
         let guard_start = signal_start + PAGE_BYTES;
         let stack_bottom = guard_start + PAGE_BYTES;
         let stack_top = stack_bottom + PAGE_BYTES * STACK_PAGE_COUNT as u64;
@@ -46,6 +48,7 @@ impl UserMemoryLayout {
             + PAGE_BYTES * crate::runtime_region::RUNTIME_REGION_SLOT_COUNT as u64;
         Self {
             code_start,
+            rodata_start,
             signal_start,
             guard_start,
             stack_bottom,
@@ -62,7 +65,23 @@ impl UserMemoryLayout {
     }
 
     pub const fn code_end(self) -> u64 {
+        self.rodata_start
+    }
+
+    pub const fn rodata_start(self) -> u64 {
+        self.rodata_start
+    }
+
+    pub const fn rodata_end(self) -> u64 {
         self.signal_start
+    }
+
+    pub const fn rodata_page_start(self, page: usize) -> Option<u64> {
+        if page >= AGENT_RODATA_PAGE_CAPACITY {
+            None
+        } else {
+            Some(self.rodata_start + PAGE_BYTES * page as u64)
+        }
     }
 
     pub const fn code_page_start(self, page: usize) -> Option<u64> {
@@ -131,6 +150,10 @@ impl UserMemoryLayout {
 
     pub const fn contains_code(self, address: u64) -> bool {
         address >= self.code_start && address < self.code_end()
+    }
+
+    pub const fn contains_rodata(self, address: u64) -> bool {
+        address >= self.rodata_start && address < self.rodata_end()
     }
 
     pub const fn contains_stack(self, address: u64) -> bool {
