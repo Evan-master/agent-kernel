@@ -7,7 +7,7 @@
 pub const PAGE_TABLE_BYTES: u64 = 4096;
 pub const P4_ENTRY_COUNT: usize = 512;
 pub const AGENT_PAGE_TABLE_FRAME_COUNT: usize = 4;
-pub const AGENT_CODE_PAGE_CAPACITY: usize = 4;
+pub const AGENT_CODE_PAGE_CAPACITY: usize = 16;
 pub const AGENT_STACK_FRAME_COUNT: usize = 4;
 pub const AGENT_NON_CODE_FRAME_COUNT: usize = AGENT_STACK_FRAME_COUNT + 3;
 pub const AGENT_CONTENT_FRAME_CAPACITY: usize =

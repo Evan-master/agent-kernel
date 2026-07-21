@@ -61,7 +61,7 @@ pub(super) fn completed(
         && completed.address_space_switch_count() == 86
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
-        && image.spans_multiple_code_pages()
+        && image.spans_fifth_code_page()
         && completed.physical_quantum_generation() == 1
         && completed.restart_generation() == 0
         && completed.lazy_data_byte() == 0

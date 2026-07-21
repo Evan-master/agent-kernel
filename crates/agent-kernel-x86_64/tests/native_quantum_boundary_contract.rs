@@ -81,7 +81,7 @@ fn page_fault_preserves_error_address_and_packed_semantic_detail() {
     assert_eq!(fault.vector(), 14);
     assert_eq!(fault.error_code(), 7);
     assert_eq!(fault.fault_address(), Some(address));
-    assert_eq!(fault.detail(), 0xe007_4000_0000_4000);
+    assert_eq!(fault.detail(), 0xe007_4000_0001_0000);
     assert_eq!(NativeAgentFault::InvalidOpcode.fault_address(), None);
 }
 
@@ -109,8 +109,8 @@ fn not_present_lazy_write_has_distinct_error_address_and_detail() {
         evidence.classify(),
         Ok(NativeRunBoundary::AgentFault(fault))
     );
-    assert_eq!(fault.detail(), 0xe006_4000_0000_a000);
-    assert_ne!(fault.detail(), 0xe007_4000_0000_4000);
+    assert_eq!(fault.detail(), 0xe006_4000_0001_6000);
+    assert_ne!(fault.detail(), 0xe007_4000_0001_0000);
 }
 
 #[test]

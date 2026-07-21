@@ -12,8 +12,8 @@ type ThreeAddressSpacePool = AddressSpaceFramePool<{ AGENT_OWNED_FRAME_CAPACITY 
 
 #[test]
 fn reclamation_pool_prepares_atomically_and_rejects_stale_tokens() {
-    let first = identity(0x1000, 4);
-    let second = identity(0x20_000, 4);
+    let first = identity(0x1000, AGENT_CODE_PAGE_CAPACITY);
+    let second = identity(0x40_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = TwoAddressSpacePool::new();
 
     let first_token = pool.prepare(first).unwrap();
@@ -27,7 +27,9 @@ fn reclamation_pool_prepares_atomically_and_rejects_stale_tokens() {
     let second_token = pool.prepare(second).unwrap();
     assert!(pool.commit(second_token));
     assert_eq!(pool.len(), AGENT_OWNED_FRAME_CAPACITY * 2);
-    assert!(pool.prepare(identity(0x40_000, 4)).is_none());
+    assert!(pool
+        .prepare(identity(0x80_000, AGENT_CODE_PAGE_CAPACITY))
+        .is_none());
     assert!(first
         .owned_frames()
         .iter()
@@ -37,7 +39,7 @@ fn reclamation_pool_prepares_atomically_and_rejects_stale_tokens() {
 
 #[test]
 fn reclaimed_frames_can_be_taken_once_for_future_allocation() {
-    let identity = identity(0x50_000, 4);
+    let identity = identity(0x100_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_CAPACITY }>::new();
     let token = pool.prepare(identity).unwrap();
     let replay = token;
@@ -59,7 +61,7 @@ fn reclaimed_frames_can_be_taken_once_for_future_allocation() {
 
 #[test]
 fn physical_frame_zero_is_preserved_as_owned_pool_data() {
-    let identity = identity(0, 4);
+    let identity = identity(0, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_CAPACITY }>::new();
     let token = pool.prepare(identity).unwrap();
     assert!(pool.commit(token));
@@ -77,8 +79,8 @@ fn physical_frame_zero_is_preserved_as_owned_pool_data() {
 
 #[test]
 fn complete_address_space_allocation_is_atomic_and_generation_bound() {
-    let first = identity(0x1000, 4);
-    let second = identity(0x20_000, 4);
+    let first = identity(0x1000, AGENT_CODE_PAGE_CAPACITY);
+    let second = identity(0x40_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = TwoAddressSpacePool::new();
     let first_reclamation = pool.prepare(first).unwrap();
     assert!(pool.commit(first_reclamation));
@@ -111,7 +113,7 @@ fn complete_address_space_allocation_is_atomic_and_generation_bound() {
 
 #[test]
 fn allocated_address_space_with_frame_zero_can_be_restored_exactly() {
-    let identity = identity(0, 4);
+    let identity = identity(0, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_CAPACITY }>::new();
     let reclamation = pool.prepare(identity).unwrap();
     assert!(pool.commit(reclamation));
@@ -134,8 +136,8 @@ fn allocated_address_space_with_frame_zero_can_be_restored_exactly() {
 
 #[test]
 fn concurrent_allocations_are_agent_bound_disjoint_and_cancellable() {
-    let first = identity(0x1000, 4);
-    let second = identity(0x20_000, 4);
+    let first = identity(0x1000, AGENT_CODE_PAGE_CAPACITY);
+    let second = identity(0x40_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = TwoAddressSpacePool::new();
     assert!(pool.commit(pool.prepare(first).unwrap()));
     assert!(pool.commit(pool.prepare(second).unwrap()));
@@ -181,9 +183,9 @@ fn concurrent_allocations_are_agent_bound_disjoint_and_cancellable() {
 
 #[test]
 fn partial_batch_reclamation_reuses_workers_without_exposing_resident_frames() {
-    let first = identity(0x1000, 4);
-    let second = identity(0x20_000, 4);
-    let third = identity(0x40_000, 4);
+    let first = identity(0x1000, AGENT_CODE_PAGE_CAPACITY);
+    let second = identity(0x40_000, AGENT_CODE_PAGE_CAPACITY);
+    let third = identity(0x80_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = ThreeAddressSpacePool::new();
     assert!(pool.commit(pool.prepare(first).unwrap()));
     assert!(pool.commit(pool.prepare(second).unwrap()));
@@ -246,8 +248,8 @@ fn partial_batch_reclamation_reuses_workers_without_exposing_resident_frames() {
 
 #[test]
 fn failed_cancellation_returns_the_noncopy_owner_without_pool_mutation() {
-    let first = identity(0x1000, 4);
-    let second = identity(0x20_000, 4);
+    let first = identity(0x1000, AGENT_CODE_PAGE_CAPACITY);
+    let second = identity(0x40_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_CAPACITY }>::new();
     assert!(pool.commit(pool.prepare(first).unwrap()));
     let owner = pool
@@ -266,7 +268,7 @@ fn failed_cancellation_returns_the_noncopy_owner_without_pool_mutation() {
 
 #[test]
 fn allocation_recomposes_exact_identity_size_from_reclaimed_frames() {
-    let original = identity(0x400_000, 4);
+    let original = identity(0x400_000, AGENT_CODE_PAGE_CAPACITY);
     let mut pool = AddressSpaceFramePool::<{ AGENT_OWNED_FRAME_CAPACITY }>::new();
     assert!(pool.commit(pool.prepare(original).unwrap()));
 
@@ -275,7 +277,7 @@ fn allocation_recomposes_exact_identity_size_from_reclaimed_frames() {
         .unwrap();
     assert_eq!(small.identity().code_page_count(), 1);
     assert_eq!(small.identity().owned_frame_count(), 12);
-    assert_eq!(pool.len(), 3);
+    assert_eq!(pool.len(), AGENT_OWNED_FRAME_CAPACITY - 12);
     assert!(pool.cancel_allocation(small).is_ok());
     assert_eq!(pool.frames(), original.owned_frames().as_slice());
 

@@ -69,7 +69,7 @@ fn memory_cell_record_retirement_reply_is_canonical() {
         resource: ResourceId::new(4),
         creator: AgentId::new(8),
         last_writer: AgentId::new(8),
-        value: MemoryValue::new([0x0000_4000_0000_b000, 4096, 3, 1]),
+        value: MemoryValue::new([0x0000_4000_0001_7000, 4096, 3, 1]),
         revision: 2,
     };
     let mut frame = request_frame();
@@ -81,7 +81,7 @@ fn memory_cell_record_retirement_reply_is_canonical() {
     assert_common_reply(&frame);
     assert_eq!(
         payload(&frame),
-        [2, 4, 2, 0x0000_4000_0000_b000, 4096, 3, 1,]
+        [2, 4, 2, 0x0000_4000_0001_7000, 4096, 3, 1,]
     );
     assert_eq!(control_words(&frame), control);
 

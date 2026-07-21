@@ -24,7 +24,7 @@ use crate::{
     native_agent_executor::{self, NativeExecutionReport, NativeRuntimeEvidence},
     native_agent_runtime::NativeAgentRuntime,
     resource_manager_flow::PreparedResourceManagerFlow,
-    serial_write_line,
+    serial_write_line, serial_write_str, serial_write_u64,
     timer_task_flow::QueuedTimerTaskFlow,
     verifier_task_flow::PreparedVerifierFlow,
     X86BootedKernel,
@@ -107,19 +107,38 @@ pub(super) fn run(
     let mut report = NativeExecutionReport::new();
     let mut evidence = NativeRuntimeEvidence::default();
 
-    native_agent_executor::run_until_idle(
+    if native_agent_executor::run_until_idle(
         booted,
         runtime,
         memory_pool,
         &mut report,
         &mut evidence,
         Some(authority),
-    )?;
-    if runtime.len() != 4
-        || report.len() != 2
-        || report.faulted_len() != 0
-        || !worker_evidence_valid(&report, worker_images, worker_contexts, authority)
+    )
+    .is_none()
     {
+        serial_write_line("AGENT_KERNEL_NATIVE_WORKER_EXECUTION_ERROR");
+        return None;
+    }
+    let mut worker_counters_valid = true;
+    if runtime.len() != 4 {
+        serial_write_line("AGENT_KERNEL_NATIVE_WORKER_RUNTIME_COUNT_ERROR");
+        worker_counters_valid = false;
+    }
+    if report.len() != 2 {
+        serial_write_line("AGENT_KERNEL_NATIVE_WORKER_REPORT_COUNT_ERROR");
+        worker_counters_valid = false;
+    }
+    if report.faulted_len() != 0 {
+        serial_write_line("AGENT_KERNEL_NATIVE_WORKER_FAULT_COUNT_ERROR");
+        write_worker_fault(&report, worker_contexts);
+        worker_counters_valid = false;
+    }
+    if !worker_counters_valid {
+        return None;
+    }
+    if !worker_evidence_valid(&report, worker_images, worker_contexts, authority) {
+        serial_write_line("AGENT_KERNEL_NATIVE_WORKER_EVIDENCE_ERROR");
         return None;
     }
     let completed_workers = workers.completed_after_runtime(booted)?;
@@ -327,6 +346,7 @@ pub(super) fn run(
         resource_manager_image,
     )?;
     serial_write_line("AGENT_KERNEL_NATIVE_MULTI_PAGE_CAPSULE_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_FIFTH_CODE_PAGE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ORPHANED_MESSAGE_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_RELEASED_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_RESOURCE_MANAGER_AGENT_OK");
@@ -355,6 +375,38 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK");
     write_verifier_markers();
     Some(())
+}
+
+fn write_worker_fault(report: &NativeExecutionReport, contexts: [AgentCallContext; 2]) {
+    for (index, context) in contexts.iter().enumerate() {
+        let Some(faulted) = report.faulted(context.agent()) else {
+            continue;
+        };
+        if index == 0 {
+            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_A_FAULT");
+        } else {
+            serial_write_line("AGENT_KERNEL_NATIVE_WORKER_B_FAULT");
+        }
+        match faulted.fault() {
+            NativeAgentFault::InvalidOpcode => {
+                serial_write_line("AGENT_KERNEL_NATIVE_WORKER_INVALID_OPCODE");
+            }
+            NativeAgentFault::GeneralProtection { .. } => {
+                serial_write_line("AGENT_KERNEL_NATIVE_WORKER_GENERAL_PROTECTION");
+            }
+            NativeAgentFault::PageFault { address, .. } => {
+                serial_write_line("AGENT_KERNEL_NATIVE_WORKER_PAGE_FAULT");
+                serial_write_str("AGENT_KERNEL_NATIVE_WORKER_FAULT_ADDRESS=");
+                serial_write_u64(address);
+                serial_write_line("");
+            }
+        }
+        if let Some(offset) = faulted.fault_offset() {
+            serial_write_str("AGENT_KERNEL_NATIVE_WORKER_FAULT_OFFSET=");
+            serial_write_u64(u64::from(offset));
+            serial_write_line("");
+        }
+    }
 }
 
 fn write_worker_markers() {

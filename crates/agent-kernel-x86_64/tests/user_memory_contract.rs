@@ -6,9 +6,9 @@ use agent_kernel_x86_64::user_memory::{
 };
 
 #[test]
-fn user_region_has_four_code_pages_signal_guard_stack_and_lazy_data() {
+fn user_region_has_sixteen_code_pages_signal_guard_stack_and_lazy_data() {
     let layout = UserMemoryLayout::fixed();
-    assert_eq!(AGENT_CODE_PAGE_CAPACITY, 4);
+    assert_eq!(AGENT_CODE_PAGE_CAPACITY, 16);
     assert_eq!(layout.code_start(), 0x0000_4000_0000_0000);
     assert_eq!(
         layout.code_end(),
@@ -29,7 +29,8 @@ fn user_region_has_four_code_pages_signal_guard_stack_and_lazy_data() {
         layout.stack_bottom() + PAGE_BYTES * STACK_PAGE_COUNT as u64
     );
     assert_eq!(layout.lazy_data_start(), layout.stack_top());
-    assert_eq!(layout.lazy_data_start(), 0x0000_4000_0000_a000);
+    assert_eq!(layout.signal_start(), 0x0000_4000_0001_0000);
+    assert_eq!(layout.lazy_data_start(), 0x0000_4000_0001_6000);
     assert_eq!(LAZY_DATA_PROOF_VALUE, 0x5a);
     assert!(layout.contains_code(layout.code_start()));
     assert!(layout.contains_code(layout.code_end() - 1));
@@ -46,7 +47,7 @@ fn user_region_has_four_code_pages_signal_guard_stack_and_lazy_data() {
 fn call_data_page_follows_the_shifted_reserved_runtime_region() {
     let layout = UserMemoryLayout::fixed();
 
-    assert_eq!(layout.call_data_start(), 0x0000_4000_0001_4000);
+    assert_eq!(layout.call_data_start(), 0x0000_4000_0002_0000);
     assert_eq!(layout.call_data_start(), layout.runtime_region_end());
     assert_eq!(
         layout.call_data_end(),

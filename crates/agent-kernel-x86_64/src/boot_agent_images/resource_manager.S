@@ -3,7 +3,7 @@
 .section .text
 .global resource_manager_entry
 resource_manager_entry:
-    movabs rax, 0x0000400000004000
+    movabs rax, 0x0000400000010000
 .wait_for_quantum:
     cmp byte ptr [rax + 1], 1
     jb .wait_for_quantum
@@ -395,7 +395,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 2
     jne .halt
-    movabs r15, 0x000040000000b000
+    movabs r15, 0x0000400000017000
     cmp r11, r15
     jne .halt
     cmp r12, 4096
@@ -571,7 +571,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 3
     jne .halt
-    movabs r15, 0x000040000000c000
+    movabs r15, 0x0000400000018000
     cmp r11, r15
     jne .halt
     cmp r12, 12288
@@ -648,7 +648,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 4
     jne .halt
-    movabs r15, 0x000040000000f000
+    movabs r15, 0x000040000001b000
     cmp r11, r15
     jne .halt
     cmp r12, 8192
@@ -748,7 +748,7 @@ resource_manager_entry:
     jne .halt
     cmp r10, 5
     jne .halt
-    movabs r15, 0x000040000000c000
+    movabs r15, 0x0000400000018000
     cmp r11, r15
     jne .halt
     cmp r12, 12288
@@ -868,7 +868,7 @@ resource_manager_entry:
     xor ebp, ebp
     int 0x90
 
-    movabs r15, 0x0000400000014000
+    movabs r15, 0x0000400000020000
     movabs r14, 0x313548544150534e
     mov qword ptr [r15], r14
     mov qword ptr [r15 + 8], 1
@@ -918,7 +918,7 @@ resource_manager_entry:
     jmp .halt
 .memory_path_done:
 
-    movabs r15, 0x0000400000014000
+    movabs r15, 0x0000400000020000
     movabs r14, 0x3147534d544e4741
     mov qword ptr [r15], r14
     mov dword ptr [r15 + 32], 160
@@ -951,7 +951,7 @@ resource_manager_entry:
 .typed_rebind_fail:
     jmp .halt
 .typed_rebind_done:
-    .fill 64, 1, 0x90
+    .fill 12352, 1, 0x90
 
     mov ecx, 4
     xor edx, edx

@@ -39,14 +39,16 @@ fn native_capsule_parses_exact_x86_worker_header_and_code() {
 }
 
 #[test]
-fn native_capsule_accepts_digest_bound_code_across_four_pages() {
-    assert_eq!(MAX_AGENT_CODE_PAGES, 4);
-    assert_eq!(MAX_AGENT_CODE_BYTES, 16_384);
+fn native_capsule_accepts_digest_bound_code_across_sixteen_pages() {
+    assert_eq!(MAX_AGENT_CODE_PAGES, 16);
+    assert_eq!(MAX_AGENT_CODE_BYTES, 65_536);
 
     for (length, entry, pages) in [
         (4096, 4095, 1),
         (4097, 4096, 2),
-        (MAX_AGENT_CODE_BYTES, MAX_AGENT_CODE_BYTES - 1, 4),
+        (16_384, 16_383, 4),
+        (16_385, 16_384, 5),
+        (MAX_AGENT_CODE_BYTES, MAX_AGENT_CODE_BYTES - 1, 16),
     ] {
         let mut code = vec![0x90; length];
         code[entry] = 0xcc;

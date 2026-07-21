@@ -3,7 +3,7 @@
 .section .text
 .global fault_worker_entry
 fault_worker_entry:
-    movabs rax, 0x0000400000004000
+    movabs rax, 0x0000400000010000
 .wait_for_quantum:
     cmp byte ptr [rax + 1], 1
     jb .wait_for_quantum
@@ -43,7 +43,7 @@ fault_worker_entry:
     jne .halt
     cmp r10, 1
     jne .halt
-    movabs r15, 0x000040000000c000
+    movabs r15, 0x0000400000018000
     cmp r11, r15
     jne .halt
     cmp r12, 8192
@@ -68,7 +68,7 @@ fault_worker_entry:
     jmp .halt
 
 .lazy_page_fault:
-    movabs rdi, 0x000040000000a000
+    movabs rdi, 0x0000400000016000
     mov byte ptr [rdi], 0x5a
     cmp byte ptr [rdi], 0x5a
     jne .halt

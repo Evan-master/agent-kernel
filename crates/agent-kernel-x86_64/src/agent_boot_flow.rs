@@ -30,7 +30,7 @@ use crate::{
     X86BootedKernel, COM1,
 };
 
-const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 73;
+const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 76;
 
 pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: PrivilegeBoundary) -> ! {
     let worker_a = boot_agent_images::worker_a();
@@ -361,7 +361,7 @@ fn validate_agent_memory(memories: [&PreparedAgentMemory; 6]) {
             fatal_boot("AGENT_KERNEL_MULTI_AGENT_MEMORY_ERROR");
         }
     }
-    let expected_code_pages = [1, 1, 1, 1, 1, 2];
+    let expected_code_pages = [1, 1, 1, 1, 1, 5];
     if memories
         .iter()
         .zip(expected_code_pages)
