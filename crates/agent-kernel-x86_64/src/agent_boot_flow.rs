@@ -9,13 +9,17 @@ mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
 use agent_kernel_core::{ActionId, AgentId, EventKind, ResourceKind, TaskId, TaskStatus};
-use agent_kernel_x86_64::agent_image::{AgentImageCapsule, VerifiedAgentImage};
+use agent_kernel_x86_64::agent_image::{
+    AgentImageCapsule, AgentImageFormat, AgentImageTrust, VerifiedAgentImage,
+};
 use bootloader_api::BootInfo;
 
 use crate::{
     agent_cpu::AgentCpuRuntime,
     agent_memory::{NativeAddressSpaceFramePool, PreparedAgentMemory, RuntimeMemoryPool},
-    boot_agent_images, event_trace, exit_qemu, fatal_boot,
+    boot_agent_images,
+    boot_agent_trust::{RESOURCE_MANAGER_SIGNER_ID, RESOURCE_MANAGER_TRUST_POLICY},
+    event_trace, exit_qemu, fatal_boot,
     fault_handler_flow::FaultHandlerFlow,
     fault_task_flow::FaultTaskFlow,
     halt_forever,
@@ -143,12 +147,23 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     else {
         fatal_boot("AGENT_KERNEL_FAULT_HANDLER_IMAGE_DIGEST_ERROR");
     };
-    let Ok(resource_manager_verified_image) =
-        VerifiedAgentImage::verify(resource_manager_record, resource_manager_image.bytes())
-    else {
-        fatal_boot("AGENT_KERNEL_RESOURCE_MANAGER_IMAGE_DIGEST_ERROR");
+    let Ok(resource_manager_verified_image) = VerifiedAgentImage::verify_signed(
+        resource_manager_record,
+        resource_manager_image.bytes(),
+        &RESOURCE_MANAGER_TRUST_POLICY,
+    ) else {
+        fatal_boot("AGENT_KERNEL_RESOURCE_MANAGER_SIGNATURE_ERROR");
     };
+    if resource_manager_verified_image.format() != AgentImageFormat::SignedPackageV3
+        || resource_manager_verified_image.signer_id() != Some(RESOURCE_MANAGER_SIGNER_ID)
+        || resource_manager_verified_image.trust()
+            != AgentImageTrust::Signed(RESOURCE_MANAGER_SIGNER_ID)
+    {
+        fatal_boot("AGENT_KERNEL_RESOURCE_MANAGER_TRUST_ERROR");
+    }
     serial_write_line("AGENT_KERNEL_AGENT_IMAGE_DIGEST_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_SIGNED_PACKAGE_OK");
+    serial_write_line("AGENT_KERNEL_NATIVE_TRUSTED_SIGNER_OK");
     serial_write_line("AGENT_KERNEL_VERIFIER_IMAGE_OK");
     let Some(agent_a_memory) = PreparedAgentMemory::prepare(boot_info, agent_a_image) else {
         fatal_boot("AGENT_KERNEL_AGENT_USER_MEMORY_ERROR");

@@ -1,0 +1,36 @@
+//! Immutable signer policy compiled into the native boot boundary.
+
+use agent_kernel_x86_64::agent_image::{
+    AgentImageKindScope, AgentImageSignerId, AgentImageTrustPolicy, TrustedAgentSigner,
+    TrustedSignerStatus,
+};
+
+pub(crate) const RESOURCE_MANAGER_SIGNER_ID: AgentImageSignerId = AgentImageSignerId::new([
+    0x62, 0xe6, 0xf2, 0xe3, 0x61, 0x5d, 0x45, 0x5f, 0x0e, 0x26, 0x0b, 0x73, 0x80, 0x40, 0x14, 0xed,
+    0x6b, 0xbd, 0x75, 0x98, 0x4a, 0x11, 0x6b, 0x5c, 0x6b, 0x72, 0x5c, 0x55, 0x66, 0x0b, 0x15, 0x8c,
+]);
+
+pub(crate) const RESOURCE_MANAGER_PUBLIC_KEY: [u8; 32] = [
+    0x59, 0x49, 0x87, 0xda, 0x8e, 0x91, 0xf7, 0x62, 0x4e, 0x12, 0x89, 0x16, 0x0e, 0x34, 0x79, 0x76,
+    0xf5, 0x78, 0xeb, 0xe1, 0x82, 0x4d, 0xb0, 0xce, 0x0b, 0x0e, 0xd4, 0x7d, 0x04, 0x54, 0x36, 0xcb,
+];
+
+const RESOURCE_MANAGER_SCOPE: AgentImageKindScope = match AgentImageKindScope::only(4) {
+    Some(scope) => scope,
+    None => panic!("invalid Resource Manager image scope"),
+};
+
+const RESOURCE_MANAGER_SIGNER: TrustedAgentSigner = match TrustedAgentSigner::new(
+    RESOURCE_MANAGER_SIGNER_ID,
+    RESOURCE_MANAGER_PUBLIC_KEY,
+    RESOURCE_MANAGER_SCOPE,
+    1,
+    1,
+    TrustedSignerStatus::Active,
+) {
+    Some(signer) => signer,
+    None => panic!("invalid Resource Manager signer policy"),
+};
+
+pub(crate) const RESOURCE_MANAGER_TRUST_POLICY: AgentImageTrustPolicy<1> =
+    AgentImageTrustPolicy::new([RESOURCE_MANAGER_SIGNER]);

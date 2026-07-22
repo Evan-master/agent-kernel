@@ -4,33 +4,51 @@ use agent_kernel_core::{AgentImageKind, AgentImageRecord, AgentImageStatus};
 
 use super::{
     sha256_digest, AgentImageCapsule, AgentImageFormat, AgentImageLoadError, AgentImageRelocation,
-    AGENT_IMAGE_KIND_FAULT_HANDLER, AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER,
-    AGENT_IMAGE_KIND_WORKER,
+    AgentImageSignerId, AgentImageTrustPolicy, AGENT_IMAGE_KIND_FAULT_HANDLER,
+    AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
 };
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AgentImageTrust {
+    DigestPinned,
+    Signed(AgentImageSignerId),
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedAgentImage<'a> {
     record: AgentImageRecord,
     capsule: AgentImageCapsule<'a>,
+    trust: AgentImageTrust,
 }
 
 impl<'a> VerifiedAgentImage<'a> {
     pub fn verify(record: AgentImageRecord, bytes: &'a [u8]) -> Result<Self, AgentImageLoadError> {
-        let capsule = AgentImageCapsule::parse(bytes)?;
-        if record.status != AgentImageStatus::Verified {
-            return Err(AgentImageLoadError::ImageNotVerified);
+        let capsule = verify_record(record, bytes)?;
+        if capsule.format() == AgentImageFormat::SignedPackageV3 {
+            return Err(AgentImageLoadError::SignatureVerificationRequired);
         }
-        let header = capsule.header();
-        if !image_kind_matches(record.kind, header.image_kind())
-            || record.abi_version != header.abi_version()
-            || record.entry_version != header.entry_version()
-        {
-            return Err(AgentImageLoadError::MetadataMismatch);
+        Ok(Self {
+            record,
+            capsule,
+            trust: AgentImageTrust::DigestPinned,
+        })
+    }
+
+    pub fn verify_signed<const N: usize>(
+        record: AgentImageRecord,
+        bytes: &'a [u8],
+        policy: &AgentImageTrustPolicy<N>,
+    ) -> Result<Self, AgentImageLoadError> {
+        let capsule = verify_record(record, bytes)?;
+        if capsule.format() != AgentImageFormat::SignedPackageV3 {
+            return Err(AgentImageLoadError::SignatureRequired);
         }
-        if record.digest != sha256_digest(capsule.raw()) {
-            return Err(AgentImageLoadError::DigestMismatch);
-        }
-        Ok(Self { record, capsule })
+        let signer_id = policy.verify(&capsule)?;
+        Ok(Self {
+            record,
+            capsule,
+            trust: AgentImageTrust::Signed(signer_id),
+        })
     }
 
     pub const fn record(&self) -> AgentImageRecord {
@@ -47,6 +65,14 @@ impl<'a> VerifiedAgentImage<'a> {
 
     pub const fn rodata(&self) -> &'a [u8] {
         self.capsule.rodata()
+    }
+
+    pub const fn signer_id(&self) -> Option<AgentImageSignerId> {
+        self.capsule.signer_id()
+    }
+
+    pub const fn trust(&self) -> AgentImageTrust {
+        self.trust
     }
 
     pub const fn entry_offset(&self) -> u32 {
@@ -68,6 +94,27 @@ impl<'a> VerifiedAgentImage<'a> {
     pub fn relocation(&self, index: usize) -> Option<AgentImageRelocation> {
         self.capsule.relocation(index)
     }
+}
+
+fn verify_record<'a>(
+    record: AgentImageRecord,
+    bytes: &'a [u8],
+) -> Result<AgentImageCapsule<'a>, AgentImageLoadError> {
+    let capsule = AgentImageCapsule::parse(bytes)?;
+    if record.status != AgentImageStatus::Verified {
+        return Err(AgentImageLoadError::ImageNotVerified);
+    }
+    let header = capsule.header();
+    if !image_kind_matches(record.kind, header.image_kind())
+        || record.abi_version != header.abi_version()
+        || record.entry_version != header.entry_version()
+    {
+        return Err(AgentImageLoadError::MetadataMismatch);
+    }
+    if record.digest != sha256_digest(capsule.raw()) {
+        return Err(AgentImageLoadError::DigestMismatch);
+    }
+    Ok(capsule)
 }
 
 fn image_kind_matches(record: AgentImageKind, header: u16) -> bool {

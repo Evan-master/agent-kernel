@@ -2,3 +2,5 @@
 /.DS_Store
 **/*.rs.bk
 /.worktrees
+/.agent-kernel
+*.private.pem

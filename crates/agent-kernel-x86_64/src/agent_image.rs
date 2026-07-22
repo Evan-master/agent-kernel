@@ -6,7 +6,10 @@
 
 mod format;
 mod package_v2;
+mod package_v3;
 mod relocation;
+mod segmented;
+mod trust;
 mod verification;
 
 use agent_kernel_core::AgentImageDigest;
@@ -14,12 +17,18 @@ use sha2::{Digest, Sha256};
 
 pub use format::{AgentImageCapsule, AgentImageFormat, AgentImageHeader};
 pub use relocation::AgentImageRelocation;
-pub use verification::VerifiedAgentImage;
+pub use trust::{
+    agent_image_signer_id, AgentImageKindScope, AgentImageSignerId, AgentImageTrustPolicy,
+    TrustedAgentSigner, TrustedSignerStatus,
+};
+pub use verification::{AgentImageTrust, VerifiedAgentImage};
 
 pub const AGENT_IMAGE_HEADER_BYTES: usize = 32;
 pub const AGENT_PACKAGE_V2_HEADER_BYTES: usize = 48;
+pub const AGENT_PACKAGE_V3_HEADER_BYTES: usize = 88;
 pub const AGENT_PACKAGE_SEGMENT_DESCRIPTOR_BYTES: usize = 24;
 pub const AGENT_PACKAGE_RELOCATION_BYTES: usize = 24;
+pub const AGENT_PACKAGE_SIGNATURE_BYTES: usize = 64;
 pub const MAX_AGENT_CODE_PAGES: usize = crate::address_space::AGENT_CODE_PAGE_CAPACITY;
 pub const MAX_AGENT_CODE_BYTES: usize =
     crate::user_memory::PAGE_BYTES as usize * MAX_AGENT_CODE_PAGES;
@@ -68,6 +77,19 @@ pub enum AgentImageLoadError {
     ImageNotVerified,
     MetadataMismatch,
     DigestMismatch,
+    UnsupportedSignatureAlgorithm,
+    InvalidSignatureLength,
+    InvalidSignatureLayout,
+    InvalidSignerId,
+    SignatureVerificationRequired,
+    SignatureRequired,
+    SignatureInvalid,
+    SignerNotTrusted,
+    TrustPolicyAmbiguous,
+    SignerRevoked,
+    SignerKeyIdMismatch,
+    SignerScopeMismatch,
+    SignerAbiMismatch,
 }
 
 pub fn sha256_digest(bytes: &[u8]) -> AgentImageDigest {

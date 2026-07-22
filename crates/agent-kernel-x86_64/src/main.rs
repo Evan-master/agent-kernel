@@ -17,6 +17,7 @@ mod agent_boot_flow;
 mod agent_cpu;
 mod agent_memory;
 mod boot_agent_images;
+mod boot_agent_trust;
 mod boot_config;
 mod event_trace;
 mod exception_runtime;

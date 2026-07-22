@@ -6,6 +6,7 @@
 
 require "digest"
 require "open3"
+require "openssl"
 require "tmpdir"
 
 ROOT = File.expand_path("..", __dir__)
@@ -13,12 +14,16 @@ IMAGE_ROOT = File.join(ROOT, "crates/agent-kernel-x86_64/src/boot_agent_images")
 MAGIC = "AGNTIMG\0".b
 CAPSULE_V1_HEADER_BYTES = 32
 PACKAGE_V2_HEADER_BYTES = 48
+PACKAGE_V3_HEADER_BYTES = 88
 SEGMENT_DESCRIPTOR_BYTES = 24
 RELOCATION_BYTES = 24
+SIGNATURE_BYTES = 64
 PAGE_BYTES = 4096
 RODATA_BASE = 0x0000_4000_0001_0000
 OLD_FIXED_BASE = 0x0000_4000_0001_0000
 OLD_FIXED_END = 0x0000_4000_0002_0000
+SIGNER_DOMAIN = "AGENT_KERNEL_ED25519_SIGNER_V1\0".b
+ED25519_SPKI_PREFIX = ["302a300506032b6570032100"].pack("H*")
 
 def assert(condition, message)
   raise "audit failed: #{message}" unless condition
@@ -49,6 +54,26 @@ def extract_digest(source, name)
   bytes
 end
 
+def extract_public_key(source, name)
+  pattern = /(?:pub\(crate\)\s+)?const\s+#{Regexp.escape(name)}:\s*\[u8;\s*32\]\s*=\s*\[(.*?)\]\s*;/m
+  match = source.match(pattern)
+  assert(match, "missing public key #{name}")
+
+  bytes = match[1].scan(/0x([0-9a-fA-F]{2})/).flatten.map { |value| value.to_i(16) }.pack("C*")
+  assert(bytes.bytesize == 32, "#{name} must contain 32 public-key bytes")
+  bytes
+end
+
+def extract_signer_id(source, name)
+  pattern = /(?:pub\(crate\)\s+)?const\s+#{Regexp.escape(name)}:\s*AgentImageSignerId\s*=\s*AgentImageSignerId::new\(\[(.*?)\]\);/m
+  match = source.match(pattern)
+  assert(match, "missing signer ID #{name}")
+
+  bytes = match[1].scan(/0x([0-9a-fA-F]{2})/).flatten.map { |value| value.to_i(16) }.pack("C*")
+  assert(bytes.bytesize == 32, "#{name} must contain 32 signer-ID bytes")
+  bytes
+end
+
 def u16(bytes, offset)
   bytes.byteslice(offset, 2).unpack1("v")
 end
@@ -67,13 +92,13 @@ def verify_digest(name, bytes, expected)
   actual.unpack1("H*")
 end
 
-def verify_common_header(name, bytes, version)
+def verify_common_header(name, bytes, version, flags: 0)
   assert(bytes.bytesize >= CAPSULE_V1_HEADER_BYTES, "#{name} header truncated")
   assert(bytes.start_with?(MAGIC), "#{name} magic mismatch")
   assert(u16(bytes, 8) == version, "#{name} format must be #{version}")
   assert(u16(bytes, 10) == 1, "#{name} architecture must be x86_64")
   assert((1..4).cover?(u16(bytes, 12)), "#{name} image kind is unsupported")
-  assert(u16(bytes, 14).zero?, "#{name} flags must be zero")
+  assert(u16(bytes, 14) == flags, "#{name} flags are noncanonical")
   assert(!u16(bytes, 16).zero? && !u16(bytes, 18).zero?, "#{name} versions must be nonzero")
 end
 
@@ -110,43 +135,29 @@ def segment(bytes, offset)
   }
 end
 
-def verify_package_v2(name, bytes, digest)
-  verify_common_header(name, bytes, 2)
-  assert(bytes.bytesize >= PACKAGE_V2_HEADER_BYTES, "#{name} V2 header truncated")
-  assert(u16(bytes, 20).zero? && u16(bytes, 22).zero?, "#{name} entry segment or reserved word is invalid")
-  entry_offset = u32(bytes, 24)
-  segment_count = u16(bytes, 28)
-  relocation_count = u16(bytes, 30)
-  assert(segment_count == 2, "#{name} must contain two segments")
-  assert((0..64).cover?(relocation_count), "#{name} relocation count is outside the V2 bound")
-  assert(u32(bytes, 32) == PACKAGE_V2_HEADER_BYTES, "#{name} segment table offset is noncanonical")
-  assert(u32(bytes, 36) == 96, "#{name} relocation table offset is noncanonical")
-  assert(u32(bytes, 40) == bytes.bytesize, "#{name} package length mismatch")
-  assert(u32(bytes, 44).zero?, "#{name} reserved header word must be zero")
-
-  code_segment = segment(bytes, PACKAGE_V2_HEADER_BYTES)
-  rodata_segment = segment(bytes, PACKAGE_V2_HEADER_BYTES + SEGMENT_DESCRIPTOR_BYTES)
+def verify_segmented_payload(name, bytes, header_bytes, relocation_offset, relocation_count, payload_end, version)
+  code_segment = segment(bytes, header_bytes)
+  rodata_segment = segment(bytes, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
   assert(code_segment.values_at(:kind, :flags, :alignment) == [1, 5, PAGE_BYTES], "#{name} code descriptor is invalid")
   assert(rodata_segment.values_at(:kind, :flags, :alignment) == [2, 1, PAGE_BYTES], "#{name} rodata descriptor is invalid")
   [code_segment, rodata_segment].each do |descriptor|
-    assert((1..65_536).cover?(descriptor[:file_length]), "#{name} segment length is outside the V2 bound")
+    assert((1..65_536).cover?(descriptor[:file_length]), "#{name} segment length is outside the V#{version} bound")
     assert(descriptor[:memory_length] == descriptor[:file_length], "#{name} segment memory length mismatch")
     assert(descriptor[:reserved].zero?, "#{name} segment reserved word must be zero")
   end
 
-  payload_offset = 96 + relocation_count * RELOCATION_BYTES
-  code_end = payload_offset + code_segment[:file_length]
+  code_offset = relocation_offset + relocation_count * RELOCATION_BYTES
+  code_end = code_offset + code_segment[:file_length]
   rodata_end = code_end + rodata_segment[:file_length]
-  assert(code_segment[:file_offset] == payload_offset, "#{name} code offset is noncanonical")
+  assert(code_segment[:file_offset] == code_offset, "#{name} code offset is noncanonical")
   assert(rodata_segment[:file_offset] == code_end, "#{name} rodata offset is noncanonical")
-  assert(rodata_end == bytes.bytesize, "#{name} payload has gaps or trailing bytes")
-  assert(entry_offset < code_segment[:file_length], "#{name} entry is outside code")
+  assert(rodata_end == payload_end, "#{name} payload has gaps or trailing bytes")
 
-  code = bytes.byteslice(payload_offset, code_segment[:file_length])
+  code = bytes.byteslice(code_offset, code_segment[:file_length])
   rodata = bytes.byteslice(code_end, rodata_segment[:file_length])
   previous_target = nil
   relocation_count.times do |index|
-    offset = 96 + index * RELOCATION_BYTES
+    offset = relocation_offset + index * RELOCATION_BYTES
     target = u32(bytes, offset + 8)
     addend = i64(bytes, offset + 16)
     assert([u16(bytes, offset), u16(bytes, offset + 2), u16(bytes, offset + 4)] == [0, 1, 1], "#{name} relocation #{index} type is invalid")
@@ -165,6 +176,55 @@ def verify_package_v2(name, bytes, digest)
 
   assert(rodata == "AGENT_KERNEL_PACKAGE_V2_RODATA\0".b, "#{name} rodata proof payload mismatch")
   verify_no_old_fixed_addresses(name, code)
+  [code, rodata]
+end
+
+def verify_package_v2(name, bytes, digest)
+  verify_common_header(name, bytes, 2)
+  assert(bytes.bytesize >= PACKAGE_V2_HEADER_BYTES, "#{name} V2 header truncated")
+  assert(u16(bytes, 20).zero? && u16(bytes, 22).zero?, "#{name} entry segment or reserved word is invalid")
+  entry_offset = u32(bytes, 24)
+  segment_count = u16(bytes, 28)
+  relocation_count = u16(bytes, 30)
+  assert(segment_count == 2, "#{name} must contain two segments")
+  assert((0..64).cover?(relocation_count), "#{name} relocation count is outside the V2 bound")
+  assert(u32(bytes, 32) == PACKAGE_V2_HEADER_BYTES, "#{name} segment table offset is noncanonical")
+  assert(u32(bytes, 36) == 96, "#{name} relocation table offset is noncanonical")
+  assert(u32(bytes, 40) == bytes.bytesize, "#{name} package length mismatch")
+  assert(u32(bytes, 44).zero?, "#{name} reserved header word must be zero")
+
+  code, = verify_segmented_payload(name, bytes, PACKAGE_V2_HEADER_BYTES, 96, relocation_count, bytes.bytesize, 2)
+  assert(entry_offset < code.bytesize, "#{name} entry is outside code")
+  verify_digest(name, bytes, digest)
+end
+
+def verify_package_v3(name, bytes, digest, expected_signer_id, public_key)
+  verify_common_header(name, bytes, 3, flags: 1)
+  assert(bytes.bytesize >= PACKAGE_V3_HEADER_BYTES, "#{name} V3 header truncated")
+  assert(u16(bytes, 20).zero? && u16(bytes, 22).zero?, "#{name} entry segment or reserved word is invalid")
+  entry_offset = u32(bytes, 24)
+  segment_count = u16(bytes, 28)
+  relocation_count = u16(bytes, 30)
+  signature_offset = u32(bytes, 40)
+  signer_id = bytes.byteslice(48, 32)
+  assert(segment_count == 2, "#{name} must contain two segments")
+  assert((0..64).cover?(relocation_count), "#{name} relocation count is outside the V3 bound")
+  assert(u32(bytes, 32) == PACKAGE_V3_HEADER_BYTES, "#{name} segment table offset is noncanonical")
+  assert(u32(bytes, 36) == 136, "#{name} relocation table offset is noncanonical")
+  assert(u32(bytes, 44) == bytes.bytesize, "#{name} package length mismatch")
+  assert(u16(bytes, 80) == 1, "#{name} signature algorithm must be Ed25519")
+  assert(u16(bytes, 82) == SIGNATURE_BYTES, "#{name} signature length mismatch")
+  assert(u32(bytes, 84).zero?, "#{name} reserved header word must be zero")
+  assert(signature_offset + SIGNATURE_BYTES == bytes.bytesize, "#{name} signature layout is noncanonical")
+  assert(signer_id == expected_signer_id, "#{name} signer ID differs from boot Trust Policy")
+  assert(Digest::SHA256.digest(SIGNER_DOMAIN + public_key) == signer_id, "#{name} signer ID does not bind the public key")
+
+  code, = verify_segmented_payload(name, bytes, PACKAGE_V3_HEADER_BYTES, 136, relocation_count, signature_offset, 3)
+  assert(entry_offset < code.bytesize, "#{name} entry is outside code")
+  signed_bytes = bytes.byteslice(0, signature_offset)
+  signature = bytes.byteslice(signature_offset, SIGNATURE_BYTES)
+  verifying_key = OpenSSL::PKey.read(ED25519_SPKI_PREFIX + public_key)
+  assert(verifying_key.verify(nil, signature, signed_bytes), "#{name} Ed25519 signature is invalid")
   verify_digest(name, bytes, digest)
 end
 
@@ -224,9 +284,10 @@ def verify_assembly_sources(images)
       assert(assembled == capsule.byteslice(CAPSULE_V1_HEADER_BYTES..), "#{source} differs from embedded code")
     end
 
-    _format, package = image_map.fetch("resource-manager")
-    code_descriptor = segment(package, PACKAGE_V2_HEADER_BYTES)
-    rodata_descriptor = segment(package, PACKAGE_V2_HEADER_BYTES + SEGMENT_DESCRIPTOR_BYTES)
+    format, package = image_map.fetch("resource-manager")
+    header_bytes = format == :v3 ? PACKAGE_V3_HEADER_BYTES : PACKAGE_V2_HEADER_BYTES
+    code_descriptor = segment(package, header_bytes)
+    rodata_descriptor = segment(package, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
     assembled = assembled_sections("resource_manager.S", [".text", ".rodata"], clang, objcopy, directory)
     code = package.byteslice(code_descriptor[:file_offset], code_descriptor[:file_length])
     rodata = package.byteslice(rodata_descriptor[:file_offset], rodata_descriptor[:file_length])
@@ -252,16 +313,17 @@ def verify_release_elf(images, path)
   elf = File.binread(path)
   image_map = images.to_h { |name, format, bytes, _digest| [name, [format, bytes]] }
 
-  _format, package = image_map.fetch("resource-manager")
-  code_descriptor = segment(package, PACKAGE_V2_HEADER_BYTES)
-  rodata_descriptor = segment(package, PACKAGE_V2_HEADER_BYTES + SEGMENT_DESCRIPTOR_BYTES)
+  format, package = image_map.fetch("resource-manager")
+  header_bytes = format == :v3 ? PACKAGE_V3_HEADER_BYTES : PACKAGE_V2_HEADER_BYTES
+  code_descriptor = segment(package, header_bytes)
+  rodata_descriptor = segment(package, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
   resource_code = package.byteslice(code_descriptor[:file_offset], code_descriptor[:file_length])
   resource_rodata = package.byteslice(rodata_descriptor[:file_offset], rodata_descriptor[:file_length])
   _format, admission = image_map.fetch("admission-supervisor")
   admission_code = admission.byteslice(CAPSULE_V1_HEADER_BYTES..)
 
   {
-    "Resource Manager Package v2" => package,
+    "Resource Manager Package v3" => package,
     "Resource Manager code" => resource_code,
     "Resource Manager rodata" => resource_rodata,
     "Admission Supervisor Capsule v1" => admission,
@@ -301,18 +363,22 @@ end
 end
 
 resource_source = File.read(File.join(IMAGE_ROOT, "resource_manager.rs"))
-images << ["resource-manager", :v2, extract_bytes(resource_source, "PACKAGE"), extract_digest(resource_source, "DIGEST")]
+trust_source = rust_source("crates/agent-kernel-x86_64/src/boot_agent_trust.rs")
+resource_signer_id = extract_signer_id(trust_source, "RESOURCE_MANAGER_SIGNER_ID")
+resource_public_key = extract_public_key(trust_source, "RESOURCE_MANAGER_PUBLIC_KEY")
+images << ["resource-manager", :v3, extract_bytes(resource_source, "PACKAGE"), extract_digest(resource_source, "DIGEST")]
 
 images.each do |name, format, bytes, digest|
-  sha = if format == :v1
-          verify_capsule_v1(name, bytes, digest)
-        else
-          verify_package_v2(name, bytes, digest)
+  sha = case format
+        when :v1 then verify_capsule_v1(name, bytes, digest)
+        when :v2 then verify_package_v2(name, bytes, digest)
+        when :v3 then verify_package_v3(name, bytes, digest, resource_signer_id, resource_public_key)
+        else raise "audit failed: unsupported image format #{format}"
         end
   puts format("[ OK ] %-20s %-10s %6d bytes  sha256:%s", name, format.to_s.upcase, bytes.bytesize, sha[0, 12])
 end
 
 puts "[ OK ] 8 native Agent images / canonical headers / digests / fixed addresses"
-puts "[ OK ] Package v2 / code RX / rodata R+NX / ABS64 simulation"
+puts "[ OK ] Package v3 / Ed25519 / Trust Policy / code RX / rodata R+NX / ABS64"
 verify_assembly_sources(images) if assembly_audit
 verify_release_elf(images, elf_path) if elf_path

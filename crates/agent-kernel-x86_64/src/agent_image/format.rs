@@ -1,16 +1,18 @@
 //! Structural parser and normalized view for Agent image formats.
 
 use super::{
-    package_v2, AgentImageLoadError, AgentImageRelocation, AGENT_IMAGE_ARCH_X86_64,
-    AGENT_IMAGE_FORMAT_VERSION, AGENT_IMAGE_HEADER_BYTES, AGENT_IMAGE_KIND_FAULT_HANDLER,
-    AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER,
-    AGENT_IMAGE_MAGIC, AGENT_PACKAGE_RELOCATION_BYTES, MAX_AGENT_CODE_BYTES,
+    package_v2, package_v3, AgentImageLoadError, AgentImageRelocation, AgentImageSignerId,
+    AGENT_IMAGE_ARCH_X86_64, AGENT_IMAGE_FORMAT_VERSION, AGENT_IMAGE_HEADER_BYTES,
+    AGENT_IMAGE_KIND_FAULT_HANDLER, AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER,
+    AGENT_IMAGE_KIND_WORKER, AGENT_IMAGE_MAGIC, AGENT_PACKAGE_RELOCATION_BYTES,
+    MAX_AGENT_CODE_BYTES,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AgentImageFormat {
     CapsuleV1,
     PackageV2,
+    SignedPackageV3,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -96,6 +98,9 @@ pub struct AgentImageCapsule<'a> {
     code: &'a [u8],
     rodata: &'a [u8],
     relocations: &'a [u8],
+    signer_id: Option<AgentImageSignerId>,
+    signed_bytes: Option<&'a [u8]>,
+    signature: Option<&'a [u8]>,
 }
 
 impl<'a> AgentImageCapsule<'a> {
@@ -110,6 +115,9 @@ impl<'a> AgentImageCapsule<'a> {
         let format_version = read_u16(bytes, 8);
         if format_version == 2 {
             return package_v2::parse(bytes);
+        }
+        if format_version == 3 {
+            return package_v3::parse(bytes);
         }
         let architecture = read_u16(bytes, 10);
         let image_kind = read_u16(bytes, 12);
@@ -176,6 +184,9 @@ impl<'a> AgentImageCapsule<'a> {
             code: &bytes[AGENT_IMAGE_HEADER_BYTES..],
             rodata: &[],
             relocations: &[],
+            signer_id: None,
+            signed_bytes: None,
+            signature: None,
         })
     }
 
@@ -193,6 +204,32 @@ impl<'a> AgentImageCapsule<'a> {
             code,
             rodata,
             relocations,
+            signer_id: None,
+            signed_bytes: None,
+            signature: None,
+        }
+    }
+
+    pub(super) const fn package_v3(
+        header: AgentImageHeader,
+        raw: &'a [u8],
+        code: &'a [u8],
+        rodata: &'a [u8],
+        relocations: &'a [u8],
+        signer_id: AgentImageSignerId,
+        signed_bytes: &'a [u8],
+        signature: &'a [u8],
+    ) -> Self {
+        Self {
+            format: AgentImageFormat::SignedPackageV3,
+            header,
+            raw,
+            code,
+            rodata,
+            relocations,
+            signer_id: Some(signer_id),
+            signed_bytes: Some(signed_bytes),
+            signature: Some(signature),
         }
     }
 
@@ -214,6 +251,18 @@ impl<'a> AgentImageCapsule<'a> {
 
     pub const fn rodata(&self) -> &'a [u8] {
         self.rodata
+    }
+
+    pub const fn signer_id(&self) -> Option<AgentImageSignerId> {
+        self.signer_id
+    }
+
+    pub const fn signed_bytes(&self) -> Option<&'a [u8]> {
+        self.signed_bytes
+    }
+
+    pub const fn signature(&self) -> Option<&'a [u8]> {
+        self.signature
     }
 
     pub const fn entry_offset(&self) -> u32 {

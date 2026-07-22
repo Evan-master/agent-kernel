@@ -4,4 +4,8 @@ rustflags = [
     'sha2_backend="soft"',
     "--cfg",
     'sha2_backend_soft="compact"',
+    "--cfg",
+    'curve25519_dalek_backend="serial"',
+    "--cfg",
+    'curve25519_dalek_bits="32"',
 ]
