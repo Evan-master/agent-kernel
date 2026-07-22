@@ -15,23 +15,23 @@
 </p>
 
 <pre>
-agent-kernel@ring0:~$ boot --profile package-v2
-[ OK ] capability authority ........ online
+agent-kernel@ring0:~$ boot --profile signed-v3
+[ OK ] immutable Trust Policy ....... loaded
+[ OK ] strict Ed25519 signature ..... verified
 [ OK ] isolated Agent address spaces online
-[ OK ] segmented RX / R+NX packages  online
-[ OK ] bounded ABS64 relocation ..... online
-[ OK ] deterministic Event archive .. online
+[ OK ] segmented RX / R+NX image .... mapped
+[ OK ] deterministic Event archive .. sealed
 kernel://supervisor/handoff-ready
 </pre>
 
 </div>
 
 ```text
-┌─ AGENT KERNEL // V9 ──────────────────────────────────────────┐
+┌─ AGENT KERNEL // V10 ─────────────────────────────────────────┐
 │ CORE      no_std / heap-free    TARGET    x86_64 bare metal   │
-│ MODE      ring 0 + ring 3       FORMAT    Package v2          │
-│ AUTH      Capabilities          EVIDENCE  Tests / QEMU / ELF  │
-│ STATUS    Active development    LICENSE   MIT                 │
+│ MODE      ring 0 + ring 3       FORMAT    Signed Package v3   │
+│ AUTH      Capabilities          TRUST     Ed25519 policy      │
+│ EVIDENCE  Tests / QEMU / ELF    STATUS    Active development  │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,35 +97,42 @@ HAL      immutable request ──> driver binding ──> hardware
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-supervisor` | Host simulation and user-space orchestration |
 
-## `03 / PACKAGE V2`
+## `03 / SIGNED PACKAGE V3`
 
 ```text
-AGNTIMG\0 // Package v2
+AGNTIMG\0 // Package v3
 ┌──────────────┬───────────────────┬──────────────────┐
-│ header / 48B │ 2 segment records │ ABS64 records    │
+│ header / 88B │ 2 segment records │ ABS64 records    │
 ├──────────────┴───────────────────┴──────────────────┤
 │ code / 1..64 KiB / R+X                             │
 ├─────────────────────────────────────────────────────┤
 │ rodata / 1..64 KiB / R+NX                          │
+├─────────────────────────────────────────────────────┤
+│ Ed25519 signature / 64B                            │
 └─────────────────────────────────────────────────────┘
 ```
 
 ```text
-SHA-256 verify
-      ↓
-allocate exact frames → copy segments → patch private code alias
-      ↓
-map code RX → map rodata R+NX → enter ring 3
+SHA-256 identity → canonical envelope → signer ID
+                                          │
+                                          ▼
+immutable Trust Policy → kind + ABI scope → Ed25519 verify_strict
+                                          │
+                                          ▼
+exact frames → ABS64 patch → code RX + rodata R+NX → ring 3
 ```
 
-| Contract | V9 bound |
+| Contract | V10 bound |
 | :--- | :--- |
+| `ENVELOPE` | Canonical offsets, lengths, counts, and reserved fields |
 | `SEGMENTS` | Exactly two: code, rodata |
 | `RELOCATIONS` | `0..64`, sorted, non-overlapping, page-contained |
-| `SYMBOL` | `rodata_base + nonnegative addend` |
-| `PLACEHOLDER` | Eight zero bytes in the immutable package |
-| `DIGEST` | Binds the complete pre-relocation package |
-| `LEGACY` | Capsule v1 remains accepted during inventory migration |
+| `SIGNED MESSAGE` | Exact package prefix before the 64-byte signature |
+| `SIGNER ID` | `SHA-256(domain || public_key)` |
+| `TRUST` | One active signer entry with matching kind and ABI scope |
+| `SIGNATURE` | Strict Ed25519 verification |
+| `DIGEST` | Binds the complete package, including the signature |
+| `LEGACY` | V1/V2 remain digest-pinned during inventory migration |
 
 ## `04 / USER MAP`
 
@@ -197,7 +204,8 @@ snapshot → decode → authenticate hops → compare → rebind
 
 | Subsystem | Native mechanism | QEMU signal |
 | :--- | :--- | :--- |
-| Package | v2 parser, full digest, ABS64 relocation | `NATIVE_SEGMENTED_PACKAGE_OK` |
+| Package | v3 parser, full digest, ABS64 relocation | `NATIVE_SIGNED_PACKAGE_OK` |
+| Trust | Immutable signer policy, kind and ABI scope | `NATIVE_TRUSTED_SIGNER_OK` |
 | Isolation | CR3, GDT/TSS/IDT, ring transitions | `MULTI_AGENT_ISOLATION_OK` |
 | Scheduling | FIFO dispatch, PIT preemption, CPU resume | `MULTI_AGENT_CONTEXT_SWITCH_OK` |
 | Faults | `#UD`, `#GP`, `#PF`, repair, restart | `NATIVE_AGENT_FAULT_RESTART_OK` |
@@ -220,7 +228,7 @@ EVENT STORE       375 peak / 345 final / 64 archived
 
 | Native image | Format | Calls | Image bytes | SHA-256 |
 | :--- | :--- | ---: | ---: | :--- |
-| Resource Manager | Package v2 | 43 | 16,634 | `14f09265ccbb...db7b646` |
+| Resource Manager | Signed Package v3 | 43 | 16,738 | `8fed932cf0a4...6699f9b3d` |
 | Admission Supervisor | Capsule v1 | 44 | 4,115 | `5a657ca1ecde...9339078` |
 
 <details>
@@ -231,6 +239,8 @@ $ scripts/run-qemu.sh --release
 
 [boot]       AGENT_KERNEL_QEMU_BOOT_OK
 [package]    AGENT_KERNEL_NATIVE_SEGMENTED_PACKAGE_OK
+[signature]  AGENT_KERNEL_NATIVE_SIGNED_PACKAGE_OK
+[trust]      AGENT_KERNEL_NATIVE_TRUSTED_SIGNER_OK
 [rodata]     AGENT_KERNEL_NATIVE_RODATA_NX_OK
 [relocation] AGENT_KERNEL_NATIVE_RELOCATION_OK
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
@@ -280,6 +290,11 @@ crates/
 docs/superpowers/
 ├─ specs/                architecture records
 └─ plans/                milestone plans
+
+scripts/
+├─ build-signed-resource-manager.rb  external-key v3 builder
+├─ audit-agent-images.rb             package + ELF verifier
+└─ run-qemu.sh                       debug / release boot proof
 ```
 
 ## `10 / ROADMAP`
@@ -291,13 +306,14 @@ docs/superpowers/
 [x] typed Namespace + bounded path mutation
 [x] 64 KiB code windows + exact frame ownership
 [x] Package v2 + RX/R+NX segments + ABS64 relocation
-[>] package signatures + signer trust policy
+[x] Package v3 + Ed25519 signatures + boot Trust Policy
+[>] signer rotation + runtime trust-policy Events
 [ ] SMP + synchronization + TLB shootdown
 [ ] storage / network / graphics / USB
 [ ] signed durable state + formal verification
 ```
 
-`CURRENT SPEC` · [`Segmented Agent Package V9`](docs/superpowers/specs/2026-07-21-segmented-agent-package-v9-design.md)
+`CURRENT SPEC` · [`Signed Agent Package V10`](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md)
 
 ## `11 / ENGINEERING GATE`
 

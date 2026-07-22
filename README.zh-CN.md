@@ -15,23 +15,23 @@
 </p>
 
 <pre>
-agent-kernel@ring0:~$ boot --profile package-v2
-[ OK ] capability authority ........ online
+agent-kernel@ring0:~$ boot --profile signed-v3
+[ OK ] immutable Trust Policy ....... loaded
+[ OK ] strict Ed25519 signature ..... verified
 [ OK ] isolated Agent address spaces online
-[ OK ] segmented RX / R+NX packages  online
-[ OK ] bounded ABS64 relocation ..... online
-[ OK ] deterministic Event archive .. online
+[ OK ] segmented RX / R+NX image .... mapped
+[ OK ] deterministic Event archive .. sealed
 kernel://supervisor/handoff-ready
 </pre>
 
 </div>
 
 ```text
-┌─ AGENT KERNEL // V9 ──────────────────────────────────────────┐
+┌─ AGENT KERNEL // V10 ─────────────────────────────────────────┐
 │ CORE      no_std / 无堆        TARGET    x86_64 裸机          │
-│ MODE      ring 0 + ring 3      FORMAT    Package v2           │
-│ AUTH      Capability           EVIDENCE  Tests / QEMU / ELF   │
-│ STATUS    持续研发             LICENSE   MIT                  │
+│ MODE      ring 0 + ring 3      FORMAT    Signed Package v3    │
+│ AUTH      Capability           TRUST     Ed25519 Policy       │
+│ EVIDENCE  Tests / QEMU / ELF   STATUS    持续研发              │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,35 +97,42 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | `agent-kernel-hal` | 不可变设备请求协议 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
 
-## `03 / PACKAGE V2`
+## `03 / SIGNED PACKAGE V3`
 
 ```text
-AGNTIMG\0 // Package v2
+AGNTIMG\0 // Package v3
 ┌──────────────┬───────────────────┬──────────────────┐
-│ header / 48B │ 2 segment records │ ABS64 records    │
+│ header / 88B │ 2 segment records │ ABS64 records    │
 ├──────────────┴───────────────────┴──────────────────┤
 │ code / 1..64 KiB / R+X                             │
 ├─────────────────────────────────────────────────────┤
 │ rodata / 1..64 KiB / R+NX                          │
+├─────────────────────────────────────────────────────┤
+│ Ed25519 signature / 64B                            │
 └─────────────────────────────────────────────────────┘
 ```
 
 ```text
-SHA-256 校验
-      ↓
-分配精确帧 → 复制分段 → 通过私有代码别名写入重定位
-      ↓
-映射 code RX → 映射 rodata R+NX → 进入 ring 3
+SHA-256 身份 → 规范封装 → signer ID
+                                  │
+                                  ▼
+不可变 Trust Policy → kind + ABI 范围 → Ed25519 verify_strict
+                                  │
+                                  ▼
+精确帧 → ABS64 patch → code RX + rodata R+NX → ring 3
 ```
 
-| 契约 | V9 边界 |
+| 契约 | V10 边界 |
 | :--- | :--- |
+| `ENVELOPE` | 规范 offset、length、count 与 reserved 字段 |
 | `SEGMENTS` | 固定两段：code、rodata |
 | `RELOCATIONS` | `0..64`，有序、无重叠、目标不跨页 |
-| `SYMBOL` | `rodata_base + 非负 addend` |
-| `PLACEHOLDER` | 不可变 Package 中的八个零字节 |
-| `DIGEST` | 绑定重定位前的完整 Package |
-| `LEGACY` | 迁移期间继续接收 Capsule v1 |
+| `SIGNED MESSAGE` | 64 字节签名前的精确 Package 前缀 |
+| `SIGNER ID` | `SHA-256(domain || public_key)` |
+| `TRUST` | 唯一 Active signer，kind 与 ABI 范围匹配 |
+| `SIGNATURE` | 严格 Ed25519 验证 |
+| `DIGEST` | 绑定包含签名在内的完整 Package |
+| `LEGACY` | V1/V2 在迁移期继续采用 digest pinning |
 
 ## `04 / 用户地址空间`
 
@@ -197,7 +204,8 @@ Workspace 8 --Cap C--> Mount(9) --Cap D--> Resource(3)
 
 | 子系统 | 原生机制 | QEMU 信号 |
 | :--- | :--- | :--- |
-| Package | v2 解析器、完整摘要、ABS64 重定位 | `NATIVE_SEGMENTED_PACKAGE_OK` |
+| Package | v3 解析器、完整摘要、ABS64 重定位 | `NATIVE_SIGNED_PACKAGE_OK` |
+| Trust | 不可变 signer policy、kind 与 ABI 范围 | `NATIVE_TRUSTED_SIGNER_OK` |
 | 隔离 | CR3、GDT/TSS/IDT、特权级切换 | `MULTI_AGENT_ISOLATION_OK` |
 | 调度 | FIFO、PIT 抢占、CPU 帧恢复 | `MULTI_AGENT_CONTEXT_SWITCH_OK` |
 | 故障 | `#UD`、`#GP`、`#PF`、修复、重启 | `NATIVE_AGENT_FAULT_RESTART_OK` |
@@ -220,7 +228,7 @@ EVENT STORE       峰值 375 / 最终 345 / 已归档 64
 
 | 原生镜像 | 格式 | Calls | 镜像字节 | SHA-256 |
 | :--- | :--- | ---: | ---: | :--- |
-| Resource Manager | Package v2 | 43 | 16,634 | `14f09265ccbb...db7b646` |
+| Resource Manager | Signed Package v3 | 43 | 16,738 | `8fed932cf0a4...6699f9b3d` |
 | Admission Supervisor | Capsule v1 | 44 | 4,115 | `5a657ca1ecde...9339078` |
 
 <details>
@@ -231,6 +239,8 @@ $ scripts/run-qemu.sh --release
 
 [boot]       AGENT_KERNEL_QEMU_BOOT_OK
 [package]    AGENT_KERNEL_NATIVE_SEGMENTED_PACKAGE_OK
+[signature]  AGENT_KERNEL_NATIVE_SIGNED_PACKAGE_OK
+[trust]      AGENT_KERNEL_NATIVE_TRUSTED_SIGNER_OK
 [rodata]     AGENT_KERNEL_NATIVE_RODATA_NX_OK
 [relocation] AGENT_KERNEL_NATIVE_RELOCATION_OK
 [isolation]  AGENT_KERNEL_MULTI_AGENT_ISOLATION_OK
@@ -280,6 +290,11 @@ crates/
 docs/superpowers/
 ├─ specs/                架构记录
 └─ plans/                里程碑计划
+
+scripts/
+├─ build-signed-resource-manager.rb  外部密钥 v3 构建器
+├─ audit-agent-images.rb             Package + ELF 验证器
+└─ run-qemu.sh                       debug / release 启动证据
 ```
 
 ## `10 / 路线图`
@@ -291,13 +306,14 @@ docs/superpowers/
 [x] 类型化 Namespace + 有界路径修改
 [x] 64 KiB code 窗口 + 精确帧所有权
 [x] Package v2 + RX/R+NX 分段 + ABS64 重定位
-[>] Package 签名 + 签名者信任策略
+[x] Package v3 + Ed25519 签名 + 启动 Trust Policy
+[>] signer 轮换 + 运行时 Trust Policy Event
 [ ] SMP + 同步 + TLB shootdown
 [ ] Storage / Network / Graphics / USB
 [ ] 签名持久状态 + 形式化验证
 ```
 
-`当前 SPEC` · [`Segmented Agent Package V9`](docs/superpowers/specs/2026-07-21-segmented-agent-package-v9-design.md)
+`当前 SPEC` · [`Signed Agent Package V10`](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md)
 
 ## `11 / 工程门禁`
 
