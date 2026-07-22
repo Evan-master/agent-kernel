@@ -12,6 +12,7 @@ use core::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
+use agent_kernel_x86_64::cpu::{CpuIndex, MAX_CPU_COUNT};
 use agent_kernel_x86_64::privilege::{
     gdt_entries, GdtPointer, TaskStateSegment64, GDT_ENTRY_COUNT, KERNEL_CODE_SELECTOR,
     KERNEL_DATA_SELECTOR, TSS_SELECTOR,
@@ -33,32 +34,42 @@ impl PrivilegedStack {
     }
 }
 
-// SAFETY: one boot CPU owns this stack, and hardware uses it only after the
-// installed TSS has transferred control away from ring 3.
-unsafe impl Sync for PrivilegedStack {}
-
 struct TssStorage {
     value: UnsafeCell<TaskStateSegment64>,
 }
-
-// SAFETY: installation occurs once with IF clear and the CPU then owns the TSS.
-unsafe impl Sync for TssStorage {}
 
 struct GdtStorage {
     entries: UnsafeCell<[u64; GDT_ENTRY_COUNT]>,
 }
 
-// SAFETY: installation occurs once with IF clear and the table remains live.
-unsafe impl Sync for GdtStorage {}
+struct CpuPrivilegeSlot {
+    stack: PrivilegedStack,
+    tss: TssStorage,
+    gdt: GdtStorage,
+    install_state: AtomicU8,
+}
 
-static PRIVILEGED_STACK: PrivilegedStack = PrivilegedStack::new();
-static TSS: TssStorage = TssStorage {
-    value: UnsafeCell::new(TaskStateSegment64::new(0)),
-};
-static GDT: GdtStorage = GdtStorage {
-    entries: UnsafeCell::new([0; GDT_ENTRY_COUNT]),
-};
-static INSTALL_STATE: AtomicU8 = AtomicU8::new(0);
+impl CpuPrivilegeSlot {
+    const fn new() -> Self {
+        Self {
+            stack: PrivilegedStack::new(),
+            tss: TssStorage {
+                value: UnsafeCell::new(TaskStateSegment64::new(0)),
+            },
+            gdt: GdtStorage {
+                entries: UnsafeCell::new([0; GDT_ENTRY_COUNT]),
+            },
+            install_state: AtomicU8::new(0),
+        }
+    }
+}
+
+// SAFETY: each logical CPU exclusively installs and uses its indexed slot;
+// slots remain live and disjoint for the kernel image lifetime.
+unsafe impl Sync for CpuPrivilegeSlot {}
+
+static PRIVILEGE_SLOTS: [CpuPrivilegeSlot; MAX_CPU_COUNT] =
+    [const { CpuPrivilegeSlot::new() }; MAX_CPU_COUNT];
 
 #[derive(Copy, Clone)]
 pub(crate) struct PrivilegedStackBounds {
@@ -67,23 +78,26 @@ pub(crate) struct PrivilegedStackBounds {
 }
 
 pub(crate) struct PrivilegeBoundary {
+    cpu: CpuIndex,
     stack: PrivilegedStackBounds,
 }
 
 impl PrivilegeBoundary {
-    pub(crate) fn install() -> Option<Self> {
-        // SAFETY: descriptor replacement is owned by the single boot CPU.
+    pub(crate) fn install(cpu: CpuIndex) -> Option<Self> {
+        // SAFETY: descriptor replacement is owned by the indexed CPU.
         unsafe {
             asm!("cli", options(nomem, nostack));
         }
-        if INSTALL_STATE
+        let slot = PRIVILEGE_SLOTS.get(cpu.as_usize())?;
+        if slot
+            .install_state
             .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
         {
             return None;
         }
 
-        let start = PRIVILEGED_STACK.bytes.get().cast::<u8>() as usize;
+        let start = slot.stack.bytes.get().cast::<u8>() as usize;
         let end = start.checked_add(PRIVILEGED_STACK_BYTES)?;
         if !start.is_multiple_of(4096) || !end.is_multiple_of(16) {
             return None;
@@ -93,13 +107,13 @@ impl PrivilegeBoundary {
             (start as *mut u64).write_volatile(PRIVILEGED_STACK_CANARY);
         }
 
-        let tss_ptr = TSS.value.get();
+        let tss_ptr = slot.tss.value.get();
         // SAFETY: IF is clear and the TSS has not been loaded before this write.
         unsafe {
             tss_ptr.write_volatile(TaskStateSegment64::new(end as u64));
         }
         let entries = gdt_entries(tss_ptr as usize as u64);
-        let gdt_ptr = GDT.entries.get();
+        let gdt_ptr = slot.gdt.entries.get();
         // SAFETY: the permanent table is exclusively initialized before lgdt.
         unsafe {
             gdt_ptr.write_volatile(entries);
@@ -123,14 +137,19 @@ impl PrivilegeBoundary {
             return None;
         }
 
-        INSTALL_STATE.store(2, Ordering::Release);
+        slot.install_state.store(2, Ordering::Release);
         Some(Self {
+            cpu,
             stack: PrivilegedStackBounds { start, end },
         })
     }
 
     pub(crate) const fn stack_bounds(&self) -> PrivilegedStackBounds {
         self.stack
+    }
+
+    pub(crate) const fn cpu(&self) -> CpuIndex {
+        self.cpu
     }
 }
 

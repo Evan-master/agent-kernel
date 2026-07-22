@@ -12,6 +12,15 @@ use agent_kernel_x86_64::{
         PRIVILEGE_INTERRUPT_RIP_OFFSET,
     },
     native_runtime::{GENERAL_PROTECTION_VECTOR, INVALID_OPCODE_VECTOR, PAGE_FAULT_VECTOR},
+    per_cpu::{
+        PER_CPU_CALL_COUNT_OFFSET, PER_CPU_CALL_CR3_OFFSET, PER_CPU_CALL_RIP_OFFSET,
+        PER_CPU_CALL_RSP_OFFSET, PER_CPU_CALL_SEEN_OFFSET, PER_CPU_FAULT_ADDRESS_OFFSET,
+        PER_CPU_FAULT_COUNT_OFFSET, PER_CPU_FAULT_CR3_OFFSET, PER_CPU_FAULT_ERROR_CODE_OFFSET,
+        PER_CPU_FAULT_RIP_OFFSET, PER_CPU_FAULT_RSP_OFFSET, PER_CPU_FAULT_SEEN_OFFSET,
+        PER_CPU_FAULT_VECTOR_OFFSET, PER_CPU_HOST_RSP_OFFSET, PER_CPU_INTERRUPT_CR3_OFFSET,
+        PER_CPU_INTERRUPT_RIP_OFFSET, PER_CPU_INTERRUPT_RSP_OFFSET, PER_CPU_IRQ_COUNT_OFFSET,
+        PER_CPU_IRQ_SEEN_OFFSET, PER_CPU_KERNEL_CR3_OFFSET, PER_CPU_PREEMPTED_OFFSET,
+    },
 };
 
 use crate::pic;
@@ -43,7 +52,7 @@ global_asm!(
     push r15
     .endm
     .macro agent_kernel_restore_host
-    mov rsp, qword ptr [rip + {host_context}]
+    mov rsp, qword ptr gs:[{host_context_offset}]
     pop r15
     pop r14
     pop r13
@@ -130,21 +139,21 @@ agent_kernel_resume_interrupted_user:
 agent_kernel_agent_timer_irq_stub:
     agent_kernel_push_integer_frame
     mov r10, cr3
-    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov rax, qword ptr gs:[{kernel_cr3_offset}]
     mov cr3, rax
-    mov qword ptr [rip + {interrupt_cr3}], r10
-    mov qword ptr [rip + {interrupt_rsp}], rsp
+    mov qword ptr gs:[{interrupt_cr3_offset}], r10
+    mov qword ptr gs:[{interrupt_rsp_offset}], rsp
     mov rax, qword ptr [rsp + {rip_offset}]
-    mov qword ptr [rip + {interrupt_rip}], rax
-    inc byte ptr [rip + {irq_count}]
+    mov qword ptr gs:[{interrupt_rip_offset}], rax
+    inc byte ptr gs:[{irq_count_offset}]
     mov dx, {pic_master_data}
     mov al, 0xff
     out dx, al
     mov dx, {pic_master_command}
     mov al, {pic_eoi}
     out dx, al
-    mov byte ptr [rip + {irq_seen}], 1
-    mov byte ptr [rip + {preempted}], 1
+    mov byte ptr gs:[{irq_seen_offset}], 1
+    mov byte ptr gs:[{preempted_offset}], 1
     agent_kernel_restore_host
     .size agent_kernel_agent_timer_irq_stub, . - agent_kernel_agent_timer_irq_stub
     .global agent_kernel_agent_call_stub
@@ -152,14 +161,14 @@ agent_kernel_agent_timer_irq_stub:
 agent_kernel_agent_call_stub:
     agent_kernel_push_integer_frame
     mov r10, cr3
-    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov rax, qword ptr gs:[{kernel_cr3_offset}]
     mov cr3, rax
-    mov qword ptr [rip + {call_cr3}], r10
-    mov qword ptr [rip + {call_rsp}], rsp
+    mov qword ptr gs:[{call_cr3_offset}], r10
+    mov qword ptr gs:[{call_rsp_offset}], rsp
     mov rax, qword ptr [rsp + {rip_offset}]
-    mov qword ptr [rip + {call_rip}], rax
-    inc byte ptr [rip + {call_count}]
-    mov byte ptr [rip + {call_seen}], 1
+    mov qword ptr gs:[{call_rip_offset}], rax
+    inc byte ptr gs:[{call_count_offset}]
+    mov byte ptr gs:[{call_seen_offset}], 1
     agent_kernel_restore_host
     .size agent_kernel_agent_call_stub, . - agent_kernel_agent_call_stub
     .global agent_kernel_agent_invalid_opcode_stub
@@ -172,15 +181,15 @@ agent_kernel_agent_invalid_opcode_stub:
     jne .Lagent_kernel_invalid_opcode_fatal
     agent_kernel_push_integer_frame_after_rax
     mov r10, cr3
-    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov rax, qword ptr gs:[{kernel_cr3_offset}]
     mov cr3, rax
-    mov qword ptr [rip + {fault_cr3}], r10
-    mov qword ptr [rip + {fault_rsp}], rsp
+    mov qword ptr gs:[{fault_cr3_offset}], r10
+    mov qword ptr gs:[{fault_rsp_offset}], rsp
     mov rax, qword ptr [rsp + {rip_offset}]
-    mov qword ptr [rip + {fault_rip}], rax
-    mov byte ptr [rip + {fault_vector}], {invalid_opcode_vector}
-    inc byte ptr [rip + {fault_count}]
-    mov byte ptr [rip + {fault_seen}], 1
+    mov qword ptr gs:[{fault_rip_offset}], rax
+    mov byte ptr gs:[{fault_vector_offset}], {invalid_opcode_vector}
+    inc byte ptr gs:[{fault_count_offset}]
+    mov byte ptr gs:[{fault_seen_offset}], 1
     agent_kernel_restore_host
 .Lagent_kernel_invalid_opcode_fatal:
     pop rax
@@ -196,17 +205,17 @@ agent_kernel_agent_general_protection_stub:
     jne .Lagent_kernel_general_protection_fatal
     agent_kernel_push_integer_frame_after_rax
     mov r10, cr3
-    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov rax, qword ptr gs:[{kernel_cr3_offset}]
     mov cr3, rax
-    mov qword ptr [rip + {fault_cr3}], r10
-    mov qword ptr [rip + {fault_rsp}], rsp
+    mov qword ptr gs:[{fault_cr3_offset}], r10
+    mov qword ptr gs:[{fault_rsp_offset}], rsp
     mov rax, qword ptr [rsp + {error_code_offset}]
-    mov qword ptr [rip + {fault_error_code}], rax
+    mov qword ptr gs:[{fault_error_code_offset}], rax
     mov rax, qword ptr [rsp + {error_rip_offset}]
-    mov qword ptr [rip + {fault_rip}], rax
-    mov byte ptr [rip + {fault_vector}], {general_protection_vector}
-    inc byte ptr [rip + {fault_count}]
-    mov byte ptr [rip + {fault_seen}], 1
+    mov qword ptr gs:[{fault_rip_offset}], rax
+    mov byte ptr gs:[{fault_vector_offset}], {general_protection_vector}
+    inc byte ptr gs:[{fault_count_offset}]
+    mov byte ptr gs:[{fault_seen_offset}], 1
     agent_kernel_restore_host
 .Lagent_kernel_general_protection_fatal:
     pop rax
@@ -223,45 +232,45 @@ agent_kernel_agent_page_fault_stub:
     agent_kernel_push_integer_frame_after_rax
     mov r11, cr2
     mov r10, cr3
-    mov rax, qword ptr [rip + {kernel_cr3}]
+    mov rax, qword ptr gs:[{kernel_cr3_offset}]
     mov cr3, rax
-    mov qword ptr [rip + {fault_address}], r11
-    mov qword ptr [rip + {fault_cr3}], r10
-    mov qword ptr [rip + {fault_rsp}], rsp
+    mov qword ptr gs:[{fault_address_offset}], r11
+    mov qword ptr gs:[{fault_cr3_offset}], r10
+    mov qword ptr gs:[{fault_rsp_offset}], rsp
     mov rax, qword ptr [rsp + {error_code_offset}]
-    mov qword ptr [rip + {fault_error_code}], rax
+    mov qword ptr gs:[{fault_error_code_offset}], rax
     mov rax, qword ptr [rsp + {error_rip_offset}]
-    mov qword ptr [rip + {fault_rip}], rax
-    mov byte ptr [rip + {fault_vector}], {page_fault_vector}
-    inc byte ptr [rip + {fault_count}]
-    mov byte ptr [rip + {fault_seen}], 1
+    mov qword ptr gs:[{fault_rip_offset}], rax
+    mov byte ptr gs:[{fault_vector_offset}], {page_fault_vector}
+    inc byte ptr gs:[{fault_count_offset}]
+    mov byte ptr gs:[{fault_seen_offset}], 1
     agent_kernel_restore_host
 .Lagent_kernel_page_fault_fatal:
     pop rax
     jmp agent_kernel_exception_14
     .size agent_kernel_agent_page_fault_stub, . - agent_kernel_agent_page_fault_stub
 "#,
-    interrupt_rsp = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP,
-    interrupt_rip = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP,
-    irq_count = sym super::storage::AGENT_KERNEL_AGENT_IRQ_COUNT,
-    irq_seen = sym super::storage::AGENT_KERNEL_AGENT_IRQ_SEEN,
-    preempted = sym super::storage::AGENT_KERNEL_AGENT_PREEMPTED,
-    kernel_cr3 = sym super::storage::AGENT_KERNEL_KERNEL_CR3,
-    interrupt_cr3 = sym super::storage::AGENT_KERNEL_AGENT_INTERRUPT_CR3,
-    call_rsp = sym super::storage::AGENT_KERNEL_AGENT_CALL_RSP,
-    call_rip = sym super::storage::AGENT_KERNEL_AGENT_CALL_RIP,
-    call_count = sym super::storage::AGENT_KERNEL_AGENT_CALL_COUNT,
-    call_seen = sym super::storage::AGENT_KERNEL_AGENT_CALL_SEEN,
-    call_cr3 = sym super::storage::AGENT_KERNEL_AGENT_CALL_CR3,
-    fault_rsp = sym super::storage::AGENT_KERNEL_AGENT_FAULT_RSP,
-    fault_rip = sym super::storage::AGENT_KERNEL_AGENT_FAULT_RIP,
-    fault_cr3 = sym super::storage::AGENT_KERNEL_AGENT_FAULT_CR3,
-    fault_count = sym super::storage::AGENT_KERNEL_AGENT_FAULT_COUNT,
-    fault_seen = sym super::storage::AGENT_KERNEL_AGENT_FAULT_SEEN,
-    fault_vector = sym super::storage::AGENT_KERNEL_AGENT_FAULT_VECTOR,
-    fault_error_code = sym super::storage::AGENT_KERNEL_AGENT_FAULT_ERROR_CODE,
-    fault_address = sym super::storage::AGENT_KERNEL_AGENT_FAULT_ADDRESS,
-    host_context = sym super::storage::AGENT_KERNEL_HOST_CONTEXT_RSP,
+    host_context_offset = const PER_CPU_HOST_RSP_OFFSET,
+    kernel_cr3_offset = const PER_CPU_KERNEL_CR3_OFFSET,
+    interrupt_rsp_offset = const PER_CPU_INTERRUPT_RSP_OFFSET,
+    interrupt_rip_offset = const PER_CPU_INTERRUPT_RIP_OFFSET,
+    interrupt_cr3_offset = const PER_CPU_INTERRUPT_CR3_OFFSET,
+    irq_count_offset = const PER_CPU_IRQ_COUNT_OFFSET,
+    irq_seen_offset = const PER_CPU_IRQ_SEEN_OFFSET,
+    preempted_offset = const PER_CPU_PREEMPTED_OFFSET,
+    call_rsp_offset = const PER_CPU_CALL_RSP_OFFSET,
+    call_rip_offset = const PER_CPU_CALL_RIP_OFFSET,
+    call_cr3_offset = const PER_CPU_CALL_CR3_OFFSET,
+    call_count_offset = const PER_CPU_CALL_COUNT_OFFSET,
+    call_seen_offset = const PER_CPU_CALL_SEEN_OFFSET,
+    fault_rsp_offset = const PER_CPU_FAULT_RSP_OFFSET,
+    fault_rip_offset = const PER_CPU_FAULT_RIP_OFFSET,
+    fault_cr3_offset = const PER_CPU_FAULT_CR3_OFFSET,
+    fault_error_code_offset = const PER_CPU_FAULT_ERROR_CODE_OFFSET,
+    fault_address_offset = const PER_CPU_FAULT_ADDRESS_OFFSET,
+    fault_count_offset = const PER_CPU_FAULT_COUNT_OFFSET,
+    fault_seen_offset = const PER_CPU_FAULT_SEEN_OFFSET,
+    fault_vector_offset = const PER_CPU_FAULT_VECTOR_OFFSET,
     rip_offset = const PRIVILEGE_INTERRUPT_RIP_OFFSET,
     origin_cs_offset = const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX,
     error_origin_cs_offset = const ERROR_CODE_ORIGIN_CS_OFFSET_AFTER_RAX,

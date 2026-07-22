@@ -33,6 +33,7 @@ use crate::{
     privilege_runtime::PrivilegeBoundary,
     resource_manager_flow::ResourceManagerFlow,
     serial_transmit_empty, serial_write_line, serial_write_str,
+    smp_boot::SmpBootstrap,
     timer_task_flow::TimerTaskFlow,
     uart_interrupt,
     verifier_task_flow::VerifierTaskFlow,
@@ -41,7 +42,14 @@ use crate::{
 
 const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 77;
 
-pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: PrivilegeBoundary) -> ! {
+pub(super) fn run(
+    boot_info: &'static mut BootInfo,
+    privilege_boundary: PrivilegeBoundary,
+    smp_bootstrap: SmpBootstrap,
+) -> ! {
+    if !smp_bootstrap.ready_for_agent_boot() {
+        fatal_boot("AGENT_KERNEL_SMP_BOOTSTRAP_ERROR");
+    }
     let worker_a = boot_agent_images::worker_a();
     let worker_b = boot_agent_images::worker_b();
     let verifier_image = boot_agent_images::verifier();
@@ -239,8 +247,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     }
     serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_OK");
     serial_write_line("AGENT_KERNEL_AGENT_IMAGE_LOAD_OK");
-    let Some(cpu_runtime) = AgentCpuRuntime::install(&privilege_boundary, agent_a_memory.roots())
-    else {
+    let Some(cpu_runtime) = AgentCpuRuntime::install(
+        &privilege_boundary,
+        agent_a_memory.roots(),
+        smp_bootstrap.bsp_index(),
+    ) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
     let Some(agent_a_cpu) = cpu_runtime.prepare(agent_a_memory, agent_a_context) else {

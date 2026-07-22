@@ -6,8 +6,6 @@
 //! non-resumable. A restart consumes and discards that frame before constructing
 //! a fresh entry context. Semantic mutation remains in the executor.
 
-use core::sync::atomic::Ordering;
-
 use agent_kernel_core::MemoryCellId;
 use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
@@ -21,7 +19,7 @@ mod reclamation;
 use super::{
     native_call_session::{AgentCallProgress, ResumableAgentCpu},
     runtime::{AgentCpuRuntime, PreparedAgentCpu},
-    storage, validation,
+    validation,
 };
 use crate::agent_memory::PreparedAgentMemory;
 
@@ -45,8 +43,8 @@ impl FaultedAgentCpu {
     ) -> Option<Self> {
         let roots = memory.roots();
         let layout = memory.layout();
-        let frame_rsp = storage::AGENT_KERNEL_AGENT_FAULT_RSP.load(Ordering::Acquire);
-        let frame_rip = storage::AGENT_KERNEL_AGENT_FAULT_RIP.load(Ordering::Acquire);
+        let frame_rsp = runtime.transition.fault_rsp();
+        let frame_rip = runtime.transition.fault_rip();
         let expected_error_code = u64::from(expected_fault.error_code());
         let expected_address = expected_fault.fault_address().unwrap_or(0);
         let frame = match expected_fault {
@@ -61,12 +59,11 @@ impl FaultedAgentCpu {
                 frame.without_error_code()
             }
         };
-        if storage::run_boundary()? != NativeRunBoundary::AgentFault(expected_fault)
-            || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
-            || storage::AGENT_KERNEL_AGENT_FAULT_CR3.load(Ordering::Acquire) != roots.agent_cr3()
-            || storage::AGENT_KERNEL_AGENT_FAULT_ERROR_CODE.load(Ordering::Acquire)
-                != expected_error_code
-            || storage::AGENT_KERNEL_AGENT_FAULT_ADDRESS.load(Ordering::Acquire) != expected_address
+        if runtime.transition.run_boundary()? != NativeRunBoundary::AgentFault(expected_fault)
+            || runtime.transition.host_rsp() == 0
+            || runtime.transition.fault_cr3() != roots.agent_cr3()
+            || runtime.transition.fault_error_code() != expected_error_code
+            || runtime.transition.fault_address() != expected_address
             || frame.rip != frame_rip
             || !validation::user_frame_valid(&frame, layout)
             || !validation::kernel_boundary_valid(runtime.kernel_stack, runtime.kernel_cr3)

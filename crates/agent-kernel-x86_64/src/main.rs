@@ -33,12 +33,14 @@ mod port_driver_flow;
 mod privilege_runtime;
 mod resource_manager_flow;
 mod reuse_worker_flow;
+mod smp_boot;
 mod timer_task_flow;
 mod uart_interrupt;
 mod verifier_task_flow;
 
 use boot_config::BOOTLOADER_CONFIG;
 use privilege_runtime::PrivilegeBoundary;
+use smp_boot::SmpBootstrap;
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
@@ -86,7 +88,9 @@ const _: () = assert!(
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
-    let Some(privilege_boundary) = PrivilegeBoundary::install() else {
+    let Some(privilege_boundary) =
+        PrivilegeBoundary::install(agent_kernel_x86_64::cpu::CpuIndex::BSP)
+    else {
         fatal_boot("AGENT_KERNEL_GDT_TSS_ERROR");
     };
     serial_write_line("AGENT_KERNEL_GDT_TSS_OK");
@@ -94,7 +98,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         fatal_boot("AGENT_KERNEL_EXCEPTION_BASELINE_ERROR");
     }
     serial_write_line("AGENT_KERNEL_EXCEPTION_BASELINE_OK");
-    agent_boot_flow::run(boot_info, privilege_boundary)
+    let Ok(smp_bootstrap) = SmpBootstrap::discover(boot_info) else {
+        fatal_boot("AGENT_KERNEL_ACPI_TOPOLOGY_ERROR");
+    };
+    serial_write_line("AGENT_KERNEL_ACPI_TOPOLOGY_OK");
+    agent_boot_flow::run(boot_info, privilege_boundary, smp_bootstrap)
 }
 
 #[panic_handler]

@@ -4,15 +4,15 @@
 //! preempted context owns a copied privilege frame, so the shared TSS RSP0 stack
 //! can accept another Agent interrupt before the first context resumes.
 
-use core::sync::atomic::Ordering;
-
 use agent_kernel_core::MemoryCellId;
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots,
     agent_call::AgentCallContext,
     context::SavedAgentFrame,
+    cpu::CpuIndex,
     interrupt::AGENT_CALL_VECTOR,
     native_runtime::NativeRunBoundary,
+    per_cpu::CpuTransitionStorage,
     privilege::{USER_CODE_SELECTOR, USER_DATA_SELECTOR},
 };
 
@@ -33,6 +33,7 @@ use crate::{
 pub(crate) struct AgentCpuRuntime {
     pub(super) kernel_stack: PrivilegedStackBounds,
     pub(super) kernel_cr3: u64,
+    pub(super) transition: &'static CpuTransitionStorage,
 }
 
 pub(crate) struct PreparedAgentCpu {
@@ -56,8 +57,15 @@ pub(crate) struct PreemptedAgentCpu {
 }
 
 impl AgentCpuRuntime {
-    pub(crate) fn install(privilege: &PrivilegeBoundary, roots: AddressSpaceRoots) -> Option<Self> {
-        storage::install(roots)?;
+    pub(crate) fn install(
+        privilege: &PrivilegeBoundary,
+        roots: AddressSpaceRoots,
+        cpu: CpuIndex,
+    ) -> Option<Self> {
+        if privilege.cpu() != cpu {
+            return None;
+        }
+        let transition = storage::install(roots, cpu)?;
         let kernel_stack = privilege.stack_bounds();
         if current_privilege_level() != 0 || !stack_canary_valid(kernel_stack) {
             return None;
@@ -85,6 +93,7 @@ impl AgentCpuRuntime {
         Some(Self {
             kernel_stack,
             kernel_cr3: roots.kernel_cr3(),
+            transition,
         })
     }
 
@@ -159,14 +168,14 @@ impl PreparedAgentCpu {
 
     pub(crate) fn run_until_boundary(self) -> Option<AgentRunOutcome> {
         let roots = self.memory.roots();
-        storage::begin_dispatch(roots)?;
+        storage::begin_dispatch(self.runtime.transition, roots)?;
         pit_timer::arm(assembly::agent_kernel_agent_timer_irq_stub)?;
         let layout = self.memory.layout();
         // SAFETY: private Agent pages, shared supervisor mappings, RSP0, gates,
         // and the per-dispatch evidence mailbox are all validated.
         unsafe {
             assembly::enter_user(
-                storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
+                self.runtime.transition.host_rsp_pointer(),
                 self.memory.entry_rip(),
                 layout.stack_top(),
                 USER_CODE_SELECTOR,
@@ -176,7 +185,7 @@ impl PreparedAgentCpu {
         }
         pit_timer::disarm();
 
-        match storage::run_boundary()? {
+        match self.runtime.transition.run_boundary()? {
             NativeRunBoundary::QuantumExpired => {
                 Some(AgentRunOutcome::Preempted(PreemptedAgentCpu::capture(
                     self.memory,
@@ -210,13 +219,12 @@ impl PreemptedAgentCpu {
     ) -> Option<Self> {
         let roots = memory.roots();
         let layout = memory.layout();
-        let frame_rsp = storage::AGENT_KERNEL_AGENT_INTERRUPT_RSP.load(Ordering::Acquire);
-        let frame_rip = storage::AGENT_KERNEL_AGENT_INTERRUPT_RIP.load(Ordering::Acquire);
+        let frame_rsp = runtime.transition.interrupt_rsp();
+        let frame_rip = runtime.transition.interrupt_rip();
         let frame = validation::read_frame(frame_rsp, runtime.kernel_stack)?;
-        if storage::run_boundary()? != NativeRunBoundary::QuantumExpired
-            || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
-            || storage::AGENT_KERNEL_AGENT_INTERRUPT_CR3.load(Ordering::Acquire)
-                != roots.agent_cr3()
+        if runtime.transition.run_boundary()? != NativeRunBoundary::QuantumExpired
+            || runtime.transition.host_rsp() == 0
+            || runtime.transition.interrupt_cr3() != roots.agent_cr3()
             || frame.rip != frame_rip
             || !validation::user_frame_valid(&frame, layout)
             || (require_initial_registers

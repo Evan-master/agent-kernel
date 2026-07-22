@@ -10,6 +10,7 @@ default = []
 bare-metal = []
 
 [dependencies]
+acpi = { version = "=6.1.1", default-features = false }
 agent-kernel-boot = { path = "../agent-kernel-boot" }
 agent-kernel-core = { path = "../agent-kernel-core" }
 agent-kernel-hal = { path = "../agent-kernel-hal" }

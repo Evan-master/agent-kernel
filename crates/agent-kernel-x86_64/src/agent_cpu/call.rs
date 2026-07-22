@@ -4,14 +4,13 @@
 //! It decodes only after the complete CPL3 frame, CR3, RSP0 bounds, and kernel
 //! continuation are valid; semantic task transitions remain outside this layer.
 
-use core::sync::atomic::Ordering;
-
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots, agent_call::AgentCallRequest, context::SavedAgentFrame,
-    native_runtime::NativeRunBoundary, user_memory::UserMemoryLayout,
+    native_runtime::NativeRunBoundary, per_cpu::CpuTransitionStorage,
+    user_memory::UserMemoryLayout,
 };
 
-use super::{assembly, storage, validation};
+use super::{assembly, validation};
 use crate::privilege_runtime::PrivilegedStackBounds;
 
 pub(super) struct CapturedAgentCall {
@@ -35,16 +34,17 @@ impl CapturedAgentCall {
 }
 
 pub(super) fn capture(
+    transition: &CpuTransitionStorage,
     stack: PrivilegedStackBounds,
     roots: AddressSpaceRoots,
     layout: UserMemoryLayout,
 ) -> Option<CapturedAgentCall> {
-    let frame_rsp = storage::AGENT_KERNEL_AGENT_CALL_RSP.load(Ordering::Acquire);
-    let frame_rip = storage::AGENT_KERNEL_AGENT_CALL_RIP.load(Ordering::Acquire);
+    let frame_rsp = transition.call_rsp();
+    let frame_rip = transition.call_rip();
     let frame = validation::read_frame(frame_rsp, stack)?;
-    if storage::run_boundary()? != NativeRunBoundary::AgentCall
-        || storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() == 0
-        || storage::AGENT_KERNEL_AGENT_CALL_CR3.load(Ordering::Acquire) != roots.agent_cr3()
+    if transition.run_boundary()? != NativeRunBoundary::AgentCall
+        || transition.host_rsp() == 0
+        || transition.call_cr3() != roots.agent_cr3()
         || frame.rip != frame_rip
         || !validation::user_frame_valid(&frame, layout)
         || !validation::kernel_boundary_valid(stack, roots.kernel_cr3())
@@ -61,13 +61,12 @@ pub(super) fn capture(
 }
 
 pub(super) fn resume_owned(
+    transition: &CpuTransitionStorage,
     frame: &mut SavedAgentFrame,
     roots: AddressSpaceRoots,
     layout: UserMemoryLayout,
 ) -> Option<()> {
-    if storage::AGENT_KERNEL_HOST_CONTEXT_RSP.load() != 0
-        || !validation::saved_frame_valid(frame, layout)
-    {
+    if transition.host_rsp() != 0 || !validation::saved_frame_valid(frame, layout) {
         return None;
     }
     let frame_rsp = frame.as_mut_ptr() as usize as u64;
@@ -75,7 +74,7 @@ pub(super) fn resume_owned(
     // gate restores this invocation's host continuation.
     unsafe {
         assembly::resume_interrupted_user(
-            storage::AGENT_KERNEL_HOST_CONTEXT_RSP.pointer(),
+            transition.host_rsp_pointer(),
             frame_rsp,
             roots.agent_cr3(),
         );

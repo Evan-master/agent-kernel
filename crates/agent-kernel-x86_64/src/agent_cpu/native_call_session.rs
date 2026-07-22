@@ -133,15 +133,20 @@ impl AgentCallSession {
     fn resume_until_boundary(mut self) -> Option<AgentRunOutcome> {
         let roots = self.memory.roots();
         let layout = self.memory.layout();
-        storage::begin_dispatch(roots)?;
+        storage::begin_dispatch(self.runtime.transition, roots)?;
         pit_timer::arm(super::assembly::agent_kernel_agent_timer_irq_stub)?;
-        let resumed = call::resume_owned(&mut self.frame, roots, layout);
+        let resumed = call::resume_owned(self.runtime.transition, &mut self.frame, roots, layout);
         pit_timer::disarm();
         resumed?;
 
-        match storage::run_boundary()? {
+        match self.runtime.transition.run_boundary()? {
             NativeRunBoundary::AgentCall => {
-                let captured = call::capture(self.runtime.kernel_stack, roots, layout)?;
+                let captured = call::capture(
+                    self.runtime.transition,
+                    self.runtime.kernel_stack,
+                    roots,
+                    layout,
+                )?;
                 let request = captured.request();
                 let return_offset = captured.return_offset();
                 self.frame = captured.into_frame();
