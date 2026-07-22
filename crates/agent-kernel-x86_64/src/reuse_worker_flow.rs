@@ -8,7 +8,10 @@ mod admission;
 mod evidence;
 
 use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, IntentId, RunQueueEntry, TaskId};
-use agent_kernel_x86_64::{agent_call::AgentCallContext, agent_image::VerifiedAgentImage};
+use agent_kernel_x86_64::{
+    agent_call::AgentCallContext,
+    agent_image::{AgentImageTrustPolicy, VerifiedAgentImage},
+};
 
 use crate::X86BootedKernel;
 
@@ -50,7 +53,13 @@ impl PreparedReuseWorkerFlow {
         booted: &X86BootedKernel,
         bytes: &'a [u8],
     ) -> Option<VerifiedAgentImage<'a>> {
-        VerifiedAgentImage::verify(booted.kernel().agent_image(self.image).ok()?, bytes).ok()
+        let policy = AgentImageTrustPolicy::new(booted.kernel().agent_image_signers());
+        VerifiedAgentImage::verify_signed(
+            booted.kernel().agent_image(self.image).ok()?,
+            bytes,
+            &policy,
+        )
+        .ok()
     }
 
     pub(super) const fn admission_target(&self) -> (AgentId, TaskId, AgentImageId) {

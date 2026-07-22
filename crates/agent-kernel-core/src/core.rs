@@ -3,12 +3,12 @@
 //! Owns deterministic no_std stores for replay and supervisor inspection.
 
 use crate::{
-    ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord, AgentRecord,
-    Capability, CheckpointRecord, DeviceEventRecord, DriverBindingRecord, DriverCommandRecord,
-    DriverEndpointRecord, DriverInvocationRecord, Event, EventArchiveCheckpoint,
-    FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent, MemoryCellRecord, MessageRecord,
-    NamespaceEntryRecord, ObservationRecord, Resource, RunQueueEntry, RuntimeAdmissionRecord, Task,
-    WaiterRecord,
+    ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord,
+    AgentImageSignerRecord, AgentRecord, Capability, CheckpointRecord, DeviceEventRecord,
+    DriverBindingRecord, DriverCommandRecord, DriverEndpointRecord, DriverInvocationRecord, Event,
+    EventArchiveCheckpoint, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
+    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
+    RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -41,6 +41,7 @@ pub struct KernelCore<
     pub(crate) execution_contexts: [AgentExecutionContext; AGENTS],
     pub(crate) agent_entries: [AgentEntryRecord; AGENTS],
     pub(crate) agent_images: [AgentImageRecord; AGENT_IMAGES],
+    pub(crate) agent_image_signers: [AgentImageSignerRecord; AGENT_IMAGES],
     pub(crate) resources: [Resource; RESOURCES],
     pub(crate) capabilities: [Option<Capability>; CAPS],
     pub(crate) intents: [Intent; INTENTS],
@@ -67,6 +68,7 @@ pub struct KernelCore<
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
     pub(crate) agent_image_len: usize,
+    pub(crate) agent_image_signer_len: usize,
     pub(crate) resource_len: usize,
     pub(crate) event_len: usize,
     pub(crate) action_len: usize,
@@ -105,6 +107,7 @@ pub struct KernelCore<
     pub(crate) next_fault_policy: u64,
     pub(crate) next_waiter: u64,
     pub(crate) next_agent_image: u64,
+    pub(crate) agent_image_signer_policy_generation: u64,
     pub(crate) next_driver_binding: u64,
     pub(crate) next_device_event: u64,
     pub(crate) next_driver_command: u64,
@@ -169,6 +172,7 @@ impl<
             execution_contexts: [AgentExecutionContext::empty(); AGENTS],
             agent_entries: [AgentEntryRecord::empty(); AGENTS],
             agent_images: [AgentImageRecord::empty(); AGENT_IMAGES],
+            agent_image_signers: [AgentImageSignerRecord::empty(); AGENT_IMAGES],
             resources: [Resource::empty(); RESOURCES],
             capabilities: [None; CAPS],
             intents: [Intent::empty(); INTENTS],
@@ -195,6 +199,7 @@ impl<
             agent_len: 0,
             agent_entry_len: 0,
             agent_image_len: 0,
+            agent_image_signer_len: 0,
             resource_len: 0,
             event_len: 0,
             action_len: 0,
@@ -233,6 +238,7 @@ impl<
             next_fault_policy: 1,
             next_waiter: 1,
             next_agent_image: 1,
+            agent_image_signer_policy_generation: 0,
             next_driver_binding: 1,
             next_device_event: 1,
             next_driver_command: 1,

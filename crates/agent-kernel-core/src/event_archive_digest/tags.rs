@@ -1,8 +1,9 @@
 //! Stable numeric tags for the Event archive format.
 
 use crate::{
-    AgentImageKind, DeviceEventKind, DriverCommandKind, EventKind, FaultKind, FaultPolicyAction,
-    IntentKind, MessageKind, Operation, VerificationRequirement, WaiterKind,
+    AgentImageKind, AgentImageSignerStatus, DeviceEventKind, DriverCommandKind, EventKind,
+    FaultKind, FaultPolicyAction, IntentKind, MessageKind, Operation, VerificationRequirement,
+    WaiterKind,
 };
 
 pub(super) const fn event_kind(value: EventKind) -> u16 {
@@ -12,6 +13,8 @@ pub(super) const fn event_kind(value: EventKind) -> u16 {
         EventKind::AgentImageVerified => 3,
         EventKind::AgentImageRetired => 4,
         EventKind::AgentImageRecordRetired => 5,
+        EventKind::AgentImageSignerTrusted => 88,
+        EventKind::AgentImageSignerRevoked => 89,
         EventKind::AgentLaunched => 6,
         EventKind::AgentEntryRetired => 7,
         EventKind::RuntimeAdmissionRequested => 8,
@@ -183,5 +186,12 @@ pub(super) const fn agent_image_kind(value: AgentImageKind) -> u16 {
         AgentImageKind::Verifier => 4,
         AgentImageKind::FaultHandler => 5,
         AgentImageKind::Driver => 6,
+    }
+}
+
+pub(super) const fn agent_image_signer_status(value: AgentImageSignerStatus) -> u16 {
+    match value {
+        AgentImageSignerStatus::Active => 1,
+        AgentImageSignerStatus::Revoked => 2,
     }
 }

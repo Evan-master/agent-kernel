@@ -1,14 +1,13 @@
 use ed25519_dalek::{Signer, SigningKey};
-use sha2::{Digest, Sha256};
 
 use agent_kernel_core::{
-    AgentId, AgentImageDigest, AgentImageId, AgentImageKind, AgentImageRecord, AgentImageStatus,
-    ResourceId,
+    agent_image_signer_id, AgentId, AgentImageDigest, AgentImageId, AgentImageKind,
+    AgentImageKindScope, AgentImageRecord, AgentImageSignerId, AgentImageSignerRecord,
+    AgentImageSignerStatus, AgentImageStatus, ResourceId,
 };
 use agent_kernel_x86_64::agent_image::{
-    sha256_digest, AgentImageCapsule, AgentImageFormat, AgentImageKindScope, AgentImageLoadError,
-    AgentImageSignerId, AgentImageTrust, AgentImageTrustPolicy, TrustedAgentSigner,
-    TrustedSignerStatus, VerifiedAgentImage, AGENT_PACKAGE_RELOCATION_BYTES,
+    sha256_digest, AgentImageCapsule, AgentImageFormat, AgentImageLoadError, AgentImageTrust,
+    AgentImageTrustPolicy, VerifiedAgentImage, AGENT_PACKAGE_RELOCATION_BYTES,
     AGENT_PACKAGE_SEGMENT_DESCRIPTOR_BYTES, AGENT_PACKAGE_SIGNATURE_BYTES,
     AGENT_PACKAGE_V3_HEADER_BYTES,
 };
@@ -16,10 +15,8 @@ use agent_kernel_x86_64::agent_image::{
 const ABI_VERSION: u16 = 1;
 const ENTRY_VERSION: u16 = 1;
 const WORKER_KIND: u16 = 1;
-const SUPERVISOR_KIND: u16 = 4;
 const CODE_SEGMENT: u16 = 0;
 const RODATA_SEGMENT: u16 = 1;
-const SIGNER_DOMAIN: &[u8] = b"AGENT_KERNEL_ED25519_SIGNER_V1\0";
 
 #[test]
 fn package_v3_parses_canonical_signed_segments() {
@@ -105,8 +102,15 @@ fn package_v3_rejects_noncanonical_signature_envelope() {
 #[test]
 fn signed_verification_binds_package_to_one_active_trusted_signer() {
     let fixture = signed_package(WORKER_KIND, ABI_VERSION, &[0x90], b"trusted", &[], [9; 32]);
-    let signer = trusted_signer(&fixture, WORKER_KIND, 1, 2, TrustedSignerStatus::Active);
-    let policy = AgentImageTrustPolicy::new([signer]);
+    let signer = trusted_signer(
+        &fixture,
+        AgentImageKind::Worker,
+        1,
+        2,
+        AgentImageSignerStatus::Active,
+    );
+    let signers = [signer];
+    let policy = AgentImageTrustPolicy::new(&signers);
     let record = record(
         sha256_digest(&fixture.bytes),
         AgentImageKind::Worker,
@@ -134,13 +138,14 @@ fn signed_verification_rejects_payload_and_signature_tampering_after_digest_rebi
         &[],
         [10; 32],
     );
-    let policy = AgentImageTrustPolicy::new([trusted_signer(
+    let signers = [trusted_signer(
         &fixture,
-        WORKER_KIND,
+        AgentImageKind::Worker,
         1,
         1,
-        TrustedSignerStatus::Active,
-    )]);
+        AgentImageSignerStatus::Active,
+    )];
+    let policy = AgentImageTrustPolicy::new(&signers);
 
     for offset in [fixture.code_offset, fixture.signature_offset + 7] {
         let mut changed = fixture.bytes.clone();
@@ -161,50 +166,62 @@ fn trust_policy_rejects_missing_ambiguous_revoked_and_mismatched_keys() {
         AgentImageKind::Worker,
         ABI_VERSION,
     );
-    let active = trusted_signer(&fixture, WORKER_KIND, 1, 1, TrustedSignerStatus::Active);
+    let active = trusted_signer(
+        &fixture,
+        AgentImageKind::Worker,
+        1,
+        1,
+        AgentImageSignerStatus::Active,
+    );
 
     assert_eq!(
-        VerifiedAgentImage::verify_signed(
-            record,
-            &fixture.bytes,
-            &AgentImageTrustPolicy::<0>::new([])
-        ),
+        VerifiedAgentImage::verify_signed(record, &fixture.bytes, &AgentImageTrustPolicy::new(&[])),
         Err(AgentImageLoadError::SignerNotTrusted)
     );
+    let ambiguous = [active, active];
     assert_eq!(
         VerifiedAgentImage::verify_signed(
             record,
             &fixture.bytes,
-            &AgentImageTrustPolicy::new([active, active]),
+            &AgentImageTrustPolicy::new(&ambiguous),
         ),
         Err(AgentImageLoadError::TrustPolicyAmbiguous)
     );
 
-    let revoked = trusted_signer(&fixture, WORKER_KIND, 1, 1, TrustedSignerStatus::Revoked);
+    let revoked = trusted_signer(
+        &fixture,
+        AgentImageKind::Worker,
+        1,
+        1,
+        AgentImageSignerStatus::Revoked,
+    );
+    let revoked_policy = [revoked];
     assert_eq!(
         VerifiedAgentImage::verify_signed(
             record,
             &fixture.bytes,
-            &AgentImageTrustPolicy::new([revoked]),
+            &AgentImageTrustPolicy::new(&revoked_policy),
         ),
         Err(AgentImageLoadError::SignerRevoked)
     );
 
     let other = signed_package(WORKER_KIND, ABI_VERSION, &[0x90], b"other", &[], [12; 32]);
-    let mismatched = TrustedAgentSigner::new(
-        AgentImageSignerId::new(fixture.signer_id),
-        other.public_key,
-        AgentImageKindScope::only(WORKER_KIND).unwrap(),
-        1,
-        1,
-        TrustedSignerStatus::Active,
-    )
-    .unwrap();
+    let mismatched = AgentImageSignerRecord {
+        signer_id: AgentImageSignerId::new(fixture.signer_id),
+        resource: ResourceId::new(1),
+        public_key: other.public_key,
+        image_kinds: AgentImageKindScope::only(AgentImageKind::Worker),
+        minimum_abi: 1,
+        maximum_abi: 1,
+        status: AgentImageSignerStatus::Active,
+        generation: 1,
+    };
+    let mismatched_policy = [mismatched];
     assert_eq!(
         VerifiedAgentImage::verify_signed(
             record,
             &fixture.bytes,
-            &AgentImageTrustPolicy::new([mismatched]),
+            &AgentImageTrustPolicy::new(&mismatched_policy),
         ),
         Err(AgentImageLoadError::SignerKeyIdMismatch)
     );
@@ -219,22 +236,36 @@ fn trust_policy_enforces_image_kind_and_abi_scope() {
         ABI_VERSION,
     );
 
-    let wrong_kind = trusted_signer(&fixture, SUPERVISOR_KIND, 1, 1, TrustedSignerStatus::Active);
+    let wrong_kind = trusted_signer(
+        &fixture,
+        AgentImageKind::Supervisor,
+        1,
+        1,
+        AgentImageSignerStatus::Active,
+    );
+    let wrong_kind_policy = [wrong_kind];
     assert_eq!(
         VerifiedAgentImage::verify_signed(
             record,
             &fixture.bytes,
-            &AgentImageTrustPolicy::new([wrong_kind]),
+            &AgentImageTrustPolicy::new(&wrong_kind_policy),
         ),
         Err(AgentImageLoadError::SignerScopeMismatch)
     );
 
-    let wrong_abi = trusted_signer(&fixture, WORKER_KIND, 2, 3, TrustedSignerStatus::Active);
+    let wrong_abi = trusted_signer(
+        &fixture,
+        AgentImageKind::Worker,
+        2,
+        3,
+        AgentImageSignerStatus::Active,
+    );
+    let wrong_abi_policy = [wrong_abi];
     assert_eq!(
         VerifiedAgentImage::verify_signed(
             record,
             &fixture.bytes,
-            &AgentImageTrustPolicy::new([wrong_abi]),
+            &AgentImageTrustPolicy::new(&wrong_abi_policy),
         ),
         Err(AgentImageLoadError::SignerAbiMismatch)
     );
@@ -243,13 +274,14 @@ fn trust_policy_enforces_image_kind_and_abi_scope() {
 #[test]
 fn signed_loader_rejects_digest_mismatch_before_trust_and_unsigned_v2_packages() {
     let fixture = signed_package(WORKER_KIND, ABI_VERSION, &[0x90], b"trusted", &[], [14; 32]);
-    let policy = AgentImageTrustPolicy::new([trusted_signer(
+    let signers = [trusted_signer(
         &fixture,
-        WORKER_KIND,
+        AgentImageKind::Worker,
         1,
         1,
-        TrustedSignerStatus::Active,
-    )]);
+        AgentImageSignerStatus::Active,
+    )];
+    let policy = AgentImageTrustPolicy::new(&signers);
     let wrong_digest = record(
         AgentImageDigest::new([0; 32]),
         AgentImageKind::Worker,
@@ -298,7 +330,7 @@ fn signed_package(
 ) -> SignedFixture {
     let signing_key = SigningKey::from_bytes(&signing_seed);
     let public_key = signing_key.verifying_key().to_bytes();
-    let signer_id = signer_id(public_key);
+    let signer_id = agent_image_signer_id(public_key).bytes();
     let relocation_offset =
         AGENT_PACKAGE_V3_HEADER_BYTES + 2 * AGENT_PACKAGE_SEGMENT_DESCRIPTOR_BYTES;
     let code_offset = relocation_offset + relocations.len() * AGENT_PACKAGE_RELOCATION_BYTES;
@@ -350,27 +382,21 @@ fn signed_package(
 
 fn trusted_signer(
     fixture: &SignedFixture,
-    image_kind: u16,
+    image_kind: AgentImageKind,
     minimum_abi: u16,
     maximum_abi: u16,
-    status: TrustedSignerStatus,
-) -> TrustedAgentSigner {
-    TrustedAgentSigner::new(
-        AgentImageSignerId::new(fixture.signer_id),
-        fixture.public_key,
-        AgentImageKindScope::only(image_kind).unwrap(),
+    status: AgentImageSignerStatus,
+) -> AgentImageSignerRecord {
+    AgentImageSignerRecord {
+        signer_id: AgentImageSignerId::new(fixture.signer_id),
+        resource: ResourceId::new(1),
+        public_key: fixture.public_key,
+        image_kinds: AgentImageKindScope::only(image_kind),
         minimum_abi,
         maximum_abi,
         status,
-    )
-    .unwrap()
-}
-
-fn signer_id(public_key: [u8; 32]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(SIGNER_DOMAIN);
-    digest.update(public_key);
-    digest.finalize().into()
+        generation: 1,
+    }
 }
 
 fn record(digest: AgentImageDigest, kind: AgentImageKind, abi_version: u16) -> AgentImageRecord {

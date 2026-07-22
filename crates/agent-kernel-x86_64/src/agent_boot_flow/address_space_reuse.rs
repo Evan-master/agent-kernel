@@ -20,6 +20,7 @@ use crate::{
 use agent_kernel_core::{
     AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
 };
+use agent_kernel_x86_64::agent_image::{AgentImageFormat, AgentImageTrust};
 
 pub(super) fn run(
     booted: &mut X86BootedKernel,
@@ -52,6 +53,14 @@ pub(super) fn run(
     {
         return None;
     }
+    let rotated_image = first_flows[0].verified_image(booted, worker_contract.bytes())?;
+    if rotated_image.format() != AgentImageFormat::SignedPackageV3
+        || rotated_image.signer_id() != Some(worker_contract.signer_id())
+        || rotated_image.trust() != AgentImageTrust::Signed(worker_contract.signer_id())
+    {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_ROTATED_SIGNER_ADMISSION_OK");
 
     let supervisor =
         PreparedAdmissionSupervisorFlow::prepare(booted, supervisor_contract.digest())?;
@@ -204,26 +213,42 @@ pub(super) fn run(
         &mut evidence,
         None,
     )?;
+    let repeated_flow_valid = evidence.proves_repeated_runtime_admission_flow();
+    let workers_completed = second_flows
+        .iter()
+        .all(|flow| flow.completed_after_runtime(booted, &report, worker_contract));
+    let supervisor_completed =
+        supervisor.completed_after_notifications(booted, &report, supervisor_contract, all_targets);
+    let frame_accounting_valid = address_space_pool.len()
+        + supervisor_admission.identity().owned_frame_count()
+        + second_admissions[0].identity().owned_frame_count()
+        + second_admissions[1].identity().owned_frame_count()
+        == inventory_frame_count;
+    let memory_pool_valid = memory_pool.all_available_and_zero();
     if !runtime.is_empty()
         || report.len() != 3
         || report.faulted_len() != 0
-        || !evidence.proves_repeated_runtime_admission_flow()
-        || second_flows
-            .iter()
-            .any(|flow| !flow.completed_after_runtime(booted, &report, worker_contract))
-        || !supervisor.completed_after_notifications(
-            booted,
-            &report,
-            supervisor_contract,
-            all_targets,
-        )
-        || address_space_pool.len()
-            + supervisor_admission.identity().owned_frame_count()
-            + second_admissions[0].identity().owned_frame_count()
-            + second_admissions[1].identity().owned_frame_count()
-            != inventory_frame_count
-        || !memory_pool.all_available_and_zero()
+        || !repeated_flow_valid
+        || !workers_completed
+        || !supervisor_completed
+        || !frame_accounting_valid
+        || !memory_pool_valid
     {
+        if !runtime.is_empty() {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_RUNTIME_STATE_ERROR");
+        } else if report.len() != 3 || report.faulted_len() != 0 {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_REPORT_ERROR");
+        } else if !repeated_flow_valid {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_COUNTER_ERROR");
+        } else if !workers_completed {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_WORKER_EVIDENCE_ERROR");
+        } else if !supervisor_completed {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_SUPERVISOR_EVIDENCE_ERROR");
+        } else if !frame_accounting_valid {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_FRAME_ACCOUNTING_ERROR");
+        } else {
+            serial_write_line("AGENT_KERNEL_NATIVE_REPEAT_MEMORY_POOL_ERROR");
+        }
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_RUNTIME_ADMISSION_NOTIFICATION_OK");

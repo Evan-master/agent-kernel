@@ -57,7 +57,7 @@ impl PreparedAdmissionSupervisorFlow {
             && window
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 377 + index as u64)
+                .all(|(index, event)| event.sequence == 380 + index as u64)
             && resource_event_matches(window[0], EventKind::ResourceCreated)
             && resource_event_matches(window[1], EventKind::CapabilityGranted)
             && derived_event_matches(window[2], DELEGATE_CAPABILITY, Operation::Delegate)

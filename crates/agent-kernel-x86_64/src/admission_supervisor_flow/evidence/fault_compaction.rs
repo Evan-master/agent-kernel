@@ -29,7 +29,7 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.faults().is_empty()
             && events.next().is_none()
             && compacted.iter().enumerate().all(|(index, event)| {
-                event.sequence == 358 + index as u64
+                event.sequence == 361 + index as u64
                     && proves_compaction_event(
                         booted,
                         event,

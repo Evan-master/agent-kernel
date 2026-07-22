@@ -5,8 +5,8 @@
 //! while performing no memory access, authorization, allocation, or mutation.
 
 use agent_kernel_core::{
-    CapabilityId, NamespaceKey, NamespaceObject, NamespacePathSegment, ResourceId,
-    NAMESPACE_PATH_MAX_DEPTH,
+    AgentImageKindScope, AgentImageSignerId, CapabilityId, NamespaceKey, NamespaceObject,
+    NamespacePathSegment, ResourceId, NAMESPACE_PATH_MAX_DEPTH,
 };
 
 use crate::namespace_object_wire::decode_namespace_object;
@@ -27,6 +27,7 @@ const REPLACEMENT_OFFSET: usize = 136;
 #[repr(u64)]
 pub enum CallDataMessageKind {
     CompareAndRebindNamespacePath = 1,
+    RotateAgentImageSigner = 2,
 }
 
 impl CallDataMessageKind {
@@ -37,6 +38,7 @@ impl CallDataMessageKind {
     const fn from_raw(raw: u64) -> Option<Self> {
         match raw {
             1 => Some(Self::CompareAndRebindNamespacePath),
+            2 => Some(Self::RotateAgentImageSigner),
             _ => None,
         }
     }
@@ -45,6 +47,7 @@ impl CallDataMessageKind {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CallDataMessage {
     CompareAndRebindNamespacePath(NamespacePathRebindMessage),
+    RotateAgentImageSigner(AgentImageSignerRotationMessage),
 }
 
 impl CallDataMessage {
@@ -86,6 +89,10 @@ impl CallDataMessage {
                 decode_namespace_path_rebind(bytes, generation)
                     .map(Self::CompareAndRebindNamespacePath)
             }
+            CallDataMessageKind::RotateAgentImageSigner => {
+                decode_agent_image_signer_rotation(bytes, generation)
+                    .map(Self::RotateAgentImageSigner)
+            }
         }
     }
 
@@ -94,13 +101,61 @@ impl CallDataMessage {
             Self::CompareAndRebindNamespacePath(_) => {
                 CallDataMessageKind::CompareAndRebindNamespacePath
             }
+            Self::RotateAgentImageSigner(_) => CallDataMessageKind::RotateAgentImageSigner,
         }
     }
 
     pub const fn generation(self) -> u64 {
         match self {
             Self::CompareAndRebindNamespacePath(message) => message.generation,
+            Self::RotateAgentImageSigner(message) => message.generation,
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AgentImageSignerRotationMessage {
+    generation: u64,
+    authority: CapabilityId,
+    expected_policy_generation: u64,
+    previous_signer_id: AgentImageSignerId,
+    replacement_public_key: [u8; 32],
+    replacement_image_kinds: AgentImageKindScope,
+    replacement_minimum_abi: u16,
+    replacement_maximum_abi: u16,
+}
+
+impl AgentImageSignerRotationMessage {
+    pub const fn generation(self) -> u64 {
+        self.generation
+    }
+
+    pub const fn authority(self) -> CapabilityId {
+        self.authority
+    }
+
+    pub const fn expected_policy_generation(self) -> u64 {
+        self.expected_policy_generation
+    }
+
+    pub const fn previous_signer_id(self) -> AgentImageSignerId {
+        self.previous_signer_id
+    }
+
+    pub const fn replacement_public_key(self) -> [u8; 32] {
+        self.replacement_public_key
+    }
+
+    pub const fn replacement_image_kinds(self) -> AgentImageKindScope {
+        self.replacement_image_kinds
+    }
+
+    pub const fn replacement_minimum_abi(self) -> u16 {
+        self.replacement_minimum_abi
+    }
+
+    pub const fn replacement_maximum_abi(self) -> u16 {
+        self.replacement_maximum_abi
     }
 }
 
@@ -157,6 +212,11 @@ pub enum CallDataMessageDecodeError {
     InvalidReplacement,
     InvalidAuthority,
     NonCanonicalUnusedSegment,
+    InvalidPolicyGeneration,
+    InvalidSignerId,
+    InvalidImageKindScope,
+    InvalidAbiRange,
+    NonCanonicalAbiReserved,
 }
 
 fn decode_namespace_path_rebind(
@@ -206,8 +266,66 @@ fn decode_namespace_path_rebind(
     })
 }
 
+fn decode_agent_image_signer_rotation(
+    bytes: &[u8; TYPED_CALL_DATA_BYTES],
+    generation: u64,
+) -> Result<AgentImageSignerRotationMessage, CallDataMessageDecodeError> {
+    let authority = CapabilityId::new(read_word(bytes, 48));
+    if authority.raw() == 0 {
+        return Err(CallDataMessageDecodeError::InvalidAuthority);
+    }
+    let expected_policy_generation = read_word(bytes, 56);
+    if expected_policy_generation == 0 {
+        return Err(CallDataMessageDecodeError::InvalidPolicyGeneration);
+    }
+    let mut previous_signer_bytes = [0; 32];
+    previous_signer_bytes.copy_from_slice(&bytes[64..96]);
+    let previous_signer_id = AgentImageSignerId::new(previous_signer_bytes);
+    if previous_signer_id.is_zero() {
+        return Err(CallDataMessageDecodeError::InvalidSignerId);
+    }
+    let mut replacement_public_key = [0; 32];
+    replacement_public_key.copy_from_slice(&bytes[96..128]);
+    let scope_bits = u16::try_from(read_word(bytes, 128))
+        .map_err(|_| CallDataMessageDecodeError::InvalidImageKindScope)?;
+    let replacement_image_kinds = AgentImageKindScope::from_bits(scope_bits)
+        .ok_or(CallDataMessageDecodeError::InvalidImageKindScope)?;
+    let replacement_minimum_abi = read_u16(bytes, 136);
+    let replacement_maximum_abi = read_u16(bytes, 138);
+    if read_u32(bytes, 140) != 0 {
+        return Err(CallDataMessageDecodeError::NonCanonicalAbiReserved);
+    }
+    if replacement_minimum_abi == 0 || replacement_minimum_abi > replacement_maximum_abi {
+        return Err(CallDataMessageDecodeError::InvalidAbiRange);
+    }
+
+    Ok(AgentImageSignerRotationMessage {
+        generation,
+        authority,
+        expected_policy_generation,
+        previous_signer_id,
+        replacement_public_key,
+        replacement_image_kinds,
+        replacement_minimum_abi,
+        replacement_maximum_abi,
+    })
+}
+
 fn read_word(bytes: &[u8; TYPED_CALL_DATA_BYTES], offset: usize) -> u64 {
     let mut word = [0; 8];
     word.copy_from_slice(&bytes[offset..offset + 8]);
     u64::from_le_bytes(word)
+}
+
+fn read_u16(bytes: &[u8; TYPED_CALL_DATA_BYTES], offset: usize) -> u16 {
+    u16::from_le_bytes([bytes[offset], bytes[offset + 1]])
+}
+
+fn read_u32(bytes: &[u8; TYPED_CALL_DATA_BYTES], offset: usize) -> u32 {
+    u32::from_le_bytes([
+        bytes[offset],
+        bytes[offset + 1],
+        bytes[offset + 2],
+        bytes[offset + 3],
+    ])
 }

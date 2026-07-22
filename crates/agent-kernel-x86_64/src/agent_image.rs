@@ -15,12 +15,13 @@ mod verification;
 use agent_kernel_core::AgentImageDigest;
 use sha2::{Digest, Sha256};
 
+pub use agent_kernel_core::{
+    agent_image_signer_id, AgentImageKindScope, AgentImageSignerId, AgentImageSignerRecord,
+    AgentImageSignerStatus,
+};
 pub use format::{AgentImageCapsule, AgentImageFormat, AgentImageHeader};
 pub use relocation::AgentImageRelocation;
-pub use trust::{
-    agent_image_signer_id, AgentImageKindScope, AgentImageSignerId, AgentImageTrustPolicy,
-    TrustedAgentSigner, TrustedSignerStatus,
-};
+pub use trust::AgentImageTrustPolicy;
 pub use verification::{AgentImageTrust, VerifiedAgentImage};
 
 pub const AGENT_IMAGE_HEADER_BYTES: usize = 32;

@@ -8,9 +8,12 @@ mod address_space_reuse;
 mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
-use agent_kernel_core::{ActionId, AgentId, EventKind, ResourceKind, TaskId, TaskStatus};
+use agent_kernel_core::{
+    ActionId, AgentId, AgentImageSignerStatus, EventKind, ResourceKind, TaskId, TaskStatus,
+};
 use agent_kernel_x86_64::agent_image::{
-    AgentImageCapsule, AgentImageFormat, AgentImageTrust, VerifiedAgentImage,
+    AgentImageCapsule, AgentImageFormat, AgentImageLoadError, AgentImageTrust,
+    AgentImageTrustPolicy, VerifiedAgentImage,
 };
 use bootloader_api::BootInfo;
 
@@ -18,7 +21,9 @@ use crate::{
     agent_cpu::AgentCpuRuntime,
     agent_memory::{NativeAddressSpaceFramePool, PreparedAgentMemory, RuntimeMemoryPool},
     boot_agent_images,
-    boot_agent_trust::{RESOURCE_MANAGER_SIGNER_ID, RESOURCE_MANAGER_TRUST_POLICY},
+    boot_agent_trust::{
+        RESOURCE_MANAGER_PUBLIC_KEY, RESOURCE_MANAGER_SCOPE, RESOURCE_MANAGER_SIGNER_ID,
+    },
     event_trace, exit_qemu, fatal_boot,
     fault_handler_flow::FaultHandlerFlow,
     fault_task_flow::FaultTaskFlow,
@@ -49,6 +54,24 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     let Ok(mut booted) = X86BootedKernel::boot(boot_config) else {
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
+    let report = *booted.report();
+    let Ok(resource_manager_signer) = booted.kernel_mut().sys_trust_agent_image_signer(
+        report.bootstrap_agent,
+        report.bootstrap_capability,
+        report.bootstrap_resource,
+        RESOURCE_MANAGER_PUBLIC_KEY,
+        RESOURCE_MANAGER_SCOPE,
+        1,
+        1,
+    ) else {
+        fatal_boot("AGENT_KERNEL_BOOT_TRUST_IMPORT_ERROR");
+    };
+    if resource_manager_signer.signer_id != RESOURCE_MANAGER_SIGNER_ID
+        || booted.kernel().agent_image_signer_policy_generation() != 1
+    {
+        fatal_boot("AGENT_KERNEL_BOOT_TRUST_IMPORT_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_TRUST_STORE_OK");
     let Some(driver_setup) = PortDriverSetup::prepare(&mut booted, COM1) else {
         fatal_boot("AGENT_KERNEL_PORT_DRIVER_SETUP_ERROR");
     };
@@ -147,10 +170,11 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
     else {
         fatal_boot("AGENT_KERNEL_FAULT_HANDLER_IMAGE_DIGEST_ERROR");
     };
+    let trust_policy = AgentImageTrustPolicy::new(booted.kernel().agent_image_signers());
     let Ok(resource_manager_verified_image) = VerifiedAgentImage::verify_signed(
         resource_manager_record,
         resource_manager_image.bytes(),
-        &RESOURCE_MANAGER_TRUST_POLICY,
+        &trust_policy,
     ) else {
         fatal_boot("AGENT_KERNEL_RESOURCE_MANAGER_SIGNATURE_ERROR");
     };
@@ -288,6 +312,46 @@ pub(super) fn run(boot_info: &'static mut BootInfo, privilege_boundary: Privileg
         fatal_boot("AGENT_KERNEL_NATIVE_RUNTIME_LOOP_ERROR");
     }
     serial_write_line("AGENT_KERNEL_NATIVE_RIGHT_SIZED_CODE_FRAMES_OK");
+    let signers = booted.kernel().agent_image_signers();
+    let resource_manager_signer = signers
+        .iter()
+        .find(|signer| signer.signer_id == RESOURCE_MANAGER_SIGNER_ID);
+    let reuse_worker_signer = signers
+        .iter()
+        .find(|signer| signer.signer_id == reuse_worker_image.signer_id());
+    if booted.kernel().agent_image_signer_policy_generation() != 2
+        || signers.len() != 2
+        || !matches!(
+            resource_manager_signer,
+            Some(signer)
+                if signer.status == AgentImageSignerStatus::Revoked
+                    && signer.generation == 2
+                    && signer.resource == report.bootstrap_resource
+        )
+        || !matches!(
+            reuse_worker_signer,
+            Some(signer)
+                if signer.status == AgentImageSignerStatus::Active
+                    && signer.generation == 2
+                    && signer.resource == report.bootstrap_resource
+                    && signer.public_key == reuse_worker_image.public_key()
+        )
+    {
+        fatal_boot("AGENT_KERNEL_NATIVE_SIGNER_ROTATION_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_SIGNER_ROTATION_OK");
+    let trust_policy = AgentImageTrustPolicy::new(signers);
+    if !matches!(
+        VerifiedAgentImage::verify_signed(
+            resource_manager_record,
+            resource_manager_image.bytes(),
+            &trust_policy,
+        ),
+        Err(AgentImageLoadError::SignerRevoked)
+    ) {
+        fatal_boot("AGENT_KERNEL_NATIVE_REVOKED_SIGNER_REJECTED_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_NATIVE_REVOKED_SIGNER_REJECTED_OK");
     if verify_initial_task_prefix(&mut booted).is_none() {
         fatal_boot("AGENT_KERNEL_TASK_PREFIX_VERIFICATION_ERROR");
     }

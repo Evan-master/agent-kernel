@@ -34,16 +34,16 @@ impl<'a> VerifiedAgentImage<'a> {
         })
     }
 
-    pub fn verify_signed<const N: usize>(
+    pub fn verify_signed(
         record: AgentImageRecord,
         bytes: &'a [u8],
-        policy: &AgentImageTrustPolicy<N>,
+        policy: &AgentImageTrustPolicy<'_>,
     ) -> Result<Self, AgentImageLoadError> {
         let capsule = verify_record(record, bytes)?;
         if capsule.format() != AgentImageFormat::SignedPackageV3 {
             return Err(AgentImageLoadError::SignatureRequired);
         }
-        let signer_id = policy.verify(&capsule)?;
+        let signer_id = policy.verify(&capsule, record.kind, record.abi_version)?;
         Ok(Self {
             record,
             capsule,

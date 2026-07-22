@@ -15,6 +15,7 @@ pub enum RuntimeAdmissionStatus {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeAdmissionFailure {
+    ImageVerification,
     AllocationUnavailable,
     MemoryBuild,
     CpuPreparation,

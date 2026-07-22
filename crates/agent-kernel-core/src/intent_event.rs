@@ -65,6 +65,7 @@ pub(crate) fn intent_compaction_event(
         agent_image_digest: None,
         agent_image_abi_version: None,
         agent_image_entry_version: None,
+        agent_image_signer: None,
     }
 }
 
@@ -195,6 +196,7 @@ impl<
             agent_image_digest: None,
             agent_image_abi_version: None,
             agent_image_entry_version: None,
+            agent_image_signer: None,
         })
     }
 }

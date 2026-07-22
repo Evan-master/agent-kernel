@@ -1,9 +1,6 @@
-//! Immutable signer policy compiled into the native boot boundary.
+//! Immutable public trust anchor imported into kernel-owned boot state.
 
-use agent_kernel_x86_64::agent_image::{
-    AgentImageKindScope, AgentImageSignerId, AgentImageTrustPolicy, TrustedAgentSigner,
-    TrustedSignerStatus,
-};
+use agent_kernel_core::{AgentImageKind, AgentImageKindScope, AgentImageSignerId};
 
 pub(crate) const RESOURCE_MANAGER_SIGNER_ID: AgentImageSignerId = AgentImageSignerId::new([
     0x62, 0xe6, 0xf2, 0xe3, 0x61, 0x5d, 0x45, 0x5f, 0x0e, 0x26, 0x0b, 0x73, 0x80, 0x40, 0x14, 0xed,
@@ -15,22 +12,5 @@ pub(crate) const RESOURCE_MANAGER_PUBLIC_KEY: [u8; 32] = [
     0xf5, 0x78, 0xeb, 0xe1, 0x82, 0x4d, 0xb0, 0xce, 0x0b, 0x0e, 0xd4, 0x7d, 0x04, 0x54, 0x36, 0xcb,
 ];
 
-const RESOURCE_MANAGER_SCOPE: AgentImageKindScope = match AgentImageKindScope::only(4) {
-    Some(scope) => scope,
-    None => panic!("invalid Resource Manager image scope"),
-};
-
-const RESOURCE_MANAGER_SIGNER: TrustedAgentSigner = match TrustedAgentSigner::new(
-    RESOURCE_MANAGER_SIGNER_ID,
-    RESOURCE_MANAGER_PUBLIC_KEY,
-    RESOURCE_MANAGER_SCOPE,
-    1,
-    1,
-    TrustedSignerStatus::Active,
-) {
-    Some(signer) => signer,
-    None => panic!("invalid Resource Manager signer policy"),
-};
-
-pub(crate) const RESOURCE_MANAGER_TRUST_POLICY: AgentImageTrustPolicy<1> =
-    AgentImageTrustPolicy::new([RESOURCE_MANAGER_SIGNER]);
+pub(crate) const RESOURCE_MANAGER_SCOPE: AgentImageKindScope =
+    AgentImageKindScope::only(AgentImageKind::Supervisor);

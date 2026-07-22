@@ -1,6 +1,8 @@
 //! Host-side formatting for deterministic simulator event output.
 
-use agent_kernel_core::{Event, EventKind};
+use std::fmt::Write;
+
+use agent_kernel_core::{AgentImageSignerStatus, Event, EventKind};
 
 use crate::format_agent::{
     format_agent_entry_retirement_event, format_agent_event, format_agent_image_event,
@@ -34,6 +36,12 @@ pub fn format_event(event: &Event) -> String {
         EventKind::AgentImageVerified => format_agent_image_event(event, "agent_image_verified"),
         EventKind::AgentImageRetired => format_agent_image_event(event, "agent_image_retired"),
         EventKind::AgentImageRecordRetired => format_agent_image_retirement_event(event),
+        EventKind::AgentImageSignerTrusted => {
+            format_agent_image_signer_event(event, "agent_image_signer_trusted")
+        }
+        EventKind::AgentImageSignerRevoked => {
+            format_agent_image_signer_event(event, "agent_image_signer_revoked")
+        }
         EventKind::AgentLaunched => format_agent_launch_event(event),
         EventKind::AgentEntryRetired => format_agent_entry_retirement_event(event),
         EventKind::RuntimeAdmissionRequested => {
@@ -214,6 +222,57 @@ pub fn format_event(event: &Event) -> String {
             format_namespace_event(event, "namespace_entry_retired")
         }
     }
+}
+
+fn format_agent_image_signer_event(event: &Event, label: &str) -> String {
+    let Some(signer) = event.agent_image_signer else {
+        return format!(
+            "event[{}] {} agent={} signer=missing",
+            event.sequence,
+            label,
+            event.agent.raw()
+        );
+    };
+    let resource = event
+        .resource
+        .map(|resource| resource.raw())
+        .unwrap_or_default();
+    let capability = event
+        .capability
+        .map(|capability| capability.raw())
+        .unwrap_or_default();
+    let peer = signer
+        .peer_signer_id
+        .map(|signer_id| format_hex_32(signer_id.bytes()))
+        .unwrap_or_else(|| "none".to_owned());
+    let status = match signer.status {
+        AgentImageSignerStatus::Active => "active",
+        AgentImageSignerStatus::Revoked => "revoked",
+    };
+
+    format!(
+        "event[{}] {} agent={} resource={} capability={} signer={} peer={} scope=0x{:x} abi={}..{} status={} generation={}",
+        event.sequence,
+        label,
+        event.agent.raw(),
+        resource,
+        capability,
+        format_hex_32(signer.signer_id.bytes()),
+        peer,
+        signer.image_kinds.bits(),
+        signer.minimum_abi,
+        signer.maximum_abi,
+        status,
+        signer.policy_generation
+    )
+}
+
+fn format_hex_32(bytes: [u8; 32]) -> String {
+    let mut output = String::with_capacity(64);
+    for byte in bytes {
+        write!(&mut output, "{byte:02x}").expect("writing to String cannot fail");
+    }
+    output
 }
 
 fn format_runtime_admission_event(event: &Event, label: &str) -> String {

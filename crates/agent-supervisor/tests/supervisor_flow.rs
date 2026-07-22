@@ -138,6 +138,6 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
         "event[78] driver_invocation_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=0"
     ));
     assert!(stdout.contains(
-        "event_archive_checkpoint generation=1 first=1 through=64 count=64 actor=1 authority=1 root=1 previous_digest=0000000000000000000000000000000000000000000000000000000000000000 digest=6c3d502efb373196813fd512704a931e41bb5351834ee884581dce3d97965615"
+        "event_archive_checkpoint generation=1 first=1 through=64 count=64 actor=1 authority=1 root=1 previous_digest=0000000000000000000000000000000000000000000000000000000000000000 digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d"
     ));
 }

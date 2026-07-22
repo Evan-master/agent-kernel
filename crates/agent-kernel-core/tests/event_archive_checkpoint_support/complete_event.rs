@@ -1,5 +1,6 @@
 use agent_kernel_core::{
-    ActionId, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId, CheckpointId,
+    ActionId, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, AgentImageKindScope,
+    AgentImageSignerEvent, AgentImageSignerId, AgentImageSignerStatus, CapabilityId, CheckpointId,
     DeviceEventId, DeviceEventKind, DeviceEventPayload, DriverBindingId, DriverCommandId,
     DriverCommandKind, DriverCommandPayload, DriverCommandResult, DriverInvocationId, Event,
     EventKind, FaultId, FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind,
@@ -74,5 +75,15 @@ pub fn complete_event() -> Event {
         agent_image_digest: Some(AgentImageDigest::new([40; 32])),
         agent_image_abi_version: Some(41),
         agent_image_entry_version: Some(42),
+        agent_image_signer: Some(AgentImageSignerEvent {
+            signer_id: AgentImageSignerId::new([43; 32]),
+            peer_signer_id: Some(AgentImageSignerId::new([44; 32])),
+            public_key: [45; 32],
+            image_kinds: AgentImageKindScope::all(),
+            minimum_abi: 46,
+            maximum_abi: 47,
+            status: AgentImageSignerStatus::Active,
+            policy_generation: 48,
+        }),
     }
 }

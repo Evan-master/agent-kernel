@@ -8,13 +8,19 @@ mod namespace;
 mod task_lifecycle;
 
 use agent_kernel_core::{
-    EventKind, Operation, OperationSet, ResourceKind, ResourceStatus, TaskStatus,
+    AgentImageKind, AgentImageKindScope, AgentImageSignerStatus, Event, EventKind, Operation,
+    OperationSet, ResourceKind, ResourceStatus, TaskStatus,
 };
 
 use super::{ResourceManagerTask, RESOURCE_MANAGER};
 use crate::{
-    agent_memory::RuntimeMemoryPool, boot_agent_images::BootResourceManagerImage,
-    native_agent_executor::NativeExecutionReport, X86BootedKernel,
+    agent_memory::RuntimeMemoryPool,
+    boot_agent_images::BootResourceManagerImage,
+    boot_agent_trust::{
+        RESOURCE_MANAGER_PUBLIC_KEY, RESOURCE_MANAGER_SCOPE, RESOURCE_MANAGER_SIGNER_ID,
+    },
+    native_agent_executor::NativeExecutionReport,
+    X86BootedKernel,
 };
 
 pub(super) fn completed(
@@ -57,8 +63,8 @@ pub(super) fn completed(
 
     completed.context() == context
         && completed.nonce() == image.nonce()
-        && completed.call_count() == 43
-        && completed.address_space_switch_count() == 86
+        && completed.call_count() == 44
+        && completed.address_space_switch_count() == 88
         && completed.operations() == image.expected_operations()
         && completed.return_offsets() == image.expected_return_offsets()
         && image.spans_fifth_code_page()
@@ -102,6 +108,7 @@ pub(super) fn completed(
                 .with(Operation::Act)
                 .with(Operation::Rollback)
                 .with(Operation::Delegate)
+                .with(Operation::Verify)
         && !authority.revoked
         && authority.task.is_none()
         && authority.parent == Some(booted.report().bootstrap_capability)
@@ -183,6 +190,8 @@ fn events_prove_lifecycle(
         EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryResolved,
         EventKind::NamespaceEntryRebound,
+        EventKind::AgentImageSignerTrusted,
+        EventKind::AgentImageSignerRevoked,
         EventKind::TaskResultSubmitted,
         EventKind::ResourceRetired,
         EventKind::TaskCompleted,
@@ -236,12 +245,56 @@ fn events_prove_lifecycle(
         && memory_region::events_valid(
             &[
                 tail[31], tail[32], tail[33], tail[34], tail[35], tail[36], tail[37], tail[38],
-                tail[39], tail[40], tail[41], tail[42], tail[43], tail[44], tail[61],
+                tail[39], tail[40], tail[41], tail[42], tail[43], tail[44], tail[63],
             ],
             booted,
             image,
         )
-        && tail[60].task == Some(manager.task)
-        && tail[60].task_result == Some(image.result())
+        && signer_rotation_events_valid(&tail[60..62], booted, manager)
         && tail[62].task == Some(manager.task)
+        && tail[62].task_result == Some(image.result())
+        && tail[64].task == Some(manager.task)
+}
+
+fn signer_rotation_events_valid(
+    events: &[Event],
+    booted: &X86BootedKernel,
+    manager: ResourceManagerTask,
+) -> bool {
+    let [trusted, revoked] = events else {
+        return false;
+    };
+    let Some(trusted_signer) = trusted.agent_image_signer else {
+        return false;
+    };
+    let Some(revoked_signer) = revoked.agent_image_signer else {
+        return false;
+    };
+    let replacement = crate::boot_agent_images::reuse_worker();
+    let resource = booted.report().bootstrap_resource;
+
+    trusted.agent == RESOURCE_MANAGER
+        && trusted.resource == Some(resource)
+        && trusted.capability == Some(manager.resource_authority)
+        && trusted.operation == Some(Operation::Verify)
+        && trusted_signer.signer_id == replacement.signer_id()
+        && trusted_signer.peer_signer_id == Some(RESOURCE_MANAGER_SIGNER_ID)
+        && trusted_signer.public_key == replacement.public_key()
+        && trusted_signer.image_kinds == AgentImageKindScope::only(AgentImageKind::Worker)
+        && trusted_signer.minimum_abi == 1
+        && trusted_signer.maximum_abi == 1
+        && trusted_signer.status == AgentImageSignerStatus::Active
+        && trusted_signer.policy_generation == 2
+        && revoked.agent == RESOURCE_MANAGER
+        && revoked.resource == Some(resource)
+        && revoked.capability == Some(manager.resource_authority)
+        && revoked.operation == Some(Operation::Rollback)
+        && revoked_signer.signer_id == RESOURCE_MANAGER_SIGNER_ID
+        && revoked_signer.peer_signer_id == Some(replacement.signer_id())
+        && revoked_signer.public_key == RESOURCE_MANAGER_PUBLIC_KEY
+        && revoked_signer.image_kinds == RESOURCE_MANAGER_SCOPE
+        && revoked_signer.minimum_abi == 1
+        && revoked_signer.maximum_abi == 1
+        && revoked_signer.status == AgentImageSignerStatus::Revoked
+        && revoked_signer.policy_generation == 2
 }

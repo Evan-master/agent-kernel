@@ -87,3 +87,8 @@ reuse_worker_completion_return:
 
 .halt:
     jmp .halt
+
+.section .rodata
+.global reuse_worker_rodata
+reuse_worker_rodata:
+    .asciz "AGENT_KERNEL_ROTATED_SIGNER"

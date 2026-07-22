@@ -6,6 +6,7 @@
 
 mod agent_entry_retirement;
 mod agent_image_record_retirement;
+mod agent_image_signer;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
@@ -192,6 +193,9 @@ pub(super) fn run(
             } => namespace::resolve_memory_path(booted, pending, root, generation)?,
             AgentCallRequest::CompareAndRebindNamespacePathFromMemory { generation, .. } => {
                 namespace::compare_and_rebind_memory_path(booted, pending, generation)?
+            }
+            AgentCallRequest::RotateAgentImageSignerFromMemory { generation, .. } => {
+                agent_image_signer::rotate(booted, pending, generation)?
             }
             AgentCallRequest::RebindNamespaceEntry {
                 authority,

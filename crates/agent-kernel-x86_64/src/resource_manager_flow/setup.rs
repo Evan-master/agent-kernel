@@ -47,6 +47,7 @@ pub(super) fn prepare(
             RESOURCE_MANAGER,
             OperationSet::only(Operation::Observe)
                 .with(Operation::Act)
+                .with(Operation::Verify)
                 .with(Operation::Rollback)
                 .with(Operation::Delegate),
         )
@@ -148,6 +149,7 @@ fn prepared_state_valid(
                 && authority.operations
                     == OperationSet::only(Operation::Observe)
                         .with(Operation::Act)
+                        .with(Operation::Verify)
                         .with(Operation::Rollback)
                         .with(Operation::Delegate)
                 && !authority.revoked

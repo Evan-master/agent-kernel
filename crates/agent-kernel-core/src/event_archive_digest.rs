@@ -8,10 +8,10 @@ mod tags;
 
 use sha2::{Digest, Sha256};
 
-use crate::{Event, EventArchiveDigest, NamespaceObject};
+use crate::{AgentImageSignerEvent, Event, EventArchiveDigest, NamespaceObject};
 
 const DOMAIN: &[u8] = b"AGENT-KERNEL-EVENT-ARCHIVE\0";
-const FORMAT_VERSION: u16 = 1;
+const FORMAT_VERSION: u16 = 2;
 
 pub(super) fn digest(
     generation: u64,
@@ -120,6 +120,29 @@ fn put_event(hash: &mut Sha256, event: &Event) {
     }
     put_option_u16(hash, event.agent_image_abi_version);
     put_option_u16(hash, event.agent_image_entry_version);
+    put_agent_image_signer(hash, event.agent_image_signer);
+}
+
+fn put_agent_image_signer(hash: &mut Sha256, evidence: Option<AgentImageSignerEvent>) {
+    let Some(evidence) = evidence else {
+        put_u8(hash, 0);
+        return;
+    };
+    put_u8(hash, 1);
+    hash.update(evidence.signer_id.bytes());
+    match evidence.peer_signer_id {
+        Some(peer) => {
+            put_u8(hash, 1);
+            hash.update(peer.bytes());
+        }
+        None => put_u8(hash, 0),
+    }
+    hash.update(evidence.public_key);
+    put_u16(hash, evidence.image_kinds.bits());
+    put_u16(hash, evidence.minimum_abi);
+    put_u16(hash, evidence.maximum_abi);
+    put_u16(hash, tags::agent_image_signer_status(evidence.status));
+    put_u64(hash, evidence.policy_generation);
 }
 
 fn put_namespace_object(hash: &mut Sha256, object: Option<NamespaceObject>) {

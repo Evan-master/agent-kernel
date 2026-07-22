@@ -77,6 +77,12 @@ pub(crate) type X86BootedKernel = BootedKernel<
     X86_NAMESPACE_ENTRY_CAPACITY,
 >;
 
+const KERNEL_STATE_STACK_HEADROOM: usize = 4;
+const _: () = assert!(
+    core::mem::size_of::<X86BootedKernel>() * KERNEL_STATE_STACK_HEADROOM
+        <= boot_config::KERNEL_STACK_SIZE as usize
+);
+
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");

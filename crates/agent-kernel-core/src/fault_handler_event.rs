@@ -120,6 +120,7 @@ impl<
             agent_image_digest: None,
             agent_image_abi_version: None,
             agent_image_entry_version: None,
+            agent_image_signer: None,
         })
     }
 
@@ -182,6 +183,7 @@ impl<
             agent_image_digest: None,
             agent_image_abi_version: None,
             agent_image_entry_version: None,
+            agent_image_signer: None,
         })
     }
 }

@@ -14,8 +14,8 @@ fn canonical_digest_is_deterministic_and_covers_every_event_field() {
     assert_eq!(
         proposal.digest().bytes,
         [
-            149, 8, 230, 170, 39, 73, 203, 114, 129, 169, 235, 162, 82, 186, 123, 131, 237, 200,
-            69, 229, 194, 93, 140, 56, 199, 194, 106, 135, 108, 35, 117, 167,
+            14, 180, 227, 157, 45, 192, 110, 192, 205, 95, 84, 90, 43, 50, 82, 27, 210, 210, 46,
+            169, 67, 54, 246, 13, 93, 138, 72, 254, 244, 28, 234, 119,
         ]
     );
     assert_eq!(
@@ -80,6 +80,7 @@ fn canonical_digest_is_deterministic_and_covers_every_event_field() {
         changed!(agent_image_digest, None),
         changed!(agent_image_abi_version, None),
         changed!(agent_image_entry_version, None),
+        changed!(agent_image_signer, None),
     ];
     assert!(variants.iter().all(|variant| {
         EventArchiveProposal::from_segment(None, core::slice::from_ref(variant))

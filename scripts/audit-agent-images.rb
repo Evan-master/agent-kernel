@@ -135,7 +135,16 @@ def segment(bytes, offset)
   }
 end
 
-def verify_segmented_payload(name, bytes, header_bytes, relocation_offset, relocation_count, payload_end, version)
+def verify_segmented_payload(
+  name,
+  bytes,
+  header_bytes,
+  relocation_offset,
+  relocation_count,
+  payload_end,
+  version,
+  expected_rodata
+)
   code_segment = segment(bytes, header_bytes)
   rodata_segment = segment(bytes, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
   assert(code_segment.values_at(:kind, :flags, :alignment) == [1, 5, PAGE_BYTES], "#{name} code descriptor is invalid")
@@ -174,7 +183,7 @@ def verify_segmented_payload(name, bytes, header_bytes, relocation_offset, reloc
     previous_target = target
   end
 
-  assert(rodata == "AGENT_KERNEL_PACKAGE_V2_RODATA\0".b, "#{name} rodata proof payload mismatch")
+  assert(rodata == expected_rodata, "#{name} rodata proof payload mismatch")
   verify_no_old_fixed_addresses(name, code)
   [code, rodata]
 end
@@ -193,12 +202,21 @@ def verify_package_v2(name, bytes, digest)
   assert(u32(bytes, 40) == bytes.bytesize, "#{name} package length mismatch")
   assert(u32(bytes, 44).zero?, "#{name} reserved header word must be zero")
 
-  code, = verify_segmented_payload(name, bytes, PACKAGE_V2_HEADER_BYTES, 96, relocation_count, bytes.bytesize, 2)
+  code, = verify_segmented_payload(
+    name,
+    bytes,
+    PACKAGE_V2_HEADER_BYTES,
+    96,
+    relocation_count,
+    bytes.bytesize,
+    2,
+    "AGENT_KERNEL_PACKAGE_V2_RODATA\0".b
+  )
   assert(entry_offset < code.bytesize, "#{name} entry is outside code")
   verify_digest(name, bytes, digest)
 end
 
-def verify_package_v3(name, bytes, digest, expected_signer_id, public_key)
+def verify_package_v3(name, bytes, digest, expected_signer_id, public_key, expected_rodata)
   verify_common_header(name, bytes, 3, flags: 1)
   assert(bytes.bytesize >= PACKAGE_V3_HEADER_BYTES, "#{name} V3 header truncated")
   assert(u16(bytes, 20).zero? && u16(bytes, 22).zero?, "#{name} entry segment or reserved word is invalid")
@@ -219,7 +237,16 @@ def verify_package_v3(name, bytes, digest, expected_signer_id, public_key)
   assert(signer_id == expected_signer_id, "#{name} signer ID differs from boot Trust Policy")
   assert(Digest::SHA256.digest(SIGNER_DOMAIN + public_key) == signer_id, "#{name} signer ID does not bind the public key")
 
-  code, = verify_segmented_payload(name, bytes, PACKAGE_V3_HEADER_BYTES, 136, relocation_count, signature_offset, 3)
+  code, = verify_segmented_payload(
+    name,
+    bytes,
+    PACKAGE_V3_HEADER_BYTES,
+    136,
+    relocation_count,
+    signature_offset,
+    3,
+    expected_rodata
+  )
   assert(entry_offset < code.bytesize, "#{name} entry is outside code")
   signed_bytes = bytes.byteslice(0, signature_offset)
   signature = bytes.byteslice(signature_offset, SIGNATURE_BYTES)
@@ -272,11 +299,10 @@ def verify_assembly_sources(images)
   assert(clang, "--assembly requires clang; set CLANG to its executable path")
   assert(objcopy, "--assembly requires llvm-objcopy; set LLVM_OBJCOPY to its executable path")
 
-  image_map = images.to_h { |name, format, bytes, _digest| [name, [format, bytes]] }
+  image_map = images.to_h { |name, format, bytes, _digest, *_trust| [name, [format, bytes]] }
   Dir.mktmpdir("agent-image-audit") do |directory|
     {
       "fault-worker" => "fault_worker.S",
-      "reuse-worker" => "reuse_worker.S",
       "admission-supervisor" => "admission_supervisor.S"
     }.each do |name, source|
       _format, capsule = image_map.fetch(name)
@@ -284,15 +310,21 @@ def verify_assembly_sources(images)
       assert(assembled == capsule.byteslice(CAPSULE_V1_HEADER_BYTES..), "#{source} differs from embedded code")
     end
 
-    format, package = image_map.fetch("resource-manager")
-    header_bytes = format == :v3 ? PACKAGE_V3_HEADER_BYTES : PACKAGE_V2_HEADER_BYTES
-    code_descriptor = segment(package, header_bytes)
-    rodata_descriptor = segment(package, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
-    assembled = assembled_sections("resource_manager.S", [".text", ".rodata"], clang, objcopy, directory)
-    code = package.byteslice(code_descriptor[:file_offset], code_descriptor[:file_length])
-    rodata = package.byteslice(rodata_descriptor[:file_offset], rodata_descriptor[:file_length])
-    assert(assembled.fetch(".text") == code, "resource_manager.S .text differs from embedded code")
-    assert(assembled.fetch(".rodata") == rodata, "resource_manager.S .rodata differs from embedded rodata")
+    {
+      "reuse-worker" => "reuse_worker.S",
+      "resource-manager" => "resource_manager.S"
+    }.each do |name, source|
+      format, package = image_map.fetch(name)
+      assert([:v2, :v3].include?(format), "#{name} must use a segmented Package")
+      header_bytes = format == :v3 ? PACKAGE_V3_HEADER_BYTES : PACKAGE_V2_HEADER_BYTES
+      code_descriptor = segment(package, header_bytes)
+      rodata_descriptor = segment(package, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
+      assembled = assembled_sections(source, [".text", ".rodata"], clang, objcopy, directory)
+      code = package.byteslice(code_descriptor[:file_offset], code_descriptor[:file_length])
+      rodata = package.byteslice(rodata_descriptor[:file_offset], rodata_descriptor[:file_length])
+      assert(assembled.fetch(".text") == code, "#{source} .text differs from embedded code")
+      assert(assembled.fetch(".rodata") == rodata, "#{source} .rodata differs from embedded rodata")
+    end
   end
 
   puts "[ OK ] 4 assembly sources / exact embedded .text and .rodata bytes"
@@ -311,7 +343,7 @@ end
 def verify_release_elf(images, path)
   assert(File.file?(path), "ELF does not exist: #{path}")
   elf = File.binread(path)
-  image_map = images.to_h { |name, format, bytes, _digest| [name, [format, bytes]] }
+  image_map = images.to_h { |name, format, bytes, _digest, *_trust| [name, [format, bytes]] }
 
   format, package = image_map.fetch("resource-manager")
   header_bytes = format == :v3 ? PACKAGE_V3_HEADER_BYTES : PACKAGE_V2_HEADER_BYTES
@@ -319,6 +351,12 @@ def verify_release_elf(images, path)
   rodata_descriptor = segment(package, header_bytes + SEGMENT_DESCRIPTOR_BYTES)
   resource_code = package.byteslice(code_descriptor[:file_offset], code_descriptor[:file_length])
   resource_rodata = package.byteslice(rodata_descriptor[:file_offset], rodata_descriptor[:file_length])
+  reuse_format, reuse = image_map.fetch("reuse-worker")
+  reuse_header_bytes = reuse_format == :v3 ? PACKAGE_V3_HEADER_BYTES : PACKAGE_V2_HEADER_BYTES
+  reuse_code_descriptor = segment(reuse, reuse_header_bytes)
+  reuse_rodata_descriptor = segment(reuse, reuse_header_bytes + SEGMENT_DESCRIPTOR_BYTES)
+  reuse_code = reuse.byteslice(reuse_code_descriptor[:file_offset], reuse_code_descriptor[:file_length])
+  reuse_rodata = reuse.byteslice(reuse_rodata_descriptor[:file_offset], reuse_rodata_descriptor[:file_length])
   _format, admission = image_map.fetch("admission-supervisor")
   admission_code = admission.byteslice(CAPSULE_V1_HEADER_BYTES..)
 
@@ -326,6 +364,9 @@ def verify_release_elf(images, path)
     "Resource Manager Package v3" => package,
     "Resource Manager code" => resource_code,
     "Resource Manager rodata" => resource_rodata,
+    "Reuse Worker Package v3" => reuse,
+    "Reuse Worker code" => reuse_code,
+    "Reuse Worker rodata" => reuse_rodata,
     "Admission Supervisor Capsule v1" => admission,
     "Admission Supervisor code" => admission_code
   }.each do |name, bytes|
@@ -355,30 +396,50 @@ end
 
 [
   ["fault-handler", "fault_handler.rs"],
-  ["reuse-worker", "reuse_worker.rs"],
   ["admission-supervisor", "admission_supervisor.rs"]
 ].each do |name, file|
   source = File.read(File.join(IMAGE_ROOT, file))
   images << [name, :v1, extract_bytes(source, "CAPSULE"), extract_digest(source, "DIGEST")]
 end
 
+reuse_source = File.read(File.join(IMAGE_ROOT, "reuse_worker.rs"))
+reuse_signer_id = extract_signer_id(reuse_source, "REUSE_WORKER_SIGNER_ID")
+reuse_public_key = extract_public_key(reuse_source, "REUSE_WORKER_PUBLIC_KEY")
+images << [
+  "reuse-worker",
+  :v3,
+  extract_bytes(reuse_source, "PACKAGE"),
+  extract_digest(reuse_source, "DIGEST"),
+  reuse_signer_id,
+  reuse_public_key,
+  "AGENT_KERNEL_ROTATED_SIGNER\0".b
+]
+
 resource_source = File.read(File.join(IMAGE_ROOT, "resource_manager.rs"))
 trust_source = rust_source("crates/agent-kernel-x86_64/src/boot_agent_trust.rs")
 resource_signer_id = extract_signer_id(trust_source, "RESOURCE_MANAGER_SIGNER_ID")
 resource_public_key = extract_public_key(trust_source, "RESOURCE_MANAGER_PUBLIC_KEY")
-images << ["resource-manager", :v3, extract_bytes(resource_source, "PACKAGE"), extract_digest(resource_source, "DIGEST")]
+images << [
+  "resource-manager",
+  :v3,
+  extract_bytes(resource_source, "PACKAGE"),
+  extract_digest(resource_source, "DIGEST"),
+  resource_signer_id,
+  resource_public_key,
+  "AGENT_KERNEL_PACKAGE_V11_RODATA\0".b
+]
 
-images.each do |name, format, bytes, digest|
+images.each do |name, format, bytes, digest, signer_id, public_key, expected_rodata|
   sha = case format
         when :v1 then verify_capsule_v1(name, bytes, digest)
         when :v2 then verify_package_v2(name, bytes, digest)
-        when :v3 then verify_package_v3(name, bytes, digest, resource_signer_id, resource_public_key)
+        when :v3 then verify_package_v3(name, bytes, digest, signer_id, public_key, expected_rodata)
         else raise "audit failed: unsupported image format #{format}"
         end
   puts format("[ OK ] %-20s %-10s %6d bytes  sha256:%s", name, format.to_s.upcase, bytes.bytesize, sha[0, 12])
 end
 
 puts "[ OK ] 8 native Agent images / canonical headers / digests / fixed addresses"
-puts "[ OK ] Package v3 / Ed25519 / Trust Policy / code RX / rodata R+NX / ABS64"
+puts "[ OK ] 2 Package v3 images / Ed25519 / distinct signers / code RX / rodata R+NX / ABS64"
 verify_assembly_sources(images) if assembly_audit
 verify_release_elf(images, elf_path) if elf_path

@@ -958,6 +958,68 @@ resource_manager_entry:
 .typed_rebind_fail:
     jmp .halt
 .typed_rebind_done:
+    movabs r15, 0x0000400000030000
+    movabs r14, 0x3147534d544e4741
+    mov qword ptr [r15], r14
+    mov qword ptr [r15 + 8], 1
+    mov qword ptr [r15 + 16], 2
+    mov qword ptr [r15 + 24], 2
+    mov qword ptr [r15 + 32], 160
+    mov qword ptr [r15 + 40], 112
+    mov qword ptr [r15 + 48], 12
+    mov qword ptr [r15 + 56], 1
+    movabs r14, 0x5f455d61e3f2e662
+    mov qword ptr [r15 + 64], r14
+    movabs r14, 0xed144080730b260e
+    mov qword ptr [r15 + 72], r14
+    movabs r14, 0x5c6b114a9875bd6b
+    mov qword ptr [r15 + 80], r14
+    movabs r14, 0x8c150b66555c726b
+    mov qword ptr [r15 + 88], r14
+    movabs r14, 0x7c160578ddd6a6e9
+    mov qword ptr [r15 + 96], r14
+    movabs r14, 0x704005301e3f9dfd
+    mov qword ptr [r15 + 104], r14
+    movabs r14, 0x1e958766f2c6378a
+    mov qword ptr [r15 + 112], r14
+    movabs r14, 0xeacd6fa653823d22
+    mov qword ptr [r15 + 120], r14
+    mov qword ptr [r15 + 128], 1
+    mov qword ptr [r15 + 136], 0x0000000000010001
+    mov qword ptr [r15 + 144], 0
+    mov qword ptr [r15 + 152], 0
+
+    mov ecx, 53
+    xor edx, edx
+    mov r10d, 2
+    xor r11d, r11d
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ebp, ebp
+    int 0x90
+.global resource_manager_signer_rotation_return
+resource_manager_signer_rotation_return:
+    test rcx, rcx
+    jne .halt
+    cmp rdx, 53
+    jne .halt
+    cmp r10, 2
+    jne .halt
+    cmp r11, 2
+    jne .halt
+    cmp r12, 2
+    jne .halt
+    cmp r13, 2
+    jne .halt
+    cmp r14, 1
+    jne .halt
+    test r15, r15
+    jne .halt
+    test rbp, rbp
+    jne .halt
+
     .fill 12352, 1, 0x90
 
     mov ecx, 4
@@ -970,14 +1032,18 @@ resource_manager_entry:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global resource_manager_result_return
+resource_manager_result_return:
 
     mov ecx, 3
     xor edx, edx
     int 0x90
+.global resource_manager_completion_return
+resource_manager_completion_return:
 .halt:
     jmp .halt
 
 .section .rodata
 .global resource_manager_rodata
 resource_manager_rodata:
-    .asciz "AGENT_KERNEL_PACKAGE_V2_RODATA"
+    .asciz "AGENT_KERNEL_PACKAGE_V11_RODATA"

@@ -95,7 +95,10 @@ pub(in crate::native_agent_executor::calls) fn compare_and_rebind_path(
     generation: u64,
 ) -> Option<ResumableAgentCpu> {
     let CallDataMessage::CompareAndRebindNamespacePath(message) =
-        pending.authenticated_typed_call_data_message()?;
+        pending.authenticated_typed_call_data_message()?
+    else {
+        return None;
+    };
     if message.generation() != generation {
         return None;
     }

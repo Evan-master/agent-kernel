@@ -1,10 +1,13 @@
 //! Transactional bridge from semantic admission requests to physical runtime.
 
 use agent_kernel_core::{
-    EventKind, RunQueueEntry, RuntimeAdmissionFailure, RuntimeAdmissionRecord,
-    RuntimeAdmissionStatus,
+    EventKind, RunQueueEntry, RuntimeAdmissionFailure, RuntimeAdmissionPermit,
+    RuntimeAdmissionRecord, RuntimeAdmissionStatus,
 };
-use agent_kernel_x86_64::{agent_call::AgentCallContext, agent_image::VerifiedAgentImage};
+use agent_kernel_x86_64::{
+    agent_call::AgentCallContext,
+    agent_image::{AgentImageTrustPolicy, VerifiedAgentImage},
+};
 
 use crate::{
     agent_cpu::AgentCpuRuntime,
@@ -39,13 +42,27 @@ impl NativeRuntimeAdmissionBroker {
             entry.capability,
             permit.requester(),
         )?;
-        let image =
-            VerifiedAgentImage::verify(booted.kernel().agent_image(permit.image()).ok()?, capsule)
-                .ok()?;
-        let initial_pool_len = pool.len();
-        let initial_runtime_len = runtime.len();
         let initial_queue_len = booted.kernel().run_queue().len();
         let event_start = booted.kernel().events().len();
+        let policy = AgentImageTrustPolicy::new(booted.kernel().agent_image_signers());
+        let image = match VerifiedAgentImage::verify_signed(
+            booted.kernel().agent_image(permit.image()).ok()?,
+            capsule,
+            &policy,
+        ) {
+            Ok(image) => image,
+            Err(_) => {
+                return reject_runtime_admission(
+                    booted,
+                    permit,
+                    RuntimeAdmissionFailure::ImageVerification,
+                    initial_queue_len,
+                    event_start,
+                );
+            }
+        };
+        let initial_pool_len = pool.len();
+        let initial_runtime_len = runtime.len();
 
         match NativeAddressSpaceService::admit(
             pool,
@@ -86,20 +103,36 @@ impl NativeRuntimeAdmissionBroker {
                 if pool.len() != initial_pool_len || runtime.len() != initial_runtime_len {
                     return None;
                 }
-                let rejected = booted
-                    .kernel_mut()
-                    .sys_reject_runtime_admission(permit, map_failure(failure.stage()))
-                    .ok()?;
-                (rejected.status == RuntimeAdmissionStatus::Rejected
-                    && rejected.failure == Some(map_failure(failure.stage()))
-                    && booted.kernel().run_queue().len() == initial_queue_len
-                    && matches!(booted.kernel().events().get(event_start), Some(event)
-                        if event.kind == EventKind::RuntimeAdmissionRejected
-                            && event.runtime_admission == Some(rejected.id)))
-                .then_some(Err(rejected))
+                reject_runtime_admission(
+                    booted,
+                    permit,
+                    map_failure(failure.stage()),
+                    initial_queue_len,
+                    event_start,
+                )
             }
         }
     }
+}
+
+fn reject_runtime_admission(
+    booted: &mut X86BootedKernel,
+    permit: RuntimeAdmissionPermit,
+    failure: RuntimeAdmissionFailure,
+    initial_queue_len: usize,
+    event_start: usize,
+) -> Option<Result<NativeAddressSpaceAdmission, RuntimeAdmissionRecord>> {
+    let rejected = booted
+        .kernel_mut()
+        .sys_reject_runtime_admission(permit, failure)
+        .ok()?;
+    (rejected.status == RuntimeAdmissionStatus::Rejected
+        && rejected.failure == Some(failure)
+        && booted.kernel().run_queue().len() == initial_queue_len
+        && matches!(booted.kernel().events().get(event_start), Some(event)
+            if event.kind == EventKind::RuntimeAdmissionRejected
+                && event.runtime_admission == Some(rejected.id)))
+    .then_some(Err(rejected))
 }
 
 #[allow(clippy::too_many_arguments)]

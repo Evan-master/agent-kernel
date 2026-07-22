@@ -66,6 +66,10 @@ key_path = File.expand_path(options[:key])
 output_path = File.expand_path(options[:output])
 fail_with("key does not exist: #{key_path}") unless File.file?(key_path)
 fail_with("output directory does not exist: #{File.dirname(output_path)}") unless Dir.exist?(File.dirname(output_path))
+fail_with("key must not grant group or other access") unless (File.stat(key_path).mode & 0o077).zero?
+key_identity = File.realpath(key_path)
+output_identity = File.exist?(output_path) ? File.realpath(output_path) : output_path
+fail_with("key and output must be different files") if key_identity == output_identity
 
 clang = command_path("CLANG", ["clang", "/usr/bin/clang"])
 objcopy = command_path(

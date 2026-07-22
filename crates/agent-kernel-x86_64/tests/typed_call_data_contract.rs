@@ -29,7 +29,9 @@ fn canonical_one_and_four_hop_messages_decode_to_typed_requests() {
             CallDataMessageKind::CompareAndRebindNamespacePath
         );
         assert_eq!(decoded.generation(), GENERATION);
-        let CallDataMessage::CompareAndRebindNamespacePath(request) = decoded;
+        let CallDataMessage::CompareAndRebindNamespacePath(request) = decoded else {
+            panic!("expected Namespace path rebinding message");
+        };
         assert_request(request, depth);
     }
 }
@@ -40,7 +42,7 @@ fn decoder_rejects_noncanonical_envelope_words() {
         (0, 0, CallDataMessageDecodeError::InvalidMagic),
         (8, 2, CallDataMessageDecodeError::UnsupportedVersion),
         (16, 0, CallDataMessageDecodeError::GenerationMismatch),
-        (24, 2, CallDataMessageDecodeError::UnsupportedKind),
+        (24, 3, CallDataMessageDecodeError::UnsupportedKind),
         (32, 159, CallDataMessageDecodeError::InvalidTotalLength),
         (40, 95, CallDataMessageDecodeError::InvalidPayloadLength),
         (144, 1, CallDataMessageDecodeError::NonCanonicalFlags),

@@ -211,14 +211,20 @@ impl PendingAgentCallCpu {
     ) -> Option<agent_kernel_x86_64::typed_call_data::CallDataMessage> {
         let generation = match self.authenticated_request()? {
             AgentCallRequest::CompareAndRebindNamespacePathFromMemory { generation, .. } => {
-                generation
+                (
+                    generation,
+                    agent_kernel_x86_64::typed_call_data::CallDataMessageKind::CompareAndRebindNamespacePath,
+                )
             }
+            AgentCallRequest::RotateAgentImageSignerFromMemory { generation, .. } => (
+                generation,
+                agent_kernel_x86_64::typed_call_data::CallDataMessageKind::RotateAgentImageSigner,
+            ),
             _ => return None,
         };
-        self.session.memory.snapshot_typed_call_data(
-            agent_kernel_x86_64::typed_call_data::CallDataMessageKind::CompareAndRebindNamespacePath,
-            generation,
-        )
+        self.session
+            .memory
+            .snapshot_typed_call_data(generation.1, generation.0)
     }
 }
 

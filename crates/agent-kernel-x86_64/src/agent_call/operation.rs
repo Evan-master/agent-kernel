@@ -58,4 +58,5 @@ pub enum AgentCallOperation {
     ResolveNamespacePath,
     ResolveNamespacePathFromMemory,
     CompareAndRebindNamespacePathFromMemory,
+    RotateAgentImageSignerFromMemory,
 }

@@ -17,6 +17,9 @@ mod agent_execution_store;
 mod agent_image;
 mod agent_image_event;
 mod agent_image_record_retirement;
+mod agent_image_signer;
+mod agent_image_signer_event;
+mod agent_image_signer_store;
 mod agent_image_store;
 mod agent_launch;
 mod agent_lifecycle;
@@ -129,6 +132,10 @@ pub use agent_execution::{AgentExecutionContext, AgentExecutionState};
 pub use agent_image::{
     AgentImageDigest, AgentImageKind, AgentImageRecord, AgentImageRecordRetirement,
     AgentImageStatus,
+};
+pub use agent_image_signer::{
+    agent_image_signer_id, AgentImageKindScope, AgentImageSignerEvent, AgentImageSignerId,
+    AgentImageSignerRecord, AgentImageSignerRotation, AgentImageSignerStatus,
 };
 pub use capability::{Capability, CapabilityCompaction};
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};

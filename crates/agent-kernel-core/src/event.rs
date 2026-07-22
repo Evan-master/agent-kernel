@@ -5,13 +5,13 @@
 //! requests, delegation, and scheduler decisions.
 
 use crate::{
-    ActionId, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, CapabilityId, CheckpointId,
-    DeviceEventId, DeviceEventKind, DeviceEventPayload, DriverBindingId, DriverCommandId,
-    DriverCommandKind, DriverCommandPayload, DriverCommandResult, DriverInvocationId, FaultId,
-    FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind, MemoryCellId, MessageId,
-    MessageKind, NamespaceEntryId, NamespaceKey, NamespaceObject, ObservationId, Operation,
-    OperationSet, ResourceId, RuntimeAdmissionId, SignalKey, TaskId, TaskResult,
-    VerificationRequirement, WaiterId,
+    ActionId, AgentId, AgentImageDigest, AgentImageId, AgentImageKind, AgentImageSignerEvent,
+    CapabilityId, CheckpointId, DeviceEventId, DeviceEventKind, DeviceEventPayload,
+    DriverBindingId, DriverCommandId, DriverCommandKind, DriverCommandPayload, DriverCommandResult,
+    DriverInvocationId, FaultId, FaultKind, FaultPolicyAction, FaultPolicyId, IntentId, IntentKind,
+    MemoryCellId, MessageId, MessageKind, NamespaceEntryId, NamespaceKey, NamespaceObject,
+    ObservationId, Operation, OperationSet, ResourceId, RuntimeAdmissionId, SignalKey, TaskId,
+    TaskResult, VerificationRequirement, WaiterId,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -21,6 +21,8 @@ pub enum EventKind {
     AgentImageVerified,
     AgentImageRetired,
     AgentImageRecordRetired,
+    AgentImageSignerTrusted,
+    AgentImageSignerRevoked,
     AgentLaunched,
     AgentEntryRetired,
     RuntimeAdmissionRequested,
@@ -157,6 +159,7 @@ pub struct Event {
     pub agent_image_digest: Option<AgentImageDigest>,
     pub agent_image_abi_version: Option<u16>,
     pub agent_image_entry_version: Option<u16>,
+    pub agent_image_signer: Option<AgentImageSignerEvent>,
 }
 
 impl Event {
@@ -212,6 +215,7 @@ impl Event {
             agent_image_digest: None,
             agent_image_abi_version: None,
             agent_image_entry_version: None,
+            agent_image_signer: None,
         }
     }
 }

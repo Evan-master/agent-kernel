@@ -430,6 +430,13 @@ pub enum AgentCallRequest {
         nonce: u64,
         generation: u64,
     },
+    RotateAgentImageSignerFromMemory {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        generation: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -496,6 +503,9 @@ impl AgentCallRequest {
             }
             Self::CompareAndRebindNamespacePathFromMemory { .. } => {
                 AgentCallOperation::CompareAndRebindNamespacePathFromMemory
+            }
+            Self::RotateAgentImageSignerFromMemory { .. } => {
+                AgentCallOperation::RotateAgentImageSignerFromMemory
             }
         }
     }

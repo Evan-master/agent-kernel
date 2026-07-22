@@ -221,6 +221,41 @@ fn prepared_request_can_record_bounded_physical_rejection() {
 }
 
 #[test]
+fn prepared_request_can_record_image_verification_rejection() {
+    let (mut core, fixture) = prepared::<40>();
+    let admission = core
+        .request_runtime_admission(
+            fixture.supervisor,
+            fixture.authority,
+            fixture.target,
+            fixture.task,
+        )
+        .expect("request succeeds");
+    let permit = core
+        .prepare_next_runtime_admission()
+        .expect("request prepares");
+
+    let record = core
+        .reject_runtime_admission(permit, RuntimeAdmissionFailure::ImageVerification)
+        .expect("verification rejection commits");
+
+    assert_eq!(record.status, RuntimeAdmissionStatus::Rejected);
+    assert_eq!(
+        record.failure,
+        Some(RuntimeAdmissionFailure::ImageVerification)
+    );
+    assert_eq!(
+        core.runtime_admission(admission).expect("record exists"),
+        record
+    );
+    assert_eq!(
+        core.events().last().expect("rejection event").kind,
+        EventKind::RuntimeAdmissionRejected
+    );
+    assert!(core.run_queue().is_empty());
+}
+
+#[test]
 fn release_requires_verified_idle_target_and_is_read_only_during_preparation() {
     let (mut core, fixture) = prepared::<60>();
     let admission = core

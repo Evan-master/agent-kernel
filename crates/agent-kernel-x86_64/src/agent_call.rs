@@ -7,6 +7,7 @@
 
 mod agent_entry_retirement;
 mod agent_image_record_retirement;
+mod agent_image_signer;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
@@ -96,6 +97,7 @@ pub const AGENT_CALL_COMPARE_AND_RETIRE_NAMESPACE_ENTRY: u64 = 49;
 pub const AGENT_CALL_RESOLVE_NAMESPACE_PATH: u64 = 50;
 pub const AGENT_CALL_RESOLVE_NAMESPACE_PATH_FROM_MEMORY: u64 = 51;
 pub const AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_PATH_FROM_MEMORY: u64 = 52;
+pub const AGENT_CALL_ROTATE_AGENT_IMAGE_SIGNER: u64 = 53;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -191,6 +193,9 @@ impl AgentCallRequest {
             }
             AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_PATH_FROM_MEMORY => {
                 AgentCallOperation::CompareAndRebindNamespacePathFromMemory
+            }
+            AGENT_CALL_ROTATE_AGENT_IMAGE_SIGNER => {
+                AgentCallOperation::RotateAgentImageSignerFromMemory
             }
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
@@ -328,6 +333,9 @@ impl AgentCallRequest {
             }
             AgentCallOperation::CompareAndRebindNamespacePathFromMemory => {
                 namespace::decode_memory_path_rebind(frame)
+            }
+            AgentCallOperation::RotateAgentImageSignerFromMemory => {
+                agent_image_signer::decode_rotation(frame)
             }
         }
     }
