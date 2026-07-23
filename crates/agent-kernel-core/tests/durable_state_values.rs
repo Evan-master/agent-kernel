@@ -4,9 +4,10 @@ mod event_archive_checkpoint_support;
 use agent_kernel_core::{
     agent_image_signer_id, durable_state_signer_id, AgentId, CapabilityId, DurableAnchorMode,
     DurableArchiveAnchor, DurableArchiveManifest, DurableArchiveManifestError,
-    DurableArchiveReceipt, DurableArchiveReceiptError, DurableArchiveSignature, DurableSlot,
-    DurableStateDigest, DurableStateSignerRecord, DurableStateSignerStatus, EventArchiveProposal,
-    ResourceId, MAX_DURABLE_ARCHIVE_EVENTS, MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
+    DurableArchiveManifestFields, DurableArchiveReceipt, DurableArchiveReceiptError,
+    DurableArchiveSignature, DurableSlot, DurableStateDigest, DurableStateSignerRecord,
+    DurableStateSignerStatus, EventArchiveProposal, ResourceId, MAX_DURABLE_ARCHIVE_EVENTS,
+    MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
 use sha2::{Digest, Sha256};
 
@@ -151,6 +152,23 @@ fn manifest_rejects_unbounded_or_inconsistent_values() {
             count: MAX_DURABLE_ARCHIVE_EVENTS + 1,
             limit: MAX_DURABLE_ARCHIVE_EVENTS,
         })
+    );
+}
+
+#[test]
+fn persisted_manifest_fields_reenter_through_the_same_validation_boundary() {
+    let original = manifest(DurableArchiveAnchor::unanchored());
+    let fields = original.fields();
+
+    assert_eq!(DurableArchiveManifest::from_fields(fields), Ok(original));
+
+    let invalid = DurableArchiveManifestFields {
+        through_sequence: fields.through_sequence + 1,
+        ..fields
+    };
+    assert_eq!(
+        DurableArchiveManifest::from_fields(invalid),
+        Err(DurableArchiveManifestError::SequenceRangeMismatch)
     );
 }
 

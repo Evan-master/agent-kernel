@@ -9,7 +9,9 @@ mod receipt;
 mod recovery;
 mod signer;
 
-pub use manifest::{DurableArchiveManifest, DurableArchiveManifestError};
+pub use manifest::{
+    DurableArchiveManifest, DurableArchiveManifestError, DurableArchiveManifestFields,
+};
 pub use receipt::{DurableArchiveReceipt, DurableArchiveReceiptError};
 pub use recovery::{DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGuarantee};
 pub use signer::{
