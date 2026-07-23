@@ -10,7 +10,7 @@
   recovery value contracts.
 - [x] Add Ed25519 manifest verification under a separate State Signer policy.
 - [x] Add a fixed-capacity `DurableStateBackend` HAL contract.
-- [ ] Implement deterministic in-memory dual-slot backend and crash injection.
+- [x] Implement deterministic in-memory dual-slot backend and crash injection.
 - [ ] Gate Event Archive release on verified flush and readback receipt.
 - [ ] Reject stale, foreign, duplicate, and replayed receipts atomically.
 - [ ] Implement dual-slot recovery and anchor-aware head selection.

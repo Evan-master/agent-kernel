@@ -148,6 +148,13 @@ monotonic nonzero epoch, and readback returns the complete fixed slot.
 The footer is written last. Header state alone never marks a slot recoverable.
 Any failure before Core commit leaves the Event prefix unchanged.
 
+The deterministic Supervisor backend maintains separate volatile and durable
+bytes plus phase metadata for both slots. A flush copies one complete slot and
+its metadata into the durable image and advances a global epoch. Injected power
+loss occurs before a selected write, flush, or readback operation, discards all
+unflushed state, and leaves the prior committed generation active. Tests cover
+all eight operation boundaries in one complete transaction.
+
 ## Recovery
 
 Recovery accepts a slot only when header and footer both declare `Committed`,
