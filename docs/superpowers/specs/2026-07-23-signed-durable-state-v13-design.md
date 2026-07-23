@@ -18,7 +18,7 @@ process credentials, and POSIX durability APIs do not define the kernel model.
 | `agent-kernel-core` | proposal identity, authority, generation binding, receipt validation, atomic Event release |
 | `agent-kernel` | syscall facade without exposing verifier injection to Agents |
 | `agent-kernel-hal` | bounded slot write, flush, readback, and commit-footer contract |
-| `agent-kernel-x86_64` | canonical capsule parsing, Ed25519 verification, native storage adapter |
+| `agent-kernel-x86_64` | canonical capsule parsing, Ed25519 verification, transaction and recovery |
 | `agent-supervisor` | signing orchestration and deterministic crash-recovery tests |
 
 Model inference, private signing keys, recovery policy, and storage selection
@@ -157,8 +157,8 @@ all eight operation boundaries in one complete transaction.
 
 ## Recovery
 
-Recovery accepts a slot only when header and footer both declare `Committed`,
-generation and manifest digest agree, lengths fit V13 bounds, payload and
+Recovery accepts a slot only when its header declares `Prepared`, its footer
+declares `Committed`, generation and manifest digest agree, lengths fit V13 bounds, payload and
 archive digests recompute, signature and signer policy validate, and the
 previous digest links to an accepted predecessor or trusted anchor.
 

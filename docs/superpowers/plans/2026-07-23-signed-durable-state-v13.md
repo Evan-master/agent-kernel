@@ -11,10 +11,10 @@
 - [x] Add Ed25519 manifest verification under a separate State Signer policy.
 - [x] Add a fixed-capacity `DurableStateBackend` HAL contract.
 - [x] Implement deterministic in-memory dual-slot backend and crash injection.
-- [ ] Gate Event Archive release on verified flush and readback receipt.
-- [ ] Reject stale, foreign, duplicate, and replayed receipts atomically.
-- [ ] Implement dual-slot recovery and anchor-aware head selection.
-- [ ] Wire the Supervisor reference flow and exact receipt output.
-- [ ] Pass workspace tests, Supervisor replay, strict Clippy, formatting, and
+- [x] Gate Event Archive release on verified flush and readback receipt.
+- [x] Reject stale, foreign, duplicate, and replayed receipts atomically.
+- [x] Implement dual-slot recovery and anchor-aware head selection.
+- [x] Wire the Supervisor reference flow and exact receipt output.
+- [x] Pass workspace tests, Supervisor replay, strict Clippy, formatting, and
   no_std x86_64 linking.
-- [ ] Update bilingual public documentation, commit, and publish the V13 branch.
+- [x] Update bilingual public documentation, commit, and publish the V13 branch.

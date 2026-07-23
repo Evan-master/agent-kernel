@@ -20,7 +20,7 @@ $ ak boot --profile signed-v3
 [01] capability graph ...... online
 [02] Ed25519 trust policy .. verified
 [03] ring-3 agents ......... isolated
-[04] event archive ......... sealed
+[04] durable archive ....... committed
 kernel://supervisor/handoff-ready
 </pre>
 
@@ -28,10 +28,10 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V12 SMP runtime  │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V13 durable      │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ IMAGE      Signed Package v3            AUTH   Capabilities     │
+│ STATE      signed A/B slots             AUTH   Capabilities     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,7 +148,30 @@ AGNTIMG\0 / Package v3
 | Admission | Active signer, matching image kind and ABI range |
 | Mapping | Code `RX`, rodata `R+NX`, no writable executable page |
 
-## `04 // AGENT CALL`
+## `04 // DURABLE STATE`
+
+```text
+Event prefix ──> canonical payload ──> 285B manifest ──> Ed25519
+                                                           │
+                                                           ▼
+slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
+                                                           │
+                                                           ▼
+Committed footer + flush ──> receipt ──> one-shot Core proof ──> release
+```
+
+| Contract | V13 invariant |
+| :--- | :--- |
+| Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
+| Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
+| Signature | Strict Ed25519 over one canonical 285-byte manifest |
+| Transaction | 8 explicit write, flush, and readback fault boundaries |
+| Recovery | Highest connected signed head; split and disconnected heads fail closed |
+| Core gate | Raw receipts cannot release Events; verified commits are consumed once |
+
+`HOST PROFILE` transaction + recovery complete · `NATIVE BLOCK PROFILE` pending
+
+## `05 // AGENT CALL`
 
 ```text
 ┌─ REGISTER FRAME ────────────────────────────────────────────────┐
@@ -170,7 +193,7 @@ decode → snapshot → authenticate → preflight → mutate → reply
 
 `TRANSPORT` private call-data page · `POINTERS` rejected · `REPLY` canonical registers
 
-## `05 // PROOF`
+## `06 // PROOF`
 
 ```text
 PROFILE            V10 signed-v3
@@ -192,6 +215,12 @@ BOOT FRAME POOL     77 sealed
 | Archive replay | `AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
+```text
+V13 HOST RECEIPT
+slot=A  generation=1  flush_epoch=3
+archive=b72f0e90513d...e823449aff0d
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -202,7 +231,7 @@ BOOT FRAME POOL     77 sealed
 
 </details>
 
-## `06 // BOOT`
+## `07 // BOOT`
 
 ```console
 $ git clone https://github.com/Evan-master/agent-kernel.git
@@ -226,7 +255,7 @@ $ cargo check -p agent-kernel-x86_64 \
 
 `TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 · `TARGET` x86_64-unknown-none
 
-## `07 // TREE`
+## `08 // TREE`
 
 ```text
 crates/
@@ -242,7 +271,7 @@ docs/superpowers/{specs,plans}/
 scripts/{run-qemu.sh,audit-agent-images.rb}
 ```
 
-## `08 // ROADMAP`
+## `09 // ROADMAP`
 
 ```text
 [done] Agent-native authority + deterministic Events
@@ -250,17 +279,19 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] typed Namespace + bounded path mutation
 [done] Package v3 + Ed25519 boot trust
 [done] runtime signer rotation + trust-policy Events
+[done] signed durable state + dual-slot host recovery
 [work] SMP + synchronization + TLB shootdown
-[next] storage + network + graphics + USB
-[next] signed durable state + formal verification
+[next] native block adapter + QEMU power-loss proof
+[next] network + graphics + USB + formal verification
 ```
 
 | Track | Record |
 | :--- | :--- |
 | Verified baseline | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
-| Active milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
+| Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
+| Active milestone | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 
-## `09 // PROJECT`
+## `10 // PROJECT`
 
 | Field | Value |
 | :--- | :--- |

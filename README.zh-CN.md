@@ -20,7 +20,7 @@ $ ak boot --profile signed-v3
 [01] capability graph ...... online
 [02] Ed25519 trust policy .. verified
 [03] ring-3 agents ......... isolated
-[04] event archive ......... sealed
+[04] durable archive ....... committed
 kernel://supervisor/handoff-ready
 </pre>
 
@@ -28,10 +28,10 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V12 SMP runtime  │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V13 durable      │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ IMAGE      Signed Package v3            AUTH   Capability       │
+│ STATE      signed A/B slots             AUTH   Capability       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,7 +148,30 @@ AGNTIMG\0 / Package v3
 | Admission | Active signer、匹配的镜像 kind 与 ABI 范围 |
 | Mapping | code `RX`、rodata `R+NX`、无可写可执行页 |
 
-## `04 // AGENT CALL`
+## `04 // 持久状态`
+
+```text
+Event 前缀 ──> canonical payload ──> 285B manifest ──> Ed25519
+                                                           │
+                                                           ▼
+slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
+                                                           │
+                                                           ▼
+Committed footer + flush ──> receipt ──> 一次性 Core proof ──> release
+```
+
+| 契约 | V13 不变量 |
+| :--- | :--- |
+| 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
+| Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
+| Signature | 对 285 字节 canonical manifest 执行严格 Ed25519 验证 |
+| Transaction | 8 个显式 write、flush、readback 故障边界 |
+| Recovery | 选择最高的连续签名链头；分叉与断链均关闭自动恢复 |
+| Core Gate | 原始 receipt 无权释放 Event；验证提交仅可消费一次 |
+
+`HOST PROFILE` 事务与恢复完成 · `NATIVE BLOCK PROFILE` 待实现
+
+## `05 // AGENT CALL`
 
 ```text
 ┌─ REGISTER FRAME ────────────────────────────────────────────────┐
@@ -170,7 +193,7 @@ AGNTIMG\0 / Package v3
 
 `TRANSPORT` 私有 call-data 页 · `POINTERS` 拒绝 · `REPLY` 规范寄存器
 
-## `05 // 启动证据`
+## `06 // 启动证据`
 
 ```text
 PROFILE            V10 signed-v3
@@ -192,6 +215,12 @@ BOOT FRAME POOL     77 帧封存
 | 归档重放 | `AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
+```text
+V13 HOST RECEIPT
+slot=A  generation=1  flush_epoch=3
+archive=b72f0e90513d...e823449aff0d
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -202,7 +231,7 @@ BOOT FRAME POOL     77 帧封存
 
 </details>
 
-## `06 // 构建启动`
+## `07 // 构建启动`
 
 ```console
 $ git clone https://github.com/Evan-master/agent-kernel.git
@@ -226,7 +255,7 @@ $ cargo check -p agent-kernel-x86_64 \
 
 `TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 · `TARGET` x86_64-unknown-none
 
-## `07 // 源码树`
+## `08 // 源码树`
 
 ```text
 crates/
@@ -242,7 +271,7 @@ docs/superpowers/{specs,plans}/
 scripts/{run-qemu.sh,audit-agent-images.rb}
 ```
 
-## `08 // 路线图`
+## `09 // 路线图`
 
 ```text
 [done] Agent 原生权限 + 确定性 Event
@@ -250,17 +279,19 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] 类型化 Namespace + 有界路径修改
 [done] Package v3 + Ed25519 启动信任
 [done] 运行时 signer 轮换 + Trust Policy Event
+[done] 签名持久状态 + 双槽宿主恢复
 [work] SMP + 同步 + TLB shootdown
-[next] Storage + Network + Graphics + USB
-[next] 签名持久状态 + 形式化验证
+[next] 原生块设备适配器 + QEMU 断电验证
+[next] Network + Graphics + USB + 形式化验证
 ```
 
 | 轨道 | 记录 |
 | :--- | :--- |
 | 已验证基线 | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
-| 当前里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
+| Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
+| 当前里程碑 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 
-## `09 // 项目`
+## `10 // 项目`
 
 | 字段 | 值 |
 | :--- | :--- |
