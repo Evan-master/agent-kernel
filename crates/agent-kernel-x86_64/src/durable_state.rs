@@ -6,6 +6,7 @@
 
 mod capsule;
 mod manifest;
+mod transaction;
 mod trust;
 
 pub use agent_kernel_core::DURABLE_ARCHIVE_MANIFEST_BYTES;
@@ -19,6 +20,7 @@ pub use manifest::{
     encode_durable_archive_manifest, DurableArchiveManifestDecodeError,
     DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION,
 };
+pub use transaction::{commit_durable_archive, DurableArchiveCommitError};
 pub use trust::{
     DurableStateTrustPolicy, DurableStateVerificationError, VerifiedDurableArchiveManifest,
 };

@@ -9,3 +9,7 @@ repository.workspace = true
 agent-kernel = { path = "../agent-kernel" }
 agent-kernel-core = { path = "../agent-kernel-core" }
 agent-kernel-hal = { path = "../agent-kernel-hal" }
+agent-kernel-x86_64 = { path = "../agent-kernel-x86_64" }
+
+[dev-dependencies]
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["fast"] }

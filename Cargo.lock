@@ -74,6 +74,8 @@ dependencies = [
  "agent-kernel",
  "agent-kernel-core",
  "agent-kernel-hal",
+ "agent-kernel-x86_64",
+ "ed25519-dalek",
 ]
 
 [[package]]
