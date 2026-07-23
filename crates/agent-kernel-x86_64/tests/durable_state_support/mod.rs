@@ -24,6 +24,16 @@ pub fn manifest(
     policy_generation: u64,
     anchor: DurableArchiveAnchor,
 ) -> DurableArchiveManifest {
+    payload_and_manifest(signing_key, root, storage, policy_generation, anchor).1
+}
+
+pub fn payload_and_manifest(
+    signing_key: &SigningKey,
+    root: ResourceId,
+    storage: ResourceId,
+    policy_generation: u64,
+    anchor: DurableArchiveAnchor,
+) -> (Vec<u8>, DurableArchiveManifest) {
     let mut core = ManifestCore::new();
     core.register_agent(AgentId::new(1)).unwrap();
     let proposal = EventArchiveProposal::from_segment(None, core.events()).unwrap();
@@ -31,7 +41,7 @@ pub fn manifest(
     let payload_length =
         encode_event_archive_payload(proposal, core.events(), &mut payload).unwrap() as u32;
 
-    DurableArchiveManifest::new(
+    let manifest = DurableArchiveManifest::new(
         proposal,
         AgentId::new(1),
         CapabilityId::new(2),
@@ -43,7 +53,8 @@ pub fn manifest(
         policy_generation,
         anchor,
     )
-    .unwrap()
+    .unwrap();
+    (payload[..payload_length as usize].to_vec(), manifest)
 }
 
 pub fn signer_record(

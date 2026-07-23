@@ -4,14 +4,18 @@
 //! order. Rust layout and pointer width never enter the 285-byte message; flags
 //! and reserved bytes stay frozen for later capsule parsing.
 
+mod decode;
+
+pub use decode::{decode_durable_archive_manifest, DurableArchiveManifestDecodeError};
+
 use agent_kernel_core::{
     DurableAnchorMode, DurableArchiveManifest, DurableStateDigest, DURABLE_ARCHIVE_MANIFEST_BYTES,
 };
 use sha2::{Digest, Sha256};
 
-const DOMAIN: &[u8; 29] = b"AGENT-KERNEL-DURABLE-ARCHIVE\0";
+pub(super) const DOMAIN: &[u8; 29] = b"AGENT-KERNEL-DURABLE-ARCHIVE\0";
 const MANIFEST_BODY_BYTES: usize = 256;
-const TRUSTED_ANCHOR_FLAG: u16 = 1;
+pub(super) const TRUSTED_ANCHOR_FLAG: u16 = 1;
 
 pub const DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION: u16 = 1;
 const _: () = assert!(DURABLE_ARCHIVE_MANIFEST_BYTES == DOMAIN.len() + MANIFEST_BODY_BYTES);
