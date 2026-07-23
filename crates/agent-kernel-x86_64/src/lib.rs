@@ -12,6 +12,7 @@ pub mod agent_image;
 pub mod apic;
 pub mod context;
 pub mod cpu;
+pub mod durable_state;
 pub mod interrupt;
 pub mod namespace_path_buffer;
 pub mod native_runtime;

@@ -106,6 +106,23 @@ and unsupported versions fail before signature verification. State Signer
 trust is separate from Agent Image trust. Reusing a key requires two explicit
 policy records.
 
+The V13 signing message is exactly 285 bytes:
+
+```text
+domain[29] | version:u16 | flags:u16 | reserved[4]
+generation:u64 | first:u64 | through:u64 | event_count:u16 | reserved[6]
+previous_digest[32] | archive_digest[32]
+actor:u64 | archive_authority:u64 | root:u64 | storage:u64
+payload_length:u32 | reserved[4] | payload_digest[32]
+state_signer_id[32] | signer_policy_generation:u64
+anchor_generation:u64 | anchor_digest[32]
+```
+
+Flag bit zero selects the trusted-anchor profile. All other flag bits and all
+reserved bytes are zero in V13. Verification first resolves exactly one active
+State Signer record, then checks key identity, root scope, current policy
+generation, and the strict Ed25519 signature over all 285 bytes.
+
 ## Two-Slot Transaction
 
 Each storage Resource owns equal fixed slots `A` and `B`. Generation parity

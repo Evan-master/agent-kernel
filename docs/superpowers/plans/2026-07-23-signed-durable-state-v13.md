@@ -8,7 +8,7 @@
 - [x] Refactor Event Archive hashing through a sink-based canonical encoder.
 - [x] Add fixed-width State Signer, manifest, signature, slot, receipt, and
   recovery value contracts.
-- [ ] Add Ed25519 manifest verification under a separate State Signer policy.
+- [x] Add Ed25519 manifest verification under a separate State Signer policy.
 - [ ] Add a fixed-capacity `DurableStateBackend` HAL contract.
 - [ ] Implement deterministic in-memory dual-slot backend and crash injection.
 - [ ] Gate Event Archive release on verified flush and readback receipt.
