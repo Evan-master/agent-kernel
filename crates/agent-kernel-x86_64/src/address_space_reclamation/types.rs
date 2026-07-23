@@ -25,6 +25,10 @@ impl AddressSpaceAllocation {
     pub const fn identity(self) -> AgentMemoryIdentity {
         self.identity
     }
+
+    pub const fn address_space_generation(self) -> u64 {
+        self.address_space_generation
+    }
 }
 
 impl AllocatedAddressSpaceFrames {
@@ -34,6 +38,10 @@ impl AllocatedAddressSpaceFrames {
 
     pub const fn identity(&self) -> AgentMemoryIdentity {
         self.identity
+    }
+
+    pub const fn address_space_generation(&self) -> u64 {
+        self.address_space_generation
     }
 
     pub const fn into_identity(self) -> AgentMemoryIdentity {

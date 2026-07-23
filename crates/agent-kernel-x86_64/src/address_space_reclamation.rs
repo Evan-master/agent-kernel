@@ -24,6 +24,7 @@ pub struct AddressSpaceReclamation {
 pub struct AddressSpaceAllocation {
     agent: AgentId,
     identity: AgentMemoryIdentity,
+    address_space_generation: u64,
     expected_len: usize,
     expected_generation: u64,
 }
@@ -32,6 +33,7 @@ pub struct AddressSpaceAllocation {
 pub struct AllocatedAddressSpaceFrames {
     agent: AgentId,
     identity: AgentMemoryIdentity,
+    address_space_generation: u64,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -99,6 +101,7 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         let owned_frame_count = agent_owned_frame_count(code_page_count, rodata_page_count)?;
         let content_frame_count = agent_content_frame_count(code_page_count, rodata_page_count)?;
         let start = self.len.checked_sub(owned_frame_count)?;
+        let address_space_generation = self.generation.checked_add(1)?;
         let mut page_table_frames = [0; AGENT_PAGE_TABLE_FRAME_COUNT];
         page_table_frames
             .copy_from_slice(&self.frames[start..start + AGENT_PAGE_TABLE_FRAME_COUNT]);
@@ -114,6 +117,7 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
                 code_page_count,
                 rodata_page_count,
             )?,
+            address_space_generation,
             expected_len: self.len,
             expected_generation: self.generation,
         })
@@ -139,6 +143,7 @@ impl<const CAPACITY: usize> AddressSpaceFramePool<CAPACITY> {
         Some(AllocatedAddressSpaceFrames {
             agent: allocation.agent,
             identity: allocation.identity,
+            address_space_generation: allocation.address_space_generation,
         })
     }
 

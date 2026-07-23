@@ -11,10 +11,12 @@ use agent_kernel_x86_64::{
     address_space_reclamation::{
         AddressSpaceFramePool, AddressSpaceReclamation, AllocatedAddressSpaceFrames,
     },
+    tlb::{TlbAddressSpace, TlbFlushKind, TlbShootdownCompletion},
 };
 
 use super::{
-    clear_page, page_is_zero, physical_pointer, PreparedAgentMemory, PHYSICAL_MEMORY_OFFSET,
+    clear_page, page_is_zero, page_tables, physical_pointer, PreparedAgentMemory,
+    PHYSICAL_MEMORY_OFFSET,
 };
 
 pub(crate) const NATIVE_ADDRESS_SPACE_CAPACITY: usize = 6;
@@ -31,6 +33,12 @@ pub(crate) struct NativeAddressSpaceFramePool {
 pub(crate) struct ReclaimedAgentAddressSpace {
     root: u64,
     frame_count: usize,
+}
+
+pub(crate) struct QuarantinedAgentAddressSpace {
+    memory: PreparedAgentMemory,
+    reclamation: AddressSpaceReclamation,
+    address_space: TlbAddressSpace,
 }
 
 impl NativeAddressSpaceFramePool {
@@ -161,16 +169,34 @@ impl PreparedAgentMemory {
         pool.prepare(self.identity)
     }
 
-    pub(crate) fn reclaim_address_space(
+    pub(crate) fn quarantine_address_space(
         self,
-        pool: &mut NativeAddressSpaceFramePool,
+        pool: &NativeAddressSpaceFramePool,
         reclamation: AddressSpaceReclamation,
-    ) -> Option<ReclaimedAgentAddressSpace> {
+    ) -> Option<QuarantinedAgentAddressSpace> {
         if self.prepare_address_space_reclamation(pool)? != reclamation
             || reclamation.identity() != self.identity
         {
             return None;
         }
+        let address_space =
+            TlbAddressSpace::new(self.roots.agent_root(), self.address_space_generation)?;
+        page_tables::remove_agent_slot(PHYSICAL_MEMORY_OFFSET, self.roots)?;
+        if !page_tables::agent_slot_removed(PHYSICAL_MEMORY_OFFSET, self.roots) {
+            return None;
+        }
+        Some(QuarantinedAgentAddressSpace {
+            memory: self,
+            reclamation,
+            address_space,
+        })
+    }
+
+    fn clear_and_commit_address_space(
+        self,
+        pool: &mut NativeAddressSpaceFramePool,
+        reclamation: AddressSpaceReclamation,
+    ) -> Option<ReclaimedAgentAddressSpace> {
         for frame in self.identity.content_frames() {
             clear_frame(frame)?;
         }
@@ -195,7 +221,32 @@ impl PreparedAgentMemory {
         pool: &mut NativeAddressSpaceFramePool,
     ) -> Option<ReclaimedAgentAddressSpace> {
         let reclamation = self.prepare_address_space_reclamation(pool)?;
-        self.reclaim_address_space(pool, reclamation)
+        self.clear_and_commit_address_space(pool, reclamation)
+    }
+}
+
+impl QuarantinedAgentAddressSpace {
+    pub(crate) const fn address_space(&self) -> TlbAddressSpace {
+        self.address_space
+    }
+
+    pub(crate) fn reclaim_after_shootdown(
+        self,
+        pool: &mut NativeAddressSpaceFramePool,
+        completion: TlbShootdownCompletion,
+    ) -> Option<ReclaimedAgentAddressSpace> {
+        if completion.address_space() != self.address_space
+            || !matches!(
+                completion.request().scope().kind(),
+                TlbFlushKind::AddressSpace | TlbFlushKind::AllContexts
+            )
+            || !page_tables::agent_slot_removed(PHYSICAL_MEMORY_OFFSET, self.memory.roots)
+        {
+            return None;
+        }
+        let reclamation = self.reclamation;
+        self.memory
+            .clear_and_commit_address_space(pool, reclamation)
     }
 }
 

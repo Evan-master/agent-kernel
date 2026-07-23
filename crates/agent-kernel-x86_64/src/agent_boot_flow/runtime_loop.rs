@@ -405,7 +405,8 @@ pub(super) fn run(
         fault_handler.call_context()?.agent(),
         resource_manager.call_context()?.agent(),
     ];
-    report.reclaim_completed_address_spaces(address_space_pool, completed_agents)?;
+    report.reclaim_completed_address_spaces(address_space_pool, smp_bootstrap, completed_agents)?;
+    serial_write_line("AGENT_KERNEL_TLB_FRAME_REUSE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_RECLAIMED_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_FRAME_POOL_OK");
     write_verifier_markers();

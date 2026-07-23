@@ -11,7 +11,9 @@ use crate::{
     native_agent_executor::NativeExecutionReport,
     native_agent_runtime::NativeAgentRuntime,
     reuse_worker_flow::PreparedReuseWorkerFlow,
-    serial_write_line, X86BootedKernel,
+    serial_write_line,
+    smp_boot::SmpBootstrap,
+    X86BootedKernel,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -19,6 +21,7 @@ pub(super) fn partial(
     booted: &mut X86BootedKernel,
     report: &mut NativeExecutionReport,
     pool: &mut NativeAddressSpaceFramePool,
+    smp: &mut SmpBootstrap,
     runtime: &NativeAgentRuntime,
     memory_pool: &RuntimeMemoryPool,
     supervisor: &PreparedAdmissionSupervisorFlow,
@@ -39,7 +42,7 @@ pub(super) fn partial(
         .ok()?;
     let event_start = booted.kernel().events().len();
     let targets = [flows[0].admission_target(), flows[1].admission_target()];
-    report.reclaim_completed_address_spaces(pool, [targets[0].0, targets[1].0])?;
+    report.reclaim_completed_address_spaces(pool, smp, [targets[0].0, targets[1].0])?;
     if report.len() != 0
         || report.faulted_len() != 0
         || pool.len() + supervisor_admission.identity().owned_frame_count()
@@ -71,6 +74,7 @@ pub(super) fn terminal(
     booted: &mut X86BootedKernel,
     report: &mut NativeExecutionReport,
     pool: &mut NativeAddressSpaceFramePool,
+    smp: &mut SmpBootstrap,
     runtime: &NativeAgentRuntime,
     memory_pool: &RuntimeMemoryPool,
     supervisor: &PreparedAdmissionSupervisorFlow,
@@ -94,6 +98,7 @@ pub(super) fn terminal(
     let targets = [flows[0].admission_target(), flows[1].admission_target()];
     report.reclaim_completed_address_spaces(
         pool,
+        smp,
         [ADMISSION_SUPERVISOR, targets[0].0, targets[1].0],
     )?;
     if report.len() != 0

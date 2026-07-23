@@ -20,8 +20,10 @@
   runtime ownership rebinding for native Agent contexts.
 - [x] Wire a generation-bound atomic TLB mailbox, fixed-IPI transport, exact AP
   acknowledgement, timeout quarantine, and CPL-safe interrupt entry.
-- [ ] Bind shootdown completion to a real mapping mutation and frame-reuse
-  quarantine, then prove native AP execution under dual-CPU QEMU.
+- [x] Bind shootdown completion to a real mapping mutation and frame-reuse
+  quarantine.
+- [ ] Prove native AP execution and post-shootdown frame reuse under dual-CPU
+  QEMU.
 - [x] Pass SMP host contracts, freestanding Clippy, linking, trampoline layout,
   relocation, and formatting gates.
 - [ ] Add guard pages to per-CPU privilege stacks.

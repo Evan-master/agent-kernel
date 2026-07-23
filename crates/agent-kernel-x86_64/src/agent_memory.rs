@@ -36,7 +36,8 @@ use agent_kernel_x86_64::{
 
 pub(crate) use self::{
     address_space_reclamation::{
-        NativeAddressSpaceFramePool, ReclaimedAgentAddressSpace, NATIVE_ADDRESS_SPACE_CAPACITY,
+        NativeAddressSpaceFramePool, QuarantinedAgentAddressSpace, ReclaimedAgentAddressSpace,
+        NATIVE_ADDRESS_SPACE_CAPACITY,
     },
     frame_allocator::BootFrameAllocator,
     runtime_pool::{RuntimeMemoryPool, RuntimePhysicalFrameSet},
@@ -50,6 +51,7 @@ pub(crate) struct PreparedAgentMemory {
     lazy_data_pointer: *mut u8,
     call_data_pointer: *mut u8,
     roots: AddressSpaceRoots,
+    address_space_generation: u64,
     identity: AgentMemoryIdentity,
     entry_rip: u64,
     runtime_page: RuntimePageLedger,
@@ -151,6 +153,7 @@ impl PreparedAgentMemory {
             lazy_data_pointer,
             call_data_pointer,
             roots,
+            address_space_generation: 1,
             identity,
             entry_rip,
             runtime_page: RuntimePageLedger::new(),

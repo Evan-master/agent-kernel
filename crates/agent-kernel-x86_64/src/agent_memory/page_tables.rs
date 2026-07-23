@@ -7,6 +7,7 @@
 mod install;
 mod lazy;
 mod ownership;
+mod quarantine;
 mod runtime_page;
 mod runtime_region;
 mod validation;
@@ -122,6 +123,14 @@ pub(super) fn deactivate_runtime_region(
     frames: &[PhysFrame],
 ) -> Option<()> {
     runtime_region::deactivate(physical_offset, roots, layout, start_slot, frames)
+}
+
+pub(super) fn remove_agent_slot(physical_offset: u64, roots: AddressSpaceRoots) -> Option<()> {
+    quarantine::remove_agent_slot(physical_offset, roots)
+}
+
+pub(super) fn agent_slot_removed(physical_offset: u64, roots: AddressSpaceRoots) -> bool {
+    quarantine::agent_slot_removed(physical_offset, roots)
 }
 
 pub(super) fn kernel_is_active(roots: AddressSpaceRoots) -> bool {

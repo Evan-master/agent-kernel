@@ -97,11 +97,13 @@ fn complete_address_space_allocation_is_atomic_and_generation_bound() {
     let stale_replay = allocation;
     assert_eq!(allocation.identity(), second);
     assert_eq!(allocation.agent(), AgentId::new(10));
+    assert_eq!(allocation.address_space_generation(), 3);
     assert_eq!(pool.len(), AGENT_OWNED_FRAME_CAPACITY * 2);
 
     let owner = pool.commit_allocation(allocation).unwrap();
     assert_eq!(owner.identity(), second);
     assert_eq!(owner.agent(), AgentId::new(10));
+    assert_eq!(owner.address_space_generation(), 3);
     assert_eq!(pool.len(), AGENT_OWNED_FRAME_CAPACITY);
     assert!(first
         .owned_frames()
@@ -186,8 +188,10 @@ fn concurrent_allocations_are_agent_bound_disjoint_and_cancellable() {
 
     assert_eq!(first_owner.agent(), AgentId::new(10));
     assert_eq!(first_owner.identity(), second);
+    assert_eq!(first_owner.address_space_generation(), 3);
     assert_eq!(second_owner.agent(), AgentId::new(11));
     assert_eq!(second_owner.identity(), first);
+    assert_eq!(second_owner.address_space_generation(), 4);
     assert!(first_owner
         .identity()
         .is_disjoint_from(second_owner.identity()));

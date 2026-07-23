@@ -395,6 +395,7 @@ pub(super) fn run(
         &mut native_runtime,
         &mut runtime_memory_pool,
         &mut address_space_frame_pool,
+        &mut smp_bootstrap,
         &cpu_runtime,
         reuse_worker_image,
         admission_supervisor_image,

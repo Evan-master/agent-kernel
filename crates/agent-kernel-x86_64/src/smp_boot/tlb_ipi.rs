@@ -9,7 +9,10 @@ use agent_kernel_x86_64::{
     apic::{LocalApicBase, LocalApicMmio, VolatileMmio},
     cpu::{CpuIndex, CpuMask},
     per_cpu::{PER_CPU_CPU_INDEX_OFFSET, PER_CPU_KERNEL_CR3_OFFSET},
-    tlb::{TlbFlushKind, TlbIpiMailbox, TlbIpiWork, TlbShootdownRequest},
+    tlb::{
+        TlbAddressSpace, TlbFlushKind, TlbFlushScope, TlbIpiMailbox, TlbIpiWork,
+        TlbShootdownRequest,
+    },
 };
 
 const CR3_CONTROL_MASK: u64 = (1 << 3) | (1 << 4);
@@ -126,6 +129,13 @@ pub(super) fn mark_timed_out(generation: u64) -> Option<CpuMask> {
     MAILBOX.mark_timed_out(generation).ok()
 }
 
+pub(super) fn flush_local(address_space: TlbAddressSpace, scope: TlbFlushScope) -> Option<()> {
+    let original_cr3 = read_cr3();
+    // SAFETY: the BSP owns the inactive target root, PCID mode was rejected,
+    // and every Agent root retains the supervisor mappings used here.
+    unsafe { flush_address_space(address_space, scope, original_cr3) }.then_some(())
+}
+
 #[no_mangle]
 extern "C" fn agent_kernel_tlb_ipi_handle(cpu_raw: u16, original_cr3: u64) {
     let Some(cpu) = CpuIndex::new(cpu_raw) else {
@@ -143,18 +153,26 @@ extern "C" fn agent_kernel_tlb_ipi_handle(cpu_raw: u16, original_cr3: u64) {
 }
 
 unsafe fn flush(work: TlbIpiWork, original_cr3: u64) -> bool {
+    unsafe { flush_address_space(work.address_space(), work.scope(), original_cr3) }
+}
+
+unsafe fn flush_address_space(
+    address_space: TlbAddressSpace,
+    scope: TlbFlushScope,
+    original_cr3: u64,
+) -> bool {
     let kernel_cr3 = read_cr3();
-    match work.scope().kind() {
+    match scope.kind() {
         TlbFlushKind::Page | TlbFlushKind::Range | TlbFlushKind::AddressSpace => {
-            let target_cr3 = work.address_space().root() | (original_cr3 & CR3_CONTROL_MASK);
+            let target_cr3 = address_space.root() | (original_cr3 & CR3_CONTROL_MASK);
             write_cr3(target_cr3);
-            match work.scope().kind() {
+            match scope.kind() {
                 TlbFlushKind::Page | TlbFlushKind::Range => {
-                    let Some(start) = work.scope().start() else {
+                    let Some(start) = scope.start() else {
                         write_cr3(kernel_cr3);
                         return false;
                     };
-                    let Some(pages) = work.scope().page_count() else {
+                    let Some(pages) = scope.page_count() else {
                         write_cr3(kernel_cr3);
                         return false;
                     };
@@ -168,7 +186,10 @@ unsafe fn flush(work: TlbIpiWork, original_cr3: u64) -> bool {
                     }
                 }
                 TlbFlushKind::AddressSpace => write_cr3(target_cr3),
-                TlbFlushKind::AllContexts => return false,
+                TlbFlushKind::AllContexts => {
+                    write_cr3(kernel_cr3);
+                    return false;
+                }
             }
             write_cr3(kernel_cr3);
         }

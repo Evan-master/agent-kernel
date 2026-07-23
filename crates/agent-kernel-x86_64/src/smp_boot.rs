@@ -27,7 +27,10 @@ use agent_kernel_x86_64::{
         APIC_SPURIOUS_VECTOR, APIC_TIMER_VECTOR, APIC_TLB_SHOOTDOWN_VECTOR,
     },
     cpu::{CpuIndex, CpuLifecycleState, CpuRegistry, MAX_CPU_COUNT},
-    tlb::{TlbAddressSpace, TlbFlushScope, TlbShootdownCoordinator},
+    tlb::{
+        TlbAddressSpace, TlbFlushScope, TlbShootdownCompletion, TlbShootdownCoordinator,
+        TlbShootdownRequest,
+    },
 };
 use bootloader_api::BootInfo;
 
@@ -245,27 +248,76 @@ impl SmpBootstrap {
     }
 
     pub(crate) fn prove_tlb_shootdown(&mut self) -> Result<(), SmpBootError> {
+        let address_space = TlbAddressSpace::new(read_cr3() & CR3_ROOT_MASK, 1)
+            .ok_or(SmpBootError::TlbShootdownFailed)?;
+        self.execute_tlb_shootdown(address_space, TlbFlushScope::all_contexts())?;
+        Ok(())
+    }
+
+    pub(crate) fn shootdown_address_space(
+        &mut self,
+        address_space: TlbAddressSpace,
+    ) -> Result<TlbShootdownCompletion, SmpBootError> {
+        self.execute_tlb_shootdown(address_space, TlbFlushScope::whole_address_space())
+    }
+
+    fn execute_tlb_shootdown(
+        &mut self,
+        address_space: TlbAddressSpace,
+        scope: TlbFlushScope,
+    ) -> Result<TlbShootdownCompletion, SmpBootError> {
         let online = self.registry.online_mask();
         if online.count() < 2 {
             return Err(SmpBootError::TlbShootdownFailed);
         }
-        let address_space = TlbAddressSpace::new(read_cr3() & CR3_ROOT_MASK, 1)
-            .ok_or(SmpBootError::TlbShootdownFailed)?;
         let request = self
             .tlb_coordinator
-            .begin(
-                CpuIndex::BSP,
-                online,
-                online,
-                address_space,
-                TlbFlushScope::all_contexts(),
-            )
+            .begin(CpuIndex::BSP, online, online, address_space, scope)
             .map_err(|_| SmpBootError::TlbShootdownFailed)?;
+        if tlb_ipi::flush_local(address_space, scope).is_none() {
+            let _ = self.tlb_coordinator.mark_timed_out(request.generation());
+            return Err(SmpBootError::TlbShootdownFailed);
+        }
         if tlb_ipi::publish(request).is_none() {
             let _ = self.tlb_coordinator.mark_timed_out(request.generation());
             return Err(SmpBootError::TlbShootdownFailed);
         }
+        if let Err(error) = self.send_tlb_ipis(request) {
+            let _ = tlb_ipi::mark_timed_out(request.generation());
+            let _ = self.tlb_coordinator.mark_timed_out(request.generation());
+            return Err(error);
+        }
 
+        for _ in 0..TLB_ACK_WAIT_LIMIT {
+            if tlb_ipi::acknowledged() == request.targets() {
+                tlb_ipi::finish(request.generation()).ok_or(SmpBootError::TlbShootdownFailed)?;
+                for raw_index in 1..self.registry.topology().len() {
+                    let cpu = CpuIndex::new(
+                        u16::try_from(raw_index).map_err(|_| SmpBootError::TlbShootdownFailed)?,
+                    )
+                    .ok_or(SmpBootError::TlbShootdownFailed)?;
+                    if request.targets().contains(cpu) {
+                        self.tlb_coordinator
+                            .acknowledge(cpu, request.generation())
+                            .map_err(|_| SmpBootError::TlbShootdownFailed)?;
+                    }
+                }
+                let completion = self
+                    .tlb_coordinator
+                    .finish(request.generation())
+                    .map_err(|_| SmpBootError::TlbShootdownFailed)?;
+                tlb_ipi::reset_complete().ok_or(SmpBootError::TlbShootdownFailed)?;
+                return Ok(completion);
+            }
+            spin_loop();
+        }
+
+        let _ = tlb_ipi::mark_timed_out(request.generation());
+        let _ = self.tlb_coordinator.mark_timed_out(request.generation());
+        Err(SmpBootError::TlbShootdownFailed)
+    }
+
+    fn send_tlb_ipis(&mut self, request: TlbShootdownRequest) -> Result<(), SmpBootError> {
         for raw_index in 1..self.registry.topology().len() {
             let cpu = CpuIndex::new(
                 u16::try_from(raw_index).map_err(|_| SmpBootError::TlbShootdownFailed)?,
@@ -288,33 +340,7 @@ impl SmpBootstrap {
             startup::send_fixed_ipi(local_apic, destination, APIC_TLB_SHOOTDOWN_VECTOR)
                 .map_err(SmpBootError::ApplicationProcessorStartup)?;
         }
-
-        for _ in 0..TLB_ACK_WAIT_LIMIT {
-            if tlb_ipi::acknowledged() == request.targets() {
-                tlb_ipi::finish(request.generation()).ok_or(SmpBootError::TlbShootdownFailed)?;
-                for raw_index in 1..self.registry.topology().len() {
-                    let cpu = CpuIndex::new(
-                        u16::try_from(raw_index).map_err(|_| SmpBootError::TlbShootdownFailed)?,
-                    )
-                    .ok_or(SmpBootError::TlbShootdownFailed)?;
-                    if request.targets().contains(cpu) {
-                        self.tlb_coordinator
-                            .acknowledge(cpu, request.generation())
-                            .map_err(|_| SmpBootError::TlbShootdownFailed)?;
-                    }
-                }
-                self.tlb_coordinator
-                    .finish(request.generation())
-                    .map_err(|_| SmpBootError::TlbShootdownFailed)?;
-                tlb_ipi::reset_complete().ok_or(SmpBootError::TlbShootdownFailed)?;
-                return Ok(());
-            }
-            spin_loop();
-        }
-
-        let _ = tlb_ipi::mark_timed_out(request.generation());
-        let _ = self.tlb_coordinator.mark_timed_out(request.generation());
-        Err(SmpBootError::TlbShootdownFailed)
+        Ok(())
     }
 
     pub(crate) fn ready_for_agent_boot(&self) -> bool {

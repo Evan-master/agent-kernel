@@ -29,7 +29,9 @@ impl PreparedAgentMemory {
     ) -> Result<Self, AllocatedAddressSpaceFrames> {
         let agent = frames.agent();
         let identity = frames.identity();
-        let Some(memory) = Self::build_reused(agent, identity, image) else {
+        let address_space_generation = frames.address_space_generation();
+        let Some(memory) = Self::build_reused(agent, identity, address_space_generation, image)
+        else {
             return Err(frames);
         };
         if memory.identity != identity {
@@ -42,9 +44,11 @@ impl PreparedAgentMemory {
     fn build_reused(
         agent: agent_kernel_core::AgentId,
         identity: AgentMemoryIdentity,
+        address_space_generation: u64,
         image: VerifiedAgentImage<'_>,
     ) -> Option<Self> {
-        if identity.code_page_count() != image.code_page_count()
+        if address_space_generation == 0
+            || identity.code_page_count() != image.code_page_count()
             || identity.rodata_page_count() != image.rodata_page_count()
             || !identity.owned_frames().into_iter().all(frame_is_zero)
         {
@@ -122,6 +126,7 @@ impl PreparedAgentMemory {
             lazy_data_pointer,
             call_data_pointer,
             roots,
+            address_space_generation,
             identity,
             entry_rip,
             runtime_page: RuntimePageLedger::new(),

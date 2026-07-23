@@ -10,12 +10,16 @@ use agent_kernel_x86_64::{
 };
 
 use super::NativeExecutionReport;
-use crate::agent_memory::{NativeAddressSpaceFramePool, NATIVE_ADDRESS_SPACE_CAPACITY};
+use crate::{
+    agent_memory::{NativeAddressSpaceFramePool, NATIVE_ADDRESS_SPACE_CAPACITY},
+    smp_boot::SmpBootstrap,
+};
 
 impl NativeExecutionReport {
     pub(crate) fn reclaim_completed_address_spaces<const COUNT: usize>(
         &mut self,
         pool: &mut NativeAddressSpaceFramePool,
+        smp: &mut SmpBootstrap,
         agents: [AgentId; COUNT],
     ) -> Option<()> {
         if COUNT == 0
@@ -48,7 +52,11 @@ impl NativeExecutionReport {
 
         for (index, agent) in agents.iter().copied().enumerate() {
             let cpu = self.completed.take(agent).ok()?;
-            let reclaimed = cpu.reclaim_address_space(pool, tokens[index]?)?;
+            let quarantined = cpu.quarantine_address_space(pool, tokens[index]?)?;
+            let completion = smp
+                .shootdown_address_space(quarantined.tlb_address_space())
+                .ok()?;
+            let reclaimed = quarantined.reclaim_after_shootdown(pool, completion)?;
             if !reclaimed.matches(agent, identities[index]?) {
                 return None;
             }
