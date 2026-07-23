@@ -2,8 +2,10 @@
 
 mod error;
 mod select;
+mod verified;
 
 pub use error::DurableArchiveRecoveryError;
+pub use verified::VerifiedDurableArchiveRecovery;
 
 use agent_kernel_core::{
     DurableArchiveReceipt, DurableRecoveredHead, DurableSlot, DurableStateDigest, ResourceId,

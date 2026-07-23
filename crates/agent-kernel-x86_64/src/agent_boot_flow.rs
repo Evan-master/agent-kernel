@@ -9,11 +9,18 @@ mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
 use agent_kernel_core::{
-    ActionId, AgentId, AgentImageSignerStatus, EventKind, ResourceKind, TaskId, TaskStatus,
+    ActionId, AgentId, AgentImageSignerStatus, CapabilityId, EventKind, Operation, OperationSet,
+    ResourceId, ResourceKind, TaskId, TaskStatus, MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
-use agent_kernel_x86_64::agent_image::{
-    AgentImageCapsule, AgentImageFormat, AgentImageLoadError, AgentImageTrust,
-    AgentImageTrustPolicy, VerifiedAgentImage,
+use agent_kernel_hal::DURABLE_SLOT_BYTES;
+use agent_kernel_x86_64::{
+    agent_image::{
+        AgentImageCapsule, AgentImageFormat, AgentImageLoadError, AgentImageTrust,
+        AgentImageTrustPolicy, VerifiedAgentImage,
+    },
+    ata::{NativeAtaDurableBootState, NativeAtaDurableConfig},
+    native_durable_boot::NativeDurableStorageProfile,
+    NativePortIo,
 };
 use bootloader_api::BootInfo;
 
@@ -46,6 +53,7 @@ pub(super) fn run(
     boot_info: &'static mut BootInfo,
     privilege_boundary: PrivilegeBoundary,
     mut smp_bootstrap: SmpBootstrap,
+    durable_profile: NativeDurableStorageProfile,
 ) -> ! {
     if smp_bootstrap.prepare_apic_mmio(boot_info).is_err() {
         fatal_boot("AGENT_KERNEL_APIC_MMIO_ERROR");
@@ -68,11 +76,58 @@ pub(super) fn run(
     let resource_manager_image = boot_agent_images::resource_manager();
     let reuse_worker_image = boot_agent_images::reuse_worker();
     let admission_supervisor_image = boot_agent_images::admission_supervisor();
+    let mut durable_staging = [0_u8; DURABLE_SLOT_BYTES];
+    let mut durable_scratch = [0_u8; DURABLE_SLOT_BYTES];
+    let mut durable_payload = [0_u8; MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES];
+    let mut durable_session = durable_profile.ata().map(|config| {
+        // SAFETY: the validated profile keeps direct port authority inside the
+        // architecture-owned ATA session while the BSP runs in ring 0.
+        let io = unsafe { NativePortIo::new() };
+        config
+            .initialize(
+                io,
+                &mut durable_staging,
+                &mut durable_scratch,
+                &mut durable_payload,
+            )
+            .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_STORAGE_ERROR"))
+    });
+    let durable_boot_state = durable_session.as_ref().map(|session| session.boot_state());
     let boot_config = BootConfig::new(AgentId::new(1), ResourceKind::Workspace, ActionId::new(1));
-    let Ok(mut booted) = X86BootedKernel::boot(boot_config) else {
+    let boot_result = match durable_session.as_mut() {
+        None => X86BootedKernel::boot(boot_config),
+        Some(session) => match session.boot_state() {
+            NativeAtaDurableBootState::Genesis => X86BootedKernel::boot(boot_config),
+            NativeAtaDurableBootState::Recovered(_) => {
+                let Some(head) = session.recovered_head() else {
+                    fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RECOVERY_ERROR");
+                };
+                let Some(verifier) = session.recovery_verifier_mut() else {
+                    fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RECOVERY_ERROR");
+                };
+                X86BootedKernel::boot_recovered(boot_config, head, verifier)
+            }
+        },
+    };
+    let Ok(mut booted) = boot_result else {
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
     let report = *booted.report();
+    let _durable_resource = durable_session.as_ref().map(|session| {
+        bind_native_durable_resource(&mut booted, session.config())
+            .unwrap_or_else(|| fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_ERROR"))
+    });
+    match durable_boot_state {
+        Some(NativeAtaDurableBootState::Genesis) => {
+            serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_GENESIS_OK");
+            serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_OK");
+        }
+        Some(NativeAtaDurableBootState::Recovered(_)) => {
+            serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RECOVERY_OK");
+            serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_OK");
+        }
+        None => {}
+    }
     let Ok(resource_manager_signer) = booted.kernel_mut().sys_trust_agent_image_signer(
         report.bootstrap_agent,
         report.bootstrap_capability,
@@ -429,6 +484,32 @@ pub(super) fn run(
     serial_write_line("SUPERVISOR_HANDOFF_READY");
     exit_qemu(0x10);
     halt_forever()
+}
+
+fn bind_native_durable_resource(
+    booted: &mut X86BootedKernel,
+    config: NativeAtaDurableConfig,
+) -> Option<(ResourceId, CapabilityId)> {
+    let report = *booted.report();
+    if config.root() != report.bootstrap_resource {
+        return None;
+    }
+    let resource = booted
+        .kernel_mut()
+        .sys_register_resource(ResourceKind::Device, Some(report.bootstrap_resource))
+        .ok()?;
+    if resource != config.storage() {
+        return None;
+    }
+    let authority = booted
+        .kernel_mut()
+        .sys_grant(
+            report.bootstrap_agent,
+            resource,
+            OperationSet::only(Operation::Checkpoint).with(Operation::Delegate),
+        )
+        .ok()?;
+    Some((resource, authority))
 }
 
 fn verify_initial_task_prefix(booted: &mut X86BootedKernel) -> Option<()> {

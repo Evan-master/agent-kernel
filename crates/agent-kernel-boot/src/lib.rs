@@ -7,7 +7,8 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
     ActionId, AgentEntryKind, AgentId, AgentImageDigest, AgentImageId, AgentImageKind,
-    CapabilityId, KernelError, Operation, OperationSet, ResourceId, ResourceKind,
+    CapabilityId, DurableArchiveRecoveryVerifier, DurableRecoveredHead, KernelError, Operation,
+    OperationSet, ResourceId, ResourceKind,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -164,7 +165,47 @@ impl<
     >
 {
     pub fn boot(config: BootConfig) -> Result<Self, KernelError> {
+        Self::finish_boot(config, AgentKernel::new())
+    }
+
+    pub fn boot_recovered<V: DurableArchiveRecoveryVerifier>(
+        config: BootConfig,
+        head: DurableRecoveredHead,
+        verifier: &mut V,
+    ) -> Result<Self, KernelError> {
         let mut kernel = AgentKernel::new();
+        kernel.recover_verified_event_archive(head, verifier)?;
+        Self::finish_boot(config, kernel)
+    }
+
+    fn finish_boot(
+        config: BootConfig,
+        mut kernel: AgentKernel<
+            AGENTS,
+            RESOURCES,
+            CAPS,
+            EVENTS,
+            ACTIONS,
+            OBSERVATIONS,
+            CHECKPOINTS,
+            INTENTS,
+            TASKS,
+            RUN_QUEUE,
+            MESSAGES,
+            MEMORY_CELLS,
+            NAMESPACE_ENTRIES,
+            FAULTS,
+            FAULT_HANDLERS,
+            FAULT_POLICIES,
+            WAITERS,
+            AGENTS,
+            DRIVER_BINDINGS,
+            DEVICE_EVENTS,
+            DRIVER_COMMANDS,
+            DRIVER_INVOCATIONS,
+            RUNTIME_ADMISSIONS,
+        >,
+    ) -> Result<Self, KernelError> {
         kernel.sys_register_agent(config.bootstrap_agent)?;
         let resource = kernel.sys_register_resource(config.bootstrap_resource_kind, None)?;
         let capability = kernel.sys_grant(

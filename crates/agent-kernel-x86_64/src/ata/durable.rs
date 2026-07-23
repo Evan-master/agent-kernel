@@ -6,10 +6,15 @@
 mod backend;
 mod binding;
 mod head;
+mod session;
 
 pub use backend::{AtaDurableBackendInitError, AtaDurableStateBackend};
 pub use binding::{AtaDurableBinding, AtaDurableBindingError};
 pub use head::{AtaDurableHead, AtaDurableHeadBindError};
+pub use session::{
+    NativeAtaDurableBootState, NativeAtaDurableCommitError, NativeAtaDurableConfig,
+    NativeAtaDurableConfigError, NativeAtaDurableInitError, NativeAtaDurableSession,
+};
 
 use agent_kernel_hal::DURABLE_SLOT_BYTES;
 

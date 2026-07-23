@@ -6,8 +6,10 @@
 
 use crate::{
     AgentEntryKind, AgentId, CapabilityId, DurableArchiveCommitProof, DurableArchiveReceipt,
-    DurableArchiveVerificationRequest, DurableArchiveVerifier, Event, EventArchiveCheckpoint,
-    EventArchiveProposal, KernelCore, KernelError, Operation, ResourceId, ResourceStatus,
+    DurableArchiveRecoveryVerificationRequest, DurableArchiveRecoveryVerifier,
+    DurableArchiveVerificationRequest, DurableArchiveVerifier, DurableRecoveredHead, Event,
+    EventArchiveCheckpoint, EventArchiveProposal, KernelCore, KernelError, Operation, ResourceId,
+    ResourceStatus,
 };
 
 impl<
@@ -125,6 +127,34 @@ impl<
             .map_err(|_| KernelError::EventArchiveVerificationFailed)?;
         let proof = DurableArchiveCommitProof::new(request);
         Ok(self.apply_durable_archive_commit(proof))
+    }
+
+    pub fn recover_durable_event_archive<V: DurableArchiveRecoveryVerifier>(
+        &mut self,
+        head: DurableRecoveredHead,
+        verifier: &mut V,
+    ) -> Result<EventArchiveCheckpoint, KernelError> {
+        if self.event_len != 0
+            || self.event_archive_checkpoint.is_some()
+            || self.durable_archive_receipt.is_some()
+            || self.next_sequence != 1
+        {
+            return Err(KernelError::EventArchiveRecoveryStateNotVirgin);
+        }
+        let next_sequence = head
+            .through_sequence()
+            .checked_add(1)
+            .ok_or(KernelError::EventArchiveRecoverySequenceExhausted)?;
+        let request = DurableArchiveRecoveryVerificationRequest::new(head);
+        verifier
+            .verify(request)
+            .map_err(|_| KernelError::EventArchiveRecoveryVerificationFailed)?;
+
+        let checkpoint = EventArchiveCheckpoint::from_recovered_head(head);
+        self.event_archive_checkpoint = Some(checkpoint);
+        self.durable_archive_receipt = Some(head.receipt());
+        self.next_sequence = next_sequence;
+        Ok(checkpoint)
     }
 
     fn validate_event_archive_commit(

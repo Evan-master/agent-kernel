@@ -16,7 +16,9 @@ pub use config::{AtaDrive, AtaPioConfig, AtaPioConfigError};
 pub use device::{AtaDeviceIdentity, AtaPioDevice};
 pub use durable::{
     AtaDurableBackendInitError, AtaDurableBinding, AtaDurableBindingError, AtaDurableHead,
-    AtaDurableHeadBindError, AtaDurableStateBackend, ATA_DURABLE_RANGE_SECTORS,
+    AtaDurableHeadBindError, AtaDurableStateBackend, NativeAtaDurableBootState,
+    NativeAtaDurableCommitError, NativeAtaDurableConfig, NativeAtaDurableConfigError,
+    NativeAtaDurableInitError, NativeAtaDurableSession, ATA_DURABLE_RANGE_SECTORS,
     ATA_DURABLE_SLOT_SECTORS,
 };
 pub use error::AtaPioError;

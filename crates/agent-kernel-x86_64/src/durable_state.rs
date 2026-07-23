@@ -21,7 +21,9 @@ pub use manifest::{
     encode_durable_archive_manifest, DurableArchiveManifestDecodeError,
     DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION,
 };
-pub use recovery::{recover_durable_archive, DurableArchiveRecoveryError};
+pub use recovery::{
+    recover_durable_archive, DurableArchiveRecoveryError, VerifiedDurableArchiveRecovery,
+};
 pub use transaction::{
     commit_durable_archive, DurableArchiveCommitError, VerifiedDurableArchiveCommit,
 };

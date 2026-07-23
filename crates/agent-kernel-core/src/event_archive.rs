@@ -4,7 +4,7 @@
 //! archive hashing, authorized commit, facades, and architecture ABIs. The
 //! latest checkpoint is a chain head; complete Event segments remain external.
 
-use crate::{AgentId, CapabilityId, Event, ResourceId};
+use crate::{AgentId, CapabilityId, DurableRecoveredHead, Event, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct EventArchiveDigest {
@@ -145,6 +145,23 @@ impl EventArchiveCheckpoint {
             actor,
             authority,
             root,
+        }
+    }
+
+    pub(crate) const fn from_recovered_head(head: DurableRecoveredHead) -> Self {
+        let manifest = head.manifest();
+        Self {
+            proposal: EventArchiveProposal {
+                generation: manifest.generation(),
+                first_sequence: manifest.first_sequence(),
+                through_sequence: manifest.through_sequence(),
+                count: manifest.event_count() as usize,
+                previous_digest: manifest.previous_digest(),
+                digest: manifest.archive_digest(),
+            },
+            actor: manifest.actor(),
+            authority: manifest.archive_authority(),
+            root: manifest.root(),
         }
     }
 

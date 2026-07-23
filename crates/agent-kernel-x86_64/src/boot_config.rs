@@ -3,6 +3,7 @@
 //! This architecture-binary module fixes the guarded kernel-stack size and
 //! supervisor physical-memory window required by the Agent page mapper.
 
+use agent_kernel_x86_64::native_durable_boot::NativeDurableStorageProfile;
 use bootloader_api::{config::Mapping, BootloaderConfig};
 
 use crate::agent_memory::PHYSICAL_MEMORY_OFFSET;
@@ -15,3 +16,7 @@ pub(crate) static BOOTLOADER_CONFIG: BootloaderConfig = {
     config.mappings.physical_memory = Some(Mapping::FixedAddress(PHYSICAL_MEMORY_OFFSET));
     config
 };
+
+pub(crate) fn durable_storage_profile() -> NativeDurableStorageProfile {
+    NativeDurableStorageProfile::Disabled
+}

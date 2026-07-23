@@ -7,6 +7,7 @@
 mod manifest;
 mod receipt;
 mod recovery;
+mod recovery_verification;
 mod signer;
 mod verification;
 
@@ -15,6 +16,10 @@ pub use manifest::{
 };
 pub use receipt::{DurableArchiveReceipt, DurableArchiveReceiptError};
 pub use recovery::{DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGuarantee};
+pub use recovery_verification::{
+    DurableArchiveRecoveryVerificationError, DurableArchiveRecoveryVerificationRequest,
+    DurableArchiveRecoveryVerifier,
+};
 pub use signer::{
     durable_state_signer_id, DurableStateSignerId, DurableStateSignerRecord,
     DurableStateSignerStatus,

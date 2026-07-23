@@ -5,8 +5,9 @@
 //! hashing, authority validation, and dense Event Store mutation.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, DurableArchiveReceipt, DurableArchiveVerifier, EventArchiveCheckpoint,
-    EventArchiveProposal, KernelError,
+    AgentId, CapabilityId, DurableArchiveReceipt, DurableArchiveRecoveryVerifier,
+    DurableArchiveVerifier, DurableRecoveredHead, EventArchiveCheckpoint, EventArchiveProposal,
+    KernelError,
 };
 
 use crate::AgentKernel;
@@ -96,6 +97,14 @@ impl<
             receipt,
             verifier,
         )
+    }
+
+    pub fn recover_verified_event_archive<V: DurableArchiveRecoveryVerifier>(
+        &mut self,
+        head: DurableRecoveredHead,
+        verifier: &mut V,
+    ) -> Result<EventArchiveCheckpoint, KernelError> {
+        self.core.recover_durable_event_archive(head, verifier)
     }
 
     pub const fn event_archive_checkpoint(&self) -> Option<EventArchiveCheckpoint> {

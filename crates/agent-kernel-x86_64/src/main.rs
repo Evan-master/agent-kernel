@@ -37,7 +37,7 @@ mod timer_task_flow;
 mod uart_interrupt;
 mod verifier_task_flow;
 
-use boot_config::BOOTLOADER_CONFIG;
+use boot_config::{durable_storage_profile, BOOTLOADER_CONFIG};
 use privilege_runtime::PrivilegeBoundary;
 use smp_boot::SmpBootstrap;
 
@@ -105,7 +105,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         fatal_boot("AGENT_KERNEL_ACPI_TOPOLOGY_ERROR");
     };
     serial_write_line("AGENT_KERNEL_ACPI_TOPOLOGY_OK");
-    agent_boot_flow::run(boot_info, privilege_boundary, smp_bootstrap)
+    agent_boot_flow::run(
+        boot_info,
+        privilege_boundary,
+        smp_bootstrap,
+        durable_storage_profile(),
+    )
 }
 
 #[panic_handler]
