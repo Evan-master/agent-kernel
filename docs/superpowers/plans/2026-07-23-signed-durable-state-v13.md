@@ -4,8 +4,8 @@
   Supervisor replay boundaries.
 - [x] Freeze durability guarantees, threat model, layer ownership, bounds,
   two-slot transaction, recovery, and rollback-anchor limitations.
-- [ ] Add failing canonical archive byte-encoding contracts.
-- [ ] Refactor Event Archive hashing through a sink-based canonical encoder.
+- [x] Add failing canonical archive byte-encoding contracts.
+- [x] Refactor Event Archive hashing through a sink-based canonical encoder.
 - [ ] Add fixed-width State Signer, manifest, signature, slot, receipt, and
   recovery value contracts.
 - [ ] Add Ed25519 manifest verification under a separate State Signer policy.

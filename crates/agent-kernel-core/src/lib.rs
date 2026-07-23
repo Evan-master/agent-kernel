@@ -57,6 +57,7 @@ mod event;
 mod event_archive;
 mod event_archive_checkpoint;
 mod event_archive_digest;
+mod event_archive_encoding;
 mod event_log;
 mod fault;
 mod fault_compaction;
@@ -151,6 +152,10 @@ pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
 pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use event_archive::{EventArchiveCheckpoint, EventArchiveDigest, EventArchiveProposal};
+pub use event_archive_encoding::{
+    encode_event_archive_payload, EventArchiveEncodingError, MAX_DURABLE_ARCHIVE_BYTES,
+    MAX_DURABLE_ARCHIVE_EVENTS,
+};
 pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
