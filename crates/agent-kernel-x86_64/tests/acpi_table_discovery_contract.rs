@@ -2,6 +2,7 @@ use agent_kernel_x86_64::{
     acpi_topology::{load_acpi_topology, AcpiTopologyError, DirectAcpiHandler},
     cpu::{ApicId, CpuIndex},
 };
+use core::ops::{Deref, DerefMut};
 
 const RSDP_ADDRESS: usize = 0x100;
 const ROOT_ADDRESS: usize = 0x200;
@@ -14,8 +15,25 @@ enum RootKind {
     Xsdt,
 }
 
-fn firmware(kind: RootKind) -> Vec<u8> {
-    let mut memory = vec![0; FIRMWARE_BYTES];
+#[repr(align(8))]
+struct FirmwareMemory([u8; FIRMWARE_BYTES]);
+
+impl Deref for FirmwareMemory {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for FirmwareMemory {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+fn firmware(kind: RootKind) -> FirmwareMemory {
+    let mut memory = FirmwareMemory([0; FIRMWARE_BYTES]);
     let madt = minimal_madt();
     memory[MADT_ADDRESS..MADT_ADDRESS + madt.len()].copy_from_slice(&madt);
 
@@ -108,6 +126,7 @@ fn handler(memory: &[u8]) -> DirectAcpiHandler {
 fn strict_discovery_accepts_rsdt_and_xsdt_roots() {
     for kind in [RootKind::Rsdt, RootKind::Xsdt] {
         let memory = firmware(kind);
+        assert_eq!((memory.as_ptr() as usize + ROOT_ADDRESS + 36) % 8, 4);
         // SAFETY: RSDP_ADDRESS names a complete RSDP in the handler window.
         let topology =
             unsafe { load_acpi_topology::<_, 8>(handler(&memory), RSDP_ADDRESS, ApicId::new(2)) }

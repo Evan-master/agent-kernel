@@ -5,11 +5,13 @@
 //! invalidation code consumes the protocol but cannot bypass its reuse gate.
 
 mod coordinator;
+mod ipi;
 mod types;
 
 pub use coordinator::{
     TlbShootdownCompletion, TlbShootdownCoordinator, TlbShootdownError, TlbShootdownProgress,
 };
+pub use ipi::{TlbIpiError, TlbIpiMailbox, TlbIpiState, TlbIpiWork};
 pub use types::{
     TlbAddressSpace, TlbFlushKind, TlbFlushScope, TlbShootdownRequest, TlbShootdownStatus,
     MAX_TLB_RANGE_PAGES,

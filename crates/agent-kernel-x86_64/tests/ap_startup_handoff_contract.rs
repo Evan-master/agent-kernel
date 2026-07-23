@@ -17,6 +17,7 @@ fn descriptor(cpu: u16, generation: u64) -> ApStartupDescriptor {
         0xffff_ffff_8100_0000,
         0xffff_ffff_8000_1000,
         0xfee0_0000,
+        42_000,
         PHYSICAL_OFFSET,
     )
     .unwrap()
@@ -50,6 +51,7 @@ fn descriptors_reject_unsafe_machine_state() {
             0xffff_ffff_8100_0000,
             0xffff_ffff_8000_1000,
             0xfee0_0000,
+            42_000,
             PHYSICAL_OFFSET,
         ),
         Err(ApStartupHandoffError::InvalidCpu)
@@ -63,6 +65,7 @@ fn descriptors_reject_unsafe_machine_state() {
             0xffff_ffff_8100_0000,
             0xffff_ffff_8000_1000,
             0xfee0_0000,
+            42_000,
             PHYSICAL_OFFSET,
         ),
         Err(ApStartupHandoffError::InvalidGeneration)
@@ -76,6 +79,7 @@ fn descriptors_reject_unsafe_machine_state() {
             0xffff_ffff_8100_0000,
             0xffff_ffff_8000_1000,
             0xfee0_0000,
+            42_000,
             PHYSICAL_OFFSET,
         ),
         Err(ApStartupHandoffError::InvalidCr3)

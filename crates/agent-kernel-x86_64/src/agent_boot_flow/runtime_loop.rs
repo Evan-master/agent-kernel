@@ -26,6 +26,7 @@ use crate::{
     native_agent_runtime::NativeAgentRuntime,
     resource_manager_flow::PreparedResourceManagerFlow,
     serial_write_line, serial_write_str, serial_write_u64,
+    smp_boot::{ap_worker, SmpBootstrap},
     timer_task_flow::QueuedTimerTaskFlow,
     verifier_task_flow::PreparedVerifierFlow,
     X86BootedKernel,
@@ -87,6 +88,7 @@ pub(super) fn run(
     runtime: &mut NativeAgentRuntime,
     memory_pool: &mut RuntimeMemoryPool,
     address_space_pool: &mut NativeAddressSpaceFramePool,
+    smp_bootstrap: &mut SmpBootstrap,
     plan: RuntimeLoopPlan,
 ) -> Option<()> {
     let RuntimeLoopPlan {
@@ -142,6 +144,16 @@ pub(super) fn run(
         serial_write_line("AGENT_KERNEL_NATIVE_WORKER_EVIDENCE_ERROR");
         return None;
     }
+    if !ap_worker::proof_complete() {
+        serial_write_line("AGENT_KERNEL_AP_AGENT_CALL_ERROR");
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_AP_AGENT_CALL_OK");
+    if smp_bootstrap.prove_tlb_shootdown().is_err() {
+        serial_write_line("AGENT_KERNEL_TLB_SHOOTDOWN_ERROR");
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_TLB_SHOOTDOWN_OK");
     let completed_workers = workers.completed_after_runtime(booted)?;
     write_worker_markers();
 

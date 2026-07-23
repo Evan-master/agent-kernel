@@ -30,6 +30,8 @@ for expected in \
   "AGENT_KERNEL_APIC_MMIO_OK" \
   "AGENT_KERNEL_AP_TRAMPOLINE_OK" \
   "AGENT_KERNEL_SMP_AP_ONLINE_OK" \
+  "AGENT_KERNEL_AP_AGENT_CALL_OK" \
+  "AGENT_KERNEL_TLB_SHOOTDOWN_OK" \
   "AGENT_KERNEL_PER_CPU_PRIVILEGE_OK" \
   "AGENT_KERNEL_AGENT_USER_MEMORY_OK" \
   "AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK" \
@@ -601,6 +603,7 @@ for expected in \
   "event[410] driver_command_dispatched" \
   "event[411] driver_command_completed" \
   "event[412] driver_invocation_completed" \
+  "AGENT_KERNEL_SMP_HANDOFF_READY" \
   "SUPERVISOR_HANDOFF_READY"
 do
   if ! grep -Fq "$expected" <<<"$OUTPUT"; then
@@ -644,6 +647,9 @@ check_marker_count() {
 }
 
 check_marker_count "AGENT_KERNEL_AGENT_CALL_ALLOCATE_MEMORY_REGION_OK" 4
+check_marker_count "AGENT_KERNEL_AP_AGENT_CALL_OK" 1
+check_marker_count "AGENT_KERNEL_TLB_SHOOTDOWN_OK" 1
+check_marker_count "AGENT_KERNEL_SMP_HANDOFF_READY" 1
 check_marker_count "AGENT_KERNEL_NATIVE_TRUST_STORE_OK" 1
 check_marker_count "AGENT_KERNEL_AGENT_CALL_SIGNER_ROTATION_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_SIGNER_ROTATION_OK" 1

@@ -41,7 +41,7 @@ pub(crate) fn install_kernel_slot(
     }
     disable_fsgsbase();
     let slot = TRANSITION_SLOTS.get(cpu.as_usize())?;
-    slot.install(kernel_cr3).ok()?;
+    slot.install_for_cpu(kernel_cr3, cpu).ok()?;
     write_msr(IA32_GS_BASE, slot.as_ptr() as usize as u64);
     (read_msr(IA32_GS_BASE) == slot.as_ptr() as usize as u64).then_some(slot)
 }

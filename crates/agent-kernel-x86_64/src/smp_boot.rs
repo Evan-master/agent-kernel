@@ -5,13 +5,18 @@
 //! freezes the initial CPU Registry before Agent execution begins. AP startup
 //! extends this owner without moving firmware parsing into kernel core state.
 
+pub(crate) mod ap_worker;
 mod delay;
 mod interrupts;
 mod memory;
 mod startup;
+mod tlb_ipi;
 mod trampoline;
 
-use core::arch::{asm, x86_64::__cpuid};
+use core::{
+    arch::{asm, x86_64::__cpuid},
+    hint::spin_loop,
+};
 
 use agent_kernel_x86_64::{
     acpi_topology::{
@@ -19,9 +24,10 @@ use agent_kernel_x86_64::{
     },
     apic::{
         ApicBaseMsr, CpuidApicIdentity, LocalApicBase, LocalApicMmio, VolatileMmio,
-        APIC_SPURIOUS_VECTOR,
+        APIC_SPURIOUS_VECTOR, APIC_TIMER_VECTOR, APIC_TLB_SHOOTDOWN_VECTOR,
     },
     cpu::{CpuIndex, CpuLifecycleState, CpuRegistry, MAX_CPU_COUNT},
+    tlb::{TlbAddressSpace, TlbFlushScope, TlbShootdownCoordinator},
 };
 use bootloader_api::BootInfo;
 
@@ -32,6 +38,9 @@ use self::startup::ApStartError;
 use self::trampoline::{TrampolineError, TrampolinePage};
 
 const IA32_APIC_BASE: u32 = 0x1b;
+const CR3_ROOT_MASK: u64 = 0x000f_ffff_ffff_f000;
+const CR4_PCIDE: u64 = 1 << 17;
+const TLB_ACK_WAIT_LIMIT: usize = 100_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SmpBootError {
@@ -50,10 +59,14 @@ pub(crate) enum SmpBootError {
     InvalidLocalApicMapping,
     LocalApicIdentityMismatch,
     InvalidLocalApicVersion,
+    LocalApicTimerCalibrationFailed,
     SpuriousGateInstallFailed,
+    IpiGateInstallFailed,
+    PcideModeActive,
     Trampoline(TrampolineError),
     TrampolineAlreadyPrepared,
     ApplicationProcessorStartup(ApStartError),
+    TlbShootdownFailed,
 }
 
 pub(crate) struct SmpBootstrap {
@@ -61,7 +74,9 @@ pub(crate) struct SmpBootstrap {
     registry: CpuRegistry<MAX_CPU_COUNT>,
     local_apic_base: LocalApicBase,
     local_apic: Option<LocalApicMmio<VolatileMmio>>,
+    local_apic_quantum_count: Option<u32>,
     trampoline: Option<TrampolinePage>,
+    tlb_coordinator: TlbShootdownCoordinator,
 }
 
 impl SmpBootstrap {
@@ -123,7 +138,9 @@ impl SmpBootstrap {
             registry,
             local_apic_base: apic_msr.base(),
             local_apic: None,
+            local_apic_quantum_count: None,
             trampoline: None,
+            tlb_coordinator: TlbShootdownCoordinator::new(),
         })
     }
 
@@ -165,7 +182,16 @@ impl SmpBootstrap {
             return Err(SmpBootError::InvalidLocalApicVersion);
         }
         local_apic.enable(APIC_SPURIOUS_VECTOR);
+        local_apic.begin_timer_calibration(APIC_TIMER_VECTOR);
+        delay::wait_micros(10_000).map_err(|_| SmpBootError::LocalApicTimerCalibrationFailed)?;
+        let current = local_apic.timer_current_count();
+        local_apic.mask_timer(APIC_TIMER_VECTOR);
+        let quantum_count = u32::MAX
+            .checked_sub(current)
+            .filter(|count| *count != 0)
+            .ok_or(SmpBootError::LocalApicTimerCalibrationFailed)?;
         self.local_apic = Some(local_apic);
+        self.local_apic_quantum_count = Some(quantum_count);
         Ok(())
     }
 
@@ -184,6 +210,20 @@ impl SmpBootstrap {
         Ok(())
     }
 
+    pub(crate) fn install_ipi_gate(&self) -> Result<(), SmpBootError> {
+        if read_cr4() & CR4_PCIDE != 0 {
+            return Err(SmpBootError::PcideModeActive);
+        }
+        tlb_ipi::configure(self.local_apic_base, PHYSICAL_MEMORY_OFFSET)
+            .ok_or(SmpBootError::IpiGateInstallFailed)?;
+        // SAFETY: the BSP still owns all IDT mutation and interrupts remain
+        // disabled until every SMP gate has been installed and frozen.
+        unsafe {
+            exception_runtime::install_irq_gate(APIC_TLB_SHOOTDOWN_VECTOR.get(), tlb_ipi::handler())
+        }
+        .ok_or(SmpBootError::IpiGateInstallFailed)
+    }
+
     pub(crate) fn start_application_processors(&mut self) -> Result<usize, SmpBootError> {
         let local_apic = self
             .local_apic
@@ -198,8 +238,83 @@ impl SmpBootstrap {
             local_apic,
             trampoline,
             self.local_apic_base,
+            self.local_apic_quantum_count
+                .ok_or(SmpBootError::LocalApicTimerCalibrationFailed)?,
         )
         .map_err(SmpBootError::ApplicationProcessorStartup)
+    }
+
+    pub(crate) fn prove_tlb_shootdown(&mut self) -> Result<(), SmpBootError> {
+        let online = self.registry.online_mask();
+        if online.count() < 2 {
+            return Err(SmpBootError::TlbShootdownFailed);
+        }
+        let address_space = TlbAddressSpace::new(read_cr3() & CR3_ROOT_MASK, 1)
+            .ok_or(SmpBootError::TlbShootdownFailed)?;
+        let request = self
+            .tlb_coordinator
+            .begin(
+                CpuIndex::BSP,
+                online,
+                online,
+                address_space,
+                TlbFlushScope::all_contexts(),
+            )
+            .map_err(|_| SmpBootError::TlbShootdownFailed)?;
+        if tlb_ipi::publish(request).is_none() {
+            let _ = self.tlb_coordinator.mark_timed_out(request.generation());
+            return Err(SmpBootError::TlbShootdownFailed);
+        }
+
+        for raw_index in 1..self.registry.topology().len() {
+            let cpu = CpuIndex::new(
+                u16::try_from(raw_index).map_err(|_| SmpBootError::TlbShootdownFailed)?,
+            )
+            .ok_or(SmpBootError::TlbShootdownFailed)?;
+            if !request.targets().contains(cpu) {
+                continue;
+            }
+            let destination = self
+                .registry
+                .topology()
+                .get(cpu)
+                .ok_or(SmpBootError::TlbShootdownFailed)?
+                .processor()
+                .apic_id();
+            let local_apic = self
+                .local_apic
+                .as_mut()
+                .ok_or(SmpBootError::InvalidLocalApicMapping)?;
+            startup::send_fixed_ipi(local_apic, destination, APIC_TLB_SHOOTDOWN_VECTOR)
+                .map_err(SmpBootError::ApplicationProcessorStartup)?;
+        }
+
+        for _ in 0..TLB_ACK_WAIT_LIMIT {
+            if tlb_ipi::acknowledged() == request.targets() {
+                tlb_ipi::finish(request.generation()).ok_or(SmpBootError::TlbShootdownFailed)?;
+                for raw_index in 1..self.registry.topology().len() {
+                    let cpu = CpuIndex::new(
+                        u16::try_from(raw_index).map_err(|_| SmpBootError::TlbShootdownFailed)?,
+                    )
+                    .ok_or(SmpBootError::TlbShootdownFailed)?;
+                    if request.targets().contains(cpu) {
+                        self.tlb_coordinator
+                            .acknowledge(cpu, request.generation())
+                            .map_err(|_| SmpBootError::TlbShootdownFailed)?;
+                    }
+                }
+                self.tlb_coordinator
+                    .finish(request.generation())
+                    .map_err(|_| SmpBootError::TlbShootdownFailed)?;
+                tlb_ipi::reset_complete().ok_or(SmpBootError::TlbShootdownFailed)?;
+                return Ok(());
+            }
+            spin_loop();
+        }
+
+        let _ = tlb_ipi::mark_timed_out(request.generation());
+        let _ = self.tlb_coordinator.mark_timed_out(request.generation());
+        Err(SmpBootError::TlbShootdownFailed)
     }
 
     pub(crate) fn ready_for_agent_boot(&self) -> bool {
@@ -209,6 +324,7 @@ impl SmpBootstrap {
             && self.topology.local_apic_address() == self.local_apic_base.physical()
             && !self.topology.io_apics().is_empty()
             && self.local_apic.is_some()
+            && self.local_apic_quantum_count.is_some()
             && self.trampoline.is_some()
     }
 
@@ -232,4 +348,22 @@ fn read_msr(register: u32) -> u64 {
         );
     }
     (u64::from(high) << 32) | u64::from(low)
+}
+
+fn read_cr3() -> u64 {
+    let value: u64;
+    // SAFETY: kernel bootstrap reads the active page-table root only.
+    unsafe {
+        asm!("mov {}, cr3", out(reg) value, options(nomem, nostack, preserves_flags));
+    }
+    value
+}
+
+fn read_cr4() -> u64 {
+    let value: u64;
+    // SAFETY: kernel bootstrap reads control state without mutation.
+    unsafe {
+        asm!("mov {}, cr4", out(reg) value, options(nomem, nostack, preserves_flags));
+    }
+    value
 }

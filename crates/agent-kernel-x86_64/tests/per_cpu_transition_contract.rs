@@ -1,16 +1,17 @@
 use core::mem::{align_of, size_of};
 
 use agent_kernel_x86_64::{
+    cpu::CpuIndex,
     native_runtime::NativeRunBoundary,
     per_cpu::{
         CpuTransitionError, CpuTransitionStorage, PER_CPU_CALL_COUNT_OFFSET,
         PER_CPU_CALL_CR3_OFFSET, PER_CPU_CALL_RIP_OFFSET, PER_CPU_CALL_RSP_OFFSET,
-        PER_CPU_CALL_SEEN_OFFSET, PER_CPU_FAULT_ADDRESS_OFFSET, PER_CPU_FAULT_COUNT_OFFSET,
-        PER_CPU_FAULT_CR3_OFFSET, PER_CPU_FAULT_ERROR_CODE_OFFSET, PER_CPU_FAULT_RIP_OFFSET,
-        PER_CPU_FAULT_RSP_OFFSET, PER_CPU_FAULT_SEEN_OFFSET, PER_CPU_FAULT_VECTOR_OFFSET,
-        PER_CPU_HOST_RSP_OFFSET, PER_CPU_INTERRUPT_CR3_OFFSET, PER_CPU_INTERRUPT_RIP_OFFSET,
-        PER_CPU_INTERRUPT_RSP_OFFSET, PER_CPU_IRQ_COUNT_OFFSET, PER_CPU_IRQ_SEEN_OFFSET,
-        PER_CPU_KERNEL_CR3_OFFSET, PER_CPU_PREEMPTED_OFFSET,
+        PER_CPU_CALL_SEEN_OFFSET, PER_CPU_CPU_INDEX_OFFSET, PER_CPU_FAULT_ADDRESS_OFFSET,
+        PER_CPU_FAULT_COUNT_OFFSET, PER_CPU_FAULT_CR3_OFFSET, PER_CPU_FAULT_ERROR_CODE_OFFSET,
+        PER_CPU_FAULT_RIP_OFFSET, PER_CPU_FAULT_RSP_OFFSET, PER_CPU_FAULT_SEEN_OFFSET,
+        PER_CPU_FAULT_VECTOR_OFFSET, PER_CPU_HOST_RSP_OFFSET, PER_CPU_INTERRUPT_CR3_OFFSET,
+        PER_CPU_INTERRUPT_RIP_OFFSET, PER_CPU_INTERRUPT_RSP_OFFSET, PER_CPU_IRQ_COUNT_OFFSET,
+        PER_CPU_IRQ_SEEN_OFFSET, PER_CPU_KERNEL_CR3_OFFSET, PER_CPU_PREEMPTED_OFFSET,
     },
 };
 
@@ -63,6 +64,7 @@ fn per_cpu_transition_layout_is_stable_for_gs_assembly() {
     assert_eq!(PER_CPU_FAULT_COUNT_OFFSET, 109);
     assert_eq!(PER_CPU_FAULT_SEEN_OFFSET, 110);
     assert_eq!(PER_CPU_FAULT_VECTOR_OFFSET, 111);
+    assert_eq!(PER_CPU_CPU_INDEX_OFFSET, 112);
 }
 
 #[test]
@@ -70,6 +72,7 @@ fn install_and_dispatch_reset_preserve_only_kernel_identity() {
     let storage = CpuTransitionStorage::new();
     assert_eq!(storage.install(0x4003), Ok(()));
     assert_eq!(storage.kernel_cr3(), 0x4003);
+    assert_eq!(storage.cpu_index(), Some(CpuIndex::BSP));
     assert_eq!(
         storage.install(0x4003),
         Err(CpuTransitionError::AlreadyInstalled)
@@ -90,6 +93,18 @@ fn install_and_dispatch_reset_preserve_only_kernel_identity() {
     assert_eq!(
         storage.begin_dispatch(0x5003),
         Err(CpuTransitionError::KernelCr3Mismatch)
+    );
+}
+
+#[test]
+fn installation_binds_the_slot_to_one_logical_cpu() {
+    let storage = CpuTransitionStorage::new();
+    let cpu = CpuIndex::new(65).unwrap();
+    assert_eq!(storage.install_for_cpu(0x4003, cpu), Ok(()));
+    assert_eq!(storage.cpu_index(), Some(cpu));
+    assert_eq!(
+        storage.install_for_cpu(0x4003, CpuIndex::BSP),
+        Err(CpuTransitionError::AlreadyInstalled)
     );
 }
 

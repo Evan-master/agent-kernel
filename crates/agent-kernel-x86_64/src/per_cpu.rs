@@ -6,6 +6,7 @@
 
 use core::{cell::UnsafeCell, mem::offset_of};
 
+use crate::cpu::CpuIndex;
 use crate::native_runtime::{NativeRunBoundary, NativeRunBoundaryEvidence};
 
 #[repr(transparent)]
@@ -50,6 +51,25 @@ impl CpuLocalU8 {
     }
 }
 
+#[repr(transparent)]
+struct CpuLocalU16(UnsafeCell<u16>);
+
+impl CpuLocalU16 {
+    const fn new() -> Self {
+        Self(UnsafeCell::new(0))
+    }
+
+    fn load(&self) -> u16 {
+        // SAFETY: only the CPU owning the enclosing slot accesses this field.
+        unsafe { self.0.get().read_volatile() }
+    }
+
+    fn store(&self, value: u16) {
+        // SAFETY: installation publishes this immutable CPU identity once.
+        unsafe { self.0.get().write_volatile(value) };
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CpuTransitionError {
     AlreadyInstalled,
@@ -80,6 +100,7 @@ pub struct CpuTransitionStorage {
     fault_count: CpuLocalU8,
     fault_seen: CpuLocalU8,
     fault_vector: CpuLocalU8,
+    cpu_index: CpuLocalU16,
 }
 
 impl CpuTransitionStorage {
@@ -106,14 +127,24 @@ impl CpuTransitionStorage {
             fault_count: CpuLocalU8::new(),
             fault_seen: CpuLocalU8::new(),
             fault_vector: CpuLocalU8::new(),
+            cpu_index: CpuLocalU16::new(),
         }
     }
 
     pub fn install(&self, kernel_cr3: u64) -> Result<(), CpuTransitionError> {
+        self.install_for_cpu(kernel_cr3, CpuIndex::BSP)
+    }
+
+    pub fn install_for_cpu(
+        &self,
+        kernel_cr3: u64,
+        cpu: CpuIndex,
+    ) -> Result<(), CpuTransitionError> {
         if self.kernel_cr3.load() != 0 {
             return Err(CpuTransitionError::AlreadyInstalled);
         }
         self.reset_evidence();
+        self.cpu_index.store(cpu.get());
         self.kernel_cr3.store(kernel_cr3);
         Ok(())
     }
@@ -161,6 +192,10 @@ impl CpuTransitionStorage {
 
     pub fn kernel_cr3(&self) -> u64 {
         self.kernel_cr3.load()
+    }
+
+    pub fn cpu_index(&self) -> Option<CpuIndex> {
+        CpuIndex::new(self.cpu_index.load())
     }
 
     pub fn interrupt_rsp(&self) -> u64 {
@@ -263,6 +298,7 @@ pub const PER_CPU_CALL_SEEN_OFFSET: usize = offset_of!(CpuTransitionStorage, cal
 pub const PER_CPU_FAULT_COUNT_OFFSET: usize = offset_of!(CpuTransitionStorage, fault_count);
 pub const PER_CPU_FAULT_SEEN_OFFSET: usize = offset_of!(CpuTransitionStorage, fault_seen);
 pub const PER_CPU_FAULT_VECTOR_OFFSET: usize = offset_of!(CpuTransitionStorage, fault_vector);
+pub const PER_CPU_CPU_INDEX_OFFSET: usize = offset_of!(CpuTransitionStorage, cpu_index);
 
 const _: () = assert!(core::mem::size_of::<CpuTransitionStorage>() == 128);
 const _: () = assert!(core::mem::align_of::<CpuTransitionStorage>() == 64);

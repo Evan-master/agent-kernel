@@ -9,7 +9,7 @@ mod handler;
 mod parser;
 mod types;
 
-pub use discover::{discover_acpi_topology, load_acpi_topology};
+pub use discover::load_acpi_topology;
 pub use handler::DirectAcpiHandler;
 pub use parser::parse_madt;
 pub use types::{

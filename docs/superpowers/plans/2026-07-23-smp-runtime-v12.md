@@ -16,7 +16,12 @@
 - [x] Replace global transition mailboxes and privilege tables with per-CPU
   runtime slots.
 - [x] Add the AP startup trampoline and bounded startup handshake.
-- [ ] Execute a native Agent on an AP and wire the TLB shootdown IPI path.
+- [x] Wire allocator-free AP dispatch, per-AP Local APIC quantum delivery, and
+  runtime ownership rebinding for native Agent contexts.
+- [x] Wire a generation-bound atomic TLB mailbox, fixed-IPI transport, exact AP
+  acknowledgement, timeout quarantine, and CPL-safe interrupt entry.
+- [ ] Bind shootdown completion to a real mapping mutation and frame-reuse
+  quarantine, then prove native AP execution under dual-CPU QEMU.
 - [x] Pass SMP host contracts, freestanding Clippy, linking, trampoline layout,
   relocation, and formatting gates.
 - [ ] Add guard pages to per-CPU privilege stacks.

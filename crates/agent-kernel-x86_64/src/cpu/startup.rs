@@ -47,6 +47,7 @@ pub enum ApStartupHandoffError {
     InvalidStack,
     InvalidEntry,
     InvalidLocalApicBase,
+    InvalidTimerInitialCount,
     InvalidPhysicalOffset,
     InvalidState,
     IdentityMismatch,
@@ -62,6 +63,7 @@ pub struct ApStartupDescriptor {
     stack_top: u64,
     entry: u64,
     local_apic_base: u64,
+    timer_initial_count: u32,
     physical_offset: u64,
 }
 
@@ -75,6 +77,7 @@ impl ApStartupDescriptor {
         stack_top: u64,
         entry: u64,
         local_apic_base: u64,
+        timer_initial_count: u32,
         physical_offset: u64,
     ) -> Result<Self, ApStartupHandoffError> {
         if cpu == CpuIndex::BSP {
@@ -99,6 +102,9 @@ impl ApStartupDescriptor {
         if local_apic_base == 0 || local_apic_base & PAGE_MASK != 0 {
             return Err(ApStartupHandoffError::InvalidLocalApicBase);
         }
+        if timer_initial_count == 0 {
+            return Err(ApStartupHandoffError::InvalidTimerInitialCount);
+        }
         let Some(local_apic_virtual) = physical_offset.checked_add(local_apic_base) else {
             return Err(ApStartupHandoffError::InvalidPhysicalOffset);
         };
@@ -113,6 +119,7 @@ impl ApStartupDescriptor {
             stack_top,
             entry,
             local_apic_base,
+            timer_initial_count,
             physical_offset,
         })
     }
@@ -143,6 +150,10 @@ impl ApStartupDescriptor {
 
     pub const fn local_apic_base(self) -> u64 {
         self.local_apic_base
+    }
+
+    pub const fn timer_initial_count(self) -> u32 {
+        self.timer_initial_count
     }
 
     pub const fn physical_offset(self) -> u64 {
@@ -229,6 +240,8 @@ impl ApStartupHandoff {
         self.entry.store(descriptor.entry, Ordering::Relaxed);
         self.local_apic_base
             .store(descriptor.local_apic_base, Ordering::Relaxed);
+        self.reserved_input
+            .store(descriptor.timer_initial_count, Ordering::Relaxed);
         self.physical_offset
             .store(descriptor.physical_offset, Ordering::Relaxed);
         self.observed_stack_start.store(0, Ordering::Relaxed);
@@ -259,6 +272,7 @@ impl ApStartupHandoff {
             self.stack_top.load(Ordering::Relaxed),
             self.entry.load(Ordering::Relaxed),
             self.local_apic_base.load(Ordering::Relaxed),
+            self.reserved_input.load(Ordering::Relaxed),
             self.physical_offset.load(Ordering::Relaxed),
         )
     }

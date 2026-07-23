@@ -51,6 +51,23 @@ global_asm!(
     push r14
     push r15
     .endm
+    .macro agent_kernel_pop_integer_frame
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    .endm
     .macro agent_kernel_restore_host
     mov rsp, qword ptr gs:[{host_context_offset}]
     pop r15
@@ -156,6 +173,35 @@ agent_kernel_agent_timer_irq_stub:
     mov byte ptr gs:[{preempted_offset}], 1
     agent_kernel_restore_host
     .size agent_kernel_agent_timer_irq_stub, . - agent_kernel_agent_timer_irq_stub
+    .global agent_kernel_agent_apic_timer_stub
+    .type agent_kernel_agent_apic_timer_stub,@function
+agent_kernel_agent_apic_timer_stub:
+    push rax
+    mov rax, qword ptr [rsp + {origin_cs_offset}]
+    and eax, 3
+    cmp eax, 3
+    jne .Lagent_kernel_apic_timer_kernel
+    agent_kernel_push_integer_frame_after_rax
+    mov r10, cr3
+    mov rax, qword ptr gs:[{kernel_cr3_offset}]
+    mov cr3, rax
+    mov qword ptr gs:[{interrupt_cr3_offset}], r10
+    mov qword ptr gs:[{interrupt_rsp_offset}], rsp
+    mov rax, qword ptr [rsp + {rip_offset}]
+    mov qword ptr gs:[{interrupt_rip_offset}], rax
+    inc byte ptr gs:[{irq_count_offset}]
+    mov byte ptr gs:[{irq_seen_offset}], 1
+    mov byte ptr gs:[{preempted_offset}], 1
+    agent_kernel_restore_host
+.Lagent_kernel_apic_timer_kernel:
+    agent_kernel_push_integer_frame_after_rax
+    mov r12, rsp
+    and rsp, -16
+    call agent_kernel_local_apic_eoi
+    mov rsp, r12
+    agent_kernel_pop_integer_frame
+    iretq
+    .size agent_kernel_agent_apic_timer_stub, . - agent_kernel_agent_apic_timer_stub
     .global agent_kernel_agent_call_stub
     .type agent_kernel_agent_call_stub,@function
 agent_kernel_agent_call_stub:
@@ -295,6 +341,7 @@ unsafe extern "C" {
     );
     fn agent_kernel_resume_interrupted_user(host_rsp: *mut u64, interrupt_rsp: u64, agent_cr3: u64);
     pub(super) fn agent_kernel_agent_timer_irq_stub();
+    pub(super) fn agent_kernel_agent_apic_timer_stub();
     pub(super) fn agent_kernel_agent_call_stub();
     pub(super) fn agent_kernel_agent_invalid_opcode_stub();
     pub(super) fn agent_kernel_agent_general_protection_stub();

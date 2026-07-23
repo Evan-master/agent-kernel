@@ -12,6 +12,8 @@ use super::{
 };
 
 const APIC_SOFTWARE_ENABLE: u32 = 1 << 8;
+const APIC_LVT_MASKED: u32 = 1 << 16;
+const APIC_TIMER_DIVIDE_BY_16: u32 = 0b0011;
 const IO_APIC_SELECTOR_OFFSET: u64 = 0;
 const IO_APIC_WINDOW_OFFSET: u64 = 0x10;
 const IO_APIC_VERSION_REGISTER: u8 = 1;
@@ -87,6 +89,37 @@ impl<B: Mmio32> LocalApicMmio<B> {
 
     pub fn end_of_interrupt(&mut self) {
         self.write(LocalApicRegister::EndOfInterrupt, 0);
+    }
+
+    pub fn begin_timer_calibration(&mut self, vector: ApicVector) {
+        self.write(LocalApicRegister::TimerDivide, APIC_TIMER_DIVIDE_BY_16);
+        self.write(
+            LocalApicRegister::LvtTimer,
+            APIC_LVT_MASKED | vector.get() as u32,
+        );
+        self.write(LocalApicRegister::TimerInitialCount, u32::MAX);
+    }
+
+    pub fn timer_current_count(&self) -> u32 {
+        self.read(LocalApicRegister::TimerCurrentCount)
+    }
+
+    pub fn arm_timer_one_shot(&mut self, vector: ApicVector, initial_count: u32) -> Option<()> {
+        if initial_count == 0 {
+            return None;
+        }
+        self.write(LocalApicRegister::TimerDivide, APIC_TIMER_DIVIDE_BY_16);
+        self.write(LocalApicRegister::LvtTimer, vector.get() as u32);
+        self.write(LocalApicRegister::TimerInitialCount, initial_count);
+        Some(())
+    }
+
+    pub fn mask_timer(&mut self, vector: ApicVector) {
+        self.write(
+            LocalApicRegister::LvtTimer,
+            APIC_LVT_MASKED | vector.get() as u32,
+        );
+        self.write(LocalApicRegister::TimerInitialCount, 0);
     }
 
     pub const fn virtual_base(&self) -> u64 {

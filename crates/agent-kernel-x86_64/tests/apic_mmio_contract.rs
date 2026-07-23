@@ -4,7 +4,8 @@ use agent_kernel_x86_64::{
     apic::{
         ApicMmioError, IcrCommand, IoApicMmio, IoApicPolarity, IoApicRedirectionEntry,
         IoApicRedirectionIndex, IoApicTrigger, LocalApicBase, LocalApicMmio, LocalApicRegister,
-        Mmio32, APIC_SPURIOUS_VECTOR, APIC_TIMER_VECTOR, APIC_TLB_SHOOTDOWN_VECTOR,
+        Mmio32, APIC_RESCHEDULE_VECTOR, APIC_SPURIOUS_VECTOR, APIC_TIMER_VECTOR,
+        APIC_TLB_SHOOTDOWN_VECTOR,
     },
     cpu::ApicId,
 };
@@ -13,6 +14,64 @@ use agent_kernel_x86_64::{
 struct RecordingMmio {
     registers: RefCell<BTreeMap<u64, u32>>,
     writes: RefCell<Vec<(u64, u32)>>,
+}
+
+#[test]
+fn local_apic_timer_calibrates_arms_and_masks_in_canonical_order() {
+    let backend = RecordingMmio::default();
+    let physical_offset = 0xffff_8000_0000_0000;
+    let base = LocalApicBase::new(0xfee0_0000).unwrap();
+    let virtual_base = base.virtual_address(physical_offset).unwrap();
+    backend.preset(
+        virtual_base + LocalApicRegister::TimerCurrentCount.offset() as u64,
+        u32::MAX - 42_000,
+    );
+    let mut apic = LocalApicMmio::new(base, physical_offset, backend).unwrap();
+
+    apic.begin_timer_calibration(APIC_RESCHEDULE_VECTOR);
+    assert_eq!(apic.timer_current_count(), u32::MAX - 42_000);
+    apic.arm_timer_one_shot(APIC_RESCHEDULE_VECTOR, 42_000)
+        .unwrap();
+    assert_eq!(apic.arm_timer_one_shot(APIC_RESCHEDULE_VECTOR, 0), None);
+    apic.mask_timer(APIC_RESCHEDULE_VECTOR);
+
+    assert_eq!(
+        apic.backend().writes(),
+        vec![
+            (
+                virtual_base + LocalApicRegister::TimerDivide.offset() as u64,
+                0b0011,
+            ),
+            (
+                virtual_base + LocalApicRegister::LvtTimer.offset() as u64,
+                (1 << 16) | APIC_RESCHEDULE_VECTOR.get() as u32,
+            ),
+            (
+                virtual_base + LocalApicRegister::TimerInitialCount.offset() as u64,
+                u32::MAX,
+            ),
+            (
+                virtual_base + LocalApicRegister::TimerDivide.offset() as u64,
+                0b0011,
+            ),
+            (
+                virtual_base + LocalApicRegister::LvtTimer.offset() as u64,
+                APIC_RESCHEDULE_VECTOR.get() as u32,
+            ),
+            (
+                virtual_base + LocalApicRegister::TimerInitialCount.offset() as u64,
+                42_000,
+            ),
+            (
+                virtual_base + LocalApicRegister::LvtTimer.offset() as u64,
+                (1 << 16) | APIC_RESCHEDULE_VECTOR.get() as u32,
+            ),
+            (
+                virtual_base + LocalApicRegister::TimerInitialCount.offset() as u64,
+                0,
+            ),
+        ]
+    );
 }
 
 impl RecordingMmio {

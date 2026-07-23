@@ -262,7 +262,10 @@ pub(super) fn run(
     ) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
-    if uart_interrupt::install_gate().is_none() || exception_runtime::freeze_for_smp().is_none() {
+    if uart_interrupt::install_gate().is_none()
+        || smp_bootstrap.install_ipi_gate().is_err()
+        || exception_runtime::freeze_for_smp().is_none()
+    {
         fatal_boot("AGENT_KERNEL_IDT_FREEZE_ERROR");
     }
     let Ok(online_cpu_count) = smp_bootstrap.start_application_processors() else {
@@ -331,6 +334,7 @@ pub(super) fn run(
         &mut native_runtime,
         &mut runtime_memory_pool,
         &mut address_space_frame_pool,
+        &mut smp_bootstrap,
         runtime_plan,
     )
     .is_none()
@@ -411,6 +415,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK");
     event_trace::write(event_archive.events());
     event_trace::write(booted.kernel().events());
+    serial_write_line("AGENT_KERNEL_SMP_HANDOFF_READY");
     serial_write_line("SUPERVISOR_HANDOFF_READY");
     exit_qemu(0x10);
     halt_forever()

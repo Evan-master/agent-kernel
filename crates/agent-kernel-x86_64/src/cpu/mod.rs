@@ -13,7 +13,7 @@ mod topology;
 pub use identity::{
     ApicId, CpuIndex, FirmwareCpuFlags, FirmwareProcessor, ProcessorSource, MAX_CPU_COUNT,
 };
-pub use mask::CpuMask;
+pub use mask::{CpuMask, CPU_MASK_WORD_COUNT};
 pub use registry::{CpuLifecycleState, CpuRegistry, CpuRegistryError};
 pub use startup::{
     ApStartupDescriptor, ApStartupEvidence, ApStartupHandoff, ApStartupHandoffError,

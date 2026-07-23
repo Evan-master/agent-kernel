@@ -1,10 +1,10 @@
-//! ACPI table-set adapter for validated MADT conversion.
+//! Strict byte-oriented ACPI root discovery and MADT conversion.
 //!
-//! Upstream `AcpiTables` owns RSDP and RSDT/XSDT enumeration. This adapter
-//! borrows the mapped MADT bytes and immediately passes them through the bounded
-//! parser before any hardware topology is accepted.
+//! Firmware SDT entries begin after a packed 36-byte header. XSDT entries are
+//! therefore not naturally aligned as `u64` values, so discovery decodes every
+//! address from bytes before passing the mapped MADT to the bounded parser.
 
-use acpi::{sdt::madt::Madt, AcpiTables, Handler};
+use acpi::Handler;
 
 use crate::cpu::ApicId;
 
@@ -15,6 +15,7 @@ const RSDP_V2_BYTES: usize = 36;
 const SDT_HEADER_BYTES: usize = 36;
 const MAX_RSDP_BYTES: usize = 4096;
 const MAX_ROOT_TABLE_BYTES: usize = 64 * 1024;
+const MAX_MADT_BYTES: usize = 64 * 1024;
 
 /// Validate RSDP and root-table bytes before constructing upstream ACPI table
 /// enumeration state.
@@ -30,28 +31,8 @@ pub unsafe fn load_acpi_topology<H: Handler, const CPU_CAPACITY: usize>(
     bsp_apic_id: ApicId,
 ) -> Result<AcpiMachineTopology<CPU_CAPACITY>, AcpiTopologyError> {
     let (revision, root_address) = unsafe { validate_rsdp(&handler, rsdp_address)? };
-    unsafe { validate_root_table(&handler, revision, root_address)? };
-    let tables = unsafe { AcpiTables::from_rsdt(handler, revision, root_address) }
-        .map_err(|_| AcpiTopologyError::AcpiTableConstruction)?;
-    discover_acpi_topology(&tables, bsp_apic_id)
-}
-
-pub fn discover_acpi_topology<H: Handler, const CPU_CAPACITY: usize>(
-    tables: &AcpiTables<H>,
-    bsp_apic_id: ApicId,
-) -> Result<AcpiMachineTopology<CPU_CAPACITY>, AcpiTopologyError> {
-    let mapping = tables
-        .find_table::<Madt>()
-        .ok_or(AcpiTopologyError::MissingMadt)?;
-    // SAFETY: Handler guarantees that the complete requested MADT region is
-    // mapped and remains live for the lifetime of `mapping`.
-    let bytes = unsafe {
-        core::slice::from_raw_parts(
-            mapping.virtual_start.as_ptr().cast::<u8>(),
-            mapping.region_length,
-        )
-    };
-    parse_madt(bytes, bsp_apic_id)
+    let root_length = unsafe { validate_root_table(&handler, revision, root_address)? };
+    unsafe { discover_madt(&handler, revision, root_address, root_length, bsp_apic_id) }
 }
 
 unsafe fn validate_rsdp<H: Handler>(
@@ -93,7 +74,7 @@ unsafe fn validate_root_table<H: Handler>(
     handler: &H,
     revision: u8,
     address: usize,
-) -> Result<(), AcpiTopologyError> {
+) -> Result<usize, AcpiTopologyError> {
     let header = unsafe { handler.map_physical_region::<u8>(address, SDT_HEADER_BYTES) };
     let bytes = mapping_bytes(&header);
     let (signature, entry_bytes) = if revision == 0 {
@@ -115,7 +96,48 @@ unsafe fn validate_root_table<H: Handler>(
     if checksum(mapping_bytes(&complete)) != 0 {
         return Err(AcpiTopologyError::InvalidRootTableChecksum);
     }
-    Ok(())
+    Ok(length)
+}
+
+unsafe fn discover_madt<H: Handler, const CPU_CAPACITY: usize>(
+    handler: &H,
+    revision: u8,
+    root_address: usize,
+    root_length: usize,
+    bsp_apic_id: ApicId,
+) -> Result<AcpiMachineTopology<CPU_CAPACITY>, AcpiTopologyError> {
+    let root = unsafe { handler.map_physical_region::<u8>(root_address, root_length) };
+    let root_bytes = mapping_bytes(&root);
+    let entry_bytes = if revision == 0 { 4 } else { 8 };
+    for offset in (SDT_HEADER_BYTES..root_length).step_by(entry_bytes) {
+        let table_address = if entry_bytes == 4 {
+            read_u32(root_bytes, offset) as usize
+        } else {
+            read_u64(root_bytes, offset) as usize
+        };
+        if table_address == 0 {
+            continue;
+        }
+        let header = unsafe { handler.map_physical_region::<u8>(table_address, SDT_HEADER_BYTES) };
+        let header_bytes = mapping_bytes(&header);
+        if &header_bytes[..4] != b"APIC" {
+            continue;
+        }
+        let length = read_u32(header_bytes, 4) as usize;
+        if length < SDT_HEADER_BYTES {
+            return Err(AcpiTopologyError::TableTooShort);
+        }
+        if length > MAX_MADT_BYTES {
+            return Err(AcpiTopologyError::LengthOutOfBounds {
+                declared: length,
+                available: MAX_MADT_BYTES,
+            });
+        }
+        drop(header);
+        let complete = unsafe { handler.map_physical_region::<u8>(table_address, length) };
+        return parse_madt(mapping_bytes(&complete), bsp_apic_id);
+    }
+    Err(AcpiTopologyError::MissingMadt)
 }
 
 fn nonzero_root(revision: u8, root: usize) -> Result<(u8, usize), AcpiTopologyError> {

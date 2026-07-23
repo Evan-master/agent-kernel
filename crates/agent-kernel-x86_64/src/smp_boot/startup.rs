@@ -3,7 +3,9 @@
 use core::{arch::asm, hint::spin_loop};
 
 use agent_kernel_x86_64::{
-    apic::{IcrCommand, LocalApicBase, LocalApicMmio, VolatileMmio, APIC_SPURIOUS_VECTOR},
+    apic::{
+        ApicVector, IcrCommand, LocalApicBase, LocalApicMmio, VolatileMmio, APIC_SPURIOUS_VECTOR,
+    },
     cpu::{
         ApStartupDescriptor, ApStartupEvidence, ApStartupHandoff, ApStartupStatus, CpuIndex,
         CpuRegistry, MAX_CPU_COUNT,
@@ -11,11 +13,12 @@ use agent_kernel_x86_64::{
 };
 
 use crate::{
-    agent_cpu, exception_runtime, halt_forever,
+    agent_cpu::{self, AgentCpuRuntime},
+    exception_runtime, halt_forever,
     privilege_runtime::{self, PrivilegeBoundary},
 };
 
-use super::{delay, trampoline::TrampolinePage};
+use super::{ap_worker, delay, trampoline::TrampolinePage};
 
 const INIT_ASSERT_MICROS: u32 = 10_000;
 const INIT_DEASSERT_MICROS: u32 = 10_000;
@@ -44,6 +47,7 @@ pub(super) fn start_all(
     local_apic: &mut LocalApicMmio<VolatileMmio>,
     trampoline: &TrampolinePage,
     local_apic_base: LocalApicBase,
+    local_apic_quantum_count: u32,
 ) -> Result<usize, ApStartError> {
     let cpu_count = registry.topology().len();
     if cpu_count < 2 {
@@ -75,6 +79,7 @@ pub(super) fn start_all(
                 stack_top,
                 agent_kernel_ap_entry as *const () as usize as u64,
                 local_apic_base.physical(),
+                local_apic_quantum_count,
                 crate::agent_memory::PHYSICAL_MEMORY_OFFSET,
             )
             .ok()
@@ -177,6 +182,15 @@ fn send(
     wait_for_delivery(local_apic)
 }
 
+pub(super) fn send_fixed_ipi(
+    local_apic: &mut LocalApicMmio<VolatileMmio>,
+    destination: agent_kernel_x86_64::cpu::ApicId,
+    vector: ApicVector,
+) -> Result<(), ApStartError> {
+    let command = IcrCommand::fixed(destination, vector).map_err(|_| ApStartError::IcrCommand)?;
+    send(local_apic, command)
+}
+
 fn wait_for_delivery(local_apic: &LocalApicMmio<VolatileMmio>) -> Result<(), ApStartError> {
     for _ in 0..ICR_POLL_LIMIT {
         if !local_apic.delivery_pending() {
@@ -209,10 +223,11 @@ extern "C" fn agent_kernel_ap_entry(
         asm!("cli", options(nomem, nostack));
     }
     let handoff = unsafe { &*(handoff_address as *const ApStartupHandoff) };
-    let result = initialize_ap(cpu_raw, generation, apic_raw, handoff);
-    match result {
-        Ok(evidence) => {
-            let _ = handoff.acknowledge_online(evidence);
+    match initialize_ap(cpu_raw, generation, apic_raw, handoff) {
+        Ok(initialized) => {
+            if handoff.acknowledge_online(initialized.evidence).is_ok() {
+                ap_worker::run(initialized.evidence.cpu, initialized.runtime);
+            }
         }
         Err((cpu, startup_generation)) => {
             let _ = handoff.fail(cpu, startup_generation);
@@ -221,12 +236,17 @@ extern "C" fn agent_kernel_ap_entry(
     halt_forever()
 }
 
+struct InitializedAp {
+    evidence: ApStartupEvidence,
+    runtime: AgentCpuRuntime,
+}
+
 fn initialize_ap(
     cpu_raw: u32,
     generation: u64,
     apic_raw: u32,
     handoff: &ApStartupHandoff,
-) -> Result<ApStartupEvidence, (CpuIndex, u64)> {
+) -> Result<InitializedAp, (CpuIndex, u64)> {
     let cpu = u16::try_from(cpu_raw)
         .ok()
         .and_then(CpuIndex::new)
@@ -250,13 +270,26 @@ fn initialize_ap(
         return Err((cpu, generation));
     }
     local_apic.enable(APIC_SPURIOUS_VECTOR);
-    let stack = privilege.stack_bounds();
-    Ok(ApStartupEvidence {
+    let runtime = AgentCpuRuntime::attach_application_processor(
+        &privilege,
+        transition,
+        descriptor.cr3(),
         cpu,
-        apic_id: descriptor.apic_id(),
-        generation,
-        privileged_stack_start: stack.start as u64,
-        privileged_stack_end: stack.end as u64,
-        transition_slot: transition.as_ptr() as usize as u64,
+        base,
+        descriptor.physical_offset(),
+        descriptor.timer_initial_count(),
+    )
+    .ok_or((cpu, generation))?;
+    let stack = privilege.stack_bounds();
+    Ok(InitializedAp {
+        evidence: ApStartupEvidence {
+            cpu,
+            apic_id: descriptor.apic_id(),
+            generation,
+            privileged_stack_start: stack.start as u64,
+            privileged_stack_end: stack.end as u64,
+            transition_slot: transition.as_ptr() as usize as u64,
+        },
+        runtime,
     })
 }

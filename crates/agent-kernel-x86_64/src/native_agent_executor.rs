@@ -18,6 +18,7 @@ use crate::{
     agent_cpu::{AgentRunOutcome, CompletedAgentCpu, FaultedAgentCpu},
     agent_memory::RuntimeMemoryPool,
     native_agent_runtime::{NativeAgentContext, NativeAgentRuntime},
+    smp_boot::ap_worker,
     X86BootedKernel,
 };
 
@@ -68,6 +69,11 @@ pub(crate) fn run_until_idle(
         match dispatched.into_context() {
             NativeAgentContext::Prepared(cpu) => {
                 evidence.prepared = evidence.prepared.checked_add(1)?;
+                let outcome = if ap_worker::wants_prepared_execution() {
+                    ap_worker::execute_prepared(cpu)?
+                } else {
+                    cpu.run_until_boundary()?
+                };
                 run_outcome(
                     booted,
                     runtime,
@@ -75,11 +81,16 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
-                    cpu.run_until_boundary()?,
+                    outcome,
                 )?;
             }
             NativeAgentContext::Preempted(cpu) => {
                 evidence.preempted = evidence.preempted.checked_add(1)?;
+                let outcome = if ap_worker::wants_preempted_execution() {
+                    ap_worker::execute_preempted(cpu)?
+                } else {
+                    cpu.resume_until_boundary()?
+                };
                 run_outcome(
                     booted,
                     runtime,
@@ -87,7 +98,7 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
-                    cpu.resume_until_boundary()?,
+                    outcome,
                 )?;
             }
             NativeAgentContext::WaitingCall(waiting) => {

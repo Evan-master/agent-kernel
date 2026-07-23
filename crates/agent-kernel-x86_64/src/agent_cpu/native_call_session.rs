@@ -17,7 +17,7 @@ use agent_kernel_x86_64::{
 };
 
 use super::{call, runtime::AgentCpuRuntime, storage, FaultedAgentCpu, PreemptedAgentCpu};
-use crate::{agent_memory::PreparedAgentMemory, pit_timer};
+use crate::agent_memory::PreparedAgentMemory;
 
 pub(super) const MAX_AGENT_CALLS: usize = 44;
 
@@ -67,6 +67,16 @@ pub(crate) enum AgentRunOutcome {
     Call(PendingAgentCallCpu),
     Preempted(PreemptedAgentCpu),
     Fault(FaultedAgentCpu),
+}
+
+impl AgentRunOutcome {
+    pub(crate) fn rebind_runtime(self, runtime: AgentCpuRuntime) -> Option<Self> {
+        match self {
+            Self::Call(cpu) => Some(Self::Call(cpu.rebind_runtime(runtime)?)),
+            Self::Preempted(cpu) => Some(Self::Preempted(cpu.rebind_runtime(runtime)?)),
+            Self::Fault(cpu) => Some(Self::Fault(cpu.rebind_runtime(runtime)?)),
+        }
+    }
 }
 
 impl PreemptedAgentCpu {
@@ -134,12 +144,13 @@ impl AgentCallSession {
         let roots = self.memory.roots();
         let layout = self.memory.layout();
         storage::begin_dispatch(self.runtime.transition, roots)?;
-        pit_timer::arm()?;
+        self.runtime.arm_quantum_timer()?;
         let resumed = call::resume_owned(self.runtime.transition, &mut self.frame, roots, layout);
-        pit_timer::disarm();
+        let boundary = self.runtime.transition.run_boundary();
+        self.runtime.finish_quantum_timer(boundary);
         resumed?;
 
-        match self.runtime.transition.run_boundary()? {
+        match boundary? {
             NativeRunBoundary::AgentCall => {
                 let captured = call::capture(
                     self.runtime.transition,
@@ -187,6 +198,14 @@ impl PendingAgentCallCpu {
 
     pub(crate) const fn call_count(&self) -> usize {
         self.session.progress.transcript.call_count()
+    }
+
+    fn rebind_runtime(mut self, runtime: AgentCpuRuntime) -> Option<Self> {
+        if !runtime.accepts_memory(&self.session.memory) {
+            return None;
+        }
+        self.session.runtime = runtime;
+        Some(self)
     }
 
     pub(crate) fn authenticated_request(&self) -> Option<AgentCallRequest> {

@@ -7,17 +7,17 @@
 use super::{CpuIndex, MAX_CPU_COUNT};
 
 const MASK_WORD_BITS: usize = u64::BITS as usize;
-const MASK_WORD_COUNT: usize = MAX_CPU_COUNT / MASK_WORD_BITS;
+pub const CPU_MASK_WORD_COUNT: usize = MAX_CPU_COUNT / MASK_WORD_BITS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CpuMask {
-    words: [u64; MASK_WORD_COUNT],
+    words: [u64; CPU_MASK_WORD_COUNT],
 }
 
 impl CpuMask {
     pub const fn empty() -> Self {
         Self {
-            words: [0; MASK_WORD_COUNT],
+            words: [0; CPU_MASK_WORD_COUNT],
         }
     }
 
@@ -81,7 +81,7 @@ impl CpuMask {
 
     pub const fn is_empty(self) -> bool {
         let mut index = 0;
-        while index < MASK_WORD_COUNT {
+        while index < CPU_MASK_WORD_COUNT {
             if self.words[index] != 0 {
                 return false;
             }
@@ -90,8 +90,16 @@ impl CpuMask {
         true
     }
 
+    pub const fn from_words(words: [u64; CPU_MASK_WORD_COUNT]) -> Self {
+        Self { words }
+    }
+
+    pub const fn words(self) -> [u64; CPU_MASK_WORD_COUNT] {
+        self.words
+    }
+
     fn combine(self, other: Self, operation: impl Fn(u64, u64) -> u64) -> Self {
-        let mut words = [0; MASK_WORD_COUNT];
+        let mut words = [0; CPU_MASK_WORD_COUNT];
         for (index, output) in words.iter_mut().enumerate() {
             *output = operation(self.words[index], other.words[index]);
         }

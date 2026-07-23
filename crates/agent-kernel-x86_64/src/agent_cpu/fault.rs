@@ -87,6 +87,14 @@ impl FaultedAgentCpu {
         self.context
     }
 
+    pub(super) fn rebind_runtime(mut self, runtime: AgentCpuRuntime) -> Option<Self> {
+        if !runtime.accepts_memory(&self.memory) {
+            return None;
+        }
+        self.runtime = runtime;
+        Some(self)
+    }
+
     pub(crate) const fn fault(&self) -> NativeAgentFault {
         self.fault
     }
