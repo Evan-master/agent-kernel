@@ -5,6 +5,8 @@
 //! host-tested architecture library.
 
 mod assembly;
+mod guard_pages;
+mod stack;
 
 use core::{
     arch::asm,
@@ -14,25 +16,14 @@ use core::{
 
 use agent_kernel_x86_64::cpu::{CpuIndex, MAX_CPU_COUNT};
 use agent_kernel_x86_64::privilege::{
-    gdt_entries, GdtPointer, TaskStateSegment64, GDT_ENTRY_COUNT, KERNEL_CODE_SELECTOR,
-    KERNEL_DATA_SELECTOR, TSS_SELECTOR,
+    gdt_entries, GdtPointer, PrivilegedStackLayout, TaskStateSegment64, GDT_ENTRY_COUNT,
+    KERNEL_CODE_SELECTOR, KERNEL_DATA_SELECTOR, PRIVILEGED_STACK_GUARD_BYTES, TSS_SELECTOR,
 };
+use bootloader_api::BootInfo;
 
-const PRIVILEGED_STACK_BYTES: usize = 32 * 1024;
+use self::stack::PrivilegedStack;
+
 const PRIVILEGED_STACK_CANARY: u64 = 0x5253_5030_5354_414b;
-
-#[repr(C, align(4096))]
-struct PrivilegedStack {
-    bytes: UnsafeCell<[u8; PRIVILEGED_STACK_BYTES]>,
-}
-
-impl PrivilegedStack {
-    const fn new() -> Self {
-        Self {
-            bytes: UnsafeCell::new([0; PRIVILEGED_STACK_BYTES]),
-        }
-    }
-}
 
 struct TssStorage {
     value: UnsafeCell<TaskStateSegment64>,
@@ -71,11 +62,7 @@ unsafe impl Sync for CpuPrivilegeSlot {}
 static PRIVILEGE_SLOTS: [CpuPrivilegeSlot; MAX_CPU_COUNT] =
     [const { CpuPrivilegeSlot::new() }; MAX_CPU_COUNT];
 
-#[derive(Copy, Clone)]
-pub(crate) struct PrivilegedStackBounds {
-    pub(crate) start: usize,
-    pub(crate) end: usize,
-}
+pub(crate) use stack::PrivilegedStackBounds;
 
 pub(crate) struct PrivilegeBoundary {
     cpu: CpuIndex,
@@ -88,6 +75,9 @@ impl PrivilegeBoundary {
         unsafe {
             asm!("cli", options(nomem, nostack));
         }
+        if !guard_pages::ready() {
+            return None;
+        }
         let slot = PRIVILEGE_SLOTS.get(cpu.as_usize())?;
         if slot
             .install_state
@@ -97,9 +87,10 @@ impl PrivilegeBoundary {
             return None;
         }
 
-        let start = slot.stack.bytes.get().cast::<u8>() as usize;
-        let end = start.checked_add(PRIVILEGED_STACK_BYTES)?;
-        if !start.is_multiple_of(4096) || !end.is_multiple_of(16) {
+        let layout = slot.stack.layout()?;
+        let start = layout.stack_start();
+        let end = layout.stack_end();
+        if !start.is_multiple_of(PRIVILEGED_STACK_GUARD_BYTES) || !end.is_multiple_of(16) {
             return None;
         }
         // SAFETY: installation exclusively initializes the static stack.
@@ -132,7 +123,11 @@ impl PrivilegeBoundary {
         }
         if current_code_selector() != KERNEL_CODE_SELECTOR
             || current_task_selector() != TSS_SELECTOR
-            || !stack_canary_valid(PrivilegedStackBounds { start, end })
+            || !stack_canary_valid(PrivilegedStackBounds {
+                guard_start: layout.guard_start(),
+                start,
+                end,
+            })
         {
             return None;
         }
@@ -140,7 +135,11 @@ impl PrivilegeBoundary {
         slot.install_state.store(2, Ordering::Release);
         Some(Self {
             cpu,
-            stack: PrivilegedStackBounds { start, end },
+            stack: PrivilegedStackBounds {
+                guard_start: layout.guard_start(),
+                start,
+                end,
+            },
         })
     }
 
@@ -154,16 +153,37 @@ impl PrivilegeBoundary {
 }
 
 pub(crate) fn startup_stack_top(cpu: CpuIndex) -> Option<u64> {
+    if !guard_pages::ready() {
+        return None;
+    }
     let slot = PRIVILEGE_SLOTS.get(cpu.as_usize())?;
-    let start = slot.stack.bytes.get().cast::<u8>() as usize;
-    let end = start.checked_add(PRIVILEGED_STACK_BYTES)?;
-    (start.is_multiple_of(4096) && end.is_multiple_of(16)).then_some(end as u64)
+    let layout = slot.stack.layout()?;
+    (layout
+        .stack_start()
+        .is_multiple_of(PRIVILEGED_STACK_GUARD_BYTES)
+        && layout.stack_end().is_multiple_of(16))
+    .then_some(layout.stack_end() as u64)
 }
 
 pub(crate) fn stack_canary_valid(stack: PrivilegedStackBounds) -> bool {
+    let Some(layout) = PrivilegedStackLayout::new(stack.guard_start) else {
+        return false;
+    };
+    if !guard_pages::ready()
+        || layout.stack_start() != stack.start
+        || layout.stack_end() != stack.end
+    {
+        return false;
+    }
     // SAFETY: bounds are created only from the live static RSP0 stack.
     unsafe { (stack.start as *const u64).read_volatile() == PRIVILEGED_STACK_CANARY }
 }
+
+pub(crate) fn prepare_guard_pages(boot_info: &BootInfo) -> Result<(), GuardPageError> {
+    guard_pages::prepare(boot_info)
+}
+
+pub(crate) use guard_pages::GuardPageError;
 
 pub(crate) fn current_privilege_level() -> u16 {
     current_code_selector() & 0x3

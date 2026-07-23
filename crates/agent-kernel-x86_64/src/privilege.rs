@@ -13,6 +13,73 @@ pub const USER_DATA_SELECTOR: u16 = 0x1b;
 pub const USER_CODE_SELECTOR: u16 = 0x23;
 pub const TSS_SELECTOR: u16 = 0x28;
 
+pub const PRIVILEGED_STACK_GUARD_BYTES: usize = 4096;
+pub const PRIVILEGED_STACK_BYTES: usize = 32 * 1024;
+pub const PRIVILEGED_STACK_SLOT_BYTES: usize =
+    PRIVILEGED_STACK_GUARD_BYTES + PRIVILEGED_STACK_BYTES;
+
+const LOWER_CANONICAL_END: usize = 0x0000_7fff_ffff_ffff;
+const UPPER_CANONICAL_START: usize = 0xffff_8000_0000_0000;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct PrivilegedStackLayout {
+    guard_start: usize,
+    guard_end: usize,
+    stack_start: usize,
+    stack_end: usize,
+}
+
+impl PrivilegedStackLayout {
+    pub const fn new(guard_start: usize) -> Option<Self> {
+        if !guard_start.is_multiple_of(PRIVILEGED_STACK_GUARD_BYTES) {
+            return None;
+        }
+        let Some(guard_end) = guard_start.checked_add(PRIVILEGED_STACK_GUARD_BYTES) else {
+            return None;
+        };
+        let stack_start = guard_end;
+        let Some(stack_end) = stack_start.checked_add(PRIVILEGED_STACK_BYTES) else {
+            return None;
+        };
+        let Some(last_byte) = stack_end.checked_sub(1) else {
+            return None;
+        };
+        if !canonical(guard_start) || !canonical(last_byte) {
+            return None;
+        }
+        Some(Self {
+            guard_start,
+            guard_end,
+            stack_start,
+            stack_end,
+        })
+    }
+
+    pub const fn guard_start(self) -> usize {
+        self.guard_start
+    }
+
+    pub const fn guard_end(self) -> usize {
+        self.guard_end
+    }
+
+    pub const fn stack_start(self) -> usize {
+        self.stack_start
+    }
+
+    pub const fn stack_end(self) -> usize {
+        self.stack_end
+    }
+
+    pub const fn contains_stack_address(self, address: usize) -> bool {
+        address >= self.stack_start && address < self.stack_end
+    }
+}
+
+const fn canonical(address: usize) -> bool {
+    address <= LOWER_CANONICAL_END || address >= UPPER_CANONICAL_START
+}
+
 pub const KERNEL_CODE_DESCRIPTOR: u64 = 0x00af_9a00_0000_ffff;
 pub const KERNEL_DATA_DESCRIPTOR: u64 = 0x00cf_9200_0000_ffff;
 pub const USER_DATA_DESCRIPTOR: u64 = 0x00cf_f200_0000_ffff;

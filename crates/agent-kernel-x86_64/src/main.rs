@@ -88,6 +88,10 @@ const _: () = assert!(
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_init();
     serial_write_line("AGENT_KERNEL_QEMU_BOOT_OK");
+    if privilege_runtime::prepare_guard_pages(boot_info).is_err() {
+        fatal_boot("AGENT_KERNEL_PER_CPU_GUARD_PAGES_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_PER_CPU_GUARD_PAGES_OK");
     let Some(privilege_boundary) =
         PrivilegeBoundary::install(agent_kernel_x86_64::cpu::CpuIndex::BSP)
     else {

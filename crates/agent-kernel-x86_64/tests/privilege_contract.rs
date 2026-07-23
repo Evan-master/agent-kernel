@@ -8,10 +8,11 @@ use agent_kernel_x86_64::{
     },
     interrupt::{IdtEntry, AGENT_CALL_VECTOR, IDT_USER_INTERRUPT_GATE_OPTIONS},
     privilege::{
-        gdt_entries, tss_descriptor, GdtPointer, TaskStateSegment64, GDT_ENTRY_COUNT,
-        KERNEL_CODE_DESCRIPTOR, KERNEL_CODE_SELECTOR, KERNEL_DATA_DESCRIPTOR, KERNEL_DATA_SELECTOR,
-        TSS_SELECTOR, USER_CODE_DESCRIPTOR, USER_CODE_SELECTOR, USER_DATA_DESCRIPTOR,
-        USER_DATA_SELECTOR,
+        gdt_entries, tss_descriptor, GdtPointer, PrivilegedStackLayout, TaskStateSegment64,
+        GDT_ENTRY_COUNT, KERNEL_CODE_DESCRIPTOR, KERNEL_CODE_SELECTOR, KERNEL_DATA_DESCRIPTOR,
+        KERNEL_DATA_SELECTOR, PRIVILEGED_STACK_BYTES, PRIVILEGED_STACK_GUARD_BYTES,
+        PRIVILEGED_STACK_SLOT_BYTES, TSS_SELECTOR, USER_CODE_DESCRIPTOR, USER_CODE_SELECTOR,
+        USER_DATA_DESCRIPTOR, USER_DATA_SELECTOR,
     },
 };
 
@@ -70,6 +71,32 @@ fn gdt_pointer_covers_exact_permanent_table() {
     let pointer = GdtPointer::for_table(entries.as_ptr() as u64, entries.len()).unwrap();
     assert_eq!(pointer.limit(), 55);
     assert_eq!(pointer.base(), entries.as_ptr() as u64);
+}
+
+#[test]
+fn per_cpu_privilege_stack_reserves_one_lower_guard_page() {
+    let guard_start = 0xffff_8000_0020_0000;
+    let layout = PrivilegedStackLayout::new(guard_start).unwrap();
+
+    assert_eq!(layout.guard_start(), guard_start);
+    assert_eq!(
+        layout.guard_end(),
+        guard_start + PRIVILEGED_STACK_GUARD_BYTES
+    );
+    assert_eq!(layout.stack_start(), layout.guard_end());
+    assert_eq!(
+        layout.stack_end(),
+        layout.stack_start() + PRIVILEGED_STACK_BYTES
+    );
+    assert_eq!(layout.stack_end() % 16, 0);
+    assert!(layout.contains_stack_address(layout.stack_start()));
+    assert!(layout.contains_stack_address(layout.stack_end() - 1));
+    assert!(!layout.contains_stack_address(layout.guard_start()));
+    assert!(!layout.contains_stack_address(layout.stack_end()));
+    assert_eq!(PRIVILEGED_STACK_SLOT_BYTES, 9 * 4096);
+    assert!(PrivilegedStackLayout::new(guard_start + 1).is_none());
+    assert!(PrivilegedStackLayout::new(0x0000_7fff_ffff_f000).is_none());
+    assert!(PrivilegedStackLayout::new(0xffff_ffff_ffff_f000).is_none());
 }
 
 #[test]

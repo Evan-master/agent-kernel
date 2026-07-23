@@ -28,7 +28,7 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V11 trust policy │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V12 SMP runtime  │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ IMAGE      Signed Package v3            AUTH   Capabilities     │
@@ -175,7 +175,7 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ```text
 PROFILE            V10 signed-v3
 QEMU               debug + release
-EVENTS             1..409 / exact replay
+EVENTS             1..412 / exact replay
 AGENT CONTEXTS      11 isolated
 DISPATCHES          35
 FRAME OWNERSHIP     12..43 per Agent
@@ -249,8 +249,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] ring-3 isolation + per-Agent address spaces
 [done] typed Namespace + bounded path mutation
 [done] Package v3 + Ed25519 boot trust
-[work] runtime signer rotation + trust-policy Events
-[next] SMP + synchronization + TLB shootdown
+[done] runtime signer rotation + trust-policy Events
+[work] SMP + synchronization + TLB shootdown
 [next] storage + network + graphics + USB
 [next] signed durable state + formal verification
 ```
@@ -258,7 +258,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | Track | Record |
 | :--- | :--- |
 | Verified baseline | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
-| Active milestone | [Runtime Trust Policy V11](docs/superpowers/specs/2026-07-22-runtime-trust-policy-v11-design.md) |
+| Active milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 
 ## `09 // PROJECT`
 

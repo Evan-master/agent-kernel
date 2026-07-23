@@ -196,6 +196,7 @@ The QEMU SMP profile boots with at least two virtual CPUs and proves:
 Successful completion emits:
 
 - `AGENT_KERNEL_ACPI_TOPOLOGY_OK`;
+- `AGENT_KERNEL_PER_CPU_GUARD_PAGES_OK`;
 - `AGENT_KERNEL_SMP_AP_ONLINE_OK`;
 - `AGENT_KERNEL_PER_CPU_PRIVILEGE_OK`;
 - `AGENT_KERNEL_AP_AGENT_CALL_OK`;

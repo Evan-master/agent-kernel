@@ -26,6 +26,6 @@
   QEMU.
 - [x] Pass SMP host contracts, freestanding Clippy, linking, trampoline layout,
   relocation, and formatting gates.
-- [ ] Add guard pages to per-CPU privilege stacks.
+- [x] Add guard pages to per-CPU privilege stacks.
 - [ ] Pass debug and release dual-CPU QEMU gates.
 - [ ] Update bilingual public documentation, commit, and publish the V12 branch.

@@ -28,7 +28,7 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V11 trust policy │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V12 SMP runtime  │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ IMAGE      Signed Package v3            AUTH   Capability       │
@@ -175,7 +175,7 @@ AGNTIMG\0 / Package v3
 ```text
 PROFILE            V10 signed-v3
 QEMU               debug + release
-EVENTS             1..409 / 精确重放
+EVENTS             1..412 / 精确重放
 AGENT CONTEXTS      11 个隔离上下文
 DISPATCHES          35
 FRAME OWNERSHIP     每 Agent 12..43
@@ -249,8 +249,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] ring-3 隔离 + 每 Agent 独立地址空间
 [done] 类型化 Namespace + 有界路径修改
 [done] Package v3 + Ed25519 启动信任
-[work] 运行时 signer 轮换 + Trust Policy Event
-[next] SMP + 同步 + TLB shootdown
+[done] 运行时 signer 轮换 + Trust Policy Event
+[work] SMP + 同步 + TLB shootdown
 [next] Storage + Network + Graphics + USB
 [next] 签名持久状态 + 形式化验证
 ```
@@ -258,7 +258,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | 轨道 | 记录 |
 | :--- | :--- |
 | 已验证基线 | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
-| 当前里程碑 | [Runtime Trust Policy V11](docs/superpowers/specs/2026-07-22-runtime-trust-policy-v11-design.md) |
+| 当前里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 
 ## `09 // 项目`
 
