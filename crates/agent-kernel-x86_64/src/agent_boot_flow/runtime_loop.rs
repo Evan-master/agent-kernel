@@ -457,7 +457,7 @@ fn write_runtime_count(marker: &str, count: usize) {
 }
 
 fn write_worker_markers() {
-    serial_write_line("AGENT_KERNEL_PIT_IRQ_OK");
+    serial_write_line("AGENT_KERNEL_BSP_LOCAL_APIC_QUANTUM_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CPU_PREEMPTION_OK");
     serial_write_line("AGENT_KERNEL_AGENT_RING3_PREEMPTION_OK");
     serial_write_line("AGENT_KERNEL_AGENT_A_PREEMPTION_OK");

@@ -1,18 +1,18 @@
-//! One-shot x86_64 COM1 IRQ4 ingress for the bare-metal boot proof.
+//! One-shot x86_64 COM1 IRQ4 ingress through the SMP I/O APIC route.
 //!
 //! This architecture-binary module registers IRQ4 in the persistent IDT,
-//! remaps and masks the legacy PIC, and arms the 16550 THRE source. Its assembly
-//! top half only captures fixed-width hardware state and acknowledges
-//! controllers; normal Rust code validates the mailbox after IF is clear again.
+//! arms the 16550 THRE source, and captures fixed-width hardware state. The BSP
+//! route owner masks I/O APIC delivery and acknowledges the Local APIC after IF
+//! is clear again.
 
 use core::{
     arch::{asm, global_asm},
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use agent_kernel_x86_64::interrupt::{UART_IRQ_LINE, UART_IRQ_VECTOR};
+use agent_kernel_x86_64::interrupt::UART_IRQ_VECTOR;
 
-use crate::{exception_runtime, inb, outb, pic, COM1};
+use crate::{exception_runtime, inb, outb, smp_boot::SmpBootstrap, COM1};
 
 const UART_IER_THRE: u8 = 0x02;
 const UART_IIR_NO_INTERRUPT: u8 = 0x01;
@@ -61,10 +61,6 @@ agent_kernel_uart_irq_stub:
     xor eax, eax
     out dx, al
 
-    mov dx, {pic_master_command}
-    mov al, {pic_eoi}
-    out dx, al
-
     pop rdx
     pop rax
     iretq
@@ -73,8 +69,6 @@ agent_kernel_uart_irq_stub:
     uart_iir_port = const COM1 + 2,
     uart_lsr_port = const COM1 + 5,
     uart_ier_port = const COM1 + 1,
-    pic_master_command = const pic::PIC_MASTER_COMMAND,
-    pic_eoi = const pic::PIC_EOI,
     irq_seen = sym AGENT_KERNEL_UART_IRQ_SEEN,
     irq_count = sym AGENT_KERNEL_UART_IRQ_COUNT,
     irq_iir = sym AGENT_KERNEL_UART_IRQ_IIR,
@@ -96,17 +90,18 @@ pub fn install_gate() -> Option<()> {
     unsafe { exception_runtime::install_irq_gate(UART_IRQ_VECTOR, agent_kernel_uart_irq_stub) }
 }
 
-pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
-    // SAFETY: the ring-0 single-core boot path owns IF until this proof completes.
+pub fn wait_for_uart_thre(smp_bootstrap: &mut SmpBootstrap) -> Option<UartInterruptSignal> {
+    // SAFETY: the BSP owns IF and the one UART redirection entry.
     unsafe {
         asm!("cli", options(nomem, nostack));
     }
     reset_mailbox();
+    smp_bootstrap.arm_uart_irq().ok()?;
 
     // SAFETY: IF is clear, the IDT gate is installed before STI, and COM1 was
-    // initialized with OUT2 asserted by `serial_init`.
+    // initialized with OUT2 asserted by `serial_init`. The I/O APIC route is
+    // fully programmed before the UART source becomes active.
     unsafe {
-        pic::initialize_for_irq(UART_IRQ_LINE)?;
         let _ = inb(COM1 + 2);
         outb(COM1 + 1, UART_IER_THRE);
         asm!("sti", options(nomem, nostack));
@@ -119,14 +114,15 @@ pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
         core::hint::spin_loop();
     }
 
-    // SAFETY: this path reclaims IF before masking both interrupt controllers.
+    // SAFETY: this path reclaims IF and disables the device source before the
+    // route owner masks delivery and optionally acknowledges the interrupt.
     unsafe {
         asm!("cli", options(nomem, nostack));
         outb(COM1 + 1, 0);
-        pic::mask_all();
     }
 
     let count = AGENT_KERNEL_UART_IRQ_COUNT.load(Ordering::Acquire);
+    smp_bootstrap.complete_uart_irq(count != 0).ok()?;
     let iir = AGENT_KERNEL_UART_IRQ_IIR.load(Ordering::Acquire);
     let line_status = AGENT_KERNEL_UART_IRQ_LSR.load(Ordering::Acquire);
     if count != 1

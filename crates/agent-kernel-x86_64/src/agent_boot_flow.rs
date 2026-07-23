@@ -51,6 +51,8 @@ pub(super) fn run(
         fatal_boot("AGENT_KERNEL_APIC_MMIO_ERROR");
     }
     serial_write_line("AGENT_KERNEL_APIC_MMIO_OK");
+    serial_write_line("AGENT_KERNEL_IO_APIC_IRQ_ROUTING_OK");
+    serial_write_line("AGENT_KERNEL_LEGACY_PIC_DISABLED_OK");
     if smp_bootstrap.prepare_trampoline(boot_info).is_err() {
         fatal_boot("AGENT_KERNEL_AP_TRAMPOLINE_ERROR");
     }
@@ -255,10 +257,17 @@ pub(super) fn run(
     }
     serial_write_line("AGENT_KERNEL_RUNTIME_FRAME_POOL_OK");
     serial_write_line("AGENT_KERNEL_AGENT_IMAGE_LOAD_OK");
+    let Some((local_apic_base, physical_offset, initial_count)) = smp_bootstrap.bsp_quantum_timer()
+    else {
+        fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
+    };
     let Some(cpu_runtime) = AgentCpuRuntime::install(
         &privilege_boundary,
         agent_a_memory.roots(),
         smp_bootstrap.bsp_index(),
+        local_apic_base,
+        physical_offset,
+        initial_count,
     ) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
@@ -409,7 +418,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_AGENT_CR3_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK");
-    complete_driver_flow(&mut booted, driver_setup);
+    complete_driver_flow(&mut booted, &mut smp_bootstrap, driver_setup);
     if !event_archive.proves_terminal_replay(&booted) {
         fatal_boot("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_ERROR");
     }
@@ -498,8 +507,12 @@ fn validate_agent_memory(memories: [&PreparedAgentMemory; 6]) {
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_MEMORY_OK");
 }
 
-fn complete_driver_flow(booted: &mut X86BootedKernel, driver_setup: PortDriverSetup) {
-    let Some(uart_signal) = uart_interrupt::wait_for_uart_thre() else {
+fn complete_driver_flow(
+    booted: &mut X86BootedKernel,
+    smp_bootstrap: &mut SmpBootstrap,
+    driver_setup: PortDriverSetup,
+) {
+    let Some(uart_signal) = uart_interrupt::wait_for_uart_thre(smp_bootstrap) else {
         fatal_boot("AGENT_KERNEL_UART_IRQ_ERROR");
     };
     serial_write_line("AGENT_KERNEL_UART_IRQ_OK");

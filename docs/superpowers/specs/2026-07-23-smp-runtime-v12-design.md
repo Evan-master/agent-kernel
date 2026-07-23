@@ -101,10 +101,15 @@ report an enabled Local APIC. x2APIC topology may be discovered, but AP startup
 fails explicitly when an identifier cannot be addressed by the active xAPIC
 mode.
 
-Legacy 8259 interrupts are masked after the I/O APIC routes are installed.
-The PIT may remain the timer source for V12, routed through I/O APIC redirection
-to the BSP. Local APIC vectors reserve distinct entries for timer, reschedule,
-TLB shootdown, AP startup error, and spurious interrupts.
+Every I/O APIC redirection entry is masked before the UART IRQ4 route is
+resolved through MADT overrides and preconfigured for the BSP. Each Local APIC
+masks LINT0, and both 8259 controllers remain fully masked after route
+installation. UART delivery uses I/O APIC fixed physical routing with Local
+APIC EOI. BSP and AP Agent quanta use the same Local APIC one-shot timer path.
+PIT channel 2 remains a polling-only source for bounded calibration and AP
+startup delays; it does not deliver an IRQ. Local APIC vectors reserve distinct
+entries for timer, reschedule, TLB shootdown, AP startup error, and spurious
+interrupts.
 
 ## Per-CPU Runtime
 
@@ -197,8 +202,11 @@ Successful completion emits:
 
 - `AGENT_KERNEL_ACPI_TOPOLOGY_OK`;
 - `AGENT_KERNEL_PER_CPU_GUARD_PAGES_OK`;
+- `AGENT_KERNEL_IO_APIC_IRQ_ROUTING_OK`;
+- `AGENT_KERNEL_LEGACY_PIC_DISABLED_OK`;
 - `AGENT_KERNEL_SMP_AP_ONLINE_OK`;
 - `AGENT_KERNEL_PER_CPU_PRIVILEGE_OK`;
+- `AGENT_KERNEL_BSP_LOCAL_APIC_QUANTUM_OK`;
 - `AGENT_KERNEL_AP_AGENT_CALL_OK`;
 - `AGENT_KERNEL_TLB_SHOOTDOWN_OK`;
 - `AGENT_KERNEL_TLB_FRAME_REUSE_OK`;

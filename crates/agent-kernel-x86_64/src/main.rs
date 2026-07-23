@@ -28,7 +28,6 @@ mod native_agent_executor;
 mod native_agent_runtime;
 mod native_runtime_admission_broker;
 mod pic;
-mod pit_timer;
 mod port_driver_flow;
 mod privilege_runtime;
 mod resource_manager_flow;

@@ -2,6 +2,9 @@ use agent_kernel_x86_64::{
     acpi_topology::{
         parse_madt, AcpiTopologyError, InterruptPolarity, InterruptTrigger, MAX_INTERRUPT_OVERRIDES,
     },
+    apic::{
+        resolve_legacy_irq_route, IoApicPolarity, IoApicRouteError, IoApicTrigger, IoApicVersion,
+    },
     cpu::{ApicId, CpuIndex, ProcessorSource, TopologyError},
 };
 
@@ -283,5 +286,74 @@ fn madt_validates_interrupt_overrides_and_capacity() {
     assert_eq!(
         parse_madt::<4>(&madt(&overflow), ApicId::new(2)),
         Err(AcpiTopologyError::InterruptOverrideCapacity)
+    );
+}
+
+#[test]
+fn legacy_isa_irqs_resolve_to_one_io_apic_redirection() {
+    let mut entries = Vec::new();
+    append(&mut entries, local_apic(1, 2, 1));
+    append(&mut entries, io_apic(3, 0xfec0_0000, 0));
+    append(&mut entries, io_apic(4, 0xfec0_1000, 24));
+    append(&mut entries, interrupt_override(0, 0, 30, 0b1111));
+    let topology = parse_madt::<4>(&madt(&entries), ApicId::new(2)).unwrap();
+    let versions = [
+        IoApicVersion::from_raw(0x11 | (23 << 16)),
+        IoApicVersion::from_raw(0x11 | (23 << 16)),
+    ];
+
+    let uart = resolve_legacy_irq_route(&topology, &versions, 4).unwrap();
+    assert_eq!(uart.source_irq(), 4);
+    assert_eq!(uart.gsi(), 4);
+    assert_eq!(uart.controller().id(), 3);
+    assert_eq!(uart.redirection_index().low_register(), 0x18);
+    assert_eq!(uart.polarity(), IoApicPolarity::ActiveHigh);
+    assert_eq!(uart.trigger(), IoApicTrigger::Edge);
+
+    let timer = resolve_legacy_irq_route(&topology, &versions, 0).unwrap();
+    assert_eq!(timer.gsi(), 30);
+    assert_eq!(timer.controller().id(), 4);
+    assert_eq!(timer.redirection_index().low_register(), 0x1c);
+    assert_eq!(timer.polarity(), IoApicPolarity::ActiveLow);
+    assert_eq!(timer.trigger(), IoApicTrigger::Level);
+
+    assert_eq!(
+        resolve_legacy_irq_route(&topology, &versions[..1], 4),
+        Err(IoApicRouteError::VersionCountMismatch {
+            controllers: 2,
+            versions: 1,
+        })
+    );
+    assert_eq!(
+        resolve_legacy_irq_route(&topology, &versions, 16),
+        Err(IoApicRouteError::UnsupportedLegacyIrq(16))
+    );
+}
+
+#[test]
+fn legacy_irq_route_rejects_missing_and_overlapping_gsi_ranges() {
+    let mut entries = Vec::new();
+    append(&mut entries, local_apic(1, 2, 1));
+    append(&mut entries, io_apic(3, 0xfec0_0000, 0));
+    append(&mut entries, io_apic(4, 0xfec0_1000, 16));
+    append(&mut entries, interrupt_override(0, 0, 20, 0));
+    append(&mut entries, interrupt_override(0, 1, 100, 0));
+    let topology = parse_madt::<4>(&madt(&entries), ApicId::new(2)).unwrap();
+    let versions = [
+        IoApicVersion::from_raw(0x11 | (23 << 16)),
+        IoApicVersion::from_raw(0x11 | (23 << 16)),
+    ];
+
+    assert_eq!(
+        resolve_legacy_irq_route(&topology, &versions, 0),
+        Err(IoApicRouteError::AmbiguousGsi(20))
+    );
+    assert_eq!(
+        resolve_legacy_irq_route(&topology, &versions, 1),
+        Err(IoApicRouteError::MissingGsi(100))
+    );
+    assert_eq!(
+        resolve_legacy_irq_route(&topology, &[IoApicVersion::from_raw(0), versions[1]], 4,),
+        Err(IoApicRouteError::InvalidControllerVersion(3))
     );
 }

@@ -118,6 +118,10 @@ fn local_apic_backend_enables_controller_and_reads_identity() {
                 0
             ),
             (
+                virtual_base + LocalApicRegister::LvtLint0.offset() as u64,
+                1 << 16,
+            ),
+            (
                 virtual_base + LocalApicRegister::Spurious.offset() as u64,
                 0x100 | APIC_SPURIOUS_VECTOR.get() as u32,
             ),

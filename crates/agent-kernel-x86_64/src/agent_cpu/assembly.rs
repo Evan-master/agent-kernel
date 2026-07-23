@@ -1,4 +1,4 @@
-//! Ring-3 entry, resume, PIT, Agent-call, and contained-exception assembly.
+//! Ring-3 entry, resume, APIC timer, Agent-call, and exception assembly.
 //!
 //! This child module owns only register and privilege-frame mechanics. It never
 //! calls Rust while a user frame is active; the parent validates all recorded
@@ -22,8 +22,6 @@ use agent_kernel_x86_64::{
         PER_CPU_IRQ_SEEN_OFFSET, PER_CPU_KERNEL_CR3_OFFSET, PER_CPU_PREEMPTED_OFFSET,
     },
 };
-
-use crate::pic;
 
 const EXCEPTION_ORIGIN_CS_OFFSET_AFTER_RAX: usize = 16;
 const ERROR_CODE_ORIGIN_CS_OFFSET_AFTER_RAX: usize = 24;
@@ -151,28 +149,6 @@ agent_kernel_resume_interrupted_user:
     pop rax
     iretq
     .size agent_kernel_resume_interrupted_user, . - agent_kernel_resume_interrupted_user
-    .global agent_kernel_agent_timer_irq_stub
-    .type agent_kernel_agent_timer_irq_stub,@function
-agent_kernel_agent_timer_irq_stub:
-    agent_kernel_push_integer_frame
-    mov r10, cr3
-    mov rax, qword ptr gs:[{kernel_cr3_offset}]
-    mov cr3, rax
-    mov qword ptr gs:[{interrupt_cr3_offset}], r10
-    mov qword ptr gs:[{interrupt_rsp_offset}], rsp
-    mov rax, qword ptr [rsp + {rip_offset}]
-    mov qword ptr gs:[{interrupt_rip_offset}], rax
-    inc byte ptr gs:[{irq_count_offset}]
-    mov dx, {pic_master_data}
-    mov al, 0xff
-    out dx, al
-    mov dx, {pic_master_command}
-    mov al, {pic_eoi}
-    out dx, al
-    mov byte ptr gs:[{irq_seen_offset}], 1
-    mov byte ptr gs:[{preempted_offset}], 1
-    agent_kernel_restore_host
-    .size agent_kernel_agent_timer_irq_stub, . - agent_kernel_agent_timer_irq_stub
     .global agent_kernel_agent_apic_timer_stub
     .type agent_kernel_agent_apic_timer_stub,@function
 agent_kernel_agent_apic_timer_stub:
@@ -325,9 +301,6 @@ agent_kernel_agent_page_fault_stub:
     invalid_opcode_vector = const INVALID_OPCODE_VECTOR,
     general_protection_vector = const GENERAL_PROTECTION_VECTOR,
     page_fault_vector = const PAGE_FAULT_VECTOR,
-    pic_master_data = const pic::PIC_MASTER_DATA,
-    pic_master_command = const pic::PIC_MASTER_COMMAND,
-    pic_eoi = const pic::PIC_EOI,
 );
 
 unsafe extern "C" {
@@ -340,7 +313,6 @@ unsafe extern "C" {
         agent_cr3: u64,
     );
     fn agent_kernel_resume_interrupted_user(host_rsp: *mut u64, interrupt_rsp: u64, agent_cr3: u64);
-    pub(super) fn agent_kernel_agent_timer_irq_stub();
     pub(super) fn agent_kernel_agent_apic_timer_stub();
     pub(super) fn agent_kernel_agent_call_stub();
     pub(super) fn agent_kernel_agent_invalid_opcode_stub();

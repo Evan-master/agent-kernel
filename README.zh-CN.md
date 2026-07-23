@@ -92,12 +92,12 @@ Agent Package
 
 | 子系统 | 原生路径 |
 | :--- | :--- |
-| 调度 | FIFO 派发、PIT 抢占、CPU Frame 恢复 |
+| 调度 | FIFO 派发、每 CPU Local APIC 量子、CPU Frame 恢复 |
 | 隔离 | 每 Agent 页表、GDT/TSS/IDT、ring-3 入口 |
 | 恢复 | `#UD`、`#GP`、`#PF`、修复、重启、回滚 |
 | IPC | 阻塞 Mailbox、唤醒、确认、回收 |
 | 内存 | 页/区域分配、First-Fit 复用、清零 |
-| I/O | Capability 授权的 HAL 请求、IRQ、端口访问 |
+| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、端口访问 |
 
 <details>
 <summary><code>用户地址空间</code></summary>

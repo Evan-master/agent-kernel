@@ -12,7 +12,7 @@
 - [x] Add the IRQ-safe ticket lock and publication tests.
 - [x] Integrate allocator-free ACPI table discovery and MADT fixture tests.
 - [x] Add Local APIC and I/O APIC register contracts.
-- [ ] Replace legacy PIC routing in the SMP profile.
+- [x] Replace legacy PIC routing in the SMP profile.
 - [x] Replace global transition mailboxes and privilege tables with per-CPU
   runtime slots.
 - [x] Add the AP startup trampoline and bounded startup handshake.

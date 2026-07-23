@@ -92,12 +92,12 @@ Agent package
 
 | Subsystem | Native path |
 | :--- | :--- |
-| Scheduling | FIFO dispatch, PIT preemption, CPU-frame resume |
+| Scheduling | FIFO dispatch, per-CPU Local APIC quantum, CPU-frame resume |
 | Isolation | Per-Agent page tables, GDT/TSS/IDT, ring-3 entry |
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, IRQ, port access |
+| I/O | Capability-authorized HAL request, I/O APIC IRQ, port access |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>

@@ -67,6 +67,7 @@ impl<B: Mmio32> LocalApicMmio<B> {
 
     pub fn enable(&mut self, spurious_vector: ApicVector) {
         self.write(LocalApicRegister::TaskPriority, 0);
+        self.write(LocalApicRegister::LvtLint0, APIC_LVT_MASKED);
         self.write(
             LocalApicRegister::Spurious,
             APIC_SOFTWARE_ENABLE | spurious_vector.get() as u32,

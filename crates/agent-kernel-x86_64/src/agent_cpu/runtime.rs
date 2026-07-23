@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
     agent_memory::PreparedAgentMemory,
-    exception_runtime, pit_timer,
+    exception_runtime,
     privilege_runtime::{
         current_privilege_level, stack_canary_valid, PrivilegeBoundary, PrivilegedStackBounds,
     },
@@ -40,13 +40,38 @@ pub(crate) struct AgentCpuRuntime {
 }
 
 #[derive(Copy, Clone)]
-enum CpuQuantumTimer {
-    LegacyPit,
-    LocalApic {
-        base: LocalApicBase,
-        physical_offset: u64,
-        initial_count: u32,
-    },
+struct CpuQuantumTimer {
+    base: LocalApicBase,
+    physical_offset: u64,
+    initial_count: u32,
+}
+
+impl CpuQuantumTimer {
+    fn new(base: LocalApicBase, physical_offset: u64, initial_count: u32) -> Option<Self> {
+        if initial_count == 0 {
+            return None;
+        }
+        LocalApicMmio::new(base, physical_offset, VolatileMmio)?;
+        Some(Self {
+            base,
+            physical_offset,
+            initial_count,
+        })
+    }
+
+    fn arm(self) -> Option<()> {
+        LocalApicMmio::new(self.base, self.physical_offset, VolatileMmio)?
+            .arm_timer_one_shot(APIC_RESCHEDULE_VECTOR, self.initial_count)
+    }
+
+    fn finish(self, boundary: Option<NativeRunBoundary>) {
+        if let Some(mut apic) = LocalApicMmio::new(self.base, self.physical_offset, VolatileMmio) {
+            apic.mask_timer(APIC_RESCHEDULE_VECTOR);
+            if boundary == Some(NativeRunBoundary::QuantumExpired) {
+                apic.end_of_interrupt();
+            }
+        }
+    }
 }
 
 pub(crate) struct PreparedAgentCpu {
@@ -74,6 +99,9 @@ impl AgentCpuRuntime {
         privilege: &PrivilegeBoundary,
         roots: AddressSpaceRoots,
         cpu: CpuIndex,
+        local_apic_base: LocalApicBase,
+        physical_offset: u64,
+        initial_count: u32,
     ) -> Option<Self> {
         if privilege.cpu() != cpu {
             return None;
@@ -107,13 +135,13 @@ impl AgentCpuRuntime {
                 assembly::agent_kernel_agent_apic_timer_stub,
             )?;
         }
-        pit_timer::install_gate(assembly::agent_kernel_agent_timer_irq_stub)?;
+        let timer = CpuQuantumTimer::new(local_apic_base, physical_offset, initial_count)?;
         Some(Self {
             cpu,
             kernel_stack,
             kernel_cr3: roots.kernel_cr3(),
             transition,
-            timer: CpuQuantumTimer::LegacyPit,
+            timer,
         })
     }
 
@@ -135,17 +163,13 @@ impl AgentCpuRuntime {
         {
             return None;
         }
-        LocalApicMmio::new(local_apic_base, physical_offset, VolatileMmio)?;
+        let timer = CpuQuantumTimer::new(local_apic_base, physical_offset, initial_count)?;
         Some(Self {
             cpu,
             kernel_stack,
             kernel_cr3,
             transition,
-            timer: CpuQuantumTimer::LocalApic {
-                base: local_apic_base,
-                physical_offset,
-                initial_count,
-            },
+            timer,
         })
     }
 
@@ -162,33 +186,11 @@ impl AgentCpuRuntime {
     }
 
     pub(super) fn arm_quantum_timer(self) -> Option<()> {
-        match self.timer {
-            CpuQuantumTimer::LegacyPit => pit_timer::arm(),
-            CpuQuantumTimer::LocalApic {
-                base,
-                physical_offset,
-                initial_count,
-            } => LocalApicMmio::new(base, physical_offset, VolatileMmio)?
-                .arm_timer_one_shot(APIC_RESCHEDULE_VECTOR, initial_count),
-        }
+        self.timer.arm()
     }
 
     pub(super) fn finish_quantum_timer(self, boundary: Option<NativeRunBoundary>) {
-        match self.timer {
-            CpuQuantumTimer::LegacyPit => pit_timer::disarm(),
-            CpuQuantumTimer::LocalApic {
-                base,
-                physical_offset,
-                ..
-            } => {
-                if let Some(mut apic) = LocalApicMmio::new(base, physical_offset, VolatileMmio) {
-                    apic.mask_timer(APIC_RESCHEDULE_VECTOR);
-                    if boundary == Some(NativeRunBoundary::QuantumExpired) {
-                        apic.end_of_interrupt();
-                    }
-                }
-            }
-        }
+        self.timer.finish(boundary);
     }
 
     pub(crate) fn prepare(
