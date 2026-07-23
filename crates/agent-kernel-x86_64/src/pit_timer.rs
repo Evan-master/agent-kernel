@@ -14,13 +14,17 @@ use agent_kernel_x86_64::interrupt::{
 
 use crate::{exception_runtime, outb, pic};
 
-pub(super) fn arm(handler: unsafe extern "C" fn()) -> Option<()> {
+pub(super) fn install_gate(handler: unsafe extern "C" fn()) -> Option<()> {
+    // SAFETY: BSP setup owns IF and freezes the IDT only after this write.
+    unsafe { exception_runtime::install_irq_gate(PIT_IRQ_VECTOR, handler) }
+}
+
+pub(super) fn arm() -> Option<()> {
     // SAFETY: this single-core boot proof configures the gate and controllers
     // with IF clear. The caller enables interrupts only after entering the
     // dedicated Agent stack.
     unsafe {
         asm!("cli", options(nomem, nostack));
-        exception_runtime::install_irq_gate(PIT_IRQ_VECTOR, handler)?;
         pic::mask_all();
         program_channel_zero();
         pic::initialize_for_irq(PIT_IRQ_LINE)?;

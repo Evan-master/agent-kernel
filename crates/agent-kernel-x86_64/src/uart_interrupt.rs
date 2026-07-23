@@ -91,6 +91,11 @@ pub struct UartInterruptSignal {
     pub line_status: u8,
 }
 
+pub fn install_gate() -> Option<()> {
+    // SAFETY: BSP setup owns IF and freezes the IDT only after this write.
+    unsafe { exception_runtime::install_irq_gate(UART_IRQ_VECTOR, agent_kernel_uart_irq_stub) }
+}
+
 pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
     // SAFETY: the ring-0 single-core boot path owns IF until this proof completes.
     unsafe {
@@ -101,7 +106,6 @@ pub fn wait_for_uart_thre() -> Option<UartInterruptSignal> {
     // SAFETY: IF is clear, the IDT gate is installed before STI, and COM1 was
     // initialized with OUT2 asserted by `serial_init`.
     unsafe {
-        exception_runtime::install_irq_gate(UART_IRQ_VECTOR, agent_kernel_uart_irq_stub)?;
         pic::initialize_for_irq(UART_IRQ_LINE)?;
         let _ = inb(COM1 + 2);
         outb(COM1 + 1, UART_IER_THRE);

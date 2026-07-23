@@ -24,7 +24,7 @@ use crate::{
     boot_agent_trust::{
         RESOURCE_MANAGER_PUBLIC_KEY, RESOURCE_MANAGER_SCOPE, RESOURCE_MANAGER_SIGNER_ID,
     },
-    event_trace, exit_qemu, fatal_boot,
+    event_trace, exception_runtime, exit_qemu, fatal_boot,
     fault_handler_flow::FaultHandlerFlow,
     fault_task_flow::FaultTaskFlow,
     halt_forever,
@@ -45,8 +45,16 @@ const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 77;
 pub(super) fn run(
     boot_info: &'static mut BootInfo,
     privilege_boundary: PrivilegeBoundary,
-    smp_bootstrap: SmpBootstrap,
+    mut smp_bootstrap: SmpBootstrap,
 ) -> ! {
+    if smp_bootstrap.prepare_apic_mmio(boot_info).is_err() {
+        fatal_boot("AGENT_KERNEL_APIC_MMIO_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_APIC_MMIO_OK");
+    if smp_bootstrap.prepare_trampoline(boot_info).is_err() {
+        fatal_boot("AGENT_KERNEL_AP_TRAMPOLINE_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_AP_TRAMPOLINE_OK");
     if !smp_bootstrap.ready_for_agent_boot() {
         fatal_boot("AGENT_KERNEL_SMP_BOOTSTRAP_ERROR");
     }
@@ -254,6 +262,17 @@ pub(super) fn run(
     ) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
+    if uart_interrupt::install_gate().is_none() || exception_runtime::freeze_for_smp().is_none() {
+        fatal_boot("AGENT_KERNEL_IDT_FREEZE_ERROR");
+    }
+    let Ok(online_cpu_count) = smp_bootstrap.start_application_processors() else {
+        fatal_boot("AGENT_KERNEL_SMP_AP_STARTUP_ERROR");
+    };
+    if online_cpu_count < 2 {
+        fatal_boot("AGENT_KERNEL_SMP_AP_STARTUP_ERROR");
+    }
+    serial_write_line("AGENT_KERNEL_SMP_AP_ONLINE_OK");
+    serial_write_line("AGENT_KERNEL_PER_CPU_PRIVILEGE_OK");
     let Some(agent_a_cpu) = cpu_runtime.prepare(agent_a_memory, agent_a_context) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };

@@ -11,16 +11,16 @@ use x86_64::{
 
 use agent_kernel_x86_64::user_memory::PAGE_BYTES;
 
-pub(super) struct BootFrameAllocator<'a> {
+pub(crate) struct BootFrameAllocator<'a> {
     regions: &'a mut [MemoryRegion],
 }
 
 impl<'a> BootFrameAllocator<'a> {
-    pub(super) fn new(regions: &'a mut [MemoryRegion]) -> Self {
+    pub(crate) fn new(regions: &'a mut [MemoryRegion]) -> Self {
         Self { regions }
     }
 
-    pub(super) fn allocate(&mut self) -> Option<PhysFrame<Size4KiB>> {
+    pub(crate) fn allocate(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.allocate_frame()
     }
 }

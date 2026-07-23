@@ -34,12 +34,11 @@ use agent_kernel_x86_64::{
     },
 };
 
-use self::frame_allocator::BootFrameAllocator;
-
 pub(crate) use self::{
     address_space_reclamation::{
         NativeAddressSpaceFramePool, ReclaimedAgentAddressSpace, NATIVE_ADDRESS_SPACE_CAPACITY,
     },
+    frame_allocator::BootFrameAllocator,
     runtime_pool::{RuntimeMemoryPool, RuntimePhysicalFrameSet},
 };
 

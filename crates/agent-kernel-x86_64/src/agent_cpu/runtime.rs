@@ -90,6 +90,7 @@ impl AgentCpuRuntime {
                 assembly::agent_kernel_agent_call_stub,
             )?;
         }
+        pit_timer::install_gate(assembly::agent_kernel_agent_timer_irq_stub)?;
         Some(Self {
             kernel_stack,
             kernel_cr3: roots.kernel_cr3(),
@@ -169,7 +170,7 @@ impl PreparedAgentCpu {
     pub(crate) fn run_until_boundary(self) -> Option<AgentRunOutcome> {
         let roots = self.memory.roots();
         storage::begin_dispatch(self.runtime.transition, roots)?;
-        pit_timer::arm(assembly::agent_kernel_agent_timer_irq_stub)?;
+        pit_timer::arm()?;
         let layout = self.memory.layout();
         // SAFETY: private Agent pages, shared supervisor mappings, RSP0, gates,
         // and the per-dispatch evidence mailbox are all validated.

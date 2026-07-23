@@ -1,8 +1,8 @@
 //! Permanent x86_64 GDT, TSS, and privileged-entry stack.
 //!
 //! This architecture-binary module installs the segment authority model and
-//! owns the single-core RSP0 stack used for ring-3 interrupts. Descriptor bytes
-//! come from the host-tested architecture library.
+//! owns one indexed RSP0 stack per logical CPU. Descriptor bytes come from the
+//! host-tested architecture library.
 
 mod assembly;
 
@@ -151,6 +151,13 @@ impl PrivilegeBoundary {
     pub(crate) const fn cpu(&self) -> CpuIndex {
         self.cpu
     }
+}
+
+pub(crate) fn startup_stack_top(cpu: CpuIndex) -> Option<u64> {
+    let slot = PRIVILEGE_SLOTS.get(cpu.as_usize())?;
+    let start = slot.stack.bytes.get().cast::<u8>() as usize;
+    let end = start.checked_add(PRIVILEGED_STACK_BYTES)?;
+    (start.is_multiple_of(4096) && end.is_multiple_of(16)).then_some(end as u64)
 }
 
 pub(crate) fn stack_canary_valid(stack: PrivilegedStackBounds) -> bool {

@@ -5,18 +5,31 @@
 //! freezes the initial CPU Registry before Agent execution begins. AP startup
 //! extends this owner without moving firmware parsing into kernel core state.
 
+mod delay;
+mod interrupts;
+mod memory;
+mod startup;
+mod trampoline;
+
 use core::arch::{asm, x86_64::__cpuid};
 
 use agent_kernel_x86_64::{
     acpi_topology::{
         load_acpi_topology, AcpiMachineTopology, AcpiTopologyError, DirectAcpiHandler,
     },
-    apic::{ApicBaseMsr, CpuidApicIdentity, LocalApicBase},
+    apic::{
+        ApicBaseMsr, CpuidApicIdentity, LocalApicBase, LocalApicMmio, VolatileMmio,
+        APIC_SPURIOUS_VECTOR,
+    },
     cpu::{CpuIndex, CpuLifecycleState, CpuRegistry, MAX_CPU_COUNT},
 };
 use bootloader_api::BootInfo;
 
-use crate::agent_memory::PHYSICAL_MEMORY_OFFSET;
+use crate::{agent_memory::PHYSICAL_MEMORY_OFFSET, exception_runtime};
+
+use self::memory::ApicMappingError;
+use self::startup::ApStartError;
+use self::trampoline::{TrampolineError, TrampolinePage};
 
 const IA32_APIC_BASE: u32 = 0x1b;
 
@@ -32,12 +45,23 @@ pub(crate) enum SmpBootError {
     X2ApicModeActive,
     Acpi(AcpiTopologyError),
     ApicBaseMismatch { msr: LocalApicBase, madt: u64 },
+    ApicMapping(ApicMappingError),
+    ApicControllerAlreadyPrepared,
+    InvalidLocalApicMapping,
+    LocalApicIdentityMismatch,
+    InvalidLocalApicVersion,
+    SpuriousGateInstallFailed,
+    Trampoline(TrampolineError),
+    TrampolineAlreadyPrepared,
+    ApplicationProcessorStartup(ApStartError),
 }
 
 pub(crate) struct SmpBootstrap {
     topology: AcpiMachineTopology<MAX_CPU_COUNT>,
     registry: CpuRegistry<MAX_CPU_COUNT>,
     local_apic_base: LocalApicBase,
+    local_apic: Option<LocalApicMmio<VolatileMmio>>,
+    trampoline: Option<TrampolinePage>,
 }
 
 impl SmpBootstrap {
@@ -98,7 +122,84 @@ impl SmpBootstrap {
             topology,
             registry,
             local_apic_base: apic_msr.base(),
+            local_apic: None,
+            trampoline: None,
         })
+    }
+
+    pub(crate) fn prepare_apic_mmio(
+        &mut self,
+        boot_info: &mut BootInfo,
+    ) -> Result<(), SmpBootError> {
+        if self.local_apic.is_some() {
+            return Err(SmpBootError::ApicControllerAlreadyPrepared);
+        }
+        // SAFETY: all shared IDT and page-table mutation remains on the BSP
+        // before any application processor receives a startup IPI.
+        unsafe {
+            asm!("cli", options(nomem, nostack));
+        }
+        memory::map_apic_pages(
+            boot_info,
+            self.local_apic_base.physical(),
+            self.topology.io_apics(),
+        )
+        .map_err(SmpBootError::ApicMapping)?;
+        // SAFETY: the IDT is live, IF is clear, and no AP can observe this
+        // final Local APIC gate update yet.
+        unsafe {
+            exception_runtime::install_irq_gate(
+                APIC_SPURIOUS_VECTOR.get(),
+                interrupts::spurious_handler(),
+            )
+        }
+        .ok_or(SmpBootError::SpuriousGateInstallFailed)?;
+
+        let mut local_apic =
+            LocalApicMmio::new(self.local_apic_base, PHYSICAL_MEMORY_OFFSET, VolatileMmio)
+                .ok_or(SmpBootError::InvalidLocalApicMapping)?;
+        if local_apic.id() != self.topology.cpus().bsp().processor().apic_id() {
+            return Err(SmpBootError::LocalApicIdentityMismatch);
+        }
+        if local_apic.version_raw() & 0xff == 0 {
+            return Err(SmpBootError::InvalidLocalApicVersion);
+        }
+        local_apic.enable(APIC_SPURIOUS_VECTOR);
+        self.local_apic = Some(local_apic);
+        Ok(())
+    }
+
+    pub(crate) fn prepare_trampoline(
+        &mut self,
+        boot_info: &mut BootInfo,
+    ) -> Result<(), SmpBootError> {
+        if self.local_apic.is_none() {
+            return Err(SmpBootError::InvalidLocalApicMapping);
+        }
+        if self.trampoline.is_some() {
+            return Err(SmpBootError::TrampolineAlreadyPrepared);
+        }
+        self.trampoline =
+            Some(TrampolinePage::prepare(boot_info).map_err(SmpBootError::Trampoline)?);
+        Ok(())
+    }
+
+    pub(crate) fn start_application_processors(&mut self) -> Result<usize, SmpBootError> {
+        let local_apic = self
+            .local_apic
+            .as_mut()
+            .ok_or(SmpBootError::InvalidLocalApicMapping)?;
+        let trampoline = self
+            .trampoline
+            .as_ref()
+            .ok_or(SmpBootError::TrampolineAlreadyPrepared)?;
+        startup::start_all(
+            &mut self.registry,
+            local_apic,
+            trampoline,
+            self.local_apic_base,
+        )
+        .map_err(SmpBootError::ApplicationProcessorStartup)
     }
 
     pub(crate) fn ready_for_agent_boot(&self) -> bool {
@@ -107,6 +208,8 @@ impl SmpBootstrap {
             && self.topology.cpus().bsp().index() == CpuIndex::BSP
             && self.topology.local_apic_address() == self.local_apic_base.physical()
             && !self.topology.io_apics().is_empty()
+            && self.local_apic.is_some()
+            && self.trampoline.is_some()
     }
 
     pub(crate) const fn bsp_index(&self) -> CpuIndex {

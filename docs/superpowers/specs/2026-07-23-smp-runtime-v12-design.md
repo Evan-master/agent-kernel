@@ -94,11 +94,12 @@ overflow stop boot with a precise marker.
 
 ## APIC Mode
 
-V12 begins with xAPIC MMIO mode because QEMU exposes it consistently and the
-boot physical map already covers the Local APIC and I/O APIC pages. CPUID and
-the IA32_APIC_BASE MSR must report an enabled Local APIC. x2APIC topology may
-be discovered, but AP startup fails explicitly when an identifier cannot be
-addressed by the active xAPIC mode.
+V12 begins with xAPIC MMIO mode because QEMU exposes it consistently. The BSP
+adds explicit supervisor RW, NX, uncacheable mappings for the Local APIC and
+I/O APIC pages before starting any AP. CPUID and the IA32_APIC_BASE MSR must
+report an enabled Local APIC. x2APIC topology may be discovered, but AP startup
+fails explicitly when an identifier cannot be addressed by the active xAPIC
+mode.
 
 Legacy 8259 interrupts are masked after the I/O APIC routes are installed.
 The PIT may remain the timer source for V12, routed through I/O APIC redirection

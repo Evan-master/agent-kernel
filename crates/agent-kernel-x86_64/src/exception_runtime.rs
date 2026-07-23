@@ -39,6 +39,7 @@ static AGENT_KERNEL_EXCEPTION_VECTOR: AtomicU8 = AtomicU8::new(0);
 static AGENT_KERNEL_EXCEPTION_RIP: AtomicU64 = AtomicU64::new(0);
 
 static IDT_READY: AtomicU8 = AtomicU8::new(0);
+static IDT_FROZEN: AtomicU8 = AtomicU8::new(0);
 
 global_asm!(
     r#"
@@ -173,8 +174,8 @@ impl IdtStorage {
     }
 }
 
-// SAFETY: IDT installation and gate updates occur with IF clear during
-// single-core boot, and the table remains live for the image lifetime.
+// SAFETY: IDT installation and gate updates finish on the BSP with IF clear
+// before AP startup, and the table remains immutable and live afterward.
 unsafe impl Sync for IdtStorage {}
 
 static IDT: IdtStorage = IdtStorage::new();
@@ -223,7 +224,10 @@ pub fn install_and_probe() -> Option<()> {
 }
 
 pub unsafe fn install_irq_gate(vector: u8, handler: unsafe extern "C" fn()) -> Option<()> {
-    if IDT_READY.load(Ordering::Acquire) != 1 || vector < PIC_MASTER_OFFSET {
+    if IDT_READY.load(Ordering::Acquire) != 1
+        || IDT_FROZEN.load(Ordering::Acquire) != 0
+        || vector < PIC_MASTER_OFFSET
+    {
         return None;
     }
     let selector = unsafe { current_code_selector() };
@@ -242,7 +246,10 @@ pub unsafe fn install_user_interrupt_gate(
     vector: u8,
     handler: unsafe extern "C" fn(),
 ) -> Option<()> {
-    if IDT_READY.load(Ordering::Acquire) != 1 || vector < PIC_MASTER_OFFSET {
+    if IDT_READY.load(Ordering::Acquire) != 1
+        || IDT_FROZEN.load(Ordering::Acquire) != 0
+        || vector < PIC_MASTER_OFFSET
+    {
         return None;
     }
     let selector = unsafe { current_code_selector() };
@@ -264,6 +271,7 @@ pub unsafe fn install_agent_exception_gate(
     handler: unsafe extern "C" fn(),
 ) -> Option<()> {
     if IDT_READY.load(Ordering::Acquire) != 1
+        || IDT_FROZEN.load(Ordering::Acquire) != 0
         || (vector != INVALID_OPCODE_VECTOR
             && vector != GENERAL_PROTECTION_VECTOR
             && vector != PAGE_FAULT_VECTOR)
@@ -278,6 +286,34 @@ pub unsafe fn install_agent_exception_gate(
             .add(usize::from(vector))
             .write_volatile(IdtEntry::interrupt_gate(handler_address(handler), selector));
     }
+    Some(())
+}
+
+pub fn load_for_current_cpu() -> Option<()> {
+    if IDT_READY.load(Ordering::Acquire) != 1 || IDT_FROZEN.load(Ordering::Acquire) != 1 {
+        return None;
+    }
+    let entries = IDT.entries.get().cast::<IdtEntry>();
+    let pointer = IdtPointer::for_table(entries as u64, IDT_ENTRY_COUNT)?;
+    // SAFETY: boot-time gate installation completed before AP startup; the
+    // shared static table remains live and selector-compatible on every CPU.
+    unsafe {
+        asm!(
+            "lidt [{pointer}]",
+            pointer = in(reg) &pointer,
+            options(readonly, nostack, preserves_flags)
+        );
+    }
+    Some(())
+}
+
+pub fn freeze_for_smp() -> Option<()> {
+    if IDT_READY.load(Ordering::Acquire) != 1 {
+        return None;
+    }
+    IDT_FROZEN
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .ok()?;
     Some(())
 }
 

@@ -22,15 +22,26 @@ pub(super) fn install(
     roots: AddressSpaceRoots,
     cpu: CpuIndex,
 ) -> Option<&'static CpuTransitionStorage> {
+    if current_raw_cr3() != roots.kernel_cr3() {
+        return None;
+    }
+    install_kernel_slot(roots.kernel_cr3(), cpu)
+}
+
+pub(crate) fn install_kernel_slot(
+    kernel_cr3: u64,
+    cpu: CpuIndex,
+) -> Option<&'static CpuTransitionStorage> {
     // SAFETY: the CPU takes ownership of IF before binding its private slot.
     unsafe {
         asm!("cli", options(nomem, nostack));
     }
-    if current_raw_cr3() != roots.kernel_cr3() {
+    if current_raw_cr3() != kernel_cr3 {
         return None;
     }
+    disable_fsgsbase();
     let slot = TRANSITION_SLOTS.get(cpu.as_usize())?;
-    slot.install(roots.kernel_cr3()).ok()?;
+    slot.install(kernel_cr3).ok()?;
     write_msr(IA32_GS_BASE, slot.as_ptr() as usize as u64);
     (read_msr(IA32_GS_BASE) == slot.as_ptr() as usize as u64).then_some(slot)
 }
@@ -95,5 +106,17 @@ fn write_msr(register: u32, value: u64) {
             in("edx") high,
             options(nomem, nostack, preserves_flags)
         );
+    }
+}
+
+fn disable_fsgsbase() {
+    const CR4_FSGSBASE: u64 = 1 << 16;
+    let mut cr4: u64;
+    // SAFETY: the CPU owns IF and no Agent is active while its transition slot
+    // is installed. Clearing FSGSBASE prevents CPL3 from replacing kernel GS.
+    unsafe {
+        asm!("mov {}, cr4", out(reg) cr4, options(nomem, nostack, preserves_flags));
+        cr4 &= !CR4_FSGSBASE;
+        asm!("mov cr4, {}", in(reg) cr4, options(nomem, nostack, preserves_flags));
     }
 }

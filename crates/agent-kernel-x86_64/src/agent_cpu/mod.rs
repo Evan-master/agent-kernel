@@ -20,3 +20,5 @@ pub(super) use native_call_session::{
 pub(super) use runtime::{
     AgentCpuPreparation, AgentCpuRuntime, PreemptedAgentCpu, PreparedAgentCpu,
 };
+
+pub(crate) use storage::install_kernel_slot as install_ap_transition_slot;

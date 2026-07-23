@@ -134,7 +134,7 @@ impl AgentCallSession {
         let roots = self.memory.roots();
         let layout = self.memory.layout();
         storage::begin_dispatch(self.runtime.transition, roots)?;
-        pit_timer::arm(super::assembly::agent_kernel_agent_timer_irq_stub)?;
+        pit_timer::arm()?;
         let resumed = call::resume_owned(self.runtime.transition, &mut self.frame, roots, layout);
         pit_timer::disarm();
         resumed?;

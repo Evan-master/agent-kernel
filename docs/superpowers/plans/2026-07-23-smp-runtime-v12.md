@@ -15,8 +15,10 @@
 - [ ] Replace legacy PIC routing in the SMP profile.
 - [x] Replace global transition mailboxes and privilege tables with per-CPU
   runtime slots.
-- [ ] Add the AP startup trampoline and bounded startup handshake.
+- [x] Add the AP startup trampoline and bounded startup handshake.
 - [ ] Execute a native Agent on an AP and wire the TLB shootdown IPI path.
-- [ ] Pass host, freestanding, Clippy, assembly, ELF, formatting, and dual-CPU
-  QEMU gates.
+- [x] Pass SMP host contracts, freestanding Clippy, linking, trampoline layout,
+  relocation, and formatting gates.
+- [ ] Add guard pages to per-CPU privilege stacks.
+- [ ] Pass debug and release dual-CPU QEMU gates.
 - [ ] Update bilingual public documentation, commit, and publish the V12 branch.

@@ -6,6 +6,7 @@ IMAGE="$("$ROOT_DIR/scripts/build-qemu-image.sh" "$@")"
 
 set +e
 OUTPUT="$(qemu-system-x86_64 \
+  -smp 2 \
   -drive "format=raw,file=$IMAGE" \
   -serial stdio \
   -display none \
@@ -25,6 +26,11 @@ for expected in \
   "AGENT_KERNEL_QEMU_BOOT_OK" \
   "AGENT_KERNEL_GDT_TSS_OK" \
   "AGENT_KERNEL_EXCEPTION_BASELINE_OK" \
+  "AGENT_KERNEL_ACPI_TOPOLOGY_OK" \
+  "AGENT_KERNEL_APIC_MMIO_OK" \
+  "AGENT_KERNEL_AP_TRAMPOLINE_OK" \
+  "AGENT_KERNEL_SMP_AP_ONLINE_OK" \
+  "AGENT_KERNEL_PER_CPU_PRIVILEGE_OK" \
   "AGENT_KERNEL_AGENT_USER_MEMORY_OK" \
   "AGENT_KERNEL_AGENT_ADDRESS_SPACE_OK" \
   "AGENT_KERNEL_AGENT_IMAGE_FORMAT_OK" \
