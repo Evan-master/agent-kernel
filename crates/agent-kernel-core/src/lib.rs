@@ -52,6 +52,7 @@ mod driver_invocation_event;
 mod driver_invocation_runtime;
 mod driver_invocation_tick;
 mod driver_runtime_event;
+mod durable_state;
 mod error;
 mod event;
 mod event_archive;
@@ -149,6 +150,13 @@ pub use driver_command::{
 };
 pub use driver_endpoint::{DriverEndpointDescriptor, DriverEndpointKind, DriverEndpointRecord};
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
+pub use durable_state::{
+    durable_state_signer_id, DurableAnchorMode, DurableArchiveAnchor, DurableArchiveManifest,
+    DurableArchiveManifestError, DurableArchiveReceipt, DurableArchiveReceiptError,
+    DurableArchiveSignature, DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGuarantee,
+    DurableSlot, DurableStateDigest, DurableStateSignerId, DurableStateSignerRecord,
+    DurableStateSignerStatus,
+};
 pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use event_archive::{EventArchiveCheckpoint, EventArchiveDigest, EventArchiveProposal};

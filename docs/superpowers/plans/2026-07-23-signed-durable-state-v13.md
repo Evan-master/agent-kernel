@@ -6,7 +6,7 @@
   two-slot transaction, recovery, and rollback-anchor limitations.
 - [x] Add failing canonical archive byte-encoding contracts.
 - [x] Refactor Event Archive hashing through a sink-based canonical encoder.
-- [ ] Add fixed-width State Signer, manifest, signature, slot, receipt, and
+- [x] Add fixed-width State Signer, manifest, signature, slot, receipt, and
   recovery value contracts.
 - [ ] Add Ed25519 manifest verification under a separate State Signer policy.
 - [ ] Add a fixed-capacity `DurableStateBackend` HAL contract.

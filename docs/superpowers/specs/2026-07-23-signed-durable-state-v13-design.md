@@ -55,6 +55,25 @@ Raw receipts remain untrusted. `KernelCore` calls a trusted
 inside the same commit operation. Agent callers cannot inject a verifier or
 construct proof tokens.
 
+### Frozen Value Contracts
+
+- State Signer IDs are SHA-256 over
+  `AGENT-KERNEL-DURABLE-STATE-SIGNER-V1\0 | public_key`. This domain remains
+  distinct from the Agent Image signer domain even when both policies contain
+  the same Ed25519 public key.
+- Durable digests and signer IDs are 32 bytes. Ed25519 signatures are exactly
+  64 bytes. Persisted lengths use `u32`; Event counts use `u16`; generations,
+  sequence numbers, object IDs, policy generations, and flush epochs use
+  `u64`.
+- Odd archive generations target slot `A`; even generations target slot `B`.
+  Generation zero has no slot.
+- An unanchored profile carries generation zero and the zero digest. A trusted
+  anchor carries the immediately preceding archive generation and digest.
+  Trusted genesis is the explicit `(Trusted, 0, zero digest)` tuple.
+- A recovery head labels an unanchored chain `rollback-evident`. It may label a
+  trusted-anchor chain `rollback-resistant` only after machine verification of
+  the manifest, receipt, and anchor evidence.
+
 ## Canonical Archive Payload
 
 The payload is the exact byte preimage used by Event Archive SHA-256:
