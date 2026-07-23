@@ -2,11 +2,11 @@
 //!
 //! This architecture-layer adapter is compiled only for x86_64. Constructing
 //! it is unsafe because possession grants direct port I/O authority; request
-//! validation remains in `PortIoBackend`.
+//! validation remains in the bounded architecture backends.
 
 use core::arch::asm;
 
-use crate::port::PortIo;
+use crate::{ata::AtaRegisterIo, port::PortIo};
 
 pub struct NativePortIo {
     _private: (),
@@ -18,7 +18,7 @@ impl NativePortIo {
     /// # Safety
     ///
     /// The caller must run at a privilege level that permits port I/O and must
-    /// bind this value only to a trusted, validated kernel endpoint.
+    /// bind this value only to a trusted, validated architecture backend.
     pub const unsafe fn new() -> Self {
         Self { _private: () }
     }
@@ -44,6 +44,40 @@ impl PortIo for NativePortIo {
                 "out dx, al",
                 in("dx") port,
                 in("al") value,
+                options(nomem, nostack, preserves_flags)
+            );
+        }
+    }
+}
+
+impl AtaRegisterIo for NativePortIo {
+    fn read_u8(&mut self, port: u16) -> u8 {
+        <Self as PortIo>::read_u8(self, port)
+    }
+
+    fn write_u8(&mut self, port: u16, value: u8) {
+        <Self as PortIo>::write_u8(self, port, value);
+    }
+
+    fn read_u16(&mut self, port: u16) -> u16 {
+        let value: u16;
+        unsafe {
+            asm!(
+                "in ax, dx",
+                in("dx") port,
+                out("ax") value,
+                options(nomem, nostack, preserves_flags)
+            );
+        }
+        value
+    }
+
+    fn write_u16(&mut self, port: u16, value: u16) {
+        unsafe {
+            asm!(
+                "out dx, ax",
+                in("dx") port,
+                in("ax") value,
                 options(nomem, nostack, preserves_flags)
             );
         }

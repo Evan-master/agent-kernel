@@ -10,6 +10,7 @@ pub mod address_space_reclamation;
 pub mod agent_call;
 pub mod agent_image;
 pub mod apic;
+pub mod ata;
 pub mod context;
 pub mod cpu;
 pub mod durable_state;
