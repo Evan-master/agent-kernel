@@ -15,12 +15,12 @@
 </p>
 
 <pre>
-$ ak boot --profile signed-v3
-[00] identity .............. bound
-[01] capability graph ...... online
-[02] Ed25519 trust policy .. verified
-[03] ring-3 agents ......... isolated
-[04] durable archive ....... committed
+agent-kernel / native-x86_64
+[00] identity ............... bound
+[01] capability graph ....... online
+[02] Ed25519 trust policy ... verified
+[03] ring-3 agents .......... isolated
+[04] durable boot chain ..... armed
 kernel://supervisor/handoff-ready
 </pre>
 
@@ -28,7 +28,7 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V14 native ATA   │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V15 durable boot │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -160,18 +160,30 @@ slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
 Committed footer + flush ──> receipt ──> one-shot Core proof ──> release
 ```
 
-| Contract | V13 / V14 invariant |
+| Contract | V13 / V14 / V15 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
 | Signature | Strict Ed25519 over one canonical 285-byte manifest |
 | Transaction | 8 explicit write, flush, and readback fault boundaries |
 | Recovery | Highest connected signed head; split and disconnected heads fail closed |
+| Boot import | Virgin Core only; next Event starts at `through_sequence + 1` |
+| Signed request | Canonical 384-byte call-data record with generation and storage authority |
 | Core gate | Raw receipts cannot release Events; verified commits are consumed once |
 | Native device | ATA LBA48, 512-byte sectors, bounded polling, `FLUSH CACHE EXT` |
 | Native mapping | 128 sectors per slot; one aligned 256-sector reserved range |
 
-`HOST PROFILE` complete · `NATIVE ATA PROFILE` transaction + cold recovery complete
+```text
+ATA IDENTIFY ──> dual-slot scan ──> chain + signature verification
+                                         │
+                   ┌─────────────────────┴─────────────────────┐
+                   ▼                                           ▼
+              GENESIS BOOT                          RECOVERED(generation)
+                   │                                           │
+                   └────────> stable Resources <──── one-shot Core proof
+```
+
+`ATA BACKEND` complete · `NATIVE BOOT HANDOFF` complete · `STATE SIGNER CALL` next
 
 ## `05 // AGENT CALL`
 
@@ -228,6 +240,14 @@ V14 ATA CONTRACT
 commit path       390 device operations
 cold scan         256 sector reads
 fault boundaries  body write / footer flush / committed readback
+```
+
+```text
+V15 DURABLE BOOT
+request record    384 canonical bytes
+recovery import   one-shot / virgin Core / overflow checked
+boot profile      Disabled | ATA
+bare target       x86_64-unknown-none
 ```
 
 <details>
@@ -291,6 +311,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] signed durable state + dual-slot host recovery
 [done] SMP + synchronization + TLB shootdown
 [done] native ATA PIO adapter + signed cold recovery
+[done] verified durable boot + Event sequence continuation
+[next] State Signer Agent + native archive prepare/commit calls
 [next] dedicated QEMU ATA image + emulator power-loss proof
 [next] network + graphics + USB + formal verification
 ```
@@ -300,7 +322,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | Verified baseline | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
-| Active milestone | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
+| Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
+| Active milestone | [Native Durable Boot V15](docs/superpowers/specs/2026-07-24-native-durable-boot-v15-design.md) |
 
 ## `10 // PROJECT`
 

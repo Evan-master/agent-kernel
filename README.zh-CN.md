@@ -15,12 +15,12 @@
 </p>
 
 <pre>
-$ ak boot --profile signed-v3
-[00] identity .............. bound
-[01] capability graph ...... online
-[02] Ed25519 trust policy .. verified
-[03] ring-3 agents ......... isolated
-[04] durable archive ....... committed
+agent-kernel / native-x86_64
+[00] identity ............... bound
+[01] capability graph ....... online
+[02] Ed25519 trust policy ... verified
+[03] ring-3 agents .......... isolated
+[04] durable boot chain ..... armed
 kernel://supervisor/handoff-ready
 </pre>
 
@@ -28,7 +28,7 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V14 native ATA   │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V15 durable boot │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -160,18 +160,30 @@ slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
 Committed footer + flush ──> receipt ──> 一次性 Core proof ──> release
 ```
 
-| 契约 | V13 / V14 不变量 |
+| 契约 | V13 / V14 / V15 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
 | Signature | 对 285 字节 canonical manifest 执行严格 Ed25519 验证 |
 | Transaction | 8 个显式 write、flush、readback 故障边界 |
 | Recovery | 选择最高的连续签名链头；分叉与断链均关闭自动恢复 |
+| Boot Import | 仅允许空白 Core；下一条 Event 从 `through_sequence + 1` 开始 |
+| Signed Request | 384 字节 canonical call-data 记录，绑定 generation 与存储权限 |
 | Core Gate | 原始 receipt 无权释放 Event；验证提交仅可消费一次 |
 | 原生设备 | ATA LBA48、512 字节扇区、有界轮询、`FLUSH CACHE EXT` |
 | 原生映射 | 每槽 128 个扇区；一个对齐的 256 扇区保留区间 |
 
-`HOST PROFILE` 完成 · `NATIVE ATA PROFILE` 事务与冷启动恢复完成
+```text
+ATA IDENTIFY ──> 双槽扫描 ──> 链路 + 签名验证
+                                │
+                 ┌──────────────┴──────────────┐
+                 ▼                             ▼
+            GENESIS BOOT              RECOVERED(generation)
+                 │                             │
+                 └──────> 稳定 Resource <──── 一次性 Core proof
+```
+
+`ATA BACKEND` 完成 · `NATIVE BOOT HANDOFF` 完成 · `STATE SIGNER CALL` 下一阶段
 
 ## `05 // AGENT CALL`
 
@@ -228,6 +240,14 @@ V14 ATA CONTRACT
 commit path       390 次设备操作
 cold scan         256 次扇区读取
 fault boundaries  body write / footer flush / committed readback
+```
+
+```text
+V15 DURABLE BOOT
+request record    384 个 canonical 字节
+recovery import   一次性 / 空白 Core / 溢出检查
+boot profile      Disabled | ATA
+bare target       x86_64-unknown-none
 ```
 
 <details>
@@ -291,6 +311,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] 签名持久状态 + 双槽宿主恢复
 [done] SMP + 同步 + TLB shootdown
 [done] 原生 ATA PIO 适配器 + 签名冷启动恢复
+[done] 验证持久启动 + Event 序列延续
+[next] State Signer Agent + 原生归档 prepare/commit 调用
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
 [next] Network + Graphics + USB + 形式化验证
 ```
@@ -300,7 +322,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | 已验证基线 | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
-| 当前里程碑 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
+| 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
+| 当前里程碑 | [Native Durable Boot V15](docs/superpowers/specs/2026-07-24-native-durable-boot-v15-design.md) |
 
 ## `10 // 项目`
 
