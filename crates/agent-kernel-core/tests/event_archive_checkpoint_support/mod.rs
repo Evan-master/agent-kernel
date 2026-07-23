@@ -1,9 +1,11 @@
 mod complete_event;
 
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, Event, IntentKind,
-    KernelCore, Operation, OperationSet, ResourceId, ResourceKind, SignalKey,
-    VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, CapabilityId, DurableArchiveAnchor,
+    DurableArchiveReceipt, DurableArchiveVerificationError, DurableArchiveVerificationRequest,
+    DurableArchiveVerifier, DurableSlot, DurableStateDigest, Event, EventArchiveCheckpoint,
+    EventArchiveProposal, IntentKind, KernelCore, KernelError, Operation, OperationSet, ResourceId,
+    ResourceKind, SignalKey, VerificationRequirement,
 };
 
 pub use complete_event::complete_event;
@@ -91,4 +93,51 @@ pub fn emit<const EVENTS: usize>(core: &mut TestCore<EVENTS>, fixture: Fixture, 
     )
     .unwrap()
     .signal_event
+}
+
+pub fn commit<const EVENTS: usize>(
+    core: &mut TestCore<EVENTS>,
+    fixture: Fixture,
+    proposal: EventArchiveProposal,
+) -> Result<EventArchiveCheckpoint, KernelError> {
+    commit_with_archive_authority(core, fixture, fixture.authority, proposal)
+}
+
+pub fn commit_with_archive_authority<const EVENTS: usize>(
+    core: &mut TestCore<EVENTS>,
+    fixture: Fixture,
+    archive_authority: CapabilityId,
+    proposal: EventArchiveProposal,
+) -> Result<EventArchiveCheckpoint, KernelError> {
+    let seed = proposal.generation() as u8;
+    let receipt = DurableArchiveReceipt::new(
+        DurableSlot::for_generation(proposal.generation()).unwrap(),
+        fixture.root,
+        proposal.generation(),
+        proposal.digest(),
+        DurableStateDigest::new([seed; 32]),
+        DurableStateDigest::new([seed.wrapping_add(1); 32]),
+        proposal.generation(),
+        DurableArchiveAnchor::unanchored(),
+    )
+    .unwrap();
+    core.commit_durable_event_archive(
+        fixture.actor,
+        archive_authority,
+        fixture.authority,
+        proposal,
+        receipt,
+        &mut AcceptDurableArchiveVerifier,
+    )
+}
+
+struct AcceptDurableArchiveVerifier;
+
+impl DurableArchiveVerifier for AcceptDurableArchiveVerifier {
+    fn verify(
+        &mut self,
+        _request: DurableArchiveVerificationRequest,
+    ) -> Result<(), DurableArchiveVerificationError> {
+        Ok(())
+    }
 }

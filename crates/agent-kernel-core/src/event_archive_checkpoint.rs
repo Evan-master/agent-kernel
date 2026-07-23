@@ -5,8 +5,9 @@
 //! Event slots, and retains the latest cryptographic checkpoint chain head.
 
 use crate::{
-    AgentEntryKind, AgentId, CapabilityId, Event, EventArchiveCheckpoint, EventArchiveProposal,
-    KernelCore, KernelError, Operation, ResourceStatus,
+    AgentEntryKind, AgentId, CapabilityId, DurableArchiveCommitProof, DurableArchiveReceipt,
+    DurableArchiveVerificationRequest, DurableArchiveVerifier, Event, EventArchiveCheckpoint,
+    EventArchiveProposal, KernelCore, KernelError, Operation, ResourceId, ResourceStatus,
 };
 
 impl<
@@ -78,10 +79,60 @@ impl<
 
     pub fn commit_event_archive(
         &mut self,
+        _actor: AgentId,
+        _authority: CapabilityId,
+        _proposal: EventArchiveProposal,
+    ) -> Result<EventArchiveCheckpoint, KernelError> {
+        Err(KernelError::EventArchiveDurabilityRequired)
+    }
+
+    pub fn commit_durable_event_archive<V: DurableArchiveVerifier>(
+        &mut self,
+        actor: AgentId,
+        archive_authority: CapabilityId,
+        storage_authority: CapabilityId,
+        proposal: EventArchiveProposal,
+        receipt: DurableArchiveReceipt,
+        verifier: &mut V,
+    ) -> Result<EventArchiveCheckpoint, KernelError> {
+        if self.durable_archive_receipt == Some(receipt) {
+            return Err(KernelError::EventArchiveReceiptReplay);
+        }
+        let root = self.validate_event_archive_commit(actor, archive_authority, proposal)?;
+        if !receipt.matches_proposal_values(proposal) {
+            return Err(KernelError::EventArchiveReceiptMismatch);
+        }
+        let storage = self.find_resource(receipt.storage())?;
+        if storage.status != ResourceStatus::Active {
+            return Err(KernelError::ResourceRetired);
+        }
+        self.ensure_authorized(
+            actor,
+            storage_authority,
+            receipt.storage(),
+            Operation::Checkpoint,
+        )?;
+        let request = DurableArchiveVerificationRequest::new(
+            proposal,
+            actor,
+            archive_authority,
+            storage_authority,
+            root,
+            receipt,
+        );
+        verifier
+            .verify(request)
+            .map_err(|_| KernelError::EventArchiveVerificationFailed)?;
+        let proof = DurableArchiveCommitProof::new(request);
+        Ok(self.apply_durable_archive_commit(proof))
+    }
+
+    fn validate_event_archive_commit(
+        &self,
         actor: AgentId,
         authority: CapabilityId,
         proposal: EventArchiveProposal,
-    ) -> Result<EventArchiveCheckpoint, KernelError> {
+    ) -> Result<ResourceId, KernelError> {
         let entry = self
             .find_agent_entry(actor)
             .map_err(|_| KernelError::AgentNotLaunched)?;
@@ -106,6 +157,17 @@ impl<
             return Err(KernelError::EventArchiveProposalMismatch);
         }
 
+        Ok(root.id)
+    }
+
+    fn apply_event_archive_commit(
+        &mut self,
+        actor: AgentId,
+        authority: CapabilityId,
+        root: ResourceId,
+        proposal: EventArchiveProposal,
+        receipt: DurableArchiveReceipt,
+    ) -> EventArchiveCheckpoint {
         let count = proposal.count();
         let remaining = self.event_len - count;
         self.events.copy_within(count..self.event_len, 0);
@@ -113,12 +175,31 @@ impl<
             *slot = Event::empty();
         }
         self.event_len = remaining;
-        let checkpoint = EventArchiveCheckpoint::new(proposal, actor, authority, root.id);
+        let checkpoint = EventArchiveCheckpoint::new(proposal, actor, authority, root);
         self.event_archive_checkpoint = Some(checkpoint);
-        Ok(checkpoint)
+        self.durable_archive_receipt = Some(receipt);
+        checkpoint
+    }
+
+    fn apply_durable_archive_commit(
+        &mut self,
+        proof: DurableArchiveCommitProof,
+    ) -> EventArchiveCheckpoint {
+        let request = proof.request();
+        self.apply_event_archive_commit(
+            request.actor(),
+            request.archive_authority(),
+            request.root(),
+            request.proposal(),
+            request.receipt(),
+        )
     }
 
     pub const fn event_archive_checkpoint(&self) -> Option<EventArchiveCheckpoint> {
         self.event_archive_checkpoint
+    }
+
+    pub const fn durable_archive_receipt(&self) -> Option<DurableArchiveReceipt> {
+        self.durable_archive_receipt
     }
 }

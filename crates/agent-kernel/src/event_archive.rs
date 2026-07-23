@@ -5,7 +5,8 @@
 //! hashing, authority validation, and dense Event Store mutation.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, EventArchiveCheckpoint, EventArchiveProposal, KernelError,
+    AgentId, CapabilityId, DurableArchiveReceipt, DurableArchiveVerifier, EventArchiveCheckpoint,
+    EventArchiveProposal, KernelError,
 };
 
 use crate::AgentKernel;
@@ -70,14 +71,38 @@ impl<
 
     pub fn sys_commit_event_archive(
         &mut self,
-        actor: AgentId,
-        authority: CapabilityId,
-        proposal: EventArchiveProposal,
+        _actor: AgentId,
+        _authority: CapabilityId,
+        _proposal: EventArchiveProposal,
     ) -> Result<EventArchiveCheckpoint, KernelError> {
-        self.core.commit_event_archive(actor, authority, proposal)
+        Err(KernelError::EventArchiveDurabilityRequired)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn commit_verified_event_archive<V: DurableArchiveVerifier>(
+        &mut self,
+        actor: AgentId,
+        archive_authority: CapabilityId,
+        storage_authority: CapabilityId,
+        proposal: EventArchiveProposal,
+        receipt: DurableArchiveReceipt,
+        verifier: &mut V,
+    ) -> Result<EventArchiveCheckpoint, KernelError> {
+        self.core.commit_durable_event_archive(
+            actor,
+            archive_authority,
+            storage_authority,
+            proposal,
+            receipt,
+            verifier,
+        )
     }
 
     pub const fn event_archive_checkpoint(&self) -> Option<EventArchiveCheckpoint> {
         self.core.event_archive_checkpoint()
+    }
+
+    pub const fn durable_archive_receipt(&self) -> Option<DurableArchiveReceipt> {
+        self.core.durable_archive_receipt()
     }
 }

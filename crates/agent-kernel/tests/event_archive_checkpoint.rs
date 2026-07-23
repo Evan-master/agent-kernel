@@ -1,10 +1,23 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, IntentKind, Operation, OperationSet,
-    ResourceKind, SignalKey, VerificationRequirement,
+    AgentEntryKind, AgentId, AgentImageDigest, AgentImageKind, DurableArchiveAnchor,
+    DurableArchiveReceipt, DurableArchiveVerificationError, DurableArchiveVerificationRequest,
+    DurableArchiveVerifier, DurableSlot, DurableStateDigest, IntentKind, KernelError, Operation,
+    OperationSet, ResourceKind, SignalKey, VerificationRequirement,
 };
 
 type TestKernel = AgentKernel<1, 1, 4, 24, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1>;
+
+struct AcceptVerifier;
+
+impl DurableArchiveVerifier for AcceptVerifier {
+    fn verify(
+        &mut self,
+        _request: DurableArchiveVerificationRequest,
+    ) -> Result<(), DurableArchiveVerificationError> {
+        Ok(())
+    }
+}
 
 #[test]
 fn facade_prepares_and_commits_event_archive_checkpoint() {
@@ -16,6 +29,7 @@ fn facade_prepares_and_commits_event_archive_checkpoint() {
         .unwrap();
     let operations = OperationSet::only(Operation::Act)
         .with(Operation::Verify)
+        .with(Operation::Checkpoint)
         .with(Operation::Rollback)
         .with(Operation::Delegate);
     let authority = kernel.sys_grant(actor, root, operations).unwrap();
@@ -64,11 +78,36 @@ fn facade_prepares_and_commits_event_archive_checkpoint() {
     let retained = kernel.events()[4..].to_vec();
 
     let proposal = kernel.sys_prepare_event_archive(through).unwrap();
+    let receipt = DurableArchiveReceipt::new(
+        DurableSlot::A,
+        root,
+        proposal.generation(),
+        proposal.digest(),
+        DurableStateDigest::new([0x71; 32]),
+        DurableStateDigest::new([0x72; 32]),
+        1,
+        DurableArchiveAnchor::unanchored(),
+    )
+    .unwrap();
+    assert_eq!(
+        kernel.sys_commit_event_archive(actor, authority, proposal),
+        Err(KernelError::EventArchiveDurabilityRequired)
+    );
+    assert_eq!(kernel.events().len(), retained.len() + proposal.count());
+
     let checkpoint = kernel
-        .sys_commit_event_archive(actor, authority, proposal)
+        .commit_verified_event_archive(
+            actor,
+            authority,
+            authority,
+            proposal,
+            receipt,
+            &mut AcceptVerifier,
+        )
         .unwrap();
 
     assert_eq!(checkpoint.proposal(), proposal);
     assert_eq!(kernel.event_archive_checkpoint(), Some(checkpoint));
+    assert_eq!(kernel.durable_archive_receipt(), Some(receipt));
     assert_eq!(kernel.events(), retained.as_slice());
 }

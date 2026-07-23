@@ -4,6 +4,7 @@
 //! through syscall-style methods and prints the event sequence without mutating
 //! kernel internals directly.
 
+mod durable_archive_flow;
 mod flow_resources;
 mod format;
 mod format_agent;
@@ -19,11 +20,14 @@ use agent_kernel_core::{
     ResourceKind, SignalKey, VerificationRequirement,
 };
 
+use crate::durable_archive_flow::commit_signed_archive;
 use crate::flow_resources::{
     drive_driver_flow, drive_resource_flow, ResourceFlowContext, SupervisorKernel,
 };
 use crate::format::format_event;
-use crate::format_event_archive::format_event_archive_checkpoint;
+use crate::format_event_archive::{
+    format_durable_archive_receipt, format_event_archive_checkpoint,
+};
 
 fn main() {
     let mut kernel = SupervisorKernel::new();
@@ -277,8 +281,16 @@ fn main() {
     let proposal = kernel
         .sys_prepare_event_archive(64)
         .expect("event prefix should produce an archive proposal");
-    let checkpoint = kernel
-        .sys_commit_event_archive(agent, owner_capability, proposal)
-        .expect("launched supervisor should commit the event archive");
-    println!("{}", format_event_archive_checkpoint(&checkpoint));
+    let outcome = commit_signed_archive(
+        &mut kernel,
+        agent,
+        owner_capability,
+        owner_capability,
+        workspace,
+        workspace,
+        proposal,
+    )
+    .expect("signed durable archive flow should commit");
+    println!("{}", format_event_archive_checkpoint(&outcome.checkpoint));
+    println!("{}", format_durable_archive_receipt(&outcome.receipt));
 }

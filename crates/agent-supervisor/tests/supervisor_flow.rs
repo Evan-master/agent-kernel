@@ -140,4 +140,7 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains(
         "event_archive_checkpoint generation=1 first=1 through=64 count=64 actor=1 authority=1 root=1 previous_digest=0000000000000000000000000000000000000000000000000000000000000000 digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d"
     ));
+    assert!(stdout.contains(
+        "durable_archive_receipt slot=A storage=1 generation=1 archive_digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d manifest_digest=0289ba7e8ccd007a088fc96487f60a6cf57cb21e776bb509a6c0eb782c8673e0 readback_digest=a0e6a8d11ba1cf8075292e82ce27fa24fcc8a03b5c83fbdf496d336bafd6ea06 flush_epoch=3"
+    ));
 }

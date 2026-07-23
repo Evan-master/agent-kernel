@@ -78,7 +78,7 @@ fn transaction_flushes_verifies_and_returns_exact_readback_receipt() {
     let mut backend = InMemoryDurableStateBackend::new(STORAGE).unwrap();
     let mut scratch = vec![0; DURABLE_SLOT_BYTES];
 
-    let receipt = commit_durable_archive(
+    let verified_commit = commit_durable_archive(
         &mut backend,
         policy,
         &fixture.payload,
@@ -87,6 +87,7 @@ fn transaction_flushes_verifies_and_returns_exact_readback_receipt() {
         &mut scratch,
     )
     .unwrap();
+    let receipt = verified_commit.receipt();
 
     assert_eq!(backend.operation_count(), 8);
     assert_eq!(backend.flush_epoch(), 3);
@@ -97,6 +98,7 @@ fn transaction_flushes_verifies_and_returns_exact_readback_receipt() {
         agent_kernel_x86_64::durable_state::durable_archive_manifest_digest(fixture.manifest)
     ));
     assert!(!receipt.readback_digest().is_zero());
+    assert!(!verified_commit.is_consumed());
 
     let readback = backend
         .read_slot(STORAGE, receipt.slot(), &mut scratch)

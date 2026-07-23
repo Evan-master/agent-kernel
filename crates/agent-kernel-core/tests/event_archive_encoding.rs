@@ -6,7 +6,7 @@ use agent_kernel_core::{
 };
 use sha2::{Digest, Sha256};
 
-use event_archive_checkpoint_support::{complete_event, emit, fixture};
+use event_archive_checkpoint_support::{commit, complete_event, emit, fixture};
 
 #[test]
 fn canonical_payload_is_the_archive_digest_preimage() {
@@ -27,9 +27,7 @@ fn chained_payload_commits_the_previous_archive_head() {
     let (mut core, fixture) = fixture::<32>(AgentEntryKind::Supervisor);
     let first_through = core.events().last().unwrap().sequence;
     let first = core.prepare_event_archive(first_through).unwrap();
-    let first_checkpoint = core
-        .commit_event_archive(fixture.actor, fixture.authority, first)
-        .unwrap();
+    let first_checkpoint = commit(&mut core, fixture, first).unwrap();
     emit(&mut core, fixture, 77);
     let second_through = core.events().last().unwrap().sequence;
     let second = core.prepare_event_archive(second_through).unwrap();

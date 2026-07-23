@@ -4,7 +4,7 @@
 //! Resource, archive generation, and anchor. Cryptographic verification must
 //! occur before a receipt can authorize Event release.
 
-use crate::{EventArchiveDigest, ResourceId};
+use crate::{EventArchiveDigest, EventArchiveProposal, ResourceId};
 
 use super::{DurableArchiveAnchor, DurableArchiveManifest, DurableSlot, DurableStateDigest};
 
@@ -115,5 +115,18 @@ impl DurableArchiveReceipt {
             && self.generation == manifest.generation()
             && self.archive_digest == manifest.archive_digest()
             && self.anchor == manifest.anchor()
+    }
+
+    pub(crate) fn matches_proposal_values(self, proposal: EventArchiveProposal) -> bool {
+        DurableSlot::for_generation(proposal.generation()) == Some(self.slot)
+            && self.generation == proposal.generation()
+            && self.archive_digest == proposal.digest()
+            && match self.anchor.mode() {
+                super::DurableAnchorMode::Unanchored => true,
+                super::DurableAnchorMode::Trusted => {
+                    self.anchor.generation().checked_add(1) == Some(proposal.generation())
+                        && self.anchor.digest() == proposal.previous_digest()
+                }
+            }
     }
 }

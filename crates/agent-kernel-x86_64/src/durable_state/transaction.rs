@@ -1,8 +1,10 @@
 //! Eight-operation durable archive commit transaction.
 
 mod error;
+mod verified;
 
 pub use error::DurableArchiveCommitError;
+pub use verified::VerifiedDurableArchiveCommit;
 
 use agent_kernel_core::{
     DurableArchiveManifest, DurableArchiveReceipt, DurableArchiveSignature, DurableStateDigest,
@@ -27,7 +29,7 @@ pub fn commit_durable_archive<B: DurableStateBackend>(
     manifest: DurableArchiveManifest,
     signature: DurableArchiveSignature,
     scratch: &mut [u8],
-) -> Result<DurableArchiveReceipt, DurableArchiveCommitError> {
+) -> Result<VerifiedDurableArchiveCommit, DurableArchiveCommitError> {
     if scratch.len() != DURABLE_SLOT_BYTES {
         return Err(DurableArchiveCommitError::ScratchLengthMismatch {
             length: scratch.len(),
@@ -97,7 +99,7 @@ pub fn commit_durable_archive<B: DurableStateBackend>(
     )?;
 
     let readback_digest = DurableStateDigest::new(Sha256::digest(scratch).into());
-    DurableArchiveReceipt::new(
+    let receipt = DurableArchiveReceipt::new(
         target.slot(),
         target.storage(),
         target.generation(),
@@ -107,7 +109,8 @@ pub fn commit_durable_archive<B: DurableStateBackend>(
         footer_flush.epoch(),
         manifest.anchor(),
     )
-    .map_err(DurableArchiveCommitError::Receipt)
+    .map_err(DurableArchiveCommitError::Receipt)?;
+    Ok(VerifiedDurableArchiveCommit::new(manifest, receipt))
 }
 
 fn flush_after<B: DurableStateBackend>(

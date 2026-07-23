@@ -151,11 +151,12 @@ pub use driver_command::{
 pub use driver_endpoint::{DriverEndpointDescriptor, DriverEndpointKind, DriverEndpointRecord};
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
 pub use durable_state::{
-    durable_state_signer_id, DurableAnchorMode, DurableArchiveAnchor, DurableArchiveManifest,
-    DurableArchiveManifestError, DurableArchiveManifestFields, DurableArchiveReceipt,
-    DurableArchiveReceiptError, DurableArchiveSignature, DurableRecoveredHead,
-    DurableRecoveryError, DurableRecoveryGuarantee, DurableSlot, DurableStateDigest,
-    DurableStateSignerId, DurableStateSignerRecord, DurableStateSignerStatus,
+    durable_state_signer_id, DurableAnchorMode, DurableArchiveAnchor, DurableArchiveCommitProof,
+    DurableArchiveManifest, DurableArchiveManifestError, DurableArchiveManifestFields,
+    DurableArchiveReceipt, DurableArchiveReceiptError, DurableArchiveSignature,
+    DurableArchiveVerificationError, DurableArchiveVerificationRequest, DurableArchiveVerifier,
+    DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGuarantee, DurableSlot,
+    DurableStateDigest, DurableStateSignerId, DurableStateSignerRecord, DurableStateSignerStatus,
     DURABLE_ARCHIVE_MANIFEST_BYTES, DURABLE_ARCHIVE_SIGNATURE_BYTES,
 };
 pub use error::KernelError;

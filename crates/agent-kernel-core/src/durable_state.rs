@@ -8,6 +8,7 @@ mod manifest;
 mod receipt;
 mod recovery;
 mod signer;
+mod verification;
 
 pub use manifest::{
     DurableArchiveManifest, DurableArchiveManifestError, DurableArchiveManifestFields,
@@ -17,6 +18,10 @@ pub use recovery::{DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGu
 pub use signer::{
     durable_state_signer_id, DurableStateSignerId, DurableStateSignerRecord,
     DurableStateSignerStatus,
+};
+pub use verification::{
+    DurableArchiveCommitProof, DurableArchiveVerificationError, DurableArchiveVerificationRequest,
+    DurableArchiveVerifier,
 };
 
 use crate::EventArchiveDigest;

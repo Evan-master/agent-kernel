@@ -5,7 +5,9 @@ use agent_kernel_core::{
     VerificationRequirement,
 };
 
-use event_archive_checkpoint_support::{all_operations, complete_event, emit, fixture, TestCore};
+use event_archive_checkpoint_support::{
+    all_operations, commit, commit_with_archive_authority, complete_event, emit, fixture, TestCore,
+};
 
 #[test]
 fn canonical_digest_is_deterministic_and_covers_every_event_field() {
@@ -99,9 +101,7 @@ fn commit_reclaims_dense_prefix_and_preserves_monotonic_sequence() {
     let retained = core.events()[4..].to_vec();
     let proposal = core.prepare_event_archive(through).unwrap();
 
-    let checkpoint = core
-        .commit_event_archive(fixture.actor, fixture.authority, proposal)
-        .unwrap();
+    let checkpoint = commit(&mut core, fixture, proposal).unwrap();
 
     assert_eq!(checkpoint.proposal(), proposal);
     assert_eq!(checkpoint.actor(), fixture.actor);
@@ -120,9 +120,7 @@ fn chained_checkpoints_commit_the_previous_digest() {
     emit(&mut core, fixture, 20);
     let first_through = core.events()[2].sequence;
     let first = core.prepare_event_archive(first_through).unwrap();
-    let first_checkpoint = core
-        .commit_event_archive(fixture.actor, fixture.authority, first)
-        .unwrap();
+    let first_checkpoint = commit(&mut core, fixture, first).unwrap();
     emit(&mut core, fixture, 21);
     emit(&mut core, fixture, 22);
     let second_through = core.events()[1].sequence;
@@ -135,9 +133,7 @@ fn chained_checkpoints_commit_the_previous_digest() {
         first_checkpoint.through_sequence() + 1
     );
     assert_eq!(second.previous_digest(), first_checkpoint.digest());
-    let second_checkpoint = core
-        .commit_event_archive(fixture.actor, fixture.authority, second)
-        .unwrap();
+    let second_checkpoint = commit(&mut core, fixture, second).unwrap();
     assert_eq!(core.event_archive_checkpoint(), Some(second_checkpoint));
     assert_ne!(second_checkpoint.digest(), first_checkpoint.digest());
 }
@@ -153,8 +149,7 @@ fn full_log_can_commit_archive_and_accept_the_next_event() {
     let through = core.events()[5].sequence;
     let proposal = core.prepare_event_archive(through).unwrap();
 
-    core.commit_event_archive(fixture.actor, fixture.authority, proposal)
-        .unwrap();
+    commit(&mut core, fixture, proposal).unwrap();
 
     assert_eq!(core.events().len(), 10);
     assert_eq!(emit(&mut core, fixture, 200).sequence, 17);
@@ -177,7 +172,7 @@ fn stale_foreign_and_unknown_proposals_fail_atomically() {
     let before = first.events().to_vec();
 
     assert_eq!(
-        first.commit_event_archive(first_fixture.actor, first_fixture.authority, foreign),
+        commit(&mut first, first_fixture, foreign),
         Err(KernelError::EventArchiveProposalMismatch)
     );
     assert_eq!(first.events(), before.as_slice());
@@ -195,11 +190,7 @@ fn commit_requires_supervisor_and_root_rollback_authority() {
         .prepare_event_archive(worker.events()[1].sequence)
         .unwrap();
     assert_eq!(
-        worker.commit_event_archive(
-            worker_fixture.actor,
-            worker_fixture.authority,
-            worker_proposal,
-        ),
+        commit(&mut worker, worker_fixture, worker_proposal),
         Err(KernelError::AgentEntryKindMismatch)
     );
 
@@ -226,11 +217,11 @@ fn commit_requires_supervisor_and_root_rollback_authority() {
     let before = core.events().to_vec();
 
     assert_eq!(
-        core.commit_event_archive(fixture.actor, observe, proposal),
+        commit_with_archive_authority(&mut core, fixture, observe, proposal),
         Err(KernelError::OperationDenied)
     );
     assert_eq!(
-        core.commit_event_archive(fixture.actor, child.capability, proposal),
+        commit_with_archive_authority(&mut core, fixture, child.capability, proposal),
         Err(KernelError::EventArchiveAuthorityScopeMismatch)
     );
     assert_eq!(core.events(), before.as_slice());

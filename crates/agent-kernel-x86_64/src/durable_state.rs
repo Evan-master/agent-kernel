@@ -22,7 +22,9 @@ pub use manifest::{
     DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION,
 };
 pub use recovery::{recover_durable_archive, DurableArchiveRecoveryError};
-pub use transaction::{commit_durable_archive, DurableArchiveCommitError};
+pub use transaction::{
+    commit_durable_archive, DurableArchiveCommitError, VerifiedDurableArchiveCommit,
+};
 pub use trust::{
     DurableStateTrustPolicy, DurableStateVerificationError, VerifiedDurableArchiveManifest,
 };
