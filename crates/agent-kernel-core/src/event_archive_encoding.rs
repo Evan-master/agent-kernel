@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub const MAX_DURABLE_ARCHIVE_EVENTS: usize = 64;
-pub const MAX_DURABLE_ARCHIVE_BYTES: usize = 64 * 1024;
+pub const MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES: usize = 64 * 1024 - 512;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum EventArchiveEncodingError {
@@ -34,10 +34,10 @@ pub fn encode_event_archive_payload(
     let previous_through = validate_proposal(proposal, events)?;
     let mut count = CountingSink { length: 0 };
     encode(&mut count, proposal, previous_through, events);
-    if count.length > MAX_DURABLE_ARCHIVE_BYTES {
+    if count.length > MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES {
         return Err(EventArchiveEncodingError::PayloadTooLarge {
             required: count.length,
-            limit: MAX_DURABLE_ARCHIVE_BYTES,
+            limit: MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
         });
     }
     if output.len() < count.length {

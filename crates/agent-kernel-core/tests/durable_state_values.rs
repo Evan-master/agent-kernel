@@ -6,7 +6,7 @@ use agent_kernel_core::{
     DurableArchiveAnchor, DurableArchiveManifest, DurableArchiveManifestError,
     DurableArchiveReceipt, DurableArchiveReceiptError, DurableArchiveSignature, DurableSlot,
     DurableStateDigest, DurableStateSignerRecord, DurableStateSignerStatus, EventArchiveProposal,
-    ResourceId, MAX_DURABLE_ARCHIVE_BYTES, MAX_DURABLE_ARCHIVE_EVENTS,
+    ResourceId, MAX_DURABLE_ARCHIVE_EVENTS, MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
 use sha2::{Digest, Sha256};
 
@@ -110,7 +110,7 @@ fn manifest_rejects_unbounded_or_inconsistent_values() {
         ),
         Err(DurableArchiveManifestError::PayloadLengthOutOfRange {
             length: 0,
-            limit: MAX_DURABLE_ARCHIVE_BYTES as u32,
+            limit: MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES as u32,
         })
     );
     assert_eq!(

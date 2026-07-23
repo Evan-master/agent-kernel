@@ -19,6 +19,9 @@ pub use signer::{
 
 use crate::EventArchiveDigest;
 
+pub const DURABLE_ARCHIVE_MANIFEST_BYTES: usize = 285;
+pub const DURABLE_ARCHIVE_SIGNATURE_BYTES: usize = 64;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DurableStateDigest {
     bytes: [u8; 32],
@@ -48,15 +51,15 @@ impl DurableStateDigest {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DurableArchiveSignature {
-    bytes: [u8; 64],
+    bytes: [u8; DURABLE_ARCHIVE_SIGNATURE_BYTES],
 }
 
 impl DurableArchiveSignature {
-    pub const fn new(bytes: [u8; 64]) -> Self {
+    pub const fn new(bytes: [u8; DURABLE_ARCHIVE_SIGNATURE_BYTES]) -> Self {
         Self { bytes }
     }
 
-    pub const fn bytes(self) -> [u8; 64] {
+    pub const fn bytes(self) -> [u8; DURABLE_ARCHIVE_SIGNATURE_BYTES] {
         self.bytes
     }
 }

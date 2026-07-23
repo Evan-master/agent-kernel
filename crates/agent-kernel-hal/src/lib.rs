@@ -7,6 +7,15 @@
 
 use agent_kernel_core::{DriverCommandRequest, DriverCommandResult};
 
+mod durable_state;
+
+pub use durable_state::{
+    DurableFlush, DurableSlotReadback, DurableSlotRegion, DurableSlotTarget,
+    DurableSlotTargetError, DurableSlotWrite, DurableSlotWriteError, DurableStateBackend,
+    DurableStateBackendError, DURABLE_SLOT_BODY_BYTES, DURABLE_SLOT_BYTES,
+    DURABLE_SLOT_FOOTER_BYTES, DURABLE_SLOT_HEADER_BYTES,
+};
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DriverCommandOutcome {
     Completed(DriverCommandResult),

@@ -7,9 +7,10 @@
 mod manifest;
 mod trust;
 
+pub use agent_kernel_core::DURABLE_ARCHIVE_MANIFEST_BYTES;
 pub use manifest::{
     durable_archive_manifest_digest, encode_durable_archive_manifest,
-    DURABLE_ARCHIVE_MANIFEST_BYTES, DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION,
+    DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION,
 };
 pub use trust::{
     DurableStateTrustPolicy, DurableStateVerificationError, VerifiedDurableArchiveManifest,

@@ -6,7 +6,7 @@
 
 use crate::{
     AgentId, CapabilityId, EventArchiveDigest, EventArchiveProposal, ResourceId,
-    MAX_DURABLE_ARCHIVE_BYTES, MAX_DURABLE_ARCHIVE_EVENTS,
+    MAX_DURABLE_ARCHIVE_EVENTS, MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
 
 use super::{DurableArchiveAnchor, DurableStateDigest, DurableStateSignerId};
@@ -65,7 +65,7 @@ impl DurableArchiveManifest {
                 limit: MAX_DURABLE_ARCHIVE_EVENTS,
             });
         }
-        let payload_limit = MAX_DURABLE_ARCHIVE_BYTES as u32;
+        let payload_limit = MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES as u32;
         if payload_length == 0 || payload_length > payload_limit {
             return Err(DurableArchiveManifestError::PayloadLengthOutOfRange {
                 length: payload_length,

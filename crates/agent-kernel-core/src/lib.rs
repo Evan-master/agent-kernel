@@ -155,14 +155,14 @@ pub use durable_state::{
     DurableArchiveManifestError, DurableArchiveReceipt, DurableArchiveReceiptError,
     DurableArchiveSignature, DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGuarantee,
     DurableSlot, DurableStateDigest, DurableStateSignerId, DurableStateSignerRecord,
-    DurableStateSignerStatus,
+    DurableStateSignerStatus, DURABLE_ARCHIVE_MANIFEST_BYTES, DURABLE_ARCHIVE_SIGNATURE_BYTES,
 };
 pub use error::KernelError;
 pub use event::{Event, EventKind};
 pub use event_archive::{EventArchiveCheckpoint, EventArchiveDigest, EventArchiveProposal};
 pub use event_archive_encoding::{
-    encode_event_archive_payload, EventArchiveEncodingError, MAX_DURABLE_ARCHIVE_BYTES,
-    MAX_DURABLE_ARCHIVE_EVENTS,
+    encode_event_archive_payload, EventArchiveEncodingError, MAX_DURABLE_ARCHIVE_EVENTS,
+    MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
 pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;

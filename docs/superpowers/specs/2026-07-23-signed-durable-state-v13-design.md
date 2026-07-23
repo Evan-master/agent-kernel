@@ -91,7 +91,8 @@ serialization libraries never enter the format.
 The current digest encoder becomes a sink-based canonical encoder. One sink
 feeds SHA-256; another writes into a caller-provided slice. Encoding fails
 atomically on insufficient capacity. Re-hashing stored payload must equal the
-proposal digest. One segment is limited to 64 Events and one capsule to 64 KiB.
+proposal digest. One segment is limited to 64 Events. Its payload is limited to
+`64 KiB - 512 bytes`, leaving fixed protocol space inside one 64 KiB slot.
 
 ## Signed Manifest
 
@@ -128,6 +129,12 @@ generation, and the strict Ed25519 signature over all 285 bytes.
 Each storage Resource owns equal fixed slots `A` and `B`. Generation parity
 selects the inactive target. The backend verifies that target does not contain
 the active committed generation.
+
+Each slot is exactly 64 KiB: a 64-byte prepared header, a 65,408-byte body, and
+a 64-byte commit footer. The HAL accepts semantic regions only; callers never
+submit device offsets. Header and footer writes require exact lengths. Body
+writes are non-empty and bounded by the body region. Every flush returns a
+monotonic nonzero epoch, and readback returns the complete fixed slot.
 
 1. Write a `Prepared` header to the inactive slot and flush.
 2. Write canonical Event payload and signed manifest, then flush.
