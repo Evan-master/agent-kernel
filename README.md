@@ -28,10 +28,10 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V13 durable      │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V14 native ATA   │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ STATE      signed A/B slots             AUTH   Capabilities     │
+│ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, ATA PIO, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-supervisor` | Host simulation and user-space orchestration |
 
@@ -97,7 +97,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, I/O APIC IRQ, port access |
+| I/O | Capability-authorized HAL request, I/O APIC IRQ, port and ATA PIO access |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -160,7 +160,7 @@ slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
 Committed footer + flush ──> receipt ──> one-shot Core proof ──> release
 ```
 
-| Contract | V13 invariant |
+| Contract | V13 / V14 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -168,8 +168,10 @@ Committed footer + flush ──> receipt ──> one-shot Core proof ──> rel
 | Transaction | 8 explicit write, flush, and readback fault boundaries |
 | Recovery | Highest connected signed head; split and disconnected heads fail closed |
 | Core gate | Raw receipts cannot release Events; verified commits are consumed once |
+| Native device | ATA LBA48, 512-byte sectors, bounded polling, `FLUSH CACHE EXT` |
+| Native mapping | 128 sectors per slot; one aligned 256-sector reserved range |
 
-`HOST PROFILE` transaction + recovery complete · `NATIVE BLOCK PROFILE` pending
+`HOST PROFILE` complete · `NATIVE ATA PROFILE` transaction + cold recovery complete
 
 ## `05 // AGENT CALL`
 
@@ -219,6 +221,13 @@ BOOT FRAME POOL     77 sealed
 V13 HOST RECEIPT
 slot=A  generation=1  flush_epoch=3
 archive=b72f0e90513d...e823449aff0d
+```
+
+```text
+V14 ATA CONTRACT
+commit path       390 device operations
+cold scan         256 sector reads
+fault boundaries  body write / footer flush / committed readback
 ```
 
 <details>
@@ -280,8 +289,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] Package v3 + Ed25519 boot trust
 [done] runtime signer rotation + trust-policy Events
 [done] signed durable state + dual-slot host recovery
-[work] SMP + synchronization + TLB shootdown
-[next] native block adapter + QEMU power-loss proof
+[done] SMP + synchronization + TLB shootdown
+[done] native ATA PIO adapter + signed cold recovery
+[next] dedicated QEMU ATA image + emulator power-loss proof
 [next] network + graphics + USB + formal verification
 ```
 
@@ -289,7 +299,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | :--- | :--- |
 | Verified baseline | [Signed Agent Package V10](docs/superpowers/specs/2026-07-21-signed-agent-package-v10-design.md) |
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
-| Active milestone | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
+| Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
+| Active milestone | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
 
 ## `10 // PROJECT`
 

@@ -15,4 +15,4 @@
   interruption, and generation conflict.
 - [x] Pass formatting, workspace tests, strict Clippy, Supervisor replay, and
   `x86_64-unknown-none` compilation.
-- [ ] Update bilingual public documentation, commit, and publish V14.
+- [x] Update bilingual public documentation, commit, and publish V14.
