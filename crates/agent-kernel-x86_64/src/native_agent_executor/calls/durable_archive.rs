@@ -5,8 +5,15 @@
 //! verifies and persists the signed request, then consumes the resulting
 //! machine proof for one Core release without returning to ring 3.
 
-use agent_kernel_core::{CapabilityId, Event};
-use agent_kernel_x86_64::{agent_call::AgentCallContext, ata::NativeDurableArchiveCaller};
+use agent_kernel_core::{
+    AgentEntryKind, AgentImageKind, AgentImageStatus, CapabilityId, DurableSignatureAlgorithm,
+    DurableStateSignerStatus, Event,
+};
+use agent_kernel_x86_64::{
+    agent_call::AgentCallContext,
+    ata::NativeDurableArchiveCaller,
+    tpm2::{sign_retained_durable_request, KernelStateSigner},
+};
 
 use super::super::{state, NativeExecutionReport};
 use crate::{
@@ -163,6 +170,75 @@ pub(super) fn commit(
     write_digest_word("AGENT_KERNEL_DURABLE_ARCHIVE_DIGEST_3=", digest[3]);
     serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_COMMITTED_OK");
     pending.acknowledge_durable_archive_committed(call_data_generation, checkpoint)
+}
+
+pub(super) fn sign(
+    booted: &mut X86BootedKernel,
+    session: &mut NativeDurableSession<'_>,
+    signer: &mut dyn KernelStateSigner,
+    mut pending: PendingAgentCallCpu,
+    call_data_generation: u64,
+) -> Option<ResumableAgentCpu> {
+    let current_request = pending.authenticated_signable_durable_archive_request()?;
+    let context = pending.context();
+    let caller = caller(context)?;
+    let preparation = session.preparation()?;
+    if preparation.caller() != caller
+        || preparation.call_data_generation() != call_data_generation
+        || !state::running(booted, context)
+    {
+        return None;
+    }
+
+    let kernel = booted.kernel();
+    let entry = kernel.agent_entry(context.agent()).ok()?;
+    let image = kernel.agent_image(context.image()).ok()?;
+    if entry.kind != AgentEntryKind::StateSigner
+        || entry.image != context.image()
+        || image.kind != AgentImageKind::StateSigner
+        || image.status != AgentImageStatus::Verified
+    {
+        return None;
+    }
+
+    let prepared_preflight = preparation.preflight();
+    let current_preflight = kernel
+        .preflight_durable_event_archive(
+            context.agent(),
+            prepared_preflight.archive_authority(),
+            prepared_preflight.storage_authority(),
+            session.config().storage(),
+            prepared_preflight.proposal(),
+        )
+        .ok()?;
+    if current_preflight != prepared_preflight {
+        return None;
+    }
+
+    let configured_signer = session.config().signer();
+    if configured_signer.status != DurableStateSignerStatus::Active
+        || configured_signer.signature_algorithm() != DurableSignatureAlgorithm::EcdsaP256Sha256
+        || configured_signer.signer_id != signer.signer_id()
+        || configured_signer.generation != signer.policy_generation()
+        || session.config().policy_generation() != signer.policy_generation()
+    {
+        return None;
+    }
+
+    let retained_request = preparation.request_bytes();
+    let signed = sign_retained_durable_request(
+        &retained_request,
+        &current_request,
+        preparation.manifest(),
+        call_data_generation,
+        signer,
+    )
+    .ok()?;
+    if !pending.replace_signable_durable_archive_request(&current_request, &signed) {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_TPM_SIGNED_OK");
+    pending.acknowledge_durable_archive_signed(call_data_generation, signer.policy_generation())
 }
 
 pub(super) fn cancel_for_context(

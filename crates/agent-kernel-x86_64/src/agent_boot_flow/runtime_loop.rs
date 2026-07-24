@@ -109,6 +109,7 @@ pub(super) fn run(
     let authority = verifier.runtime_authority()?;
     let mut report = NativeExecutionReport::new();
     let mut evidence = NativeRuntimeEvidence::default();
+    let mut state_signer = None;
 
     if native_agent_executor::run_until_idle(
         booted,
@@ -118,6 +119,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )
     .is_none()
     {
@@ -167,6 +169,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     if runtime.len() != 4
         || report.len() != 2
@@ -191,6 +194,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -231,6 +235,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -257,6 +262,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -278,6 +284,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -297,6 +304,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     if runtime.len() != 1
         || report.len() != 4
@@ -322,6 +330,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )?;
     serial_write_line("AGENT_KERNEL_NATIVE_FAULT_RECOVERY_EXECUTION_OK");
     if runtime.len() != 1 || report.len() != 5 || report.faulted_len() != 0 {
@@ -346,6 +355,7 @@ pub(super) fn run(
         &mut evidence,
         Some(authority),
         None,
+        &mut state_signer,
     )
     .is_none()
     {

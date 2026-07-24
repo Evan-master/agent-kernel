@@ -454,6 +454,13 @@ pub enum AgentCallRequest {
         nonce: u64,
         generation: u64,
     },
+    SignDurableArchive {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        generation: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -528,6 +535,7 @@ impl AgentCallRequest {
             Self::CommitDurableArchiveFromMemory { .. } => {
                 AgentCallOperation::CommitDurableArchiveFromMemory
             }
+            Self::SignDurableArchive { .. } => AgentCallOperation::SignDurableArchive,
         }
     }
 }

@@ -5,7 +5,7 @@ use agent_kernel_x86_64::{
     agent_call::{
         AgentCallContext, AgentCallDecodeError, AgentCallOperation, AgentCallRequest,
         AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_COMMIT_DURABLE_ARCHIVE,
-        AGENT_CALL_PREPARE_DURABLE_ARCHIVE, AGENT_CALL_STATUS_OK,
+        AGENT_CALL_PREPARE_DURABLE_ARCHIVE, AGENT_CALL_SIGN_DURABLE_ARCHIVE, AGENT_CALL_STATUS_OK,
     },
     context::PrivilegeInterruptStackFrame,
     durable_archive_request::DURABLE_ARCHIVE_REQUEST_BYTES,
@@ -19,9 +19,10 @@ const CALL_DATA_GENERATION: u64 = 7;
 const DIGEST: EventArchiveDigest = EventArchiveDigest::new([0x5a; 32]);
 
 #[test]
-fn calls_54_and_55_decode_and_authenticate_exact_register_contracts() {
+fn calls_54_through_56_decode_and_authenticate_exact_register_contracts() {
     assert_eq!(AGENT_CALL_PREPARE_DURABLE_ARCHIVE, 54);
     assert_eq!(AGENT_CALL_COMMIT_DURABLE_ARCHIVE, 55);
+    assert_eq!(AGENT_CALL_SIGN_DURABLE_ARCHIVE, 56);
 
     let prepare = AgentCallRequest::decode(&prepare_frame()).unwrap();
     assert_eq!(
@@ -60,6 +61,20 @@ fn calls_54_and_55_decode_and_authenticate_exact_register_contracts() {
     );
     assert!(context().authenticates(commit, NONCE));
     assert!(!context().authenticates(commit, NONCE + 1));
+
+    let sign = AgentCallRequest::decode(&sign_frame()).unwrap();
+    assert_eq!(
+        sign,
+        AgentCallRequest::SignDurableArchive {
+            agent: AgentId::new(12),
+            task: TaskId::new(10),
+            image: AgentImageId::new(12),
+            nonce: NONCE,
+            generation: CALL_DATA_GENERATION,
+        }
+    );
+    assert_eq!(sign.operation(), AgentCallOperation::SignDurableArchive);
+    assert!(context().authenticates(sign, NONCE));
 }
 
 #[test]
@@ -90,6 +105,10 @@ fn durable_archive_calls_reject_zero_payloads_and_reserved_registers() {
     let mut reserved = commit_frame();
     reserved.r11 = 1;
     assert_decode_error(reserved, AgentCallDecodeError::ReservedNotZero);
+
+    let mut sign_reserved = sign_frame();
+    sign_reserved.r12 = 1;
+    assert_decode_error(sign_reserved, AgentCallDecodeError::ReservedNotZero);
 }
 
 #[test]
@@ -124,12 +143,25 @@ fn prepare_and_commit_replies_are_canonical() {
     assert_eq!(payload(&commit)[3..], DIGEST.words_le());
     assert_eq!(control_words(&commit), commit_control);
 
+    let mut sign = sign_frame();
+    let sign_control = control_words(&sign);
+    context()
+        .encode_durable_archive_sign_reply(&mut sign, NONCE, CALL_DATA_GENERATION, 23, 2)
+        .unwrap();
+    assert_common_reply(&sign, AGENT_CALL_SIGN_DURABLE_ARCHIVE);
+    assert_eq!(payload(&sign), [CALL_DATA_GENERATION, 23, 2, 0, 0, 0, 0]);
+    assert_eq!(control_words(&sign), sign_control);
+
     assert_eq!(
         context().encode_durable_archive_prepare_reply(&mut prepare, NONCE, 0, 1, THROUGH, 64, 23,),
         Err(AgentCallDecodeError::InvalidPayload)
     );
     assert_eq!(
         context().encode_durable_archive_commit_reply(&mut commit, NONCE, 1, THROUGH, 63, DIGEST),
+        Err(AgentCallDecodeError::InvalidPayload)
+    );
+    assert_eq!(
+        context().encode_durable_archive_sign_reply(&mut sign, NONCE, 0, 23, 2),
         Err(AgentCallDecodeError::InvalidPayload)
     );
 }
@@ -162,6 +194,13 @@ fn prepare_frame() -> PrivilegeInterruptStackFrame {
 fn commit_frame() -> PrivilegeInterruptStackFrame {
     frame(
         AGENT_CALL_COMMIT_DURABLE_ARCHIVE,
+        [CALL_DATA_GENERATION, 0, 0, 0, 0, 0, 0],
+    )
+}
+
+fn sign_frame() -> PrivilegeInterruptStackFrame {
+    frame(
+        AGENT_CALL_SIGN_DURABLE_ARCHIVE,
         [CALL_DATA_GENERATION, 0, 0, 0, 0, 0, 0],
     )
 }

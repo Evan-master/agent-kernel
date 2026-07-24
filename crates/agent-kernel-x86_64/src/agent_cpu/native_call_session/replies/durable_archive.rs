@@ -1,6 +1,6 @@
 //! Acknowledgements for authenticated two-stage durable archive calls.
 
-use agent_kernel_core::EventArchiveCheckpoint;
+use agent_kernel_core::{DurableSignatureAlgorithm, EventArchiveCheckpoint};
 use agent_kernel_x86_64::{agent_call::AgentCallRequest, ata::NativeDurableArchivePreparation};
 
 use super::{PendingAgentCallCpu, ResumableAgentCpu};
@@ -63,6 +63,31 @@ impl PendingAgentCallCpu {
                 checkpoint.through_sequence(),
                 checkpoint.count(),
                 checkpoint.digest(),
+            )
+            .ok()?;
+        Some(ResumableAgentCpu(self.session))
+    }
+
+    pub(crate) fn acknowledge_durable_archive_signed(
+        mut self,
+        call_data_generation: u64,
+        policy_generation: u64,
+    ) -> Option<ResumableAgentCpu> {
+        let nonce = self.authenticated_nonce_for(|request| {
+            matches!(
+                request,
+                AgentCallRequest::SignDurableArchive { generation, .. }
+                    if generation == call_data_generation
+            )
+        })?;
+        self.session
+            .context
+            .encode_durable_archive_sign_reply(
+                self.session.frame.frame_mut(),
+                nonce,
+                call_data_generation,
+                policy_generation,
+                DurableSignatureAlgorithm::EcdsaP256Sha256.wire_value(),
             )
             .ok()?;
         Some(ResumableAgentCpu(self.session))

@@ -201,6 +201,9 @@ state_signer_entry:
     lea rdi, [r12 + 32]
     lea rsi, [r12 + SIGNATURE_OFFSET]
     mov rdx, qword ptr [rip + state_signer_config_policy_generation]
+    mov rcx, qword ptr [r14 + REQUEST_BYTES + 8]
+    mov r8, qword ptr [r14 + REQUEST_BYTES + 16]
+    mov r9, qword ptr [r14 + REQUEST_BYTES + 24]
     call state_signer_provider_sign
     mov rsp, r15
     test eax, eax

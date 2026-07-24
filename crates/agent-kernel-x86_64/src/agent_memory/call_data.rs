@@ -33,6 +33,17 @@ impl PreparedAgentMemory {
         Some(bytes)
     }
 
+    pub(crate) fn replace_durable_archive_request_if_unchanged(
+        &mut self,
+        expected: &[u8; DURABLE_ARCHIVE_REQUEST_BYTES],
+        replacement: &[u8; DURABLE_ARCHIVE_REQUEST_BYTES],
+    ) -> bool {
+        matches!(
+            self.snapshot_call_data::<DURABLE_ARCHIVE_REQUEST_BYTES>(),
+            Some(current) if current == *expected
+        ) && self.stage_call_data(replacement)
+    }
+
     pub(crate) fn snapshot_namespace_path(
         &self,
         expected_root: ResourceId,

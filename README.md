@@ -21,15 +21,15 @@ agent-kernel / native-x86_64
 [02] signer algorithms ...... verified
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
-[05] native state signer .... algorithm-bound
-kernel://state-signer/v18-ready
+[05] native state signer .... TPM-bound
+kernel://state-signer/v19-crb
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V18 signer agility│
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V19 native TPM    │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -74,7 +74,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, ATA PIO, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, ATA PIO, TPM CRB, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-state-signer` | `no_std` signing policy and injected provider boundary |
 | `agent-supervisor` | Host simulation and user-space orchestration |
@@ -169,11 +169,13 @@ Committed footer + flush ──> receipt ──> one-shot Core proof ──> rel
 ```text
 prepare(54) ──> private call-data ──> State Signer policy
                                               │
+                     sign(56) ──> kernel TPM service ──> CRB
+                                              │
                                               ▼
-commit(55) <── exact 384B request <── provider signature
+commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V18 invariant |
+| Contract | V13 through V19 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -188,6 +190,7 @@ commit(55) <── exact 384B request <── provider signature
 | Core gate | Raw receipts cannot release Events; verified commits are consumed once |
 | Native device | ATA LBA48, 512-byte sectors, bounded polling, `FLUSH CACHE EXT` |
 | Native mapping | 128 sectors per slot; one aligned 256-sector reserved range |
+| TPM authority | Ring 0 owns MMIO and command transport; ring 3 can request one retained-manifest signature |
 
 ```text
 ATA IDENTIFY ──> dual-slot scan ──> chain + signature verification
@@ -214,7 +217,7 @@ fixed x86_64 link ──> ELF section audit ──> Package v3 / kind 5
 | :--- | :--- |
 | Core identity | `AgentImageKind::StateSigner` + `AgentEntryKind::StateSigner` |
 | Image trust | x86 kind `5`; independent signer scope bit `4` |
-| Provider ABI | 285-byte manifest input, 64-byte signature output, policy generation |
+| Provider ABI | Manifest, signature, policy generation, authenticated Agent/Task/Image |
 | Algorithm policy | Immutable Ed25519 or ECDSA P-256/SHA-256 selection |
 | Package | Two fixed-address segments, zero relocations, output mode `0600` |
 | Secret ownership | Provider retains durable-state key access; package contains public policy |
@@ -227,7 +230,16 @@ signature         Ed25519 / 64B | IEEE P1363 low-S P-256 / 64B
 failure policy    mismatch / malformed key / high-S -> fail closed
 ```
 
-`ATA BACKEND` complete · `STATE SIGNER PACKAGE` complete · `SIGNER AGILITY` complete
+```text
+V19 NATIVE TPM STATE SIGNER
+discovery         ACPI TPM2 / Start Method 7
+transport         CRB locality 0 / bounded polls / fail-closed cleanup
+binding           ReadPublic Name + template + compressed P-256 point
+agent boundary    Call 56 / retained manifest only / no raw TPM channel
+recovery proof    TPM sign / ATA commit / power loss / cold recovery
+```
+
+`ATA BACKEND` complete · `STATE SIGNER PACKAGE` complete · `TPM CRB PATH` complete
 
 ## `05 // AGENT CALL`
 
@@ -249,7 +261,7 @@ decode → snapshot → authenticate → preflight → mutate → reply
 | `29..43` | Reclamation, compaction, Event archive |
 | `44..52` | Namespace bind, resolve, compare, mutation, paths |
 | `53` | Agent image signer-policy rotation |
-| `54..55` | Durable archive prepare and signed commit |
+| `54..56` | Durable archive prepare, TPM sign, and signed commit |
 
 `TRANSPORT` private call-data page · `POINTERS` rejected · `REPLY` canonical registers
 
@@ -320,6 +332,16 @@ policy            provider + package + manifest must agree
 closed loop       P-256 sign / ATA commit / power loss / cold recovery
 ```
 
+```text
+V19 NATIVE TPM
+ACPI               checksum-valid TPM2 / Start Method 7
+CRB                locality + ready + execute + cleanup
+wire               ReadPublic / SignDigest v185 / Sign v184
+key binding        Name + TPMT_PUBLIC + P-256 point
+Agent Call         56 / generation-only payload
+closed loop        TPM response / ATA commit / cold recovery
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -349,13 +371,23 @@ $ ruby scripts/test-state-signer-package.rb
 ```console
 $ ruby scripts/build-state-signer-package.rb \
     --signature-algorithm ecdsa-p256-sha256 \
-    --image-key "$IMAGE_KEY" --provider-object "$PROVIDER_OBJECT" \
+    --image-key "$IMAGE_KEY" --kernel-tpm-provider \
     --output "$STATE_SIGNER_PACKAGE" \
     --nonce 1 --archive-authority 2 --storage-authority 3 \
     --root 4 --storage 5 --through-sequence 64 \
     --call-data-generation 1 --policy-generation 1 \
     --state-signer-id "$STATE_SIGNER_ID"
 ```
+
+```console
+$ scripts/inspect-tpm-state-signer.rb \
+    --handle 0x81010001 --command sign-digest-v185 \
+    --policy-generation 1 \
+    --name "$TPM_NAME" --public-key "$TPM_PUBLIC_KEY"
+```
+
+The hardware profile defaults to `Disabled`. Activation uses
+`NativeTpmSignerProfile::Crb` and a matching ATA signer record.
 
 ```console
 $ cargo check -p agent-kernel-x86_64 \
@@ -380,7 +412,7 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
+scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect-tpm-state-signer.rb}
 ```
 
 ## `09 // ROADMAP`
@@ -398,7 +430,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 [done] State Signer Agent + native archive prepare/commit calls
 [done] first-class signer identity + external-provider native package
 [done] V1/V2 signer agility + low-S ECDSA P-256/SHA-256
-[next] TPM/HSM transport + key-provisioning ceremony
+[done] ACPI TPM2 discovery + CRB transport + provisioned signer binding
+[done] Agent Call 56 + built-in TPM provider + scripted TPM recovery proof
+[next] measured-boot policy sessions + sealed TPM authorization
 [next] dedicated QEMU ATA image + emulator power-loss proof
 [next] network + graphics + USB + formal verification
 ```
@@ -409,7 +443,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| Active milestone | [Hardware State Signer Agility V18](docs/superpowers/specs/2026-07-24-hardware-state-signer-agility-v18-design.md) |
+| Active milestone | [Native TPM State Signer V19](docs/superpowers/specs/2026-07-24-native-tpm-state-signer-v19-design.md) |
 
 ## `10 // PROJECT`
 

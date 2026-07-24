@@ -37,7 +37,7 @@ mod timer_task_flow;
 mod uart_interrupt;
 mod verifier_task_flow;
 
-use boot_config::{durable_storage_profile, BOOTLOADER_CONFIG};
+use boot_config::{durable_storage_profile, tpm_signer_profile, BOOTLOADER_CONFIG};
 use privilege_runtime::PrivilegeBoundary;
 use smp_boot::SmpBootstrap;
 
@@ -114,6 +114,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         privilege_boundary,
         smp_bootstrap,
         durable_storage_profile(),
+        tpm_signer_profile(),
     )
 }
 

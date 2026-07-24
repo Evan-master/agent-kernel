@@ -52,3 +52,23 @@ pub(super) fn decode_commit(
         generation: frame.r10,
     })
 }
+
+pub(super) fn decode_sign(
+    frame: &PrivilegeInterruptStackFrame,
+) -> Result<AgentCallRequest, AgentCallDecodeError> {
+    if frame.r11 != 0 {
+        return Err(AgentCallDecodeError::ReservedNotZero);
+    }
+    ensure_extended_reserved_zero(frame)?;
+    let (agent, task, image, nonce) = decode_context_payload(frame)?;
+    if frame.r10 == 0 {
+        return Err(AgentCallDecodeError::InvalidPayload);
+    }
+    Ok(AgentCallRequest::SignDurableArchive {
+        agent,
+        task,
+        image,
+        nonce,
+        generation: frame.r10,
+    })
+}

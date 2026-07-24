@@ -1,4 +1,4 @@
-//! Supervisor-only APIC mappings in the active kernel address space.
+//! Supervisor-only device mappings in the active kernel address space.
 
 use agent_kernel_x86_64::acpi_topology::IoApicDescriptor;
 use bootloader_api::BootInfo;
@@ -60,6 +60,24 @@ pub(super) fn map_apic_pages(
         )?;
     }
     Ok(())
+}
+
+pub(super) fn map_tpm_crb_page(
+    boot_info: &mut BootInfo,
+    locality_base: u64,
+) -> Result<(), ApicMappingError> {
+    let physical_offset = boot_info
+        .physical_memory_offset
+        .into_option()
+        .ok_or(ApicMappingError::MissingPhysicalMap)?;
+    if physical_offset != PHYSICAL_MEMORY_OFFSET {
+        return Err(ApicMappingError::UnexpectedPhysicalOffset);
+    }
+    // SAFETY: the BSP owns the active root before any application processor
+    // starts and the direct map covers this firmware-described device page.
+    let mut mapper = unsafe { active_mapper(physical_offset)? };
+    let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
+    map_device_page(&mut mapper, &mut allocator, physical_offset, locality_base)
 }
 
 pub(super) fn map_trampoline_page(
@@ -132,7 +150,7 @@ fn map_page(
 
     match mapper.translate_page(page) {
         Ok(existing) if existing == frame => {
-            // SAFETY: this canonical physical-window alias names an APIC page;
+            // SAFETY: this canonical physical-window alias names a device page;
             // no user mapping or executable code may depend on weaker flags.
             unsafe { mapper.update_flags(page, flags) }
                 .map_err(|_| ApicMappingError::FlagUpdateFailed)?
@@ -146,7 +164,7 @@ fn map_page(
             return Err(ApicMappingError::MappingConflict);
         }
         Err(TranslateError::PageNotMapped) => {
-            // SAFETY: the APIC physical page is exclusive device MMIO, this
+            // SAFETY: the physical page is exclusive device MMIO, this
             // virtual page belongs to the physical window, and allocated table
             // frames are removed permanently from BootInfo Usable regions.
             unsafe { mapper.map_to(page, frame, flags, allocator) }

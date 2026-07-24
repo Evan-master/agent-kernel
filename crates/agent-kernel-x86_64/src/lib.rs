@@ -19,6 +19,7 @@ pub mod interrupt;
 pub mod namespace_path_buffer;
 pub mod native_durable_boot;
 pub mod native_runtime;
+pub mod native_tpm_boot;
 pub mod per_cpu;
 pub mod port;
 pub mod privilege;
@@ -28,6 +29,7 @@ pub mod runtime_reclamation;
 pub mod runtime_region;
 pub mod sync;
 pub mod tlb;
+pub mod tpm2;
 pub mod typed_call_data;
 pub mod user_memory;
 

@@ -32,6 +32,7 @@ mod task_lifecycle;
 mod waiter_compaction;
 
 use agent_kernel_x86_64::agent_call::AgentCallRequest;
+use agent_kernel_x86_64::tpm2::KernelStateSigner;
 
 use super::{
     memory_reclamation, NativeExecutionReport, NativeRuntimeEvidence, NativeVerifyAuthority,
@@ -51,6 +52,7 @@ pub(super) fn run(
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
     mut durable_session: Option<&mut crate::NativeDurableSession<'_>>,
+    state_signer: &mut Option<&mut dyn KernelStateSigner>,
     mut pending: PendingAgentCallCpu,
 ) -> Option<()> {
     loop {
@@ -174,6 +176,16 @@ pub(super) fn run(
                     booted,
                     durable_session.as_deref_mut()?,
                     report,
+                    pending,
+                    generation,
+                )?
+            }
+            AgentCallRequest::SignDurableArchive { generation, .. } => {
+                let signer = state_signer.as_mut()?;
+                durable_archive::sign(
+                    booted,
+                    durable_session.as_deref_mut()?,
+                    &mut **signer,
                     pending,
                     generation,
                 )?

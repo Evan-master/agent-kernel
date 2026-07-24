@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Builds a signed native State Signer package around an external provider.
-# The provider owns durable-state key access; the image key only authenticates
-# the resulting Agent Package and is never copied into the output.
+# Builds a signed native State Signer package around a selected provider.
+# The image key only authenticates the resulting Agent Package and is never
+# copied into the output.
 
 require "digest"
 require "open3"
@@ -18,6 +18,10 @@ ENTRY_SOURCE = File.join(
 LINKER_SCRIPT = File.join(
   ROOT,
   "crates/agent-state-signer/native/state_signer.ld"
+)
+TPM_PROVIDER_SOURCE = File.join(
+  ROOT,
+  "crates/agent-state-signer/native/tpm_call_provider.S"
 )
 MAGIC = "AGNTIMG\0".b
 HEADER_BYTES = 88
@@ -219,6 +223,12 @@ OptionParser.new do |parser|
   parser.on("--provider-object PATH", "external x86_64 provider object") do |path|
     options[:provider_object] = path
   end
+  parser.on(
+    "--kernel-tpm-provider",
+    "compile the built-in Agent Call 56 TPM provider"
+  ) do
+    options[:kernel_tpm_provider] = true
+  end
   parser.on("--output PATH", "Package output outside the source tree") do |path|
     options[:output] = path
   end
@@ -257,7 +267,6 @@ end.parse!
 
 required = %i[
   image_key
-  provider_object
   output
   nonce
   archive_authority
@@ -272,16 +281,26 @@ required = %i[
 ]
 required.each { |name| fail_with("--#{name.to_s.tr("_", "-")} is required") unless options[name] }
 fail_with("unexpected positional arguments") unless ARGV.empty?
+if options[:provider_object] && options[:kernel_tpm_provider]
+  fail_with("--provider-object and --kernel-tpm-provider are mutually exclusive")
+end
+unless options[:provider_object] || options[:kernel_tpm_provider]
+  fail_with("--provider-object or --kernel-tpm-provider is required")
+end
 
 image_key_path = private_input_path("image key", options[:image_key])
-provider_object_path = private_input_path("provider object", options[:provider_object])
+provider_object_path = if options[:provider_object]
+                         private_input_path("provider object", options[:provider_object])
+                       end
 output_path = canonical_output_path(options[:output])
 output_identity = File.exist?(output_path) ? File.realpath(output_path) : output_path
-fail_with("image key and provider object must be different files") if image_key_path == provider_object_path
-fail_with("output must differ from both inputs") if [image_key_path, provider_object_path].include?(output_identity)
-if File.exist?(output_path) &&
-   [image_key_path, provider_object_path].any? { |input| File.identical?(output_path, input) }
-  fail_with("output must not be a hard link to either input")
+input_paths = [image_key_path, provider_object_path].compact
+if provider_object_path && image_key_path == provider_object_path
+  fail_with("image key and provider object must be different files")
+end
+fail_with("output must differ from inputs") if input_paths.include?(output_identity)
+if File.exist?(output_path) && input_paths.any? { |input| File.identical?(output_path, input) }
+  fail_with("output must not be a hard link to an input")
 end
 fail_with("output must be outside the source tree") if inside_root?(output_path)
 
@@ -289,7 +308,6 @@ numeric_values = required
   .filter do |name|
     !%i[
       image_key
-      provider_object
       output
       signature_algorithm
       state_signer_id
@@ -299,6 +317,9 @@ numeric_values = required
 signature_algorithm = SIGNATURE_ALGORITHMS[options[:signature_algorithm]]
 unless signature_algorithm
   fail_with("signature-algorithm must be ed25519 or ecdsa-p256-sha256")
+end
+if options[:kernel_tpm_provider] && signature_algorithm != SIGNATURE_ALGORITHMS["ecdsa-p256-sha256"]
+  fail_with("kernel TPM provider requires ecdsa-p256-sha256")
 end
 numeric_values[:signature_algorithm] = signature_algorithm
 signer_id_hex = options[:state_signer_id]
@@ -352,6 +373,7 @@ image_signer_id = Digest::SHA256.digest(SIGNER_DOMAIN + public_key)
 package = nil
 Dir.mktmpdir("agent-kernel-state-signer") do |directory|
   entry_object = File.join(directory, "state_signer_entry.o")
+  built_in_provider_object = File.join(directory, "tpm_call_provider.o")
   config_assembly = File.join(directory, "state_signer_config.S")
   config_object = File.join(directory, "state_signer_config.o")
   linked_elf = File.join(directory, "state_signer.elf")
@@ -362,6 +384,19 @@ Dir.mktmpdir("agent-kernel-state-signer") do |directory|
 
   File.write(config_assembly, config_source(numeric_values, state_signer_id))
   run_command(clang, "-c", "-target", "x86_64-unknown-none", ENTRY_SOURCE, "-o", entry_object)
+  if options[:kernel_tpm_provider]
+    run_command(
+      clang,
+      "-c",
+      "-target",
+      "x86_64-unknown-none",
+      TPM_PROVIDER_SOURCE,
+      "-o",
+      built_in_provider_object
+    )
+  end
+  selected_provider_object = built_in_provider_object if options[:kernel_tpm_provider]
+  selected_provider_object ||= provider_object_path
   run_command(clang, "-c", "-target", "x86_64-unknown-none", config_assembly, "-o", config_object)
   run_command(
     rust_lld,
@@ -378,7 +413,7 @@ Dir.mktmpdir("agent-kernel-state-signer") do |directory|
     "-T",
     LINKER_SCRIPT,
     entry_object,
-    provider_object_path,
+    selected_provider_object,
     config_object,
     "-o",
     linked_elf
@@ -457,6 +492,7 @@ ensure
 end
 
 puts "kind=state-signer"
+puts "provider=#{options[:kernel_tpm_provider] ? "kernel-tpm-agent-call-56" : "external"}"
 puts "signature_algorithm=#{options[:signature_algorithm]}"
 puts "package=#{output_path}"
 puts "bytes=#{package.bytesize}"

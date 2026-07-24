@@ -21,15 +21,15 @@ agent-kernel / native-x86_64
 [02] signer algorithms ...... verified
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
-[05] native state signer .... algorithm-bound
-kernel://state-signer/v18-ready
+[05] native state signer .... TPM-bound
+kernel://state-signer/v19-crb
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V18 signer agility│
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V19 native TPM    │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -74,7 +74,7 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | :--- | :--- |
 | `agent-kernel-core` | 领域记录、固定容量 Store、状态转换、Event |
 | `agent-kernel` | 稳定的 `no_std` syscall 风格 Facade |
-| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、ATA PIO、原生执行 |
+| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、ATA PIO、TPM CRB、原生执行 |
 | `agent-kernel-hal` | 不可变设备请求协议 |
 | `agent-state-signer` | `no_std` 签名策略与可注入 Provider 边界 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
@@ -169,11 +169,13 @@ Committed footer + flush ──> receipt ──> 一次性 Core proof ──> re
 ```text
 prepare(54) ──> 私有 call-data ──> State Signer policy
                                             │
+                   sign(56) ──> 内核 TPM service ──> CRB
+                                            │
                                             ▼
-commit(55) <── 精确 384B request <── provider signature
+commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V18 不变量 |
+| 契约 | V13 至 V19 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -188,6 +190,7 @@ commit(55) <── 精确 384B request <── provider signature
 | Core Gate | 原始 receipt 无权释放 Event；验证提交仅可消费一次 |
 | 原生设备 | ATA LBA48、512 字节扇区、有界轮询、`FLUSH CACHE EXT` |
 | 原生映射 | 每槽 128 个扇区；一个对齐的 256 扇区保留区间 |
+| TPM 权限 | Ring 0 独占 MMIO 与命令传输；Ring 3 仅可请求一次保留 Manifest 签名 |
 
 ```text
 ATA IDENTIFY ──> 双槽扫描 ──> 链路 + 签名验证
@@ -214,7 +217,7 @@ fixed x86_64 link ──> ELF section audit ──> Package v3 / kind 5
 | :--- | :--- |
 | Core 身份 | `AgentImageKind::StateSigner` + `AgentEntryKind::StateSigner` |
 | 镜像信任 | x86 kind `5`；独立 signer scope bit `4` |
-| Provider ABI | 输入 285 字节 manifest，输出 64 字节签名，携带 policy generation |
+| Provider ABI | Manifest、Signature、Policy Generation、已认证 Agent/Task/Image |
 | 算法策略 | 不可变选择 Ed25519 或 ECDSA P-256/SHA-256 |
 | Package | 两个固定地址段、零重定位、输出权限 `0600` |
 | 密钥归属 | Provider 保留持久状态密钥访问；Package 仅包含公开策略 |
@@ -227,7 +230,16 @@ signature         Ed25519 / 64B | IEEE P1363 low-S P-256 / 64B
 failure policy    mismatch / malformed key / high-S -> fail closed
 ```
 
-`ATA BACKEND` 完成 · `STATE SIGNER PACKAGE` 完成 · `SIGNER AGILITY` 完成
+```text
+V19 NATIVE TPM STATE SIGNER
+discovery         ACPI TPM2 / Start Method 7
+transport         CRB locality 0 / 有界轮询 / 清理失败即禁用
+binding           ReadPublic Name + Template + 压缩 P-256 Point
+agent boundary    Call 56 / 仅保留 Manifest / 无原始 TPM 通道
+recovery proof    TPM 签名 / ATA 提交 / 断电 / 冷启动恢复
+```
+
+`ATA BACKEND` 完成 · `STATE SIGNER PACKAGE` 完成 · `TPM CRB PATH` 完成
 
 ## `05 // AGENT CALL`
 
@@ -249,7 +261,7 @@ failure policy    mismatch / malformed key / high-S -> fail closed
 | `29..43` | 回收、压缩、Event 归档 |
 | `44..52` | Namespace 绑定、解析、比较、修改、路径 |
 | `53` | Agent Image Signer 策略轮换 |
-| `54..55` | 持久归档 Prepare 与签名 Commit |
+| `54..56` | 持久归档 Prepare、TPM 签名与签名 Commit |
 
 `TRANSPORT` 私有 call-data 页 · `POINTERS` 拒绝 · `REPLY` 规范寄存器
 
@@ -320,6 +332,16 @@ policy            Provider + Package + Manifest 必须一致
 closed loop       P-256 签名 / ATA 提交 / 断电 / 冷启动恢复
 ```
 
+```text
+V19 NATIVE TPM
+ACPI               校验和有效的 TPM2 / Start Method 7
+CRB                Locality + Ready + Execute + Cleanup
+wire               ReadPublic / SignDigest v185 / Sign v184
+key binding        Name + TPMT_PUBLIC + P-256 Point
+Agent Call         56 / 仅 Generation Payload
+closed loop        TPM Response / ATA 提交 / 冷启动恢复
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -349,13 +371,23 @@ $ ruby scripts/test-state-signer-package.rb
 ```console
 $ ruby scripts/build-state-signer-package.rb \
     --signature-algorithm ecdsa-p256-sha256 \
-    --image-key "$IMAGE_KEY" --provider-object "$PROVIDER_OBJECT" \
+    --image-key "$IMAGE_KEY" --kernel-tpm-provider \
     --output "$STATE_SIGNER_PACKAGE" \
     --nonce 1 --archive-authority 2 --storage-authority 3 \
     --root 4 --storage 5 --through-sequence 64 \
     --call-data-generation 1 --policy-generation 1 \
     --state-signer-id "$STATE_SIGNER_ID"
 ```
+
+```console
+$ scripts/inspect-tpm-state-signer.rb \
+    --handle 0x81010001 --command sign-digest-v185 \
+    --policy-generation 1 \
+    --name "$TPM_NAME" --public-key "$TPM_PUBLIC_KEY"
+```
+
+硬件 Profile 默认使用 `Disabled`。启用路径采用
+`NativeTpmSignerProfile::Crb`，并绑定匹配的 ATA Signer Record。
 
 ```console
 $ cargo check -p agent-kernel-x86_64 \
@@ -380,7 +412,7 @@ crates/
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
+scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect-tpm-state-signer.rb}
 ```
 
 ## `09 // 路线图`
@@ -398,7 +430,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 [done] State Signer Agent + 原生归档 prepare/commit 调用
 [done] 首类 Signer 身份 + 外部 Provider 原生 Package
 [done] V1/V2 Signer 算法敏捷 + 低 S ECDSA P-256/SHA-256
-[next] TPM/HSM 传输 + 密钥配置仪式
+[done] ACPI TPM2 发现 + CRB 传输 + Provisioned Signer 绑定
+[done] Agent Call 56 + 内置 TPM Provider + 脚本化 TPM 恢复证明
+[next] 度量启动 Policy Session + 密封 TPM 授权
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
 [next] Network + Graphics + USB + 形式化验证
 ```
@@ -409,7 +443,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [Hardware State Signer Agility V18](docs/superpowers/specs/2026-07-24-hardware-state-signer-agility-v18-design.md) |
+| 当前里程碑 | [Native TPM State Signer V19](docs/superpowers/specs/2026-07-24-native-tpm-state-signer-v19-design.md) |
 
 ## `10 // 项目`
 

@@ -4,6 +4,7 @@
 //! supervisor physical-memory window required by the Agent page mapper.
 
 use agent_kernel_x86_64::native_durable_boot::NativeDurableStorageProfile;
+use agent_kernel_x86_64::native_tpm_boot::NativeTpmSignerProfile;
 use bootloader_api::{config::Mapping, BootloaderConfig};
 
 use crate::agent_memory::PHYSICAL_MEMORY_OFFSET;
@@ -19,4 +20,8 @@ pub(crate) static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 pub(crate) fn durable_storage_profile() -> NativeDurableStorageProfile {
     NativeDurableStorageProfile::Disabled
+}
+
+pub(crate) fn tpm_signer_profile() -> NativeTpmSignerProfile {
+    NativeTpmSignerProfile::Disabled
 }

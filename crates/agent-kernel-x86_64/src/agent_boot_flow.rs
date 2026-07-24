@@ -20,6 +20,8 @@ use agent_kernel_x86_64::{
     },
     ata::{NativeAtaDurableBootState, NativeAtaDurableConfig},
     native_durable_boot::NativeDurableStorageProfile,
+    native_tpm_boot::NativeTpmSignerProfile,
+    tpm2::{CrbTransport, KernelStateSigner, ProvisionedTpmSigner},
     NativePortIo,
 };
 use bootloader_api::BootInfo;
@@ -48,12 +50,14 @@ use crate::{
 };
 
 const INITIAL_ADDRESS_SPACE_FRAME_INVENTORY: usize = 77;
+const TPM_CRB_POLL_BUDGET: u32 = 10_000_000;
 
 pub(super) fn run(
     boot_info: &'static mut BootInfo,
     privilege_boundary: PrivilegeBoundary,
     mut smp_bootstrap: SmpBootstrap,
     durable_profile: NativeDurableStorageProfile,
+    tpm_profile: NativeTpmSignerProfile,
 ) -> ! {
     if smp_bootstrap.prepare_apic_mmio(boot_info).is_err() {
         fatal_boot("AGENT_KERNEL_APIC_MMIO_ERROR");
@@ -61,6 +65,19 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_APIC_MMIO_OK");
     serial_write_line("AGENT_KERNEL_IO_APIC_IRQ_ROUTING_OK");
     serial_write_line("AGENT_KERNEL_LEGACY_PIC_DISABLED_OK");
+    let mut tpm_state_signer = tpm_profile.config().map(|config| {
+        let (table, io) = smp_bootstrap
+            .prepare_tpm_crb_io(boot_info)
+            .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_TPM_CRB_MMIO_ERROR"));
+        let transport = CrbTransport::new(io, table.control_area(), TPM_CRB_POLL_BUDGET)
+            .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_TPM_CRB_TRANSPORT_ERROR"));
+        ProvisionedTpmSigner::bind(transport, config)
+            .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_TPM_SIGNER_BINDING_ERROR"))
+    });
+    if tpm_state_signer.is_some() {
+        serial_write_line("AGENT_KERNEL_TPM_CRB_MMIO_OK");
+        serial_write_line("AGENT_KERNEL_TPM_SIGNER_BINDING_OK");
+    }
     if smp_bootstrap.prepare_trampoline(boot_info).is_err() {
         fatal_boot("AGENT_KERNEL_AP_TRAMPOLINE_ERROR");
     }
@@ -92,6 +109,15 @@ pub(super) fn run(
             )
             .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_STORAGE_ERROR"))
     });
+    match (tpm_state_signer.as_ref(), durable_session.as_ref()) {
+        (Some(signer), Some(session))
+            if session.config().signer().signer_id == signer.signer_id()
+                && session.config().signer().generation == signer.policy_generation()
+                && session.config().signer().public_key.ecdsa_p256_bytes()
+                    == Some(signer.public_key()) => {}
+        (Some(_), _) => fatal_boot("AGENT_KERNEL_TPM_DURABLE_POLICY_ERROR"),
+        (None, _) => {}
+    }
     let durable_boot_state = durable_session.as_ref().map(|session| session.boot_state());
     let boot_config = BootConfig::new(AgentId::new(1), ResourceKind::Workspace, ActionId::new(1));
     let boot_result = match durable_session.as_mut() {
@@ -454,6 +480,9 @@ pub(super) fn run(
         fatal_boot("AGENT_KERNEL_TASK_PREFIX_VERIFICATION_ERROR");
     }
     serial_write_line("AGENT_KERNEL_TASK_PREFIX_VERIFIED_OK");
+    let mut state_signer_service = tpm_state_signer
+        .as_mut()
+        .map(|signer| signer as &mut dyn KernelStateSigner);
     let Some(event_archive) = address_space_reuse::run(
         &mut booted,
         &mut native_runtime,
@@ -464,6 +493,7 @@ pub(super) fn run(
         reuse_worker_image,
         admission_supervisor_image,
         durable_session.as_mut(),
+        &mut state_signer_service,
     ) else {
         fatal_boot("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_ERROR");
     };

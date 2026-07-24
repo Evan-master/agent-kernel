@@ -9,6 +9,10 @@ require "tmpdir"
 
 ROOT = File.expand_path("..", __dir__)
 BUILDER = File.join(ROOT, "scripts/build-state-signer-package.rb")
+TPM_PROVIDER = File.join(
+  ROOT,
+  "crates/agent-state-signer/native/tpm_call_provider.S"
+)
 MAGIC = "AGNTIMG\0".b
 SIGNER_DOMAIN = "AGENT_KERNEL_ED25519_SIGNER_V1\0".b
 SPKI_PREFIX = ["302a300506032b6570032100"].pack("H*")
@@ -66,11 +70,16 @@ def builder_command(
   signer_id_hex,
   signature_algorithm = "ed25519"
 )
+  provider_arguments = if provider_object == :kernel_tpm
+                         ["--kernel-tpm-provider"]
+                       else
+                         ["--provider-object", provider_object]
+                       end
   [
     RbConfig.ruby,
     BUILDER,
     "--image-key", key_path,
-    "--provider-object", provider_object,
+    *provider_arguments,
     "--output", output_path,
     "--nonce", "0xa17ce017",
     "--archive-authority", "25",
@@ -86,6 +95,7 @@ def builder_command(
 end
 
 assert(File.file?(BUILDER), "state signer package builder is missing")
+assert(File.file?(TPM_PROVIDER), "kernel TPM provider source is missing")
 
 clang = ENV["CLANG"]
 clang = "/usr/bin/clang" unless clang && File.executable?(clang)
@@ -207,7 +217,7 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
   p256_output = run!(
     *builder_command(
       key_path,
-      provider_object,
+      :kernel_tpm,
       p256_output_path,
       signer_id_hex,
       "ecdsa-p256-sha256"
@@ -217,7 +227,19 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
     p256_output.include?("signature_algorithm=ecdsa-p256-sha256"),
     "builder omitted P-256 signature algorithm"
   )
+  assert(
+    p256_output.include?("provider=kernel-tpm-agent-call-56"),
+    "builder omitted kernel TPM provider evidence"
+  )
   assert(File.binread(p256_output_path) != package, "algorithm policy did not change package bytes")
+
+  invalid_tpm_output = File.join(directory, "state-signer-tpm-ed25519.pkg")
+  _output, error, status = Open3.capture3(
+    *builder_command(key_path, :kernel_tpm, invalid_tpm_output, signer_id_hex)
+  )
+  assert(!status.success?, "builder accepted Ed25519 for the kernel TPM provider")
+  assert(error.include?("requires ecdsa-p256-sha256"), "wrong TPM algorithm failure")
+  assert(!File.exist?(invalid_tpm_output), "TPM algorithm rejection left an output")
 
   unsupported_output = File.join(directory, "state-signer-unsupported.pkg")
   _output, error, status = Open3.capture3(
@@ -298,4 +320,4 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
   assert(!File.exist?(rejected_key_path), "image-key rejection left an output")
 end
 
-puts "[ OK ] State Signer Package v3 / kind 5 / external provider / mode 0600"
+puts "[ OK ] State Signer Package v3 / kind 5 / external + kernel TPM providers / mode 0600"

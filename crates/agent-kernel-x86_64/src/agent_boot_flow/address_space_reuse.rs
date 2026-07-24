@@ -23,6 +23,7 @@ use agent_kernel_core::{
     AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
 };
 use agent_kernel_x86_64::agent_image::{AgentImageFormat, AgentImageTrust};
+use agent_kernel_x86_64::tpm2::KernelStateSigner;
 
 pub(super) fn run(
     booted: &mut X86BootedKernel,
@@ -34,6 +35,7 @@ pub(super) fn run(
     worker_contract: BootReuseWorkerImage,
     supervisor_contract: BootAdmissionSupervisorImage,
     mut durable_session: Option<&mut NativeDurableSession<'_>>,
+    state_signer: &mut Option<&mut dyn KernelStateSigner>,
 ) -> Option<NativeEventArchive> {
     let inventory_frame_count = address_space_pool.inventory_frame_count()?;
     if !runtime.is_empty()
@@ -108,6 +110,7 @@ pub(super) fn run(
         &mut evidence,
         None,
         durable_session.as_deref_mut(),
+        state_signer,
     )?;
     let first_targets = [
         first_flows[0].admission_target(),
@@ -159,6 +162,7 @@ pub(super) fn run(
         &mut evidence,
         None,
         durable_session.as_deref_mut(),
+        state_signer,
     )?;
     if runtime.len() != 1
         || !runtime.contains(ADMISSION_SUPERVISOR)
@@ -220,6 +224,7 @@ pub(super) fn run(
         &mut evidence,
         None,
         durable_session.as_deref_mut(),
+        state_signer,
     )?;
     let repeated_flow_valid = evidence.proves_repeated_runtime_admission_flow();
     let workers_completed = second_flows

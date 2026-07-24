@@ -13,6 +13,7 @@ mod io_apic;
 mod memory;
 mod startup;
 mod tlb_ipi;
+mod tpm;
 mod trampoline;
 
 use core::{
@@ -22,7 +23,8 @@ use core::{
 
 use agent_kernel_x86_64::{
     acpi_topology::{
-        load_acpi_topology, AcpiMachineTopology, AcpiTopologyError, DirectAcpiHandler,
+        load_acpi_topology, load_acpi_tpm2_table, AcpiMachineTopology, AcpiTopologyError,
+        AcpiTpm2DiscoveryError, DirectAcpiHandler,
     },
     apic::{
         ApicBaseMsr, CpuidApicIdentity, LocalApicBase, LocalApicMmio, VolatileMmio,
@@ -33,6 +35,7 @@ use agent_kernel_x86_64::{
         TlbAddressSpace, TlbFlushScope, TlbShootdownCompletion, TlbShootdownCoordinator,
         TlbShootdownRequest,
     },
+    tpm2::Tpm2AcpiTable,
 };
 use bootloader_api::BootInfo;
 
@@ -59,6 +62,10 @@ pub(crate) enum SmpBootError {
     BootProcessorBitClear,
     X2ApicModeActive,
     Acpi(AcpiTopologyError),
+    Tpm2Acpi(AcpiTpm2DiscoveryError),
+    MissingTpm2Table,
+    TpmCrbAlreadyPrepared,
+    InvalidTpmCrbMapping,
     ApicBaseMismatch { msr: LocalApicBase, madt: u64 },
     ApicMapping(ApicMappingError),
     IoApicRouting(IoApicRoutingError),
@@ -78,6 +85,7 @@ pub(crate) enum SmpBootError {
 
 pub(crate) struct SmpBootstrap {
     topology: AcpiMachineTopology<MAX_CPU_COUNT>,
+    tpm2_table: Result<Option<Tpm2AcpiTable>, AcpiTpm2DiscoveryError>,
     registry: CpuRegistry<MAX_CPU_COUNT>,
     local_apic_base: LocalApicBase,
     local_apic: Option<LocalApicMmio<VolatileMmio>>,
@@ -85,6 +93,7 @@ pub(crate) struct SmpBootstrap {
     io_apic_routing: Option<IoApicRouting>,
     legacy_pic_disabled: bool,
     trampoline: Option<TrampolinePage>,
+    tpm_crb_prepared: bool,
     tlb_coordinator: TlbShootdownCoordinator,
 }
 
@@ -135,6 +144,7 @@ impl SmpBootstrap {
             load_acpi_topology::<_, MAX_CPU_COUNT>(handler, rsdp_address, cpuid.initial_apic_id())
         }
         .map_err(SmpBootError::Acpi)?;
+        let tpm2_table = unsafe { load_acpi_tpm2_table(handler, rsdp_address) };
         if topology.local_apic_address() != apic_msr.base().physical() {
             return Err(SmpBootError::ApicBaseMismatch {
                 msr: apic_msr.base(),
@@ -144,6 +154,7 @@ impl SmpBootstrap {
         let registry = CpuRegistry::new(topology.cpus().clone());
         Ok(Self {
             topology,
+            tpm2_table,
             registry,
             local_apic_base: apic_msr.base(),
             local_apic: None,
@@ -151,6 +162,7 @@ impl SmpBootstrap {
             io_apic_routing: None,
             legacy_pic_disabled: false,
             trampoline: None,
+            tpm_crb_prepared: false,
             tlb_coordinator: TlbShootdownCoordinator::new(),
         })
     }

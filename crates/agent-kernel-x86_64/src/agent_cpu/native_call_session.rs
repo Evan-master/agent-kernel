@@ -5,6 +5,7 @@
 //! Session nonce and transcript survive the timer boundary; semantic mutation
 //! and reply choice remain outside the session.
 
+mod durable_archive_memory;
 mod replies;
 mod runtime_memory;
 

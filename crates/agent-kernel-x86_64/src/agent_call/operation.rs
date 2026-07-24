@@ -61,4 +61,5 @@ pub enum AgentCallOperation {
     RotateAgentImageSignerFromMemory,
     PrepareDurableArchive,
     CommitDurableArchiveFromMemory,
+    SignDurableArchive,
 }

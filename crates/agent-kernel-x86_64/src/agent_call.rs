@@ -101,6 +101,7 @@ pub const AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_PATH_FROM_MEMORY: u64 = 52;
 pub const AGENT_CALL_ROTATE_AGENT_IMAGE_SIGNER: u64 = 53;
 pub const AGENT_CALL_PREPARE_DURABLE_ARCHIVE: u64 = 54;
 pub const AGENT_CALL_COMMIT_DURABLE_ARCHIVE: u64 = 55;
+pub const AGENT_CALL_SIGN_DURABLE_ARCHIVE: u64 = 56;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -202,6 +203,7 @@ impl AgentCallRequest {
             }
             AGENT_CALL_PREPARE_DURABLE_ARCHIVE => AgentCallOperation::PrepareDurableArchive,
             AGENT_CALL_COMMIT_DURABLE_ARCHIVE => AgentCallOperation::CommitDurableArchiveFromMemory,
+            AGENT_CALL_SIGN_DURABLE_ARCHIVE => AgentCallOperation::SignDurableArchive,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -346,6 +348,7 @@ impl AgentCallRequest {
             AgentCallOperation::CommitDurableArchiveFromMemory => {
                 durable_archive::decode_commit(frame)
             }
+            AgentCallOperation::SignDurableArchive => durable_archive::decode_sign(frame),
         }
     }
 }

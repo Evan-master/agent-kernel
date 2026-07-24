@@ -7,6 +7,7 @@
 use acpi::Handler;
 
 use crate::cpu::ApicId;
+use crate::tpm2::{parse_tpm2_acpi_table, Tpm2AcpiTable, Tpm2AcpiTableError};
 
 use super::{parse_madt, AcpiMachineTopology, AcpiTopologyError};
 
@@ -16,6 +17,15 @@ const SDT_HEADER_BYTES: usize = 36;
 const MAX_RSDP_BYTES: usize = 4096;
 const MAX_ROOT_TABLE_BYTES: usize = 64 * 1024;
 const MAX_MADT_BYTES: usize = 64 * 1024;
+const MAX_TPM2_TABLE_BYTES: usize = 4096;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum AcpiTpm2DiscoveryError {
+    Firmware(AcpiTopologyError),
+    TableLengthOutOfBounds { length: usize },
+    DuplicateTable,
+    Table(Tpm2AcpiTableError),
+}
 
 /// Validate RSDP and root-table bytes before constructing upstream ACPI table
 /// enumeration state.
@@ -33,6 +43,23 @@ pub unsafe fn load_acpi_topology<H: Handler, const CPU_CAPACITY: usize>(
     let (revision, root_address) = unsafe { validate_rsdp(&handler, rsdp_address)? };
     let root_length = unsafe { validate_root_table(&handler, revision, root_address)? };
     unsafe { discover_madt(&handler, revision, root_address, root_length, bsp_apic_id) }
+}
+
+/// Finds at most one checksum-valid ACPI `TPM2` table.
+///
+/// # Safety
+///
+/// `rsdp_address` and every root-table entry must remain readable through the
+/// supplied handler for the duration of this call.
+pub unsafe fn load_acpi_tpm2_table<H: Handler>(
+    handler: H,
+    rsdp_address: usize,
+) -> Result<Option<Tpm2AcpiTable>, AcpiTpm2DiscoveryError> {
+    let (revision, root_address) = unsafe { validate_rsdp(&handler, rsdp_address) }
+        .map_err(AcpiTpm2DiscoveryError::Firmware)?;
+    let root_length = unsafe { validate_root_table(&handler, revision, root_address) }
+        .map_err(AcpiTpm2DiscoveryError::Firmware)?;
+    unsafe { discover_tpm2(&handler, revision, root_address, root_length) }
 }
 
 unsafe fn validate_rsdp<H: Handler>(
@@ -138,6 +165,47 @@ unsafe fn discover_madt<H: Handler, const CPU_CAPACITY: usize>(
         return parse_madt(mapping_bytes(&complete), bsp_apic_id);
     }
     Err(AcpiTopologyError::MissingMadt)
+}
+
+unsafe fn discover_tpm2<H: Handler>(
+    handler: &H,
+    revision: u8,
+    root_address: usize,
+    root_length: usize,
+) -> Result<Option<Tpm2AcpiTable>, AcpiTpm2DiscoveryError> {
+    let root = unsafe { handler.map_physical_region::<u8>(root_address, root_length) };
+    let root_bytes = mapping_bytes(&root);
+    let entry_bytes = if revision == 0 { 4 } else { 8 };
+    let mut discovered = None;
+    for offset in (SDT_HEADER_BYTES..root_length).step_by(entry_bytes) {
+        let table_address = if entry_bytes == 4 {
+            read_u32(root_bytes, offset) as usize
+        } else {
+            read_u64(root_bytes, offset) as usize
+        };
+        if table_address == 0 {
+            continue;
+        }
+        let header = unsafe { handler.map_physical_region::<u8>(table_address, SDT_HEADER_BYTES) };
+        let header_bytes = mapping_bytes(&header);
+        if &header_bytes[..4] != b"TPM2" {
+            continue;
+        }
+        if discovered.is_some() {
+            return Err(AcpiTpm2DiscoveryError::DuplicateTable);
+        }
+        let length = read_u32(header_bytes, 4) as usize;
+        if !(52..=MAX_TPM2_TABLE_BYTES).contains(&length) {
+            return Err(AcpiTpm2DiscoveryError::TableLengthOutOfBounds { length });
+        }
+        drop(header);
+        let complete = unsafe { handler.map_physical_region::<u8>(table_address, length) };
+        discovered = Some(
+            parse_tpm2_acpi_table(mapping_bytes(&complete))
+                .map_err(AcpiTpm2DiscoveryError::Table)?,
+        );
+    }
+    Ok(discovered)
 }
 
 fn nonzero_root(revision: u8, root: usize) -> Result<(u8, usize), AcpiTopologyError> {

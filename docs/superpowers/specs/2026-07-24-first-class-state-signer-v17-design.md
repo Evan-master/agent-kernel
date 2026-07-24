@@ -56,9 +56,16 @@ The provider object exports one fixed x86_64 System V symbol:
 state_signer_provider_sign(
     manifest_ptr: *const u8,   // 285 bytes
     signature_ptr: *mut u8,    // 64 bytes
-    policy_generation: u64
+    policy_generation: u64,
+    agent: u64,
+    task: u64,
+    image: u64
 ) -> u32                       // 0 = success
 ```
+
+The final three register arguments were added in V19. Existing providers may
+ignore them. The kernel-mediated TPM provider uses them to authenticate Agent
+Call 56 without issuing a duplicate Describe call.
 
 The package entry:
 

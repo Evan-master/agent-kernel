@@ -13,6 +13,7 @@ mod state;
 
 use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, EventKind, FaultKind, MemoryCellId};
 use agent_kernel_x86_64::native_runtime::NativeAgentRuntimeStore;
+use agent_kernel_x86_64::tpm2::KernelStateSigner;
 
 use crate::{
     agent_cpu::{AgentRunOutcome, CompletedAgentCpu, FaultedAgentCpu},
@@ -62,6 +63,7 @@ pub(crate) fn run_until_idle(
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
     mut durable_session: Option<&mut crate::NativeDurableSession<'_>>,
+    state_signer: &mut Option<&mut dyn KernelStateSigner>,
 ) -> Option<()> {
     while !booted.kernel().run_queue().is_empty() {
         let dispatched = runtime.dispatch_next(booted, NATIVE_TASK_QUANTUM)?;
@@ -83,6 +85,7 @@ pub(crate) fn run_until_idle(
                     evidence,
                     verify_authority,
                     durable_session.as_deref_mut(),
+                    state_signer,
                     outcome,
                 )?;
             }
@@ -101,6 +104,7 @@ pub(crate) fn run_until_idle(
                     evidence,
                     verify_authority,
                     durable_session.as_deref_mut(),
+                    state_signer,
                     outcome,
                 )?;
             }
@@ -115,6 +119,7 @@ pub(crate) fn run_until_idle(
                     evidence,
                     verify_authority,
                     durable_session.as_deref_mut(),
+                    state_signer,
                     resumable.resume_until_boundary()?,
                 )?;
             }
@@ -128,6 +133,7 @@ pub(crate) fn run_until_idle(
                     evidence,
                     verify_authority,
                     durable_session.as_deref_mut(),
+                    state_signer,
                     resumable.resume_until_boundary()?,
                 )?;
             }
@@ -141,6 +147,7 @@ pub(crate) fn run_until_idle(
                     evidence,
                     verify_authority,
                     durable_session.as_deref_mut(),
+                    state_signer,
                     resumable.resume_until_boundary()?,
                 )?;
             }
@@ -160,6 +167,7 @@ fn run_outcome(
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
     durable_session: Option<&mut crate::NativeDurableSession<'_>>,
+    state_signer: &mut Option<&mut dyn KernelStateSigner>,
     outcome: AgentRunOutcome,
 ) -> Option<()> {
     match outcome {
@@ -171,6 +179,7 @@ fn run_outcome(
             evidence,
             verify_authority,
             durable_session,
+            state_signer,
             pending,
         ),
         AgentRunOutcome::Preempted(cpu) => expire_quantum(booted, runtime, evidence, cpu),
