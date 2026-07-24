@@ -28,7 +28,7 @@ kernel://supervisor/handoff-ready
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V15 durable boot │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V16 state signer │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -75,6 +75,7 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | `agent-kernel` | 稳定的 `no_std` syscall 风格 Facade |
 | `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、ATA PIO、原生执行 |
 | `agent-kernel-hal` | 不可变设备请求协议 |
+| `agent-state-signer` | `no_std` 签名策略与可注入 Provider 边界 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
 
 ## `02 // 执行单元`
@@ -160,7 +161,14 @@ slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
 Committed footer + flush ──> receipt ──> 一次性 Core proof ──> release
 ```
 
-| 契约 | V13 / V14 / V15 不变量 |
+```text
+prepare(54) ──> 私有 call-data ──> State Signer policy
+                                            │
+                                            ▼
+commit(55) <── 精确 384B request <── provider signature
+```
+
+| 契约 | V13 / V14 / V15 / V16 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -168,7 +176,8 @@ Committed footer + flush ──> receipt ──> 一次性 Core proof ──> re
 | Transaction | 8 个显式 write、flush、readback 故障边界 |
 | Recovery | 选择最高的连续签名链头；分叉与断链均关闭自动恢复 |
 | Boot Import | 仅允许空白 Core；下一条 Event 从 `through_sequence + 1` 开始 |
-| Signed Request | 384 字节 canonical call-data 记录，绑定 generation 与存储权限 |
+| Signed Request | 384 字节 canonical 记录；仅签名区间 `317..381` 可变 |
+| Signer Agent | 独立策略、可注入 Provider、内核不执行私钥操作 |
 | Core Gate | 原始 receipt 无权释放 Event；验证提交仅可消费一次 |
 | 原生设备 | ATA LBA48、512 字节扇区、有界轮询、`FLUSH CACHE EXT` |
 | 原生映射 | 每槽 128 个扇区；一个对齐的 256 扇区保留区间 |
@@ -183,7 +192,7 @@ ATA IDENTIFY ──> 双槽扫描 ──> 链路 + 签名验证
                  └──────> 稳定 Resource <──── 一次性 Core proof
 ```
 
-`ATA BACKEND` 完成 · `NATIVE BOOT HANDOFF` 完成 · `STATE SIGNER CALL` 下一阶段
+`ATA BACKEND` 完成 · `NATIVE BOOT HANDOFF` 完成 · `STATE SIGNER CALL` 完成
 
 ## `05 // AGENT CALL`
 
@@ -204,6 +213,8 @@ ATA IDENTIFY ──> 双槽扫描 ──> 链路 + 签名验证
 | `21..28` | Runtime Memory 与 Admission |
 | `29..43` | 回收、压缩、Event 归档 |
 | `44..52` | Namespace 绑定、解析、比较、修改、路径 |
+| `53` | Agent Image Signer 策略轮换 |
+| `54..55` | 持久归档 Prepare 与签名 Commit |
 
 `TRANSPORT` 私有 call-data 页 · `POINTERS` 拒绝 · `REPLY` 规范寄存器
 
@@ -250,6 +261,14 @@ boot profile      Disabled | ATA
 bare target       x86_64-unknown-none
 ```
 
+```text
+V16 STATE SIGNER
+call IDs          54 prepare / 55 commit
+signature window  仅 bytes 317..381
+session states    ready / prepared / faulted
+closed loop       preflight / sign / ATA / release / cold recovery
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -294,6 +313,7 @@ crates/
 ├─ agent-kernel-boot/    Bootstrap Profile
 ├─ agent-kernel-x86_64/  原生机器边界
 ├─ agent-kernel-image/   BIOS 镜像构建器
+├─ agent-state-signer/   no_std 签名策略 Agent
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
@@ -312,7 +332,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] SMP + 同步 + TLB shootdown
 [done] 原生 ATA PIO 适配器 + 签名冷启动恢复
 [done] 验证持久启动 + Event 序列延续
-[next] State Signer Agent + 原生归档 prepare/commit 调用
+[done] State Signer Agent + 原生归档 prepare/commit 调用
+[next] 安全 Signer 配置 + 原生 Signer Package
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
 [next] Network + Graphics + USB + 形式化验证
 ```
@@ -323,7 +344,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [Native Durable Boot V15](docs/superpowers/specs/2026-07-24-native-durable-boot-v15-design.md) |
+| 当前里程碑 | [State Signer Agent V16](docs/superpowers/specs/2026-07-24-state-signer-agent-v16-design.md) |
 
 ## `10 // 项目`
 
