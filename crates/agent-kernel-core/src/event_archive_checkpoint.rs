@@ -5,11 +5,10 @@
 //! Event slots, and retains the latest cryptographic checkpoint chain head.
 
 use crate::{
-    AgentEntryKind, AgentId, CapabilityId, DurableArchiveCommitProof, DurableArchiveReceipt,
+    AgentId, CapabilityId, DurableArchiveCommitProof, DurableArchiveReceipt,
     DurableArchiveRecoveryVerificationRequest, DurableArchiveRecoveryVerifier,
     DurableArchiveVerificationRequest, DurableArchiveVerifier, DurableRecoveredHead, Event,
-    EventArchiveCheckpoint, EventArchiveProposal, KernelCore, KernelError, Operation, ResourceId,
-    ResourceStatus,
+    EventArchiveCheckpoint, EventArchiveProposal, KernelCore, KernelError, ResourceId,
 };
 
 impl<
@@ -100,26 +99,22 @@ impl<
         if self.durable_archive_receipt == Some(receipt) {
             return Err(KernelError::EventArchiveReceiptReplay);
         }
-        let root = self.validate_event_archive_commit(actor, archive_authority, proposal)?;
+        let preflight = self.preflight_durable_event_archive(
+            actor,
+            archive_authority,
+            storage_authority,
+            receipt.storage(),
+            proposal,
+        )?;
         if !receipt.matches_proposal_values(proposal) {
             return Err(KernelError::EventArchiveReceiptMismatch);
         }
-        let storage = self.find_resource(receipt.storage())?;
-        if storage.status != ResourceStatus::Active {
-            return Err(KernelError::ResourceRetired);
-        }
-        self.ensure_authorized(
-            actor,
-            storage_authority,
-            receipt.storage(),
-            Operation::Checkpoint,
-        )?;
         let request = DurableArchiveVerificationRequest::new(
             proposal,
             actor,
             archive_authority,
             storage_authority,
-            root,
+            preflight.root(),
             receipt,
         );
         verifier
@@ -155,39 +150,6 @@ impl<
         self.durable_archive_receipt = Some(head.receipt());
         self.next_sequence = next_sequence;
         Ok(checkpoint)
-    }
-
-    fn validate_event_archive_commit(
-        &self,
-        actor: AgentId,
-        authority: CapabilityId,
-        proposal: EventArchiveProposal,
-    ) -> Result<ResourceId, KernelError> {
-        let entry = self
-            .find_agent_entry(actor)
-            .map_err(|_| KernelError::AgentNotLaunched)?;
-        if entry.kind != AgentEntryKind::Supervisor {
-            return Err(KernelError::AgentEntryKindMismatch);
-        }
-
-        let capability = self.find_capability(authority)?;
-        let root = self.find_resource(capability.resource)?;
-        if root.parent.is_some() {
-            return Err(KernelError::EventArchiveAuthorityScopeMismatch);
-        }
-        if root.status != ResourceStatus::Active {
-            return Err(KernelError::ResourceRetired);
-        }
-        self.ensure_authorized(actor, authority, root.id, Operation::Rollback)?;
-
-        let current = self
-            .prepare_event_archive(proposal.through_sequence())
-            .map_err(|_| KernelError::EventArchiveProposalMismatch)?;
-        if current != proposal {
-            return Err(KernelError::EventArchiveProposalMismatch);
-        }
-
-        Ok(root.id)
     }
 
     fn apply_event_archive_commit(

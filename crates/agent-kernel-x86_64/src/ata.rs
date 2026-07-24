@@ -17,9 +17,10 @@ pub use device::{AtaDeviceIdentity, AtaPioDevice};
 pub use durable::{
     AtaDurableBackendInitError, AtaDurableBinding, AtaDurableBindingError, AtaDurableHead,
     AtaDurableHeadBindError, AtaDurableStateBackend, NativeAtaDurableBootState,
-    NativeAtaDurableCommitError, NativeAtaDurableConfig, NativeAtaDurableConfigError,
-    NativeAtaDurableInitError, NativeAtaDurableSession, ATA_DURABLE_RANGE_SECTORS,
-    ATA_DURABLE_SLOT_SECTORS,
+    NativeAtaDurableCancelError, NativeAtaDurableCommitError, NativeAtaDurableConfig,
+    NativeAtaDurableConfigError, NativeAtaDurableInitError, NativeAtaDurablePrepareError,
+    NativeAtaDurableSession, NativeDurableArchiveCaller, NativeDurableArchivePreparation,
+    ATA_DURABLE_RANGE_SECTORS, ATA_DURABLE_SLOT_SECTORS,
 };
 pub use error::AtaPioError;
 pub use io::AtaRegisterIo;

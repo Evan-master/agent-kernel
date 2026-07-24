@@ -53,6 +53,10 @@ pub(crate) const X86_FAULT_CAPACITY: usize = 4;
 pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
 pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 4;
 pub(crate) const X86_EVENT_CAPACITY: usize = 375;
+pub(crate) type NativeDurableSession<'a> = agent_kernel_x86_64::ata::NativeAtaDurableSession<
+    'a,
+    agent_kernel_x86_64::ata::AtaPioDevice<agent_kernel_x86_64::NativePortIo>,
+>;
 pub(crate) type X86BootedKernel = BootedKernel<
     14,
     X86_RESOURCE_CAPACITY,

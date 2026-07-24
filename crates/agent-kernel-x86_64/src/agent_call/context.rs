@@ -13,6 +13,7 @@ mod authentication;
 mod capability;
 mod capability_cleanup_revocation;
 mod capability_compaction;
+mod durable_archive;
 mod event_archive;
 mod fault_compaction;
 mod intent_compaction;

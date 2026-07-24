@@ -5,9 +5,9 @@
 //! hashing, authority validation, and dense Event Store mutation.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, DurableArchiveReceipt, DurableArchiveRecoveryVerifier,
-    DurableArchiveVerifier, DurableRecoveredHead, EventArchiveCheckpoint, EventArchiveProposal,
-    KernelError,
+    AgentId, CapabilityId, DurableArchivePreflight, DurableArchiveReceipt,
+    DurableArchiveRecoveryVerifier, DurableArchiveVerifier, DurableRecoveredHead,
+    EventArchiveCheckpoint, EventArchiveProposal, KernelError, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -68,6 +68,23 @@ impl<
         through_sequence: u64,
     ) -> Result<EventArchiveProposal, KernelError> {
         self.core.prepare_event_archive(through_sequence)
+    }
+
+    pub fn preflight_durable_event_archive(
+        &self,
+        actor: AgentId,
+        archive_authority: CapabilityId,
+        storage_authority: CapabilityId,
+        storage: ResourceId,
+        proposal: EventArchiveProposal,
+    ) -> Result<DurableArchivePreflight, KernelError> {
+        self.core.preflight_durable_event_archive(
+            actor,
+            archive_authority,
+            storage_authority,
+            storage,
+            proposal,
+        )
     }
 
     pub fn sys_commit_event_archive(

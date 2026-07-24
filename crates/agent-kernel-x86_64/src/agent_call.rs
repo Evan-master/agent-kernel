@@ -14,6 +14,7 @@ mod capability;
 mod capability_cleanup_revocation;
 mod capability_compaction;
 mod context;
+mod durable_archive;
 mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
@@ -98,6 +99,8 @@ pub const AGENT_CALL_RESOLVE_NAMESPACE_PATH: u64 = 50;
 pub const AGENT_CALL_RESOLVE_NAMESPACE_PATH_FROM_MEMORY: u64 = 51;
 pub const AGENT_CALL_COMPARE_AND_REBIND_NAMESPACE_PATH_FROM_MEMORY: u64 = 52;
 pub const AGENT_CALL_ROTATE_AGENT_IMAGE_SIGNER: u64 = 53;
+pub const AGENT_CALL_PREPARE_DURABLE_ARCHIVE: u64 = 54;
+pub const AGENT_CALL_COMMIT_DURABLE_ARCHIVE: u64 = 55;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -197,6 +200,8 @@ impl AgentCallRequest {
             AGENT_CALL_ROTATE_AGENT_IMAGE_SIGNER => {
                 AgentCallOperation::RotateAgentImageSignerFromMemory
             }
+            AGENT_CALL_PREPARE_DURABLE_ARCHIVE => AgentCallOperation::PrepareDurableArchive,
+            AGENT_CALL_COMMIT_DURABLE_ARCHIVE => AgentCallOperation::CommitDurableArchiveFromMemory,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -336,6 +341,10 @@ impl AgentCallRequest {
             }
             AgentCallOperation::RotateAgentImageSignerFromMemory => {
                 agent_image_signer::decode_rotation(frame)
+            }
+            AgentCallOperation::PrepareDurableArchive => durable_archive::decode_prepare(frame),
+            AgentCallOperation::CommitDurableArchiveFromMemory => {
+                durable_archive::decode_commit(frame)
             }
         }
     }

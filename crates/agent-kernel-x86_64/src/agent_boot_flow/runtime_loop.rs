@@ -117,6 +117,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )
     .is_none()
     {
@@ -165,6 +166,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     if runtime.len() != 4
         || report.len() != 2
@@ -188,6 +190,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -227,6 +230,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -252,6 +256,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -272,6 +277,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     if runtime.len() != 2
         || report.len() != 3
@@ -290,6 +296,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     if runtime.len() != 1
         || report.len() != 4
@@ -314,6 +321,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )?;
     serial_write_line("AGENT_KERNEL_NATIVE_FAULT_RECOVERY_EXECUTION_OK");
     if runtime.len() != 1 || report.len() != 5 || report.faulted_len() != 0 {
@@ -337,6 +345,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         Some(authority),
+        None,
     )
     .is_none()
     {

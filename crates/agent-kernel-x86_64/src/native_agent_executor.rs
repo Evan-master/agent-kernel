@@ -61,6 +61,7 @@ pub(crate) fn run_until_idle(
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
+    mut durable_session: Option<&mut crate::NativeDurableSession<'_>>,
 ) -> Option<()> {
     while !booted.kernel().run_queue().is_empty() {
         let dispatched = runtime.dispatch_next(booted, NATIVE_TASK_QUANTUM)?;
@@ -81,6 +82,7 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
+                    durable_session.as_deref_mut(),
                     outcome,
                 )?;
             }
@@ -98,6 +100,7 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
+                    durable_session.as_deref_mut(),
                     outcome,
                 )?;
             }
@@ -111,6 +114,7 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
+                    durable_session.as_deref_mut(),
                     resumable.resume_until_boundary()?,
                 )?;
             }
@@ -123,6 +127,7 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
+                    durable_session.as_deref_mut(),
                     resumable.resume_until_boundary()?,
                 )?;
             }
@@ -135,6 +140,7 @@ pub(crate) fn run_until_idle(
                     report,
                     evidence,
                     verify_authority,
+                    durable_session.as_deref_mut(),
                     resumable.resume_until_boundary()?,
                 )?;
             }
@@ -153,6 +159,7 @@ fn run_outcome(
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
+    durable_session: Option<&mut crate::NativeDurableSession<'_>>,
     outcome: AgentRunOutcome,
 ) -> Option<()> {
     match outcome {
@@ -163,10 +170,13 @@ fn run_outcome(
             report,
             evidence,
             verify_authority,
+            durable_session,
             pending,
         ),
         AgentRunOutcome::Preempted(cpu) => expire_quantum(booted, runtime, evidence, cpu),
-        AgentRunOutcome::Fault(cpu) => contain_fault(booted, memory_pool, report, evidence, cpu),
+        AgentRunOutcome::Fault(cpu) => {
+            contain_fault(booted, memory_pool, report, evidence, durable_session, cpu)
+        }
     }
 }
 
@@ -175,11 +185,15 @@ pub(super) fn contain_fault(
     memory_pool: &mut RuntimeMemoryPool,
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
+    durable_session: Option<&mut crate::NativeDurableSession<'_>>,
     cpu: FaultedAgentCpu,
 ) -> Option<()> {
     let context = cpu.context();
     if !state::running(booted, context) {
         return None;
+    }
+    if let Some(session) = durable_session {
+        calls::cancel_durable_preparation(session, context)?;
     }
     let (cpu, reclaimed) = memory_reclamation::reclaim(booted, memory_pool, cpu)?;
     let fault_kind = FaultKind::ExecutionTrap;

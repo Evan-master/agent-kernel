@@ -250,6 +250,47 @@ impl PendingAgentCallCpu {
             .memory
             .snapshot_typed_call_data(generation.1, generation.0)
     }
+
+    pub(crate) fn stage_durable_archive_preparation(
+        &mut self,
+        preparation: agent_kernel_x86_64::ata::NativeDurableArchivePreparation,
+    ) -> bool {
+        let valid = matches!(
+            self.authenticated_request(),
+            Some(AgentCallRequest::PrepareDurableArchive {
+                archive_authority,
+                storage_authority,
+                through_sequence,
+                generation,
+                ..
+            }) if preparation.caller().agent() == self.session.context.agent()
+                && preparation.caller().task() == self.session.context.task()
+                && preparation.caller().image() == self.session.context.image()
+                && preparation.preflight().archive_authority() == archive_authority
+                && preparation.preflight().storage_authority() == storage_authority
+                && preparation.preflight().proposal().through_sequence() == through_sequence
+                && preparation.call_data_generation() == generation
+        );
+        if !valid {
+            return false;
+        }
+        self.session
+            .memory
+            .stage_durable_archive_request(&preparation.request_bytes())
+    }
+
+    pub(crate) fn authenticated_durable_archive_request(
+        &self,
+    ) -> Option<[u8; agent_kernel_x86_64::durable_archive_request::DURABLE_ARCHIVE_REQUEST_BYTES]>
+    {
+        let generation = match self.authenticated_request()? {
+            AgentCallRequest::CommitDurableArchiveFromMemory { generation, .. } => generation,
+            _ => return None,
+        };
+        self.session
+            .memory
+            .snapshot_durable_archive_request(generation)
+    }
 }
 
 impl ResumableAgentCpu {

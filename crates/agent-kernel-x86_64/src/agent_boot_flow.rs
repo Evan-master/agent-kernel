@@ -463,6 +463,7 @@ pub(super) fn run(
         &cpu_runtime,
         reuse_worker_image,
         admission_supervisor_image,
+        durable_session.as_mut(),
     ) else {
         fatal_boot("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_ERROR");
     };

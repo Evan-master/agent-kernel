@@ -12,6 +12,7 @@ mod agent_record_retirement;
 mod capability;
 mod capability_cleanup_revocation;
 mod capability_compaction;
+mod durable_archive;
 mod event_archive;
 mod fault_compaction;
 mod intent_compaction;
@@ -49,6 +50,7 @@ pub(super) fn run(
     report: &mut NativeExecutionReport,
     evidence: &mut NativeRuntimeEvidence,
     verify_authority: Option<NativeVerifyAuthority>,
+    mut durable_session: Option<&mut crate::NativeDurableSession<'_>>,
     mut pending: PendingAgentCallCpu,
 ) -> Option<()> {
     loop {
@@ -152,6 +154,30 @@ pub(super) fn run(
                 through_sequence,
                 ..
             } => event_archive::archive(booted, report, pending, authority, through_sequence)?,
+            AgentCallRequest::PrepareDurableArchive {
+                archive_authority,
+                storage_authority,
+                through_sequence,
+                generation,
+                ..
+            } => durable_archive::prepare(
+                booted,
+                durable_session.as_deref_mut()?,
+                pending,
+                archive_authority,
+                storage_authority,
+                through_sequence,
+                generation,
+            )?,
+            AgentCallRequest::CommitDurableArchiveFromMemory { generation, .. } => {
+                durable_archive::commit(
+                    booted,
+                    durable_session.as_deref_mut()?,
+                    report,
+                    pending,
+                    generation,
+                )?
+            }
             AgentCallRequest::RetireResourceRecord {
                 authority, target, ..
             } => resource_record_retirement::retire(booted, pending, authority, target)?,
@@ -306,6 +332,9 @@ pub(super) fn run(
             }
             AgentCallRequest::CompleteTask { .. } => {
                 task::completion_ready(booted, &pending)?;
+                if let Some(session) = durable_session.as_deref_mut() {
+                    durable_archive::cancel_for_context(session, pending.context())?;
+                }
                 let (pending, reclamation, reclaimed) =
                     memory_reclamation::reclaim_completion(booted, memory_pool, pending)?;
                 let completed = task::complete(booted, pending, reclamation)?;
@@ -323,7 +352,14 @@ pub(super) fn run(
                 return Some(());
             }
             AgentRunOutcome::Fault(cpu) => {
-                super::contain_fault(booted, memory_pool, report, evidence, cpu)?;
+                super::contain_fault(
+                    booted,
+                    memory_pool,
+                    report,
+                    evidence,
+                    durable_session.as_deref_mut(),
+                    cpu,
+                )?;
                 return Some(());
             }
         }
@@ -339,4 +375,11 @@ pub(super) fn resume_waiting_receive(
 
 fn resume_next(cpu: ResumableAgentCpu) -> Option<AgentRunOutcome> {
     cpu.resume_until_boundary()
+}
+
+pub(super) fn cancel_durable_preparation(
+    session: &mut crate::NativeDurableSession<'_>,
+    context: agent_kernel_x86_64::agent_call::AgentCallContext,
+) -> Option<()> {
+    durable_archive::cancel_for_context(session, context)
 }

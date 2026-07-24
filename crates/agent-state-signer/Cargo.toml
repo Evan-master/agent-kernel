@@ -1,0 +1,15 @@
+[package]
+name = "agent-state-signer"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+agent-kernel-core = { path = "../agent-kernel-core" }
+agent-kernel-x86_64 = { path = "../agent-kernel-x86_64" }
+
+[dev-dependencies]
+agent-kernel = { path = "../agent-kernel" }
+agent-kernel-hal = { path = "../agent-kernel-hal" }
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["fast"] }

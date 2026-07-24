@@ -4,13 +4,19 @@
 //! slots under a fixed State Signer policy, and retains caller-owned buffers for
 //! later commits. It performs no private-key operation or Core mutation.
 
+mod cancellation;
 mod commit;
 mod config;
 mod error;
+mod preparation;
 
+pub use cancellation::NativeAtaDurableCancelError;
 pub use commit::NativeAtaDurableCommitError;
 pub use config::{NativeAtaDurableConfig, NativeAtaDurableConfigError};
 pub use error::NativeAtaDurableInitError;
+pub use preparation::{
+    NativeAtaDurablePrepareError, NativeDurableArchiveCaller, NativeDurableArchivePreparation,
+};
 
 use agent_kernel_core::{
     DurableRecoveredHead, DurableRecoveryError, MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
@@ -38,6 +44,8 @@ pub struct NativeAtaDurableSession<'a, D> {
     scratch: &'a mut [u8; DURABLE_SLOT_BYTES],
     payload: &'a mut [u8; MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES],
     recovery: Option<VerifiedDurableArchiveRecovery>,
+    preparation: Option<NativeDurableArchivePreparation>,
+    faulted: bool,
 }
 
 impl NativeAtaDurableConfig {
@@ -110,6 +118,8 @@ impl<'a, D: AtaBlockDevice> NativeAtaDurableSession<'a, D> {
             scratch,
             payload,
             recovery,
+            preparation: None,
+            faulted: false,
         })
     }
 
@@ -123,6 +133,10 @@ impl<'a, D: AtaBlockDevice> NativeAtaDurableSession<'a, D> {
 
     pub fn backend_mut(&mut self) -> &mut AtaDurableStateBackend<'a, D> {
         &mut self.backend
+    }
+
+    pub fn into_device(self) -> D {
+        self.backend.into_device()
     }
 
     pub fn boot_state(&self) -> NativeAtaDurableBootState {
@@ -143,5 +157,13 @@ impl<'a, D: AtaBlockDevice> NativeAtaDurableSession<'a, D> {
 
     pub fn recovery_verifier_mut(&mut self) -> Option<&mut VerifiedDurableArchiveRecovery> {
         self.recovery.as_mut()
+    }
+
+    pub const fn preparation(&self) -> Option<NativeDurableArchivePreparation> {
+        self.preparation
+    }
+
+    pub const fn is_faulted(&self) -> bool {
+        self.faulted
     }
 }

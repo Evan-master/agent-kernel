@@ -59,4 +59,6 @@ pub enum AgentCallOperation {
     ResolveNamespacePathFromMemory,
     CompareAndRebindNamespacePathFromMemory,
     RotateAgentImageSignerFromMemory,
+    PrepareDurableArchive,
+    CommitDurableArchiveFromMemory,
 }

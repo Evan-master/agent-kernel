@@ -4,8 +4,11 @@ mod durable_state_support;
 use agent_kernel_core::{CapabilityId, DurableArchiveAnchor};
 use agent_kernel_x86_64::{
     durable_archive_request::{
-        DurableArchiveRequest, DurableArchiveRequestDecodeError, DURABLE_ARCHIVE_REQUEST_BYTES,
-        DURABLE_ARCHIVE_REQUEST_FORMAT_VERSION, DURABLE_ARCHIVE_REQUEST_MAGIC,
+        encode_unsigned_durable_archive_request, DurableArchiveRequest,
+        DurableArchiveRequestDecodeError, DurableArchiveRequestEncodeError,
+        DURABLE_ARCHIVE_REQUEST_BYTES, DURABLE_ARCHIVE_REQUEST_FORMAT_VERSION,
+        DURABLE_ARCHIVE_REQUEST_MAGIC, DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET,
+        DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET, DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET,
     },
     durable_state::{
         encode_durable_archive_manifest, DurableArchiveManifestDecodeError,
@@ -17,6 +20,46 @@ use durable_state_support::{manifest, signature, signing_key, POLICY_GENERATION,
 
 const GENERATION: u64 = 9;
 const STORAGE_AUTHORITY: CapabilityId = CapabilityId::new(17);
+
+#[test]
+fn kernel_stages_one_canonical_unsigned_request() {
+    let key = signing_key(0x80);
+    let manifest = manifest(
+        &key,
+        ROOT,
+        STORAGE,
+        POLICY_GENERATION,
+        DurableArchiveAnchor::unanchored(),
+    );
+
+    let bytes =
+        encode_unsigned_durable_archive_request(GENERATION, STORAGE_AUTHORITY, manifest).unwrap();
+    let decoded = DurableArchiveRequest::decode(&bytes, GENERATION).unwrap();
+
+    assert_eq!(DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET, 32);
+    assert_eq!(DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET, 317);
+    assert_eq!(DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET, 381);
+    assert_eq!(decoded.generation(), GENERATION);
+    assert_eq!(decoded.storage_authority(), STORAGE_AUTHORITY);
+    assert_eq!(decoded.manifest(), manifest);
+    assert_eq!(decoded.signature().bytes(), [0; 64]);
+    assert_eq!(
+        &bytes[DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET..DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET],
+        encode_durable_archive_manifest(manifest).as_slice()
+    );
+    assert_eq!(
+        &bytes[DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET..DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET],
+        &[0; 64]
+    );
+    assert_eq!(
+        encode_unsigned_durable_archive_request(0, STORAGE_AUTHORITY, manifest),
+        Err(DurableArchiveRequestEncodeError::ZeroGeneration)
+    );
+    assert_eq!(
+        encode_unsigned_durable_archive_request(GENERATION, CapabilityId::new(0), manifest),
+        Err(DurableArchiveRequestEncodeError::ZeroStorageAuthority)
+    );
+}
 
 #[test]
 fn request_decodes_one_frozen_384_byte_record() {

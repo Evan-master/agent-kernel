@@ -12,8 +12,10 @@ pub use backend::{AtaDurableBackendInitError, AtaDurableStateBackend};
 pub use binding::{AtaDurableBinding, AtaDurableBindingError};
 pub use head::{AtaDurableHead, AtaDurableHeadBindError};
 pub use session::{
-    NativeAtaDurableBootState, NativeAtaDurableCommitError, NativeAtaDurableConfig,
-    NativeAtaDurableConfigError, NativeAtaDurableInitError, NativeAtaDurableSession,
+    NativeAtaDurableBootState, NativeAtaDurableCancelError, NativeAtaDurableCommitError,
+    NativeAtaDurableConfig, NativeAtaDurableConfigError, NativeAtaDurableInitError,
+    NativeAtaDurablePrepareError, NativeAtaDurableSession, NativeDurableArchiveCaller,
+    NativeDurableArchivePreparation,
 };
 
 use agent_kernel_hal::DURABLE_SLOT_BYTES;

@@ -57,6 +57,7 @@ name = "agent-kernel-x86_64"
 version = "0.1.0"
 dependencies = [
  "acpi",
+ "agent-kernel",
  "agent-kernel-boot",
  "agent-kernel-core",
  "agent-kernel-hal",
@@ -65,6 +66,17 @@ dependencies = [
  "sha2 0.10.9",
  "sha2 0.11.0",
  "x86_64",
+]
+
+[[package]]
+name = "agent-state-signer"
+version = "0.1.0"
+dependencies = [
+ "agent-kernel",
+ "agent-kernel-core",
+ "agent-kernel-hal",
+ "agent-kernel-x86_64",
+ "ed25519-dalek",
 ]
 
 [[package]]

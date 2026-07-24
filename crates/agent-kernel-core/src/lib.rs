@@ -59,6 +59,7 @@ mod event_archive;
 mod event_archive_checkpoint;
 mod event_archive_digest;
 mod event_archive_encoding;
+mod event_archive_preflight;
 mod event_log;
 mod fault;
 mod fault_compaction;
@@ -167,6 +168,7 @@ pub use event_archive_encoding::{
     encode_event_archive_payload, EventArchiveEncodingError, MAX_DURABLE_ARCHIVE_EVENTS,
     MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
+pub use event_archive_preflight::DurableArchivePreflight;
 pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};

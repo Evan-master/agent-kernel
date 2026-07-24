@@ -9,15 +9,25 @@ use agent_kernel_core::{
     DURABLE_ARCHIVE_SIGNATURE_BYTES,
 };
 
-use crate::durable_state::{decode_durable_archive_manifest, DurableArchiveManifestDecodeError};
+use crate::durable_state::{
+    decode_durable_archive_manifest, encode_durable_archive_manifest,
+    DurableArchiveManifestDecodeError,
+};
 
 pub const DURABLE_ARCHIVE_REQUEST_MAGIC: [u8; 8] = *b"AKDARQ15";
 pub const DURABLE_ARCHIVE_REQUEST_FORMAT_VERSION: u16 = 1;
 pub const DURABLE_ARCHIVE_REQUEST_BYTES: usize = 384;
+pub const DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET: usize = 32;
+pub const DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET: usize =
+    DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET + DURABLE_ARCHIVE_MANIFEST_BYTES;
+pub const DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET: usize =
+    DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET + DURABLE_ARCHIVE_SIGNATURE_BYTES;
 
-const MANIFEST_OFFSET: usize = 32;
-const SIGNATURE_OFFSET: usize = MANIFEST_OFFSET + DURABLE_ARCHIVE_MANIFEST_BYTES;
-const RESERVED_OFFSET: usize = SIGNATURE_OFFSET + DURABLE_ARCHIVE_SIGNATURE_BYTES;
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum DurableArchiveRequestEncodeError {
+    ZeroGeneration,
+    ZeroStorageAuthority,
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DurableArchiveRequestDecodeError {
@@ -37,6 +47,29 @@ pub struct DurableArchiveRequest {
     storage_authority: CapabilityId,
     manifest: DurableArchiveManifest,
     signature: DurableArchiveSignature,
+}
+
+pub fn encode_unsigned_durable_archive_request(
+    generation: u64,
+    storage_authority: CapabilityId,
+    manifest: DurableArchiveManifest,
+) -> Result<[u8; DURABLE_ARCHIVE_REQUEST_BYTES], DurableArchiveRequestEncodeError> {
+    if generation == 0 {
+        return Err(DurableArchiveRequestEncodeError::ZeroGeneration);
+    }
+    if storage_authority.raw() == 0 {
+        return Err(DurableArchiveRequestEncodeError::ZeroStorageAuthority);
+    }
+
+    let mut bytes = [0; DURABLE_ARCHIVE_REQUEST_BYTES];
+    bytes[..8].copy_from_slice(&DURABLE_ARCHIVE_REQUEST_MAGIC);
+    bytes[8..10].copy_from_slice(&DURABLE_ARCHIVE_REQUEST_FORMAT_VERSION.to_le_bytes());
+    bytes[12..16].copy_from_slice(&(DURABLE_ARCHIVE_REQUEST_BYTES as u32).to_le_bytes());
+    bytes[16..24].copy_from_slice(&generation.to_le_bytes());
+    bytes[24..32].copy_from_slice(&storage_authority.raw().to_le_bytes());
+    bytes[DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET..DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET]
+        .copy_from_slice(&encode_durable_archive_manifest(manifest));
+    Ok(bytes)
 }
 
 impl DurableArchiveRequest {
@@ -73,13 +106,20 @@ impl DurableArchiveRequest {
 
         let mut encoded_manifest = [0; DURABLE_ARCHIVE_MANIFEST_BYTES];
         encoded_manifest.copy_from_slice(
-            &bytes[MANIFEST_OFFSET..MANIFEST_OFFSET + DURABLE_ARCHIVE_MANIFEST_BYTES],
+            &bytes
+                [DURABLE_ARCHIVE_REQUEST_MANIFEST_OFFSET..DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET],
         );
         let manifest = decode_durable_archive_manifest(&encoded_manifest)
             .map_err(DurableArchiveRequestDecodeError::Manifest)?;
         let mut signature = [0; DURABLE_ARCHIVE_SIGNATURE_BYTES];
-        signature.copy_from_slice(&bytes[SIGNATURE_OFFSET..RESERVED_OFFSET]);
-        if bytes[RESERVED_OFFSET..].iter().any(|byte| *byte != 0) {
+        signature.copy_from_slice(
+            &bytes
+                [DURABLE_ARCHIVE_REQUEST_SIGNATURE_OFFSET..DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET],
+        );
+        if bytes[DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET..]
+            .iter()
+            .any(|byte| *byte != 0)
+        {
             return Err(DurableArchiveRequestDecodeError::ReservedNotZero);
         }
 
@@ -124,4 +164,4 @@ fn read_u64(bytes: &[u8; DURABLE_ARCHIVE_REQUEST_BYTES], offset: usize) -> u64 {
     u64::from_le_bytes(value)
 }
 
-const _: () = assert!(RESERVED_OFFSET == 381);
+const _: () = assert!(DURABLE_ARCHIVE_REQUEST_RESERVED_OFFSET == 381);

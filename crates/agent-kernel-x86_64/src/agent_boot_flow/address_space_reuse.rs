@@ -16,7 +16,8 @@ use crate::{
     reuse_worker_flow::{PreparedReuseWorkerFlow, REUSE_WORKER_BATCHES},
     serial_write_line,
     smp_boot::SmpBootstrap,
-    X86BootedKernel, X86_FAULT_CAPACITY, X86_RUNTIME_ADMISSION_CAPACITY, X86_TASK_CAPACITY,
+    NativeDurableSession, X86BootedKernel, X86_FAULT_CAPACITY, X86_RUNTIME_ADMISSION_CAPACITY,
+    X86_TASK_CAPACITY,
 };
 use agent_kernel_core::{
     AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
@@ -32,6 +33,7 @@ pub(super) fn run(
     cpu_runtime: &AgentCpuRuntime,
     worker_contract: BootReuseWorkerImage,
     supervisor_contract: BootAdmissionSupervisorImage,
+    mut durable_session: Option<&mut NativeDurableSession<'_>>,
 ) -> Option<NativeEventArchive> {
     let inventory_frame_count = address_space_pool.inventory_frame_count()?;
     if !runtime.is_empty()
@@ -105,6 +107,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         None,
+        durable_session.as_deref_mut(),
     )?;
     let first_targets = [
         first_flows[0].admission_target(),
@@ -155,6 +158,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         None,
+        durable_session.as_deref_mut(),
     )?;
     if runtime.len() != 1
         || !runtime.contains(ADMISSION_SUPERVISOR)
@@ -215,6 +219,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         None,
+        durable_session.as_deref_mut(),
     )?;
     let repeated_flow_valid = evidence.proves_repeated_runtime_admission_flow();
     let workers_completed = second_flows

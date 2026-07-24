@@ -11,6 +11,7 @@ mod agent_management;
 mod agent_record_retirement;
 mod capability_cleanup_revocation;
 mod capability_compaction;
+mod durable_archive;
 mod event_archive;
 mod fault_compaction;
 mod intent_compaction;

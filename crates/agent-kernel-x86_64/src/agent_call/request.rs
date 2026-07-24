@@ -437,6 +437,23 @@ pub enum AgentCallRequest {
         nonce: u64,
         generation: u64,
     },
+    PrepareDurableArchive {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        archive_authority: CapabilityId,
+        storage_authority: CapabilityId,
+        through_sequence: u64,
+        generation: u64,
+    },
+    CommitDurableArchiveFromMemory {
+        agent: AgentId,
+        task: TaskId,
+        image: AgentImageId,
+        nonce: u64,
+        generation: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -506,6 +523,10 @@ impl AgentCallRequest {
             }
             Self::RotateAgentImageSignerFromMemory { .. } => {
                 AgentCallOperation::RotateAgentImageSignerFromMemory
+            }
+            Self::PrepareDurableArchive { .. } => AgentCallOperation::PrepareDurableArchive,
+            Self::CommitDurableArchiveFromMemory { .. } => {
+                AgentCallOperation::CommitDurableArchiveFromMemory
             }
         }
     }
