@@ -18,18 +18,18 @@
 agent-kernel / native-x86_64
 [00] identity ............... bound
 [01] capability graph ....... online
-[02] Ed25519 trust policy ... verified
+[02] signer algorithms ...... verified
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
-[05] native state signer .... packaged
-kernel://state-signer/package-ready
+[05] native state signer .... algorithm-bound
+kernel://state-signer/v18-ready
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V17 state signer │
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V18 signer agility│
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -153,12 +153,16 @@ AGNTIMG\0 / Package v3
 ## `04 // 持久状态`
 
 ```text
-Event 前缀 ──> canonical payload ──> 285B manifest ──> Ed25519
-                                                           │
-                                                           ▼
+Event 前缀 ──> canonical payload ──> 285B manifest V1/V2
+                                                │
+                               ┌────────────────┴────────────────┐
+                               ▼                                 ▼
+                          Ed25519                         P-256/SHA-256
+                               └────────────────┬────────────────┘
+                                                ▼
 slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
-                                                           │
-                                                           ▼
+                                                │
+                                                ▼
 Committed footer + flush ──> receipt ──> 一次性 Core proof ──> release
 ```
 
@@ -169,11 +173,13 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── provider signature
 ```
 
-| 契约 | V13 / V14 / V15 / V16 / V17 不变量 |
+| 契约 | V13 至 V18 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
-| Signature | 对 285 字节 canonical manifest 执行严格 Ed25519 验证 |
+| Manifest | V1 保留 Ed25519 历史字节；V2 显式绑定算法 |
+| Signature | 固定 64 字节：严格 Ed25519 或 IEEE P1363 低 S ECDSA P-256/SHA-256 |
+| Signer ID | Ed25519 历史域保持稳定；算法绑定密钥使用 V2 域 |
 | Transaction | 8 个显式 write、flush、readback 故障边界 |
 | Recovery | 选择最高的连续签名链头；分叉与断链均关闭自动恢复 |
 | Boot Import | 仅允许空白 Core；下一条 Event 从 `through_sequence + 1` 开始 |
@@ -209,10 +215,19 @@ fixed x86_64 link ──> ELF section audit ──> Package v3 / kind 5
 | Core 身份 | `AgentImageKind::StateSigner` + `AgentEntryKind::StateSigner` |
 | 镜像信任 | x86 kind `5`；独立 signer scope bit `4` |
 | Provider ABI | 输入 285 字节 manifest，输出 64 字节签名，携带 policy generation |
+| 算法策略 | 不可变选择 Ed25519 或 ECDSA P-256/SHA-256 |
 | Package | 两个固定地址段、零重定位、输出权限 `0600` |
 | 密钥归属 | Provider 保留持久状态密钥访问；Package 仅包含公开策略 |
 
-`ATA BACKEND` 完成 · `NATIVE BOOT HANDOFF` 完成 · `STATE SIGNER PACKAGE` 完成
+```text
+V18 HARDWARE SIGNER AGILITY
+manifest          V1 legacy Ed25519 | V2 algorithm-bound
+public key        Ed25519 / 32B | compressed SEC1 P-256 / 33B
+signature         Ed25519 / 64B | IEEE P1363 low-S P-256 / 64B
+failure policy    mismatch / malformed key / high-S -> fail closed
+```
+
+`ATA BACKEND` 完成 · `STATE SIGNER PACKAGE` 完成 · `SIGNER AGILITY` 完成
 
 ## `05 // AGENT CALL`
 
@@ -297,6 +312,14 @@ native package    fixed address / 2 segments / 0 relocations
 provider          external ABI / Package 不含持久状态密钥
 ```
 
+```text
+V18 SIGNER AGILITY
+manifest          精确兼容 V1 / V2 显式算法
+verification      Ed25519 verify_strict / P-256 SHA-256 low-S
+policy            Provider + Package + Manifest 必须一致
+closed loop       P-256 签名 / ATA 提交 / 断电 / 冷启动恢复
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -321,7 +344,17 @@ $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
 $ scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
-$ ruby scripts/build-state-signer-package.rb --help
+```
+
+```console
+$ ruby scripts/build-state-signer-package.rb \
+    --signature-algorithm ecdsa-p256-sha256 \
+    --image-key "$IMAGE_KEY" --provider-object "$PROVIDER_OBJECT" \
+    --output "$STATE_SIGNER_PACKAGE" \
+    --nonce 1 --archive-authority 2 --storage-authority 3 \
+    --root 4 --storage 5 --through-sequence 64 \
+    --call-data-generation 1 --policy-generation 1 \
+    --state-signer-id "$STATE_SIGNER_ID"
 ```
 
 ```console
@@ -364,7 +397,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 [done] 验证持久启动 + Event 序列延续
 [done] State Signer Agent + 原生归档 prepare/commit 调用
 [done] 首类 Signer 身份 + 外部 Provider 原生 Package
-[next] 生产 Provider + TPM/HSM 配置
+[done] V1/V2 Signer 算法敏捷 + 低 S ECDSA P-256/SHA-256
+[next] TPM/HSM 传输 + 密钥配置仪式
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
 [next] Network + Graphics + USB + 形式化验证
 ```
@@ -375,7 +409,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [First-Class State Signer V17](docs/superpowers/specs/2026-07-24-first-class-state-signer-v17-design.md) |
+| 当前里程碑 | [Hardware State Signer Agility V18](docs/superpowers/specs/2026-07-24-hardware-state-signer-agility-v18-design.md) |
 
 ## `10 // 项目`
 

@@ -14,6 +14,9 @@
 .equ REQUEST_MAGIC, 0x3531515241444b41
 .equ REQUEST_BYTES, 384
 .equ MANIFEST_BYTES, 285
+.equ MANIFEST_OFFSET, 32
+.equ MANIFEST_VERSION_OFFSET, 29
+.equ MANIFEST_ALGORITHM_OFFSET, 33
 .equ SIGNATURE_OFFSET, 317
 .equ SIGNATURE_BYTES, 64
 .equ RESERVED_OFFSET, 381
@@ -33,6 +36,7 @@
 .extern state_signer_config_through_sequence
 .extern state_signer_config_call_data_generation
 .extern state_signer_config_policy_generation
+.extern state_signer_config_signature_algorithm
 .extern state_signer_config_signer_id
 .extern state_signer_provider_sign
 
@@ -119,6 +123,33 @@ state_signer_entry:
     mov rax, qword ptr [rip + state_signer_config_storage_authority]
     cmp qword ptr [r12 + 24], rax
     jne .fault
+
+    movzx eax, word ptr [rip + state_signer_config_signature_algorithm]
+    cmp eax, 1
+    je .configured_ed25519
+    cmp eax, 2
+    jne .fault
+    cmp word ptr [r12 + MANIFEST_OFFSET + MANIFEST_VERSION_OFFSET], 2
+    jne .fault
+    cmp word ptr [r12 + MANIFEST_OFFSET + MANIFEST_ALGORITHM_OFFSET], 2
+    jne .fault
+    jmp .signature_algorithm_valid
+.configured_ed25519:
+    movzx eax, word ptr [r12 + MANIFEST_OFFSET + MANIFEST_VERSION_OFFSET]
+    cmp eax, 1
+    je .legacy_ed25519
+    cmp eax, 2
+    jne .fault
+    cmp word ptr [r12 + MANIFEST_OFFSET + MANIFEST_ALGORITHM_OFFSET], 1
+    jne .fault
+    jmp .signature_algorithm_valid
+.legacy_ed25519:
+    cmp word ptr [r12 + MANIFEST_OFFSET + MANIFEST_ALGORITHM_OFFSET], 0
+    jne .fault
+.signature_algorithm_valid:
+    cmp word ptr [r12 + MANIFEST_OFFSET + MANIFEST_ALGORITHM_OFFSET + 2], 0
+    jne .fault
+
     mov rax, qword ptr [rsp + 24]
     cmp qword ptr [r12 + MANIFEST_ACTOR_OFFSET], rax
     jne .fault

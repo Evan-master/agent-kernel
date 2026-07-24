@@ -5,7 +5,8 @@ mod durable_state_support;
 
 use agent_kernel_boot::{BootConfig, BootedKernel};
 use agent_kernel_core::{
-    DurableArchiveAnchor, DurableStateSignerRecord, DurableStateSignerStatus, ResourceId,
+    durable_state_signer_id_for_key, DurableArchiveAnchor, DurableStatePublicKey,
+    DurableStateSignerRecord, DurableStateSignerStatus, ResourceId,
 };
 use agent_kernel_hal::DURABLE_SLOT_BYTES;
 use agent_kernel_x86_64::{
@@ -210,6 +211,29 @@ fn config_rejects_aliased_resources_and_invalid_signer_scope() {
             POLICY_GENERATION,
         ),
         Err(NativeAtaDurableConfigError::SignerRootMismatch)
+    );
+}
+
+#[test]
+fn config_rejects_malformed_signer_key_encoding() {
+    let malformed_key = DurableStatePublicKey::EcdsaP256([0; 33]);
+    let malformed_signer = DurableStateSignerRecord {
+        signer_id: durable_state_signer_id_for_key(malformed_key),
+        root: ROOT,
+        public_key: malformed_key,
+        status: DurableStateSignerStatus::Active,
+        generation: POLICY_GENERATION,
+    };
+    assert_eq!(
+        NativeAtaDurableConfig::new(
+            pio(),
+            ROOT,
+            STORAGE,
+            BASE_LBA,
+            malformed_signer,
+            POLICY_GENERATION,
+        ),
+        Err(NativeAtaDurableConfigError::SignerKeyEncodingInvalid)
     );
 }
 

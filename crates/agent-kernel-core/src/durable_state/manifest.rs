@@ -4,16 +4,37 @@
 //! State Signer policy, and optional trusted-anchor evidence. It owns bounds
 //! and identity checks while leaving canonical encoding and cryptography out.
 
+mod construction;
 mod fields;
 
 pub use fields::DurableArchiveManifestFields;
 
-use crate::{
-    AgentId, CapabilityId, EventArchiveDigest, EventArchiveProposal, ResourceId,
-    MAX_DURABLE_ARCHIVE_EVENTS,
+use crate::{AgentId, CapabilityId, EventArchiveDigest, ResourceId};
+
+use super::{
+    DurableArchiveAnchor, DurableSignatureAlgorithm, DurableStateDigest, DurableStateSignerId,
 };
 
-use super::{DurableArchiveAnchor, DurableStateDigest, DurableStateSignerId};
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u16)]
+pub enum DurableArchiveManifestVersion {
+    LegacyEd25519 = 1,
+    AlgorithmBound = 2,
+}
+
+impl DurableArchiveManifestVersion {
+    pub const fn wire_value(self) -> u16 {
+        self as u16
+    }
+
+    pub const fn from_wire_value(value: u16) -> Option<Self> {
+        match value {
+            1 => Some(Self::LegacyEd25519),
+            2 => Some(Self::AlgorithmBound),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DurableArchiveManifestError {
@@ -34,6 +55,8 @@ pub enum DurableArchiveManifestError {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DurableArchiveManifest {
+    version: DurableArchiveManifestVersion,
+    signature_algorithm: DurableSignatureAlgorithm,
     generation: u64,
     first_sequence: u64,
     through_sequence: u64,
@@ -52,68 +75,6 @@ pub struct DurableArchiveManifest {
 }
 
 impl DurableArchiveManifest {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        proposal: EventArchiveProposal,
-        actor: AgentId,
-        archive_authority: CapabilityId,
-        root: ResourceId,
-        storage: ResourceId,
-        payload_length: u32,
-        payload_digest: DurableStateDigest,
-        signer_id: DurableStateSignerId,
-        signer_policy_generation: u64,
-        anchor: DurableArchiveAnchor,
-    ) -> Result<Self, DurableArchiveManifestError> {
-        let count = proposal.count();
-        if count == 0 || count > MAX_DURABLE_ARCHIVE_EVENTS {
-            return Err(DurableArchiveManifestError::EventCountOutOfRange {
-                count,
-                limit: MAX_DURABLE_ARCHIVE_EVENTS,
-            });
-        }
-        Self::from_fields(DurableArchiveManifestFields {
-            generation: proposal.generation(),
-            first_sequence: proposal.first_sequence(),
-            through_sequence: proposal.through_sequence(),
-            event_count: count as u16,
-            previous_digest: proposal.previous_digest(),
-            archive_digest: proposal.digest(),
-            actor,
-            archive_authority,
-            root,
-            storage,
-            payload_length,
-            payload_digest,
-            signer_id,
-            signer_policy_generation,
-            anchor,
-        })
-    }
-
-    pub fn from_fields(
-        fields: DurableArchiveManifestFields,
-    ) -> Result<Self, DurableArchiveManifestError> {
-        fields::validate(fields)?;
-        Ok(Self {
-            generation: fields.generation,
-            first_sequence: fields.first_sequence,
-            through_sequence: fields.through_sequence,
-            event_count: fields.event_count,
-            previous_digest: fields.previous_digest,
-            archive_digest: fields.archive_digest,
-            actor: fields.actor,
-            archive_authority: fields.archive_authority,
-            root: fields.root,
-            storage: fields.storage,
-            payload_length: fields.payload_length,
-            payload_digest: fields.payload_digest,
-            signer_id: fields.signer_id,
-            signer_policy_generation: fields.signer_policy_generation,
-            anchor: fields.anchor,
-        })
-    }
-
     pub const fn fields(self) -> DurableArchiveManifestFields {
         DurableArchiveManifestFields {
             generation: self.generation,
@@ -132,6 +93,14 @@ impl DurableArchiveManifest {
             signer_policy_generation: self.signer_policy_generation,
             anchor: self.anchor,
         }
+    }
+
+    pub const fn version(self) -> DurableArchiveManifestVersion {
+        self.version
+    }
+
+    pub const fn signature_algorithm(self) -> DurableSignatureAlgorithm {
+        self.signature_algorithm
     }
 
     pub const fn generation(self) -> u64 {

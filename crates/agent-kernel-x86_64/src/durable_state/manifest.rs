@@ -9,7 +9,8 @@ mod decode;
 pub use decode::{decode_durable_archive_manifest, DurableArchiveManifestDecodeError};
 
 use agent_kernel_core::{
-    DurableAnchorMode, DurableArchiveManifest, DurableStateDigest, DURABLE_ARCHIVE_MANIFEST_BYTES,
+    DurableAnchorMode, DurableArchiveManifest, DurableArchiveManifestVersion, DurableStateDigest,
+    DURABLE_ARCHIVE_MANIFEST_BYTES,
 };
 use sha2::{Digest, Sha256};
 
@@ -17,7 +18,8 @@ pub(super) const DOMAIN: &[u8; 29] = b"AGENT-KERNEL-DURABLE-ARCHIVE\0";
 const MANIFEST_BODY_BYTES: usize = 256;
 pub(super) const TRUSTED_ANCHOR_FLAG: u16 = 1;
 
-pub const DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION: u16 = 1;
+pub const DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION: u16 =
+    DurableArchiveManifestVersion::LegacyEd25519 as u16;
 const _: () = assert!(DURABLE_ARCHIVE_MANIFEST_BYTES == DOMAIN.len() + MANIFEST_BODY_BYTES);
 
 pub fn encode_durable_archive_manifest(
@@ -25,13 +27,19 @@ pub fn encode_durable_archive_manifest(
 ) -> [u8; DURABLE_ARCHIVE_MANIFEST_BYTES] {
     let mut encoder = ManifestEncoder::new();
     encoder.put(DOMAIN);
-    encoder.put(&DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION.to_le_bytes());
+    encoder.put(&manifest.version().wire_value().to_le_bytes());
     let flags = match manifest.anchor().mode() {
         DurableAnchorMode::Unanchored => 0,
         DurableAnchorMode::Trusted => TRUSTED_ANCHOR_FLAG,
     };
     encoder.put(&flags.to_le_bytes());
-    encoder.put(&[0; 4]);
+    match manifest.version() {
+        DurableArchiveManifestVersion::LegacyEd25519 => encoder.put(&[0; 4]),
+        DurableArchiveManifestVersion::AlgorithmBound => {
+            encoder.put(&manifest.signature_algorithm().wire_value().to_le_bytes());
+            encoder.put(&[0; 2]);
+        }
+    }
     encoder.put(&manifest.generation().to_le_bytes());
     encoder.put(&manifest.first_sequence().to_le_bytes());
     encoder.put(&manifest.through_sequence().to_le_bytes());

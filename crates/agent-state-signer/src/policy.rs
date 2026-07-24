@@ -1,6 +1,6 @@
 //! Fixed durable-state authority accepted by one State Signer instance.
 
-use agent_kernel_core::{DurableStateSignerId, ResourceId};
+use agent_kernel_core::{DurableSignatureAlgorithm, DurableStateSignerId, ResourceId};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum StateSignerPolicyError {
@@ -15,6 +15,7 @@ pub struct StateSignerPolicy {
     root: ResourceId,
     storage: ResourceId,
     signer_id: DurableStateSignerId,
+    signature_algorithm: DurableSignatureAlgorithm,
     generation: u64,
 }
 
@@ -23,6 +24,22 @@ impl StateSignerPolicy {
         root: ResourceId,
         storage: ResourceId,
         signer_id: DurableStateSignerId,
+        generation: u64,
+    ) -> Result<Self, StateSignerPolicyError> {
+        Self::new_with_algorithm(
+            root,
+            storage,
+            signer_id,
+            DurableSignatureAlgorithm::Ed25519,
+            generation,
+        )
+    }
+
+    pub fn new_with_algorithm(
+        root: ResourceId,
+        storage: ResourceId,
+        signer_id: DurableStateSignerId,
+        signature_algorithm: DurableSignatureAlgorithm,
         generation: u64,
     ) -> Result<Self, StateSignerPolicyError> {
         if root.raw() == 0 {
@@ -41,6 +58,7 @@ impl StateSignerPolicy {
             root,
             storage,
             signer_id,
+            signature_algorithm,
             generation,
         })
     }
@@ -55,6 +73,10 @@ impl StateSignerPolicy {
 
     pub const fn signer_id(self) -> DurableStateSignerId {
         self.signer_id
+    }
+
+    pub const fn signature_algorithm(self) -> DurableSignatureAlgorithm {
+        self.signature_algorithm
     }
 
     pub const fn generation(self) -> u64 {

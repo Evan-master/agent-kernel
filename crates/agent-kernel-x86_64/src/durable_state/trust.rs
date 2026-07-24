@@ -1,14 +1,18 @@
-//! Strict Ed25519 verification against an isolated State Signer policy.
+//! Strict algorithm-bound verification against an isolated State Signer policy.
 //!
 //! This machine-layer policy borrows fixed-width Core records and owns no
 //! mutable trust state. Identity, root scope, current generation, revocation,
 //! and strict signature checks all complete before a verified value is issued.
 
 use agent_kernel_core::{
-    durable_state_signer_id, DurableArchiveManifest, DurableArchiveSignature, DurableStateDigest,
-    DurableStateSignerId, DurableStateSignerRecord, DurableStateSignerStatus,
+    durable_state_signer_id_for_key, DurableArchiveManifest, DurableArchiveSignature,
+    DurableStateDigest, DurableStatePublicKey, DurableStateSignerId, DurableStateSignerRecord,
+    DurableStateSignerStatus,
 };
-use ed25519_dalek::{Signature, VerifyingKey};
+use ed25519_dalek::{Signature as Ed25519Signature, VerifyingKey as Ed25519VerifyingKey};
+use p256::ecdsa::{
+    signature::Verifier, Signature as P256Signature, VerifyingKey as P256VerifyingKey,
+};
 
 use super::{durable_archive_manifest_digest, encode_durable_archive_manifest};
 
@@ -18,8 +22,11 @@ pub enum DurableStateVerificationError {
     TrustPolicyAmbiguous,
     SignerRevoked,
     SignerKeyIdMismatch,
+    SignerKeyInvalid,
     SignerRootMismatch,
     PolicyGenerationMismatch,
+    SignatureAlgorithmMismatch,
+    SignatureNonCanonical,
     SignatureInvalid,
 }
 
@@ -63,7 +70,7 @@ impl<'a> DurableStateTrustPolicy<'a> {
         if signer.status == DurableStateSignerStatus::Revoked {
             return Err(DurableStateVerificationError::SignerRevoked);
         }
-        if durable_state_signer_id(signer.public_key) != signer.signer_id {
+        if durable_state_signer_id_for_key(signer.public_key) != signer.signer_id {
             return Err(DurableStateVerificationError::SignerKeyIdMismatch);
         }
         if signer.root != manifest.root() {
@@ -75,15 +82,34 @@ impl<'a> DurableStateTrustPolicy<'a> {
         {
             return Err(DurableStateVerificationError::PolicyGenerationMismatch);
         }
+        if signer.signature_algorithm() != manifest.signature_algorithm() {
+            return Err(DurableStateVerificationError::SignatureAlgorithmMismatch);
+        }
 
         let signature_bytes = signature.bytes();
-        let signature = Signature::from_bytes(&signature_bytes);
-        let verifying_key = VerifyingKey::from_bytes(&signer.public_key)
-            .map_err(|_| DurableStateVerificationError::SignatureInvalid)?;
         let encoded = encode_durable_archive_manifest(manifest);
-        verifying_key
-            .verify_strict(&encoded, &signature)
-            .map_err(|_| DurableStateVerificationError::SignatureInvalid)?;
+        match signer.public_key {
+            DurableStatePublicKey::Ed25519(public_key) => {
+                let signature = Ed25519Signature::from_bytes(&signature_bytes);
+                let verifying_key = Ed25519VerifyingKey::from_bytes(&public_key)
+                    .map_err(|_| DurableStateVerificationError::SignerKeyInvalid)?;
+                verifying_key
+                    .verify_strict(&encoded, &signature)
+                    .map_err(|_| DurableStateVerificationError::SignatureInvalid)?;
+            }
+            DurableStatePublicKey::EcdsaP256(public_key) => {
+                let signature = P256Signature::from_slice(&signature_bytes)
+                    .map_err(|_| DurableStateVerificationError::SignatureInvalid)?;
+                if signature.normalize_s().is_some() {
+                    return Err(DurableStateVerificationError::SignatureNonCanonical);
+                }
+                let verifying_key = P256VerifyingKey::from_sec1_bytes(&public_key)
+                    .map_err(|_| DurableStateVerificationError::SignerKeyInvalid)?;
+                verifying_key
+                    .verify(&encoded, &signature)
+                    .map_err(|_| DurableStateVerificationError::SignatureInvalid)?;
+            }
+        }
 
         Ok(VerifiedDurableArchiveManifest {
             manifest,

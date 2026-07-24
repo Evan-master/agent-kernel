@@ -29,6 +29,10 @@ RODATA_ADDRESS = ENTRY_ADDRESS + MAX_SEGMENT_BYTES
 SIGNER_DOMAIN = "AGENT_KERNEL_ED25519_SIGNER_V1\0".b
 ED25519_SPKI_PREFIX = ["302a300506032b6570032100"].pack("H*")
 U64_MAX = (1 << 64) - 1
+SIGNATURE_ALGORITHMS = {
+  "ed25519" => 1,
+  "ecdsa-p256-sha256" => 2
+}.freeze
 
 def fail_with(message)
   warn "build State Signer failed: #{message}"
@@ -103,6 +107,7 @@ def config_source(values, signer_id)
     through_sequence
     call_data_generation
     policy_generation
+    signature_algorithm
   ]
   assembly = <<~ASM.dup
     /* Generated non-secret State Signer policy. */
@@ -235,6 +240,12 @@ OptionParser.new do |parser|
   parser.on("--policy-generation VALUE", "provider policy generation") do |value|
     options[:policy_generation] = value
   end
+  parser.on(
+    "--signature-algorithm NAME",
+    "durable signature algorithm: ed25519 or ecdsa-p256-sha256"
+  ) do |value|
+    options[:signature_algorithm] = value
+  end
   parser.on("--state-signer-id HEX", "32-byte durable State Signer ID") do |value|
     options[:state_signer_id] = value
   end
@@ -256,6 +267,7 @@ required = %i[
   through_sequence
   call_data_generation
   policy_generation
+  signature_algorithm
   state_signer_id
 ]
 required.each { |name| fail_with("--#{name.to_s.tr("_", "-")} is required") unless options[name] }
@@ -274,8 +286,21 @@ end
 fail_with("output must be outside the source tree") if inside_root?(output_path)
 
 numeric_values = required
-  .filter { |name| !%i[image_key provider_object output state_signer_id].include?(name) }
+  .filter do |name|
+    !%i[
+      image_key
+      provider_object
+      output
+      signature_algorithm
+      state_signer_id
+    ].include?(name)
+  end
   .to_h { |name| [name, parse_u64(name.to_s.tr("_", "-"), options.fetch(name))] }
+signature_algorithm = SIGNATURE_ALGORITHMS[options[:signature_algorithm]]
+unless signature_algorithm
+  fail_with("signature-algorithm must be ed25519 or ecdsa-p256-sha256")
+end
+numeric_values[:signature_algorithm] = signature_algorithm
 signer_id_hex = options[:state_signer_id]
 fail_with("state-signer-id must contain exactly 64 hexadecimal digits") unless signer_id_hex.match?(/\A[0-9a-fA-F]{64}\z/)
 state_signer_id = [signer_id_hex].pack("H*")
@@ -432,6 +457,7 @@ ensure
 end
 
 puts "kind=state-signer"
+puts "signature_algorithm=#{options[:signature_algorithm]}"
 puts "package=#{output_path}"
 puts "bytes=#{package.bytesize}"
 puts "public_key=#{public_key.unpack1("H*")}"

@@ -1,7 +1,7 @@
 //! Static machine policy for one native ATA durable archive service.
 
 use agent_kernel_core::{
-    durable_state_signer_id, DurableStateSignerRecord, DurableStateSignerStatus, ResourceId,
+    durable_state_signer_id_for_key, DurableStateSignerRecord, DurableStateSignerStatus, ResourceId,
 };
 
 use crate::ata::{AtaPioConfig, ATA_DURABLE_SLOT_SECTORS};
@@ -14,6 +14,7 @@ pub enum NativeAtaDurableConfigError {
     BaseLbaUnaligned,
     ZeroPolicyGeneration,
     SignerInactive,
+    SignerKeyEncodingInvalid,
     SignerIdentityMismatch,
     SignerRootMismatch,
     SignerGenerationMismatch,
@@ -56,7 +57,10 @@ impl NativeAtaDurableConfig {
         if signer.status != DurableStateSignerStatus::Active {
             return Err(NativeAtaDurableConfigError::SignerInactive);
         }
-        if durable_state_signer_id(signer.public_key) != signer.signer_id {
+        if !signer.public_key.has_canonical_encoding() {
+            return Err(NativeAtaDurableConfigError::SignerKeyEncodingInvalid);
+        }
+        if durable_state_signer_id_for_key(signer.public_key) != signer.signer_id {
             return Err(NativeAtaDurableConfigError::SignerIdentityMismatch);
         }
         if signer.root != root {

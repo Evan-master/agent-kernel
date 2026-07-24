@@ -18,18 +18,18 @@
 agent-kernel / native-x86_64
 [00] identity ............... bound
 [01] capability graph ....... online
-[02] Ed25519 trust policy ... verified
+[02] signer algorithms ...... verified
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
-[05] native state signer .... packaged
-kernel://state-signer/package-ready
+[05] native state signer .... algorithm-bound
+kernel://state-signer/v18-ready
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V17 state signer │
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V18 signer agility│
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -153,12 +153,16 @@ AGNTIMG\0 / Package v3
 ## `04 // DURABLE STATE`
 
 ```text
-Event prefix ──> canonical payload ──> 285B manifest ──> Ed25519
-                                                           │
-                                                           ▼
+Event prefix ──> canonical payload ──> 285B manifest V1/V2
+                                                │
+                               ┌────────────────┴────────────────┐
+                               ▼                                 ▼
+                          Ed25519                         P-256/SHA-256
+                               └────────────────┬────────────────┘
+                                                ▼
 slot A/B ──> Prepared + flush ──> body + flush ──> readback verify
-                                                           │
-                                                           ▼
+                                                │
+                                                ▼
 Committed footer + flush ──> receipt ──> one-shot Core proof ──> release
 ```
 
@@ -169,11 +173,13 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── provider signature
 ```
 
-| Contract | V13 / V14 / V15 / V16 / V17 invariant |
+| Contract | V13 through V18 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
-| Signature | Strict Ed25519 over one canonical 285-byte manifest |
+| Manifest | V1 preserves legacy Ed25519 bytes; V2 binds an explicit algorithm |
+| Signature | 64 bytes: strict Ed25519 or IEEE P1363 low-S ECDSA P-256/SHA-256 |
+| Signer ID | Legacy Ed25519 domain retained; algorithm-bound keys use the V2 domain |
 | Transaction | 8 explicit write, flush, and readback fault boundaries |
 | Recovery | Highest connected signed head; split and disconnected heads fail closed |
 | Boot import | Virgin Core only; next Event starts at `through_sequence + 1` |
@@ -209,10 +215,19 @@ fixed x86_64 link ──> ELF section audit ──> Package v3 / kind 5
 | Core identity | `AgentImageKind::StateSigner` + `AgentEntryKind::StateSigner` |
 | Image trust | x86 kind `5`; independent signer scope bit `4` |
 | Provider ABI | 285-byte manifest input, 64-byte signature output, policy generation |
+| Algorithm policy | Immutable Ed25519 or ECDSA P-256/SHA-256 selection |
 | Package | Two fixed-address segments, zero relocations, output mode `0600` |
 | Secret ownership | Provider retains durable-state key access; package contains public policy |
 
-`ATA BACKEND` complete · `NATIVE BOOT HANDOFF` complete · `STATE SIGNER PACKAGE` complete
+```text
+V18 HARDWARE SIGNER AGILITY
+manifest          V1 legacy Ed25519 | V2 algorithm-bound
+public key        Ed25519 / 32B | compressed SEC1 P-256 / 33B
+signature         Ed25519 / 64B | IEEE P1363 low-S P-256 / 64B
+failure policy    mismatch / malformed key / high-S -> fail closed
+```
+
+`ATA BACKEND` complete · `STATE SIGNER PACKAGE` complete · `SIGNER AGILITY` complete
 
 ## `05 // AGENT CALL`
 
@@ -297,6 +312,14 @@ native package    fixed address / 2 segments / 0 relocations
 provider          external ABI / durable key excluded from package
 ```
 
+```text
+V18 SIGNER AGILITY
+manifest          exact V1 compatibility / explicit V2 algorithm
+verification      Ed25519 verify_strict / P-256 SHA-256 low-S
+policy            provider + package + manifest must agree
+closed loop       P-256 sign / ATA commit / power loss / cold recovery
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -321,7 +344,17 @@ $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
 $ scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
-$ ruby scripts/build-state-signer-package.rb --help
+```
+
+```console
+$ ruby scripts/build-state-signer-package.rb \
+    --signature-algorithm ecdsa-p256-sha256 \
+    --image-key "$IMAGE_KEY" --provider-object "$PROVIDER_OBJECT" \
+    --output "$STATE_SIGNER_PACKAGE" \
+    --nonce 1 --archive-authority 2 --storage-authority 3 \
+    --root 4 --storage 5 --through-sequence 64 \
+    --call-data-generation 1 --policy-generation 1 \
+    --state-signer-id "$STATE_SIGNER_ID"
 ```
 
 ```console
@@ -364,7 +397,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 [done] verified durable boot + Event sequence continuation
 [done] State Signer Agent + native archive prepare/commit calls
 [done] first-class signer identity + external-provider native package
-[next] production provider + TPM/HSM provisioning
+[done] V1/V2 signer agility + low-S ECDSA P-256/SHA-256
+[next] TPM/HSM transport + key-provisioning ceremony
 [next] dedicated QEMU ATA image + emulator power-loss proof
 [next] network + graphics + USB + formal verification
 ```
@@ -375,7 +409,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| Active milestone | [First-Class State Signer V17](docs/superpowers/specs/2026-07-24-first-class-state-signer-v17-design.md) |
+| Active milestone | [Hardware State Signer Agility V18](docs/superpowers/specs/2026-07-24-hardware-state-signer-agility-v18-design.md) |
 
 ## `10 // PROJECT`
 

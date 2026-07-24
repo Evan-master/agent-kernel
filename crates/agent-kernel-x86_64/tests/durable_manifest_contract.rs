@@ -1,14 +1,20 @@
 #[allow(dead_code)]
 mod durable_state_support;
 
-use agent_kernel_core::{DurableAnchorMode, DurableArchiveAnchor, DurableStateDigest};
+use agent_kernel_core::{
+    DurableAnchorMode, DurableArchiveAnchor, DurableArchiveManifestVersion,
+    DurableSignatureAlgorithm, DurableStateDigest,
+};
 use agent_kernel_x86_64::durable_state::{
-    durable_archive_manifest_digest, encode_durable_archive_manifest,
+    decode_durable_archive_manifest, durable_archive_manifest_digest,
+    encode_durable_archive_manifest, DurableArchiveManifestDecodeError,
     DURABLE_ARCHIVE_MANIFEST_BYTES,
 };
 use sha2::{Digest, Sha256};
 
-use durable_state_support::{manifest, signing_key, POLICY_GENERATION, ROOT, STORAGE};
+use durable_state_support::{
+    manifest, p256_manifest, p256_signing_key, signing_key, POLICY_GENERATION, ROOT, STORAGE,
+};
 
 #[test]
 fn canonical_manifest_has_one_frozen_285_byte_encoding() {
@@ -28,6 +34,73 @@ fn canonical_manifest_has_one_frozen_285_byte_encoding() {
     assert_eq!(
         durable_archive_manifest_digest(manifest),
         DurableStateDigest::new(Sha256::digest(encoded).into())
+    );
+}
+
+#[test]
+fn algorithm_bound_manifest_uses_v2_and_the_reserved_algorithm_slot() {
+    let signing_key = p256_signing_key(0x12);
+    let manifest = p256_manifest(
+        &signing_key,
+        ROOT,
+        STORAGE,
+        POLICY_GENERATION,
+        DurableArchiveAnchor::unanchored(),
+    );
+
+    let encoded = encode_durable_archive_manifest(manifest);
+
+    assert_eq!(
+        manifest.version(),
+        DurableArchiveManifestVersion::AlgorithmBound
+    );
+    assert_eq!(
+        manifest.signature_algorithm(),
+        DurableSignatureAlgorithm::EcdsaP256Sha256
+    );
+    assert_eq!(&encoded[29..31], &2u16.to_le_bytes());
+    assert_eq!(&encoded[33..35], &2u16.to_le_bytes());
+    assert_eq!(&encoded[35..37], &[0, 0]);
+    assert_eq!(
+        agent_kernel_x86_64::durable_state::decode_durable_archive_manifest(&encoded),
+        Ok(manifest)
+    );
+}
+
+#[test]
+fn versions_reject_noncanonical_or_unknown_algorithm_encodings() {
+    let legacy = manifest(
+        &signing_key(0x13),
+        ROOT,
+        STORAGE,
+        POLICY_GENERATION,
+        DurableArchiveAnchor::unanchored(),
+    );
+    let mut legacy_bytes = encode_durable_archive_manifest(legacy);
+    legacy_bytes[33..35].copy_from_slice(&1u16.to_le_bytes());
+    assert_eq!(
+        decode_durable_archive_manifest(&legacy_bytes),
+        Err(DurableArchiveManifestDecodeError::ReservedNotZero)
+    );
+
+    let algorithm_bound = p256_manifest(
+        &p256_signing_key(0x14),
+        ROOT,
+        STORAGE,
+        POLICY_GENERATION,
+        DurableArchiveAnchor::unanchored(),
+    );
+    let mut algorithm_bytes = encode_durable_archive_manifest(algorithm_bound);
+    algorithm_bytes[33..35].copy_from_slice(&3u16.to_le_bytes());
+    assert_eq!(
+        decode_durable_archive_manifest(&algorithm_bytes),
+        Err(DurableArchiveManifestDecodeError::UnsupportedSignatureAlgorithm { algorithm: 3 })
+    );
+
+    algorithm_bytes[29..31].copy_from_slice(&3u16.to_le_bytes());
+    assert_eq!(
+        decode_durable_archive_manifest(&algorithm_bytes),
+        Err(DurableArchiveManifestDecodeError::UnsupportedVersion { version: 3 })
     );
 }
 

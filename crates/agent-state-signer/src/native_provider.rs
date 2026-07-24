@@ -4,8 +4,8 @@
 //! buffers and converts its status code into the portable State Signer trait.
 
 use agent_kernel_core::{
-    DurableArchiveSignature, DurableStateSignerId, DURABLE_ARCHIVE_MANIFEST_BYTES,
-    DURABLE_ARCHIVE_SIGNATURE_BYTES,
+    DurableArchiveSignature, DurableSignatureAlgorithm, DurableStateSignerId,
+    DURABLE_ARCHIVE_MANIFEST_BYTES, DURABLE_ARCHIVE_SIGNATURE_BYTES,
 };
 
 use crate::StateSignerProvider;
@@ -27,6 +27,7 @@ pub enum NativeStateSignerProviderError {
 #[derive(Copy, Clone)]
 pub struct NativeStateSignerProvider {
     signer_id: DurableStateSignerId,
+    signature_algorithm: DurableSignatureAlgorithm,
     policy_generation: u64,
     entry: NativeStateSignerProviderEntry,
 }
@@ -45,6 +46,29 @@ impl NativeStateSignerProvider {
         policy_generation: u64,
         entry: NativeStateSignerProviderEntry,
     ) -> Result<Self, NativeStateSignerProviderError> {
+        // SAFETY: the caller supplies the same ABI-compatible entry contract.
+        unsafe {
+            Self::new_with_algorithm(
+                signer_id,
+                DurableSignatureAlgorithm::Ed25519,
+                policy_generation,
+                entry,
+            )
+        }
+    }
+
+    /// Creates an adapter with one explicit durable signature algorithm.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must obey the same buffer, register, lifetime, and unwind
+    /// constraints documented by [`Self::new`].
+    pub unsafe fn new_with_algorithm(
+        signer_id: DurableStateSignerId,
+        signature_algorithm: DurableSignatureAlgorithm,
+        policy_generation: u64,
+        entry: NativeStateSignerProviderEntry,
+    ) -> Result<Self, NativeStateSignerProviderError> {
         if signer_id.is_zero() {
             return Err(NativeStateSignerProviderError::ZeroSignerId);
         }
@@ -53,6 +77,7 @@ impl NativeStateSignerProvider {
         }
         Ok(Self {
             signer_id,
+            signature_algorithm,
             policy_generation,
             entry,
         })
@@ -65,6 +90,10 @@ impl NativeStateSignerProvider {
 
 impl StateSignerProvider for NativeStateSignerProvider {
     type Error = NativeStateSignerProviderError;
+
+    fn signature_algorithm(&self) -> DurableSignatureAlgorithm {
+        self.signature_algorithm
+    }
 
     fn signer_id(&self) -> DurableStateSignerId {
         self.signer_id

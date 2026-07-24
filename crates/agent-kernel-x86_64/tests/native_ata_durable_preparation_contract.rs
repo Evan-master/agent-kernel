@@ -4,7 +4,10 @@ mod durable_archive_kernel_support;
 #[allow(dead_code)]
 mod durable_state_support;
 
-use agent_kernel_core::{DurableStateSignerStatus, EventArchiveEncodingError};
+use agent_kernel_core::{
+    DurableArchiveManifestVersion, DurableSignatureAlgorithm, DurableStateSignerStatus,
+    EventArchiveEncodingError,
+};
 use agent_kernel_hal::DURABLE_SLOT_BYTES;
 use agent_kernel_x86_64::{
     ata::{
@@ -16,7 +19,9 @@ use agent_kernel_x86_64::{
 
 use ata_block_support::SectorDevice;
 use durable_archive_kernel_support::launched_archive_kernel;
-use durable_state_support::{signer_record, signing_key, POLICY_GENERATION};
+use durable_state_support::{
+    p256_signer_record, p256_signing_key, signer_record, signing_key, POLICY_GENERATION,
+};
 
 const BASE_LBA: u64 = 256;
 const DEVICE_SECTORS: u64 = 4096;
@@ -91,6 +96,64 @@ fn preparation_binds_preflight_caller_payload_and_unsigned_request() {
         Err(NativeAtaDurablePrepareError::AlreadyPrepared)
     );
     assert_eq!(session.backend().device().operations().len(), baseline);
+}
+
+#[test]
+fn p256_preparation_stages_an_algorithm_bound_manifest() {
+    let key = p256_signing_key(0xb3);
+    let fixture = launched_archive_kernel();
+    let proposal = fixture
+        .kernel
+        .sys_prepare_event_archive(fixture.kernel.events()[3].sequence)
+        .unwrap();
+    let preflight = fixture
+        .kernel
+        .preflight_durable_event_archive(
+            fixture.actor,
+            fixture.archive_authority,
+            fixture.storage_authority,
+            fixture.storage,
+            proposal,
+        )
+        .unwrap();
+    let caller =
+        NativeDurableArchiveCaller::new(fixture.actor, fixture.task, fixture.image).unwrap();
+    let mut buffers = buffers();
+    let mut session = config(
+        fixture.root,
+        fixture.storage,
+        p256_signer_record(
+            &key,
+            fixture.root,
+            DurableStateSignerStatus::Active,
+            POLICY_GENERATION,
+        ),
+    )
+    .initialize_device(
+        SectorDevice::new(identity()),
+        buffers.0.as_mut(),
+        buffers.1.as_mut(),
+        buffers.2.as_mut(),
+    )
+    .unwrap();
+
+    let preparation = session
+        .prepare(
+            caller,
+            preflight,
+            &fixture.kernel.events()[..proposal.count()],
+            CALL_DATA_GENERATION,
+        )
+        .unwrap();
+
+    assert_eq!(
+        preparation.manifest().version(),
+        DurableArchiveManifestVersion::AlgorithmBound
+    );
+    assert_eq!(
+        preparation.manifest().signature_algorithm(),
+        DurableSignatureAlgorithm::EcdsaP256Sha256
+    );
 }
 
 #[test]

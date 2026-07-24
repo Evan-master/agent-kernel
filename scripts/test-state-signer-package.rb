@@ -59,7 +59,13 @@ def command_path(environment_name, candidates)
   nil
 end
 
-def builder_command(key_path, provider_object, output_path, signer_id_hex)
+def builder_command(
+  key_path,
+  provider_object,
+  output_path,
+  signer_id_hex,
+  signature_algorithm = "ed25519"
+)
   [
     RbConfig.ruby,
     BUILDER,
@@ -74,6 +80,7 @@ def builder_command(key_path, provider_object, output_path, signer_id_hex)
     "--through-sequence", "64",
     "--call-data-generation", "1",
     "--policy-generation", "1",
+    "--signature-algorithm", signature_algorithm,
     "--state-signer-id", signer_id_hex
   ]
 end
@@ -125,6 +132,7 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
   signer_id_hex = "53" * 32
   output = run!(*builder_command(key_path, provider_object, output_path, signer_id_hex))
   assert(output.include?("kind=state-signer"), "builder omitted public kind evidence")
+  assert(output.include?("signature_algorithm=ed25519"), "builder omitted signature algorithm")
   assert((File.stat(output_path).mode & 0o777) == 0o600, "package mode is not 0600")
 
   package = File.binread(output_path)
@@ -194,6 +202,30 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
     "-sigfile",
     signature_path
   )
+
+  p256_output_path = File.join(directory, "state-signer-p256.pkg")
+  p256_output = run!(
+    *builder_command(
+      key_path,
+      provider_object,
+      p256_output_path,
+      signer_id_hex,
+      "ecdsa-p256-sha256"
+    )
+  )
+  assert(
+    p256_output.include?("signature_algorithm=ecdsa-p256-sha256"),
+    "builder omitted P-256 signature algorithm"
+  )
+  assert(File.binread(p256_output_path) != package, "algorithm policy did not change package bytes")
+
+  unsupported_output = File.join(directory, "state-signer-unsupported.pkg")
+  _output, error, status = Open3.capture3(
+    *builder_command(key_path, provider_object, unsupported_output, signer_id_hex, "rsa")
+  )
+  assert(!status.success?, "builder accepted an unsupported signature algorithm")
+  assert(error.include?("signature-algorithm"), "builder reported the wrong algorithm failure")
+  assert(!File.exist?(unsupported_output), "algorithm rejection left an output")
 
   original_key = File.binread(key_path)
   _output, error, status = Open3.capture3(

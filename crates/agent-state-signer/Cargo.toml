@@ -13,3 +13,4 @@ agent-kernel-x86_64 = { path = "../agent-kernel-x86_64" }
 agent-kernel = { path = "../agent-kernel" }
 agent-kernel-hal = { path = "../agent-kernel-hal" }
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["fast"] }
+p256 = { version = "=0.13.2", default-features = false, features = ["ecdsa"] }

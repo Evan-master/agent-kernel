@@ -13,6 +13,7 @@ mod verification;
 
 pub use manifest::{
     DurableArchiveManifest, DurableArchiveManifestError, DurableArchiveManifestFields,
+    DurableArchiveManifestVersion,
 };
 pub use receipt::{DurableArchiveReceipt, DurableArchiveReceiptError};
 pub use recovery::{DurableRecoveredHead, DurableRecoveryError, DurableRecoveryGuarantee};
@@ -21,7 +22,8 @@ pub use recovery_verification::{
     DurableArchiveRecoveryVerifier,
 };
 pub use signer::{
-    durable_state_signer_id, DurableStateSignerId, DurableStateSignerRecord,
+    durable_state_signer_id, durable_state_signer_id_for_key, DurableSignatureAlgorithm,
+    DurableStatePublicKey, DurableStateSignerId, DurableStateSignerRecord,
     DurableStateSignerStatus,
 };
 pub use verification::{

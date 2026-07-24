@@ -2,17 +2,19 @@
 
 use agent_kernel_core::{
     AgentId, CapabilityId, DurableArchiveAnchor, DurableArchiveManifest,
-    DurableArchiveManifestError, DurableArchiveManifestFields, DurableStateDigest,
-    DurableStateSignerId, EventArchiveDigest, ResourceId, DURABLE_ARCHIVE_MANIFEST_BYTES,
+    DurableArchiveManifestError, DurableArchiveManifestFields, DurableArchiveManifestVersion,
+    DurableSignatureAlgorithm, DurableStateDigest, DurableStateSignerId, EventArchiveDigest,
+    ResourceId, DURABLE_ARCHIVE_MANIFEST_BYTES,
 };
 
-use super::{DOMAIN, DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION, TRUSTED_ANCHOR_FLAG};
+use super::{DOMAIN, TRUSTED_ANCHOR_FLAG};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DurableArchiveManifestDecodeError {
     LengthMismatch { length: usize, required: usize },
     DomainMismatch,
     UnsupportedVersion { version: u16 },
+    UnsupportedSignatureAlgorithm { algorithm: u16 },
     UnsupportedFlags { flags: u16 },
     ReservedNotZero,
     AnchorEncodingInvalid,
@@ -33,15 +35,33 @@ pub fn decode_durable_archive_manifest(
     if decoder.take::<29>() != *DOMAIN {
         return Err(DurableArchiveManifestDecodeError::DomainMismatch);
     }
-    let version = decoder.u16();
-    if version != DURABLE_ARCHIVE_MANIFEST_FORMAT_VERSION {
-        return Err(DurableArchiveManifestDecodeError::UnsupportedVersion { version });
-    }
+    let encoded_version = decoder.u16();
+    let version = DurableArchiveManifestVersion::from_wire_value(encoded_version).ok_or(
+        DurableArchiveManifestDecodeError::UnsupportedVersion {
+            version: encoded_version,
+        },
+    )?;
     let flags = decoder.u16();
     if flags & !TRUSTED_ANCHOR_FLAG != 0 {
         return Err(DurableArchiveManifestDecodeError::UnsupportedFlags { flags });
     }
-    if !decoder.zeroes::<4>() {
+    let encoded_algorithm = decoder.u16();
+    let signature_algorithm = match version {
+        DurableArchiveManifestVersion::LegacyEd25519 => {
+            if encoded_algorithm != 0 {
+                return Err(DurableArchiveManifestDecodeError::ReservedNotZero);
+            }
+            DurableSignatureAlgorithm::Ed25519
+        }
+        DurableArchiveManifestVersion::AlgorithmBound => {
+            DurableSignatureAlgorithm::from_wire_value(encoded_algorithm).ok_or(
+                DurableArchiveManifestDecodeError::UnsupportedSignatureAlgorithm {
+                    algorithm: encoded_algorithm,
+                },
+            )?
+        }
+    };
+    if !decoder.zeroes::<2>() {
         return Err(DurableArchiveManifestDecodeError::ReservedNotZero);
     }
 
@@ -69,7 +89,7 @@ pub fn decode_durable_archive_manifest(
     let anchor_digest = EventArchiveDigest::new(decoder.take());
     let anchor = decode_anchor(flags, anchor_generation, anchor_digest)?;
 
-    DurableArchiveManifest::from_fields(DurableArchiveManifestFields {
+    let fields = DurableArchiveManifestFields {
         generation,
         first_sequence,
         through_sequence,
@@ -85,7 +105,13 @@ pub fn decode_durable_archive_manifest(
         signer_id,
         signer_policy_generation,
         anchor,
-    })
+    };
+    match version {
+        DurableArchiveManifestVersion::LegacyEd25519 => DurableArchiveManifest::from_fields(fields),
+        DurableArchiveManifestVersion::AlgorithmBound => {
+            DurableArchiveManifest::from_algorithm_bound_fields(fields, signature_algorithm)
+        }
+    }
     .map_err(DurableArchiveManifestDecodeError::Manifest)
 }
 

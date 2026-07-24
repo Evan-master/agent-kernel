@@ -52,7 +52,10 @@ fn state_signer_identity_and_policy_are_separate_from_agent_images() {
             .unwrap();
     assert_eq!(record.signer_id, signer_id);
     assert_eq!(record.root, root);
-    assert_eq!(record.public_key, public_key);
+    assert_eq!(
+        record.public_key,
+        agent_kernel_core::DurableStatePublicKey::ed25519(public_key)
+    );
     assert_eq!(record.generation, 4);
     assert!(record.allows(root, 4));
     assert!(!record.allows(ResourceId::new(8), 4));

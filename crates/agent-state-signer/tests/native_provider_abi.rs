@@ -1,7 +1,8 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use agent_kernel_core::{
-    DurableStateSignerId, DURABLE_ARCHIVE_MANIFEST_BYTES, DURABLE_ARCHIVE_SIGNATURE_BYTES,
+    DurableSignatureAlgorithm, DurableStateSignerId, DURABLE_ARCHIVE_MANIFEST_BYTES,
+    DURABLE_ARCHIVE_SIGNATURE_BYTES,
 };
 use agent_state_signer::{
     NativeStateSignerProvider, NativeStateSignerProviderError, StateSignerProvider,
@@ -35,6 +36,27 @@ fn native_provider_status_is_typed_and_returns_no_signature() {
         provider.sign_manifest(&[0; DURABLE_ARCHIVE_MANIFEST_BYTES]),
         Err(NativeStateSignerProviderError::ProviderStatus(9))
     );
+}
+
+#[test]
+fn native_provider_exposes_one_explicit_hardware_signature_algorithm() {
+    let signer_id = DurableStateSignerId::new([0x56; 32]);
+    // SAFETY: the test provider obeys the fixed buffer and lifetime contract.
+    let provider = unsafe {
+        NativeStateSignerProvider::new_with_algorithm(
+            signer_id,
+            DurableSignatureAlgorithm::EcdsaP256Sha256,
+            19,
+            fill_signature,
+        )
+    }
+    .unwrap();
+
+    assert_eq!(
+        provider.signature_algorithm(),
+        DurableSignatureAlgorithm::EcdsaP256Sha256
+    );
+    assert_eq!(provider.signer_id(), signer_id);
 }
 
 #[test]

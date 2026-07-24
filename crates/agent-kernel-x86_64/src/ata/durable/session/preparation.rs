@@ -130,7 +130,8 @@ impl<'a, D: AtaBlockDevice> NativeAtaDurableSession<'a, D> {
 
         let payload_length = encode_event_archive_payload(proposal, events, self.payload.as_mut())
             .map_err(NativeAtaDurablePrepareError::Archive)?;
-        let manifest = DurableArchiveManifest::new(
+        let signer = self.config.signer();
+        let manifest = DurableArchiveManifest::new_for_signature_algorithm(
             proposal,
             caller.agent(),
             preflight.archive_authority(),
@@ -138,7 +139,8 @@ impl<'a, D: AtaBlockDevice> NativeAtaDurableSession<'a, D> {
             preflight.storage(),
             payload_length as u32,
             DurableStateDigest::from_archive(proposal.digest()),
-            self.config.signer().signer_id,
+            signer.signer_id,
+            signer.signature_algorithm(),
             self.config.policy_generation(),
             DurableArchiveAnchor::unanchored(),
         )
