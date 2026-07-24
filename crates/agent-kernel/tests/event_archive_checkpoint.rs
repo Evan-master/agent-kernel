@@ -52,7 +52,7 @@ fn facade_prepares_and_commits_event_archive_checkpoint() {
             actor,
             authority,
             root,
-            AgentImageKind::Supervisor,
+            AgentImageKind::StateSigner,
             AgentImageDigest::new([0x40; 32]),
             1,
             1,
@@ -67,7 +67,7 @@ fn facade_prepares_and_commits_event_archive_checkpoint() {
             task_authority,
             task,
             image,
-            AgentEntryKind::Supervisor,
+            AgentEntryKind::StateSigner,
         )
         .unwrap();
     kernel.sys_accept_task(actor, task).unwrap();

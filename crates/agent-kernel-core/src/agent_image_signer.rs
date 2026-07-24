@@ -53,7 +53,9 @@ impl AgentImageKindScope {
     const VERIFIER: u16 = 1 << 1;
     const FAULT_HANDLER: u16 = 1 << 2;
     const SUPERVISOR: u16 = 1 << 3;
-    const KNOWN_BITS: u16 = Self::WORKER | Self::VERIFIER | Self::FAULT_HANDLER | Self::SUPERVISOR;
+    const STATE_SIGNER: u16 = 1 << 4;
+    const KNOWN_BITS: u16 =
+        Self::WORKER | Self::VERIFIER | Self::FAULT_HANDLER | Self::SUPERVISOR | Self::STATE_SIGNER;
 
     pub const fn only(kind: AgentImageKind) -> Self {
         let bits = match kind {
@@ -61,6 +63,7 @@ impl AgentImageKindScope {
             AgentImageKind::Verifier => Self::VERIFIER,
             AgentImageKind::FaultHandler => Self::FAULT_HANDLER,
             AgentImageKind::Supervisor => Self::SUPERVISOR,
+            AgentImageKind::StateSigner => Self::STATE_SIGNER,
             AgentImageKind::Bootstrap | AgentImageKind::Driver => 0,
         };
         Self { bits }

@@ -15,6 +15,7 @@ use agent_kernel_x86_64::agent_image::{
 const ABI_VERSION: u16 = 1;
 const ENTRY_VERSION: u16 = 1;
 const WORKER_KIND: u16 = 1;
+const STATE_SIGNER_KIND: u16 = 5;
 const CODE_SEGMENT: u16 = 0;
 const RODATA_SEGMENT: u16 = 1;
 
@@ -125,6 +126,53 @@ fn signed_verification_binds_package_to_one_active_trusted_signer() {
     assert_eq!(
         VerifiedAgentImage::verify(record, &fixture.bytes),
         Err(AgentImageLoadError::SignatureVerificationRequired)
+    );
+}
+
+#[test]
+fn signed_state_signer_package_requires_state_signer_scope() {
+    let fixture = signed_package(
+        STATE_SIGNER_KIND,
+        ABI_VERSION,
+        &[0x90, 0xcd, 0x90],
+        b"state-signer-policy",
+        &[],
+        [0x17; 32],
+    );
+    let record = record(
+        sha256_digest(&fixture.bytes),
+        AgentImageKind::StateSigner,
+        ABI_VERSION,
+    );
+    let state_signer = [trusted_signer(
+        &fixture,
+        AgentImageKind::StateSigner,
+        1,
+        1,
+        AgentImageSignerStatus::Active,
+    )];
+    let verified = VerifiedAgentImage::verify_signed(
+        record,
+        &fixture.bytes,
+        &AgentImageTrustPolicy::new(&state_signer),
+    )
+    .unwrap();
+    assert_eq!(verified.record().kind, AgentImageKind::StateSigner);
+
+    let supervisor = [trusted_signer(
+        &fixture,
+        AgentImageKind::Supervisor,
+        1,
+        1,
+        AgentImageSignerStatus::Active,
+    )];
+    assert_eq!(
+        VerifiedAgentImage::verify_signed(
+            record,
+            &fixture.bytes,
+            &AgentImageTrustPolicy::new(&supervisor),
+        ),
+        Err(AgentImageLoadError::SignerScopeMismatch)
     );
 }
 

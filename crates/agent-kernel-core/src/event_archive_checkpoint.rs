@@ -1,7 +1,7 @@
 //! Authorized two-phase Event archive commit.
 //!
 //! This no_std Core module prepares immutable prefix proposals, validates a
-//! launched Supervisor with root Rollback authority, atomically releases live
+//! launched State Signer with root Rollback authority, atomically releases live
 //! Event slots, and retains the latest cryptographic checkpoint chain head.
 
 use crate::{

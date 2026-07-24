@@ -21,14 +21,15 @@ agent-kernel / native-x86_64
 [02] Ed25519 trust policy ... verified
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
-kernel://supervisor/handoff-ready
+[05] native state signer .... packaged
+kernel://state-signer/package-ready
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V16 state signer │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V17 state signer │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -168,7 +169,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── provider signature
 ```
 
-| 契约 | V13 / V14 / V15 / V16 不变量 |
+| 契约 | V13 / V14 / V15 / V16 / V17 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -177,7 +178,7 @@ commit(55) <── 精确 384B request <── provider signature
 | Recovery | 选择最高的连续签名链头；分叉与断链均关闭自动恢复 |
 | Boot Import | 仅允许空白 Core；下一条 Event 从 `through_sequence + 1` 开始 |
 | Signed Request | 384 字节 canonical 记录；仅签名区间 `317..381` 可变 |
-| Signer Agent | 独立策略、可注入 Provider、内核不执行私钥操作 |
+| Signer Agent | 首类镜像与入口身份、独立策略、可注入 Provider |
 | Core Gate | 原始 receipt 无权释放 Event；验证提交仅可消费一次 |
 | 原生设备 | ATA LBA48、512 字节扇区、有界轮询、`FLUSH CACHE EXT` |
 | 原生映射 | 每槽 128 个扇区；一个对齐的 256 扇区保留区间 |
@@ -192,7 +193,26 @@ ATA IDENTIFY ──> 双槽扫描 ──> 链路 + 签名验证
                  └──────> 稳定 Resource <──── 一次性 Core proof
 ```
 
-`ATA BACKEND` 完成 · `NATIVE BOOT HANDOFF` 完成 · `STATE SIGNER CALL` 完成
+```text
+V17 NATIVE STATE SIGNER
+entry.S + immutable policy + external provider.o
+                 │
+                 ▼
+fixed x86_64 link ──> ELF section audit ──> Package v3 / kind 5
+                 │
+                 ▼
+        external Ed25519 image signature
+```
+
+| 原生 Signer 边界 | 契约 |
+| :--- | :--- |
+| Core 身份 | `AgentImageKind::StateSigner` + `AgentEntryKind::StateSigner` |
+| 镜像信任 | x86 kind `5`；独立 signer scope bit `4` |
+| Provider ABI | 输入 285 字节 manifest，输出 64 字节签名，携带 policy generation |
+| Package | 两个固定地址段、零重定位、输出权限 `0600` |
+| 密钥归属 | Provider 保留持久状态密钥访问；Package 仅包含公开策略 |
+
+`ATA BACKEND` 完成 · `NATIVE BOOT HANDOFF` 完成 · `STATE SIGNER PACKAGE` 完成
 
 ## `05 // AGENT CALL`
 
@@ -269,6 +289,14 @@ session states    ready / prepared / faulted
 closed loop       preflight / sign / ATA / release / cold recovery
 ```
 
+```text
+V17 FIRST-CLASS SIGNER
+Core identity     StateSigner image + entry
+trust scope       bit 4 / x86 image kind 5
+native package    fixed address / 2 segments / 0 relocations
+provider          external ABI / Package 不含持久状态密钥
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -292,6 +320,8 @@ $ cargo run -p agent-supervisor
 $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
 $ scripts/audit-agent-images.rb --assembly
+$ ruby scripts/test-state-signer-package.rb
+$ ruby scripts/build-state-signer-package.rb --help
 ```
 
 ```console
@@ -317,7 +347,7 @@ crates/
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,audit-agent-images.rb}
+scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 ```
 
 ## `09 // 路线图`
@@ -333,7 +363,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] 原生 ATA PIO 适配器 + 签名冷启动恢复
 [done] 验证持久启动 + Event 序列延续
 [done] State Signer Agent + 原生归档 prepare/commit 调用
-[next] 安全 Signer 配置 + 原生 Signer Package
+[done] 首类 Signer 身份 + 外部 Provider 原生 Package
+[next] 生产 Provider + TPM/HSM 配置
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
 [next] Network + Graphics + USB + 形式化验证
 ```
@@ -344,7 +375,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [State Signer Agent V16](docs/superpowers/specs/2026-07-24-state-signer-agent-v16-design.md) |
+| 当前里程碑 | [First-Class State Signer V17](docs/superpowers/specs/2026-07-24-first-class-state-signer-v17-design.md) |
 
 ## `10 // 项目`
 

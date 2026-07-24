@@ -48,7 +48,7 @@ fn receipt(
 
 #[test]
 fn verified_receipt_releases_the_prefix_and_records_replay_state() {
-    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::StateSigner);
     let through = core.events().last().unwrap().sequence;
     let proposal = core.prepare_event_archive(through).unwrap();
     let receipt = receipt(fixture, proposal, 0x31);
@@ -79,7 +79,7 @@ fn verified_receipt_releases_the_prefix_and_records_replay_state() {
 
 #[test]
 fn rejected_and_mismatched_receipts_leave_all_core_state_unchanged() {
-    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::StateSigner);
     let through = core.events().last().unwrap().sequence;
     let proposal = core.prepare_event_archive(through).unwrap();
     let valid_receipt = receipt(fixture, proposal, 0x41);
@@ -133,7 +133,7 @@ fn rejected_and_mismatched_receipts_leave_all_core_state_unchanged() {
 
 #[test]
 fn a_consumed_receipt_is_rejected_before_verification_runs_again() {
-    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::StateSigner);
     let through = core.events().last().unwrap().sequence;
     let proposal = core.prepare_event_archive(through).unwrap();
     let receipt = receipt(fixture, proposal, 0x61);

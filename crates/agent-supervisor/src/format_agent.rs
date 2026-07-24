@@ -180,6 +180,7 @@ fn image_kind_label(kind: AgentImageKind) -> &'static str {
         AgentImageKind::Verifier => "verifier",
         AgentImageKind::FaultHandler => "fault_handler",
         AgentImageKind::Driver => "driver",
+        AgentImageKind::StateSigner => "state_signer",
     }
 }
 

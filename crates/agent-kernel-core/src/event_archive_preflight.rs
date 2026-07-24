@@ -1,6 +1,6 @@
 //! Read-only authorization boundary for one durable Event archive commit.
 //!
-//! Core validates the launched Supervisor, root Rollback authority, storage
+//! Core validates the launched State Signer, root Rollback authority, storage
 //! Checkpoint authority, and exact current proposal before machine code may
 //! write durable media. The returned record is immutable and emits no Event.
 
@@ -107,7 +107,7 @@ impl<
         let entry = self
             .find_agent_entry(actor)
             .map_err(|_| KernelError::AgentNotLaunched)?;
-        if entry.kind != AgentEntryKind::Supervisor {
+        if entry.kind != AgentEntryKind::StateSigner {
             return Err(KernelError::AgentEntryKindMismatch);
         }
 

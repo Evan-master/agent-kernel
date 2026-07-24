@@ -137,10 +137,19 @@ fn supervisor_runs_minimal_agent_kernel_flow() {
     assert!(stdout.contains(
         "event[78] driver_invocation_completed agent=4 resource=4 capability=7 driver_binding=1 device_event=1 driver_invocation=1 ticks=1 quantum=0"
     ));
+    assert!(stdout.contains("event[79] agent_registered agent=5 target_agent=5"));
+    assert!(stdout.contains("event[80] capability_derived agent=1 resource=1 capability=8"));
     assert!(stdout.contains(
-        "event_archive_checkpoint generation=1 first=1 through=64 count=64 actor=1 authority=1 root=1 previous_digest=0000000000000000000000000000000000000000000000000000000000000000 digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d"
+        "event[81] agent_image_registered agent=1 resource=1 capability=1 image=4 kind=state_signer"
     ));
     assert!(stdout.contains(
-        "durable_archive_receipt slot=A storage=1 generation=1 archive_digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d manifest_digest=0289ba7e8ccd007a088fc96487f60a6cf57cb21e776bb509a6c0eb782c8673e0 readback_digest=a0e6a8d11ba1cf8075292e82ce27fa24fcc8a03b5c83fbdf496d336bafd6ea06 flush_epoch=3"
+        "event[82] agent_image_verified agent=1 resource=1 capability=1 image=4 kind=state_signer"
+    ));
+    assert!(stdout.contains("event[83] agent_launched agent=5 resource=1 capability=8 image=4"));
+    assert!(stdout.contains(
+        "event_archive_checkpoint generation=1 first=1 through=64 count=64 actor=5 authority=8 root=1 previous_digest=0000000000000000000000000000000000000000000000000000000000000000 digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d"
+    ));
+    assert!(stdout.contains(
+        "durable_archive_receipt slot=A storage=1 generation=1 archive_digest=b72f0e90513d7ff3b294acb3e925d0544c4a64c4d8ef4d0972fce823449aff0d manifest_digest=6256e26855dc72452e19afb140e414b471a1d0c0e96320be41f7667cd9c9012d readback_digest=2657760161d99c9153425fc89743466da777c86fccccee2535c8b76d2f0aba19 flush_epoch=3"
     ));
 }

@@ -16,8 +16,8 @@ fn canonical_digest_is_deterministic_and_covers_every_event_field() {
     assert_eq!(
         proposal.digest().bytes,
         [
-            14, 180, 227, 157, 45, 192, 110, 192, 205, 95, 84, 90, 43, 50, 82, 27, 210, 210, 46,
-            169, 67, 54, 246, 13, 93, 138, 72, 254, 244, 28, 234, 119,
+            101, 193, 148, 176, 163, 227, 199, 177, 88, 223, 196, 234, 111, 155, 75, 58, 60, 71,
+            142, 132, 181, 27, 14, 111, 166, 244, 94, 215, 156, 6, 133, 84,
         ]
     );
     assert_eq!(
@@ -94,7 +94,7 @@ fn canonical_digest_is_deterministic_and_covers_every_event_field() {
 
 #[test]
 fn commit_reclaims_dense_prefix_and_preserves_monotonic_sequence() {
-    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::StateSigner);
     emit(&mut core, fixture, 10);
     emit(&mut core, fixture, 11);
     let through = core.events()[3].sequence;
@@ -116,7 +116,7 @@ fn commit_reclaims_dense_prefix_and_preserves_monotonic_sequence() {
 
 #[test]
 fn chained_checkpoints_commit_the_previous_digest() {
-    let (mut core, fixture) = fixture::<40>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<40>(agent_kernel_core::AgentEntryKind::StateSigner);
     emit(&mut core, fixture, 20);
     let first_through = core.events()[2].sequence;
     let first = core.prepare_event_archive(first_through).unwrap();
@@ -140,7 +140,7 @@ fn chained_checkpoints_commit_the_previous_digest() {
 
 #[test]
 fn full_log_can_commit_archive_and_accept_the_next_event() {
-    let (mut core, fixture) = fixture::<16>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<16>(agent_kernel_core::AgentEntryKind::StateSigner);
     while core.events().len() < 16 {
         let detail = core.events().len() as u64 + 100;
         emit(&mut core, fixture, detail);
@@ -163,8 +163,9 @@ fn stale_foreign_and_unknown_proposals_fail_atomically() {
         Err(KernelError::EventArchiveSequenceNotFound)
     );
 
-    let (mut first, first_fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
-    let (mut second, second_fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut first, first_fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::StateSigner);
+    let (mut second, second_fixture) =
+        fixture::<32>(agent_kernel_core::AgentEntryKind::StateSigner);
     emit(&mut first, first_fixture, 301);
     emit(&mut second, second_fixture, 302);
     let through = first.events().last().unwrap().sequence;
@@ -184,7 +185,7 @@ fn stale_foreign_and_unknown_proposals_fail_atomically() {
 }
 
 #[test]
-fn commit_requires_supervisor_and_root_rollback_authority() {
+fn commit_requires_state_signer_and_root_rollback_authority() {
     let (mut worker, worker_fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Worker);
     let worker_proposal = worker
         .prepare_event_archive(worker.events()[1].sequence)
@@ -194,7 +195,7 @@ fn commit_requires_supervisor_and_root_rollback_authority() {
         Err(KernelError::AgentEntryKindMismatch)
     );
 
-    let (mut core, fixture) = fixture::<48>(agent_kernel_core::AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<48>(agent_kernel_core::AgentEntryKind::StateSigner);
     let observe = core
         .derive_capability(
             fixture.actor,

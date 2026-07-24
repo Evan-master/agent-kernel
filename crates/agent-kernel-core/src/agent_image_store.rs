@@ -223,5 +223,6 @@ fn image_kind_matches_entry(image: AgentImageKind, entry: AgentEntryKind) -> boo
             | (AgentImageKind::Verifier, AgentEntryKind::Verifier)
             | (AgentImageKind::FaultHandler, AgentEntryKind::FaultHandler)
             | (AgentImageKind::Driver, AgentEntryKind::Driver)
+            | (AgentImageKind::StateSigner, AgentEntryKind::StateSigner)
     )
 }

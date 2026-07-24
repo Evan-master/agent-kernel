@@ -13,6 +13,7 @@ pub enum AgentEntryKind {
     Verifier,
     FaultHandler,
     Driver,
+    StateSigner,
 }
 
 impl AgentEntryKind {
@@ -24,6 +25,7 @@ impl AgentEntryKind {
             Self::Verifier => AgentImageKind::Verifier,
             Self::FaultHandler => AgentImageKind::FaultHandler,
             Self::Driver => AgentImageKind::Driver,
+            Self::StateSigner => AgentImageKind::StateSigner,
         }
     }
 }

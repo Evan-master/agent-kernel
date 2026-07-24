@@ -62,7 +62,7 @@ pub fn launched_archive_kernel() -> ArchiveKernelFixture {
             actor,
             archive_authority,
             root,
-            AgentImageKind::Supervisor,
+            AgentImageKind::StateSigner,
             AgentImageDigest::new([0x91; 32]),
             1,
             1,
@@ -77,7 +77,7 @@ pub fn launched_archive_kernel() -> ArchiveKernelFixture {
             task_authority,
             task,
             image,
-            AgentEntryKind::Supervisor,
+            AgentEntryKind::StateSigner,
         )
         .unwrap();
     kernel.sys_accept_task(actor, task).unwrap();

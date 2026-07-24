@@ -46,6 +46,18 @@ fn signer_id_derivation_matches_the_v10_trust_anchor() {
 }
 
 #[test]
+fn state_signer_scope_has_one_independent_stable_bit() {
+    let scope = AgentImageKindScope::only(AgentImageKind::StateSigner);
+
+    assert_eq!(scope.bits(), 1 << 4);
+    assert!(scope.allows(AgentImageKind::StateSigner));
+    assert!(!scope.allows(AgentImageKind::Supervisor));
+    assert_eq!(AgentImageKindScope::from_bits(1 << 4), Some(scope));
+    assert_eq!(AgentImageKindScope::from_bits(1 << 5), None);
+    assert!(AgentImageKindScope::all().allows(AgentImageKind::StateSigner));
+}
+
+#[test]
 fn initial_trust_is_kernel_owned_and_replayable() {
     let mut core = SignerCore::new();
     let (actor, authority, resource) = prepare(&mut core, rotation_authority());

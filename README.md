@@ -21,14 +21,15 @@ agent-kernel / native-x86_64
 [02] Ed25519 trust policy ... verified
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
-kernel://supervisor/handoff-ready
+[05] native state signer .... packaged
+kernel://state-signer/package-ready
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD   V16 state signer │
+│ VERIFIED   V10 / QEMU debug + release   HEAD   V17 state signer │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -168,7 +169,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── provider signature
 ```
 
-| Contract | V13 / V14 / V15 / V16 invariant |
+| Contract | V13 / V14 / V15 / V16 / V17 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -177,7 +178,7 @@ commit(55) <── exact 384B request <── provider signature
 | Recovery | Highest connected signed head; split and disconnected heads fail closed |
 | Boot import | Virgin Core only; next Event starts at `through_sequence + 1` |
 | Signed request | Canonical 384-byte record; only signature bytes `317..381` may change |
-| Signer Agent | Independent policy, injected provider, no kernel private-key operation |
+| Signer Agent | First-class image and entry identity, independent policy, injected provider |
 | Core gate | Raw receipts cannot release Events; verified commits are consumed once |
 | Native device | ATA LBA48, 512-byte sectors, bounded polling, `FLUSH CACHE EXT` |
 | Native mapping | 128 sectors per slot; one aligned 256-sector reserved range |
@@ -192,7 +193,26 @@ ATA IDENTIFY ──> dual-slot scan ──> chain + signature verification
                    └────────> stable Resources <──── one-shot Core proof
 ```
 
-`ATA BACKEND` complete · `NATIVE BOOT HANDOFF` complete · `STATE SIGNER CALL` complete
+```text
+V17 NATIVE STATE SIGNER
+entry.S + immutable policy + external provider.o
+                 │
+                 ▼
+fixed x86_64 link ──> ELF section audit ──> Package v3 / kind 5
+                 │
+                 ▼
+        external Ed25519 image signature
+```
+
+| Native signer boundary | Contract |
+| :--- | :--- |
+| Core identity | `AgentImageKind::StateSigner` + `AgentEntryKind::StateSigner` |
+| Image trust | x86 kind `5`; independent signer scope bit `4` |
+| Provider ABI | 285-byte manifest input, 64-byte signature output, policy generation |
+| Package | Two fixed-address segments, zero relocations, output mode `0600` |
+| Secret ownership | Provider retains durable-state key access; package contains public policy |
+
+`ATA BACKEND` complete · `NATIVE BOOT HANDOFF` complete · `STATE SIGNER PACKAGE` complete
 
 ## `05 // AGENT CALL`
 
@@ -269,6 +289,14 @@ session states    ready / prepared / faulted
 closed loop       preflight / sign / ATA / release / cold recovery
 ```
 
+```text
+V17 FIRST-CLASS SIGNER
+Core identity     StateSigner image + entry
+trust scope       bit 4 / x86 image kind 5
+native package    fixed address / 2 segments / 0 relocations
+provider          external ABI / durable key excluded from package
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -292,6 +320,8 @@ $ cargo run -p agent-supervisor
 $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
 $ scripts/audit-agent-images.rb --assembly
+$ ruby scripts/test-state-signer-package.rb
+$ ruby scripts/build-state-signer-package.rb --help
 ```
 
 ```console
@@ -317,7 +347,7 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,audit-agent-images.rb}
+scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb}
 ```
 
 ## `09 // ROADMAP`
@@ -333,7 +363,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 [done] native ATA PIO adapter + signed cold recovery
 [done] verified durable boot + Event sequence continuation
 [done] State Signer Agent + native archive prepare/commit calls
-[next] secure signer provisioning + packaged native signer image
+[done] first-class signer identity + external-provider native package
+[next] production provider + TPM/HSM provisioning
 [next] dedicated QEMU ATA image + emulator power-loss proof
 [next] network + graphics + USB + formal verification
 ```
@@ -344,7 +375,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb}
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| Active milestone | [State Signer Agent V16](docs/superpowers/specs/2026-07-24-state-signer-agent-v16-design.md) |
+| Active milestone | [First-Class State Signer V17](docs/superpowers/specs/2026-07-24-first-class-state-signer-v17-design.md) |
 
 ## `10 // PROJECT`
 

@@ -274,6 +274,45 @@ fn main() {
         },
     );
 
+    let state_signer = AgentId::new(5);
+    kernel
+        .sys_register_agent(state_signer)
+        .expect("State Signer should fit in simulator kernel");
+    let state_signer_capability = kernel
+        .sys_derive_capability(
+            agent,
+            owner_capability,
+            state_signer,
+            OperationSet::only(Operation::Act)
+                .with(Operation::Rollback)
+                .with(Operation::Checkpoint),
+        )
+        .expect("owner should derive bounded durable archive authority");
+    let state_signer_image = kernel
+        .sys_register_agent_image(
+            agent,
+            owner_capability,
+            workspace,
+            AgentImageKind::StateSigner,
+            AgentImageDigest::new([4; 32]),
+            1,
+            1,
+        )
+        .expect("State Signer image should register");
+    kernel
+        .sys_verify_agent_image(agent, owner_capability, state_signer_image)
+        .expect("State Signer image should verify");
+    kernel
+        .sys_launch_agent(
+            state_signer,
+            state_signer_capability,
+            workspace,
+            state_signer_image,
+            AgentEntryKind::StateSigner,
+            None,
+        )
+        .expect("State Signer should launch with bounded authority");
+
     println!("Agent Kernel supervisor boot");
     for event in kernel.events() {
         println!("{}", format_event(event));
@@ -283,9 +322,9 @@ fn main() {
         .expect("event prefix should produce an archive proposal");
     let outcome = commit_signed_archive(
         &mut kernel,
-        agent,
-        owner_capability,
-        owner_capability,
+        state_signer,
+        state_signer_capability,
+        state_signer_capability,
         workspace,
         workspace,
         proposal,

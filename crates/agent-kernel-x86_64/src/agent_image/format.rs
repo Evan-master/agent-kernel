@@ -3,9 +3,9 @@
 use super::{
     package_v2, package_v3, AgentImageLoadError, AgentImageRelocation, AgentImageSignerId,
     AGENT_IMAGE_ARCH_X86_64, AGENT_IMAGE_FORMAT_VERSION, AGENT_IMAGE_HEADER_BYTES,
-    AGENT_IMAGE_KIND_FAULT_HANDLER, AGENT_IMAGE_KIND_SUPERVISOR, AGENT_IMAGE_KIND_VERIFIER,
-    AGENT_IMAGE_KIND_WORKER, AGENT_IMAGE_MAGIC, AGENT_PACKAGE_RELOCATION_BYTES,
-    MAX_AGENT_CODE_BYTES,
+    AGENT_IMAGE_KIND_FAULT_HANDLER, AGENT_IMAGE_KIND_STATE_SIGNER, AGENT_IMAGE_KIND_SUPERVISOR,
+    AGENT_IMAGE_KIND_VERIFIER, AGENT_IMAGE_KIND_WORKER, AGENT_IMAGE_MAGIC,
+    AGENT_PACKAGE_RELOCATION_BYTES, MAX_AGENT_CODE_BYTES,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -140,6 +140,7 @@ impl<'a> AgentImageCapsule<'a> {
                 | AGENT_IMAGE_KIND_VERIFIER
                 | AGENT_IMAGE_KIND_FAULT_HANDLER
                 | AGENT_IMAGE_KIND_SUPERVISOR
+                | AGENT_IMAGE_KIND_STATE_SIGNER
         ) {
             return Err(AgentImageLoadError::UnsupportedImageKind);
         }
@@ -312,5 +313,6 @@ pub(super) const fn supported_image_kind(image_kind: u16) -> bool {
             | AGENT_IMAGE_KIND_VERIFIER
             | AGENT_IMAGE_KIND_FAULT_HANDLER
             | AGENT_IMAGE_KIND_SUPERVISOR
+            | AGENT_IMAGE_KIND_STATE_SIGNER
     )
 }

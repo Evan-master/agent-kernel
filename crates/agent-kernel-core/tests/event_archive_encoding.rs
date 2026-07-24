@@ -24,7 +24,7 @@ fn canonical_payload_is_the_archive_digest_preimage() {
 
 #[test]
 fn chained_payload_commits_the_previous_archive_head() {
-    let (mut core, fixture) = fixture::<32>(AgentEntryKind::Supervisor);
+    let (mut core, fixture) = fixture::<32>(AgentEntryKind::StateSigner);
     let first_through = core.events().last().unwrap().sequence;
     let first = core.prepare_event_archive(first_through).unwrap();
     let first_checkpoint = commit(&mut core, fixture, first).unwrap();

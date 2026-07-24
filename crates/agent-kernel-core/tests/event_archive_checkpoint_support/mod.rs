@@ -58,6 +58,7 @@ pub fn fixture<const EVENTS: usize>(kind: AgentEntryKind) -> (TestCore<EVENTS>, 
         AgentEntryKind::Verifier => AgentImageKind::Verifier,
         AgentEntryKind::FaultHandler => AgentImageKind::FaultHandler,
         AgentEntryKind::Driver => AgentImageKind::Driver,
+        AgentEntryKind::StateSigner => AgentImageKind::StateSigner,
     };
     let image = core
         .register_agent_image(

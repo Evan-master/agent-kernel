@@ -60,7 +60,44 @@ fn durable_preflight_rejects_wrong_storage_authority_without_mutation() {
     assert_eq!(kernel.durable_archive_receipt(), None);
 }
 
+#[test]
+fn durable_preflight_rejects_supervisor_identity_without_mutation() {
+    let (kernel, actor, _, storage, archive_authority, storage_authority) =
+        launched_kernel_with_kind(AgentImageKind::Supervisor, AgentEntryKind::Supervisor);
+    let through = kernel.events()[3].sequence;
+    let proposal = kernel.sys_prepare_event_archive(through).unwrap();
+    let events = kernel.events().to_vec();
+
+    assert_eq!(
+        kernel.preflight_durable_event_archive(
+            actor,
+            archive_authority,
+            storage_authority,
+            storage,
+            proposal,
+        ),
+        Err(KernelError::AgentEntryKindMismatch)
+    );
+    assert_eq!(kernel.events(), events.as_slice());
+    assert_eq!(kernel.event_archive_checkpoint(), None);
+    assert_eq!(kernel.durable_archive_receipt(), None);
+}
+
 fn launched_kernel() -> (
+    TestKernel,
+    AgentId,
+    agent_kernel_core::ResourceId,
+    agent_kernel_core::ResourceId,
+    agent_kernel_core::CapabilityId,
+    agent_kernel_core::CapabilityId,
+) {
+    launched_kernel_with_kind(AgentImageKind::StateSigner, AgentEntryKind::StateSigner)
+}
+
+fn launched_kernel_with_kind(
+    image_kind: AgentImageKind,
+    entry_kind: AgentEntryKind,
+) -> (
     TestKernel,
     AgentId,
     agent_kernel_core::ResourceId,
@@ -111,7 +148,7 @@ fn launched_kernel() -> (
             actor,
             archive_authority,
             root,
-            AgentImageKind::Supervisor,
+            image_kind,
             AgentImageDigest::new([0x81; 32]),
             1,
             1,
@@ -121,13 +158,7 @@ fn launched_kernel() -> (
         .sys_verify_agent_image(actor, archive_authority, image)
         .unwrap();
     kernel
-        .sys_launch_task_agent(
-            actor,
-            task_authority,
-            task,
-            image,
-            AgentEntryKind::Supervisor,
-        )
+        .sys_launch_task_agent(actor, task_authority, task, image, entry_kind)
         .unwrap();
     kernel.sys_accept_task(actor, task).unwrap();
     kernel

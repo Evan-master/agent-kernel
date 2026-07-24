@@ -17,7 +17,7 @@ use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
 use crate::virtual_device::VirtualRegisterDevice;
 
 pub type SupervisorKernel =
-    AgentKernel<8, 8, 8, 80, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2, 2, 2>;
+    AgentKernel<8, 8, 8, 96, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 8, 2, 2, 2, 2>;
 
 pub struct ResourceFlowContext {
     pub agent: AgentId,

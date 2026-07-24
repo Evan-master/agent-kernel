@@ -25,6 +25,7 @@ pub enum AgentImageKind {
     Verifier,
     FaultHandler,
     Driver,
+    StateSigner,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

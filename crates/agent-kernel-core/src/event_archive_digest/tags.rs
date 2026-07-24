@@ -186,6 +186,7 @@ pub(super) const fn agent_image_kind(value: AgentImageKind) -> u16 {
         AgentImageKind::Verifier => 4,
         AgentImageKind::FaultHandler => 5,
         AgentImageKind::Driver => 6,
+        AgentImageKind::StateSigner => 7,
     }
 }
 
