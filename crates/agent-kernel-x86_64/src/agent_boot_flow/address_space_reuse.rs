@@ -223,7 +223,7 @@ pub(super) fn run(
         &mut report,
         &mut evidence,
         None,
-        durable_session.as_deref_mut(),
+        durable_session,
         state_signer,
     )?;
     let repeated_flow_valid = evidence.proves_repeated_runtime_admission_flow();

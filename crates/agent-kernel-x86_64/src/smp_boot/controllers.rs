@@ -128,6 +128,7 @@ impl SmpBootstrap {
                 .as_ref()
                 .is_some_and(IoApicRouting::uart_masked)
             && self.legacy_pic_disabled
+            && self.pci_inventory.is_some()
             && self.trampoline.is_some()
     }
 }

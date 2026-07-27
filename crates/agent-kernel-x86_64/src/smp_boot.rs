@@ -11,6 +11,7 @@ mod delay;
 mod interrupts;
 mod io_apic;
 mod memory;
+mod pci;
 mod startup;
 mod tlb_ipi;
 mod tpm;
@@ -66,6 +67,8 @@ pub(crate) enum SmpBootError {
     MissingTpm2Table,
     TpmCrbAlreadyPrepared,
     InvalidTpmCrbMapping,
+    Pci(pci::PciBootError),
+    PciAlreadyDiscovered,
     ApicBaseMismatch { msr: LocalApicBase, madt: u64 },
     ApicMapping(ApicMappingError),
     IoApicRouting(IoApicRoutingError),
@@ -94,6 +97,7 @@ pub(crate) struct SmpBootstrap {
     legacy_pic_disabled: bool,
     trampoline: Option<TrampolinePage>,
     tpm_crb_prepared: bool,
+    pci_inventory: Option<pci::BootPciInventory>,
     tlb_coordinator: TlbShootdownCoordinator,
 }
 
@@ -163,6 +167,7 @@ impl SmpBootstrap {
             legacy_pic_disabled: false,
             trampoline: None,
             tpm_crb_prepared: false,
+            pci_inventory: None,
             tlb_coordinator: TlbShootdownCoordinator::new(),
         })
     }

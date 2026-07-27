@@ -22,14 +22,15 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-kernel://state-signer/v20-pcr-policy
+[06] PCI device fabric ...... inventoried
+kernel://devices/v21-pci-inventory
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V20 TPM policy    │
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V21 PCI inventory │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -74,7 +75,7 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | :--- | :--- |
 | `agent-kernel-core` | 领域记录、固定容量 Store、状态转换、Event |
 | `agent-kernel` | 稳定的 `no_std` syscall 风格 Facade |
-| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、ATA PIO、TPM CRB、原生执行 |
+| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、ATA PIO、TPM CRB、原生执行 |
 | `agent-kernel-hal` | 不可变设备请求协议 |
 | `agent-state-signer` | `no_std` 签名策略与可注入 Provider 边界 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
@@ -99,7 +100,7 @@ Agent Package
 | 恢复 | `#UD`、`#GP`、`#PF`、修复、重启、回滚 |
 | IPC | 阻塞 Mailbox、唤醒、确认、回收 |
 | 内存 | 页/区域分配、First-Fit 复用、清零 |
-| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、端口与 ATA PIO 访问 |
+| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、PCI 清单、端口与 ATA PIO 访问 |
 
 <details>
 <summary><code>用户地址空间</code></summary>
@@ -248,7 +249,16 @@ lifecycle         新建会话 / 显式 FlushContext / 故障后禁用
 recovery proof    PCR 策略 / TPM 签名 / ATA 提交 / 冷启动恢复
 ```
 
-`ATA BACKEND` 完成 · `TPM CRB PATH` 完成 · `PCR POLICY` 完成
+```text
+V21 NATIVE PCI INVENTORY
+transport         Configuration Mechanism 1 / 0x0cf8 + 0x0cfc
+coordinates       segment 0 / 256 Bus / 32 Device / 8 Function
+inventory         256 条固定记录 / BDF 稳定排序 / 只读
+classes           Network / Display / USB 发现
+ownership         BSP 持有 / Agent 原始配置访问关闭
+```
+
+`TPM CRB PATH` 完成 · `PCR POLICY` 完成 · `PCI INVENTORY` 完成
 
 ## `05 // AGENT CALL`
 
@@ -360,6 +370,15 @@ session            创建 / 断言 / 签名 / 清理
 closed loop        Policy Session / ATA 提交 / 断电 / 冷启动恢复
 ```
 
+```text
+V21 PCI INVENTORY
+selector           已验证 BDF + 对齐公共 Header DWORD
+probe              保存 / 验证 / 恢复 Address Latch
+scan               缺席 / 单 Function / 多 Function / 全 Bus
+failure            无 Function / 容量溢出 -> 停止启动
+boot evidence      PCI_CONFIG_IO_OK / PCI_INVENTORY_OK
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -455,8 +474,10 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] Agent Call 56 + 内置 TPM Provider + 脚本化 TPM 恢复证明
 [done] SHA-256 PCR Policy Session + 命令绑定 TPM 授权
 [done] 策略门控 TPM 签名 + ATA 断电恢复证明
+[done] 原生 PCI 配置访问 + 固定容量 Function 清单
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
-[next] Network + Graphics + USB + 形式化验证
+[next] PCI BAR 归属 + Capability 绑定的 Driver Function 认领
+[next] Network + Graphics + USB Controller + 形式化验证
 ```
 
 | 轨道 | 记录 |
@@ -465,7 +486,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [TPM Measured Policy V20](docs/superpowers/specs/2026-07-24-tpm-measured-policy-v20-design.md) |
+| 当前里程碑 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 
 ## `10 // 项目`
 

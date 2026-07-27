@@ -5,6 +5,7 @@
 //! existing UART Driver flow. All failures terminate through explicit markers.
 
 mod address_space_reuse;
+mod pci_inventory;
 mod runtime_loop;
 
 use agent_kernel_boot::BootConfig;
@@ -65,6 +66,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_APIC_MMIO_OK");
     serial_write_line("AGENT_KERNEL_IO_APIC_IRQ_ROUTING_OK");
     serial_write_line("AGENT_KERNEL_LEGACY_PIC_DISABLED_OK");
+    pci_inventory::prepare(&mut smp_bootstrap);
     let mut tpm_state_signer = tpm_profile.config().map(|config| {
         let (table, io) = smp_bootstrap
             .prepare_tpm_crb_io(boot_info)

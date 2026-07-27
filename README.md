@@ -22,14 +22,15 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-kernel://state-signer/v20-pcr-policy
+[06] PCI device fabric ...... inventoried
+kernel://devices/v21-pci-inventory
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V20 TPM policy    │
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V21 PCI inventory │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -74,7 +75,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, ATA PIO, TPM CRB, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, ATA PIO, TPM CRB, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-state-signer` | `no_std` signing policy and injected provider boundary |
 | `agent-supervisor` | Host simulation and user-space orchestration |
@@ -99,7 +100,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, I/O APIC IRQ, port and ATA PIO access |
+| I/O | Capability-authorized HAL request, I/O APIC IRQ, PCI inventory, port and ATA PIO access |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -248,7 +249,16 @@ lifecycle         fresh session / explicit FlushContext / disable on fault
 recovery proof    PCR policy / TPM sign / ATA commit / cold recovery
 ```
 
-`ATA BACKEND` complete · `TPM CRB PATH` complete · `PCR POLICY` complete
+```text
+V21 NATIVE PCI INVENTORY
+transport         Configuration Mechanism 1 / 0x0cf8 + 0x0cfc
+coordinates       segment 0 / 256 buses / 32 devices / 8 functions
+inventory         256 fixed records / stable BDF order / read-only
+classes           network / display / USB discovery
+ownership         BSP retained / Agent raw config access closed
+```
+
+`TPM CRB PATH` complete · `PCR POLICY` complete · `PCI INVENTORY` complete
 
 ## `05 // AGENT CALL`
 
@@ -360,6 +370,15 @@ session            create / assert / sign / flush
 closed loop        policy session / ATA commit / power loss / cold recovery
 ```
 
+```text
+V21 PCI INVENTORY
+selector           validated BDF + aligned common-header DWORD
+probe              save / verify / restore address latch
+scan               absent / single-function / multifunction / all buses
+failure            no functions / capacity overflow -> stop boot
+boot evidence      PCI_CONFIG_IO_OK / PCI_INVENTORY_OK
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -455,8 +474,10 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] Agent Call 56 + built-in TPM provider + scripted TPM recovery proof
 [done] SHA-256 PCR policy sessions + command-bound TPM authorization
 [done] policy-gated TPM signature + ATA power-loss recovery proof
+[done] native PCI configuration access + fixed-capacity function inventory
 [next] dedicated QEMU ATA image + emulator power-loss proof
-[next] network + graphics + USB + formal verification
+[next] PCI BAR ownership + capability-bound Driver function claims
+[next] network + graphics + USB controllers + formal verification
 ```
 
 | Track | Record |
@@ -465,7 +486,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| Active milestone | [TPM Measured Policy V20](docs/superpowers/specs/2026-07-24-tpm-measured-policy-v20-design.md) |
+| Active milestone | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 
 ## `10 // PROJECT`
 
