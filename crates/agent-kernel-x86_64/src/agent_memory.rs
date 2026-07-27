@@ -28,9 +28,9 @@ use agent_kernel_x86_64::{
     runtime_page::RuntimePageLedger,
     runtime_region::{RuntimeRegionLedger, RuntimeRegionObservationLog},
     user_memory::{
-        UserMemoryLayout, AGENT_CALL_RELEASE_OFFSET, AGENT_RESTART_GENERATION_OFFSET,
-        MAX_AGENT_RESTART_GENERATION, PAGE_BYTES, PHYSICAL_QUANTUM_GENERATION_OFFSET,
-        STACK_PAGE_COUNT,
+        UserMemoryLayout, AGENT_BOOT_EVENT_SEQUENCE_OFFSET, AGENT_CALL_RELEASE_OFFSET,
+        AGENT_RESTART_GENERATION_OFFSET, MAX_AGENT_RESTART_GENERATION, PAGE_BYTES,
+        PHYSICAL_QUANTUM_GENERATION_OFFSET, STACK_PAGE_COUNT,
     },
 };
 
@@ -204,6 +204,25 @@ impl PreparedAgentMemory {
             let release = self.signal_pointer.add(AGENT_CALL_RELEASE_OFFSET);
             release.write_volatile(1);
             release.read_volatile() == 1
+        }
+    }
+
+    pub(crate) fn install_boot_event_sequence(&mut self, first_sequence: u64) -> bool {
+        if first_sequence == 0 {
+            return false;
+        }
+        // SAFETY: the signal frame is exclusive to this address space. Ring 3
+        // maps it read-only, while the active kernel owns this physical alias.
+        unsafe {
+            let pointer = self
+                .signal_pointer
+                .add(AGENT_BOOT_EVENT_SEQUENCE_OFFSET)
+                .cast::<u64>();
+            if pointer.read_volatile() != 0 {
+                return false;
+            }
+            pointer.write_volatile(first_sequence);
+            pointer.read_volatile() == first_sequence
         }
     }
 

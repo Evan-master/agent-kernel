@@ -19,6 +19,7 @@ use crate::{
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum KernelStateSignerError {
     Unavailable,
+    TpmResponseCode(u32),
 }
 
 pub trait KernelStateSigner {

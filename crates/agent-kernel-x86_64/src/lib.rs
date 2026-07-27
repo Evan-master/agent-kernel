@@ -11,6 +11,7 @@ pub mod agent_call;
 pub mod agent_image;
 pub mod apic;
 pub mod ata;
+pub mod boot_event_window;
 pub mod context;
 pub mod cpu;
 pub mod durable_archive_request;

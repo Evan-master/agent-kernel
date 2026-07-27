@@ -17,6 +17,7 @@ pub(super) fn compact(
     pending.authenticated_request()?;
     let context = pending.context();
     let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
     let queue_len = booted.kernel().run_queue().len();
     let task_len = booted.kernel().tasks().len();
     let intent_len = booted.kernel().intents().len();
@@ -36,7 +37,7 @@ pub(super) fn compact(
         || events.first()?.intent != Some(receipt.first())
         || events.last()?.intent != Some(receipt.through())
         || events.iter().enumerate().any(|(index, event)| {
-            event.sequence != (event_start + index + 1) as u64
+            Some(event.sequence) != next_sequence.checked_add(index as u64)
                 || event.kind != EventKind::IntentCompacted
                 || event.agent != context.agent()
                 || event.capability != Some(authority)

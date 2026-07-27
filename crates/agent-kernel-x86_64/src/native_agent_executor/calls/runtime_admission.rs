@@ -61,6 +61,7 @@ pub(super) fn compact(
     pending.authenticated_request()?;
     let context = pending.context();
     let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
     let queue_len = booted.kernel().run_queue().len();
     let admission_len = booted.kernel().runtime_admissions().len();
     let receipt = booted
@@ -78,7 +79,7 @@ pub(super) fn compact(
         || events.first()?.runtime_admission != Some(receipt.first())
         || events.last()?.runtime_admission != Some(receipt.through())
         || events.iter().enumerate().any(|(index, event)| {
-            event.sequence != (event_start + index + 1) as u64
+            Some(event.sequence) != next_sequence.checked_add(index as u64)
                 || event.kind != EventKind::RuntimeAdmissionCompacted
                 || event.agent != context.agent()
                 || event.capability != Some(authority)

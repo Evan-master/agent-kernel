@@ -12,7 +12,10 @@ use agent_kernel_core::{
 use agent_kernel_x86_64::{
     agent_call::AgentCallContext,
     ata::NativeDurableArchiveCaller,
-    tpm2::{sign_retained_durable_request, KernelStateSigner},
+    tpm2::{
+        sign_retained_durable_request, KernelStateSigner, KernelStateSignerError,
+        KernelStateSignerServiceError,
+    },
 };
 
 use super::super::{state, NativeExecutionReport};
@@ -179,7 +182,16 @@ pub(super) fn sign(
     mut pending: PendingAgentCallCpu,
     call_data_generation: u64,
 ) -> Option<ResumableAgentCpu> {
-    let current_request = pending.authenticated_signable_durable_archive_request()?;
+    if pending.authenticated_request().is_none() {
+        serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_CONTEXT_AUTHENTICATION_ERROR");
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_CONTEXT_AUTHENTICATED_OK");
+    let Some(current_request) = pending.authenticated_signable_durable_archive_request() else {
+        serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_CALL_DATA_ERROR");
+        return None;
+    };
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_REQUEST_AUTHENTICATED_OK");
     let context = pending.context();
     let caller = caller(context)?;
     let preparation = session.preparation()?;
@@ -189,6 +201,7 @@ pub(super) fn sign(
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_PREPARATION_MATCHED_OK");
 
     let kernel = booted.kernel();
     let entry = kernel.agent_entry(context.agent()).ok()?;
@@ -200,6 +213,7 @@ pub(super) fn sign(
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_IDENTITY_MATCHED_OK");
 
     let prepared_preflight = preparation.preflight();
     let current_preflight = kernel
@@ -214,6 +228,7 @@ pub(super) fn sign(
     if current_preflight != prepared_preflight {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_PREFLIGHT_MATCHED_OK");
 
     let configured_signer = session.config().signer();
     if configured_signer.status != DurableStateSignerStatus::Active
@@ -224,16 +239,32 @@ pub(super) fn sign(
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGNER_MATCHED_OK");
 
     let retained_request = preparation.request_bytes();
-    let signed = sign_retained_durable_request(
+    let signed = match sign_retained_durable_request(
         &retained_request,
         &current_request,
         preparation.manifest(),
         call_data_generation,
         signer,
-    )
-    .ok()?;
+    ) {
+        Ok(signed) => signed,
+        Err(KernelStateSignerServiceError::Signer(KernelStateSignerError::TpmResponseCode(
+            code,
+        ))) => {
+            write_digest_word("AGENT_KERNEL_TPM_RESPONSE_CODE=", code as u64);
+            return None;
+        }
+        Err(KernelStateSignerServiceError::Signer(KernelStateSignerError::Unavailable)) => {
+            serial_write_line("AGENT_KERNEL_TPM_SIGNER_UNAVAILABLE");
+            return None;
+        }
+        Err(_) => {
+            serial_write_line("AGENT_KERNEL_DURABLE_ARCHIVE_SIGN_REQUEST_REJECTED");
+            return None;
+        }
+    };
     if !pending.replace_signable_durable_archive_request(&current_request, &signed) {
         return None;
     }

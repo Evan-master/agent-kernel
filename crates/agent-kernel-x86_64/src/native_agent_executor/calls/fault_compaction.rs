@@ -40,6 +40,7 @@ pub(super) fn compact(
         .position(|record| record.id == through)?;
     let expected_count = through_index + 1;
     let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
     let queue_len = booted.kernel().run_queue().len();
 
     let receipt = booted
@@ -81,7 +82,7 @@ pub(super) fn compact(
             let Some(record) = previous_faults[index] else {
                 return true;
             };
-            event.sequence != (event_start + index + 1) as u64
+            Some(event.sequence) != next_sequence.checked_add(index as u64)
                 || event.kind != EventKind::FaultCompacted
                 || event.agent != context.agent()
                 || event.target_agent != Some(record.agent)

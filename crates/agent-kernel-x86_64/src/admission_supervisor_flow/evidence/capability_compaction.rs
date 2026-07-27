@@ -21,8 +21,15 @@ const DELEGATE_CAPABILITY: CapabilityId = CapabilityId::new(31);
 const ROLLBACK_CAPABILITY: CapabilityId = CapabilityId::new(32);
 
 impl PreparedAdmissionSupervisorFlow {
-    pub(super) fn capability_store_compacted(&self, booted: &X86BootedKernel) -> bool {
+    pub(super) fn capability_store_compacted(
+        &self,
+        booted: &X86BootedKernel,
+        sequence_offset: u64,
+    ) -> bool {
         let kernel = booted.kernel();
+        let Some(first_sequence) = 373_u64.checked_add(sequence_offset) else {
+            return false;
+        };
         let report = *booted.report();
         let events = kernel.events();
         let Some(start) = events.iter().position(|event| {
@@ -65,7 +72,7 @@ impl PreparedAdmissionSupervisorFlow {
             && window
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 373 + index as u64)
+                .all(|(index, event)| event.sequence == first_sequence + index as u64)
             && capability_event_matches(
                 window[0],
                 EventKind::CapabilityDerived,

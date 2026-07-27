@@ -32,8 +32,15 @@ impl PreparedAdmissionSupervisorFlow {
         &self,
         booted: &X86BootedKernel,
         report: &NativeExecutionReport,
+        sequence_offset: u64,
     ) -> bool {
         let kernel = booted.kernel();
+        let Some(early_cleanup_sequence) = 379_u64.checked_add(sequence_offset) else {
+            return false;
+        };
+        let Some(first_sequence) = 384_u64.checked_add(sequence_offset) else {
+            return false;
+        };
         let cells = kernel.memory_cells();
         let Some(cell) = cells.iter().find(|record| record.id == FRESH_CELL) else {
             return false;
@@ -51,7 +58,11 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(completed) = report.completed(ADMISSION_SUPERVISOR) else {
             return false;
         };
-        let Some(early_cleanup) = kernel.events().iter().find(|event| event.sequence == 379) else {
+        let Some(early_cleanup) = kernel
+            .events()
+            .iter()
+            .find(|event| event.sequence == early_cleanup_sequence)
+        else {
             return false;
         };
         let reclamation = completed.reclamation_log();
@@ -61,7 +72,7 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(start) = kernel
             .events()
             .iter()
-            .position(|event| event.sequence == 384)
+            .position(|event| event.sequence == first_sequence)
         else {
             return false;
         };
@@ -111,7 +122,7 @@ impl PreparedAdmissionSupervisorFlow {
             && events
                 .iter()
                 .enumerate()
-                .all(|(index, event)| event.sequence == 384 + index as u64)
+                .all(|(index, event)| event.sequence == first_sequence + index as u64)
             && retirement_event(events[0])
             && cleanup_event(
                 events[1],

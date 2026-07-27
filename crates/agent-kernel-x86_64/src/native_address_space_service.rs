@@ -51,6 +51,49 @@ impl NativeAddressSpaceService {
         image: VerifiedAgentImage<'_>,
         context: AgentCallContext,
     ) -> Option<Result<NativeAddressSpaceAdmission, NativeAddressSpaceAdmissionFailure>> {
+        Self::admit_with_boot_event_sequence(
+            pool,
+            runtime,
+            cpu_runtime,
+            memory_pool,
+            image,
+            context,
+            None,
+        )
+    }
+
+    pub(crate) fn admit_for_boot_event_sequence(
+        pool: &mut NativeAddressSpaceFramePool,
+        runtime: &mut NativeAgentRuntime,
+        cpu_runtime: &AgentCpuRuntime,
+        memory_pool: &RuntimeMemoryPool,
+        image: VerifiedAgentImage<'_>,
+        context: AgentCallContext,
+        first_sequence: u64,
+    ) -> Option<Result<NativeAddressSpaceAdmission, NativeAddressSpaceAdmissionFailure>> {
+        if first_sequence == 0 {
+            return None;
+        }
+        Self::admit_with_boot_event_sequence(
+            pool,
+            runtime,
+            cpu_runtime,
+            memory_pool,
+            image,
+            context,
+            Some(first_sequence),
+        )
+    }
+
+    fn admit_with_boot_event_sequence(
+        pool: &mut NativeAddressSpaceFramePool,
+        runtime: &mut NativeAgentRuntime,
+        cpu_runtime: &AgentCpuRuntime,
+        memory_pool: &RuntimeMemoryPool,
+        image: VerifiedAgentImage<'_>,
+        context: AgentCallContext,
+        first_sequence: Option<u64>,
+    ) -> Option<Result<NativeAddressSpaceAdmission, NativeAddressSpaceAdmissionFailure>> {
         let initial_pool_len = pool.len();
         let initial_runtime_len = runtime.len();
         let agent = context.agent();
@@ -68,7 +111,7 @@ impl NativeAddressSpaceService {
             return rollback_owner(pool, owner, initial_pool_len);
         }
 
-        let memory = match PreparedAgentMemory::prepare_reused(owner, image) {
+        let mut memory = match PreparedAgentMemory::prepare_reused(owner, image) {
             Ok(memory) => memory,
             Err(owner) => {
                 return rollback_owner_at(
@@ -79,6 +122,16 @@ impl NativeAddressSpaceService {
                 );
             }
         };
+        if first_sequence.is_some_and(|sequence| !memory.install_boot_event_sequence(sequence)) {
+            return rollback_memory(
+                pool,
+                memory,
+                initial_pool_len,
+                NativeAddressSpaceAdmissionStage::MemoryBuild,
+                agent,
+                identity,
+            );
+        }
         if memory.identity() != identity
             || memory.allocated_for() != Some(agent)
             || !memory.kernel_address_space_active()

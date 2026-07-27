@@ -9,6 +9,10 @@ require "tmpdir"
 
 ROOT = File.expand_path("..", __dir__)
 BUILDER = File.join(ROOT, "scripts/build-state-signer-package.rb")
+ENTRY_SOURCE = File.join(
+  ROOT,
+  "crates/agent-state-signer/native/state_signer_entry.S"
+)
 TPM_PROVIDER = File.join(
   ROOT,
   "crates/agent-state-signer/native/tpm_call_provider.S"
@@ -95,7 +99,14 @@ def builder_command(
 end
 
 assert(File.file?(BUILDER), "state signer package builder is missing")
+assert(File.file?(ENTRY_SOURCE), "state signer entry source is missing")
 assert(File.file?(TPM_PROVIDER), "kernel TPM provider source is missing")
+assert(
+  File.read(ENTRY_SOURCE).match?(
+    /mov rax, qword ptr \[rsp \+ 8\]\s+cmp qword ptr \[r12 \+ MANIFEST_ACTOR_OFFSET\], rax/
+  ),
+  "StateSigner actor check does not use the preserved Agent slot"
+)
 
 clang = ENV["CLANG"]
 clang = "/usr/bin/clang" unless clang && File.executable?(clang)
@@ -143,6 +154,10 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
   output = run!(*builder_command(key_path, provider_object, output_path, signer_id_hex))
   assert(output.include?("kind=state-signer"), "builder omitted public kind evidence")
   assert(output.include?("signature_algorithm=ed25519"), "builder omitted signature algorithm")
+  assert(
+    output.match?(/^return_offsets=(\d+,){4}\d+$/),
+    "builder omitted five-call transcript offsets"
+  )
   assert((File.stat(output_path).mode & 0o777) == 0o600, "package mode is not 0600")
 
   package = File.binread(output_path)
@@ -230,6 +245,10 @@ Dir.mktmpdir("agent-kernel-state-signer-package-test") do |directory|
   assert(
     p256_output.include?("provider=kernel-tpm-agent-call-56"),
     "builder omitted kernel TPM provider evidence"
+  )
+  assert(
+    p256_output.match?(/^return_offsets=(\d+,){5}\d+$/),
+    "builder omitted six-call TPM transcript offsets"
   )
   assert(File.binread(p256_output_path) != package, "algorithm policy did not change package bytes")
 

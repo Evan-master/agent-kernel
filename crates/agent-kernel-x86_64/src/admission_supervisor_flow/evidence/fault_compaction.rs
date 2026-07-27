@@ -8,8 +8,15 @@ use crate::{
 };
 
 impl PreparedAdmissionSupervisorFlow {
-    pub(super) fn fault_store_compacted(&self, booted: &X86BootedKernel) -> bool {
+    pub(super) fn fault_store_compacted(
+        &self,
+        booted: &X86BootedKernel,
+        sequence_offset: u64,
+    ) -> bool {
         let kernel = booted.kernel();
+        let Some(first_sequence) = 361_u64.checked_add(sequence_offset) else {
+            return false;
+        };
         let mut events = kernel
             .events()
             .iter()
@@ -29,7 +36,7 @@ impl PreparedAdmissionSupervisorFlow {
             && kernel.faults().is_empty()
             && events.next().is_none()
             && compacted.iter().enumerate().all(|(index, event)| {
-                event.sequence == 361 + index as u64
+                event.sequence == first_sequence + index as u64
                     && proves_compaction_event(
                         booted,
                         event,

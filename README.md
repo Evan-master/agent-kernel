@@ -23,14 +23,14 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://devices/v25-pci-intx-recovery
+kernel://durability/v26-qemu-ata-power-loss
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V25 / QEMU debug + release   PCI INTx + restart      │
+│ VERIFIED   V26 / QEMU debug + release   ATA cut + cold boot     │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -176,7 +176,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V25 invariant |
+| Contract | V13 through V26 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -299,7 +299,16 @@ commands          Configure(ARM_THRE_INTERRUPT) / Write(0x50)
 proof             two Invocations / real INTx / two address-space reclaims
 ```
 
-`TPM CRB PATH` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete · `PCI INTX + RESTART` complete
+```text
+V26 QEMU ATA POWER-LOSS
+writer            signed Package v3 / Agent 11 reuse / Calls 54,56,55
+TPM               swtpm CRB / PCR 23 / TPM2_CC_Sign / P-256
+storage           primary-slave ATA / A/B slots / generation 1 / Events 1..64
+cut               host SIGKILL after durable commit marker
+recovery          no TPM / Events 65..516 / unchanged disk / PCI byte 0x50
+```
+
+`TPM CRB PATH` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete · `QEMU ATA POWER-LOSS` complete
 
 ## `05 // AGENT CALL`
 
@@ -329,9 +338,11 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ## `06 // PROOF`
 
 ```text
-PROFILE            V25 native-pci-intx-driver
-QEMU               debug + release
-EVENTS             1..451 / exact history
+PROFILE            V26 qemu-ata-power-loss
+QEMU               debug + release / writer SIGKILL + cold recovery
+BASELINE EVENTS     1..451 / exact V25 history
+DURABLE HEAD        generation 1 / Events 1..64
+RECOVERY EVENTS     65..516 / ordered contiguous history
 AGENT ENTRIES       12 live / reclaimed slot
 TASK DISPATCHES     35
 V25 DRIVER RUNS     6 / three quantum expiries / one restart
@@ -359,6 +370,8 @@ BOOT FRAME POOL     77 sealed
 | PCI physical command | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
 | Driver address-space reclaim | `AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK` |
 | PCI terminal state | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
+| Durable writer commit | `AGENT_KERNEL_QEMU_DURABLE_COMMIT_OK` |
+| Abrupt-power recovery | `AGENT_KERNEL_QEMU_DURABLE_POWER_LOSS_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -468,13 +481,24 @@ hardware            Configure IER 0x02 / real INTx / one Write(0x50)
 reclamation         independent SMP TLB shootdown after both Invocations
 ```
 
+```text
+V26 QEMU ATA POWER-LOSS
+writer              ring-3 State Signer / Agent 11 / Events 1..64
+signing             TPM CRB / PCR policy / low-S P-256
+media               raw ATA slave / slot A committed / generation 1
+power cut           host SIGKILL / no guest shutdown path
+inspection          canonical manifest / payload digest / signature / chain
+recovery            no TPM device / first Event 65 / terminal Event 516
+immutability        durable image SHA-256 equal before and after recovery
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
 | Native image | Format | Calls | Bytes | SHA-256 |
 | :--- | :--- | ---: | ---: | :--- |
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
-| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
+| Admission Supervisor | Capsule v1 | 44 | 4,122 | `54eaa321a65c...923e10970` |
 | PCI Serial Driver | Capsule v1 / kind 6 | 5 | 437 | `95787586c02f...eec2e402` |
 
 `AUDIT` 9 native images · 2 signed Package v3 images · 5 exact assembly sources
@@ -496,6 +520,13 @@ $ scripts/run-qemu.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
+$ ruby scripts/test-inspect-qemu-durable-disk.rb
+$ ruby scripts/test-qemu-durable-profile.rb
+```
+
+```console
+$ ruby scripts/run-qemu-durable-power-loss.rb
+$ ruby scripts/run-qemu-durable-power-loss.rb --release
 ```
 
 ```console
@@ -529,7 +560,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // TREE`
 
@@ -545,7 +576,8 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect-tpm-state-signer.rb}
+scripts/{run-qemu.sh,run-qemu-durable-power-loss.rb,inspect-qemu-durable-disk.rb}
+tools/qemu-tpm-provision/
 ```
 
 ## `09 // ROADMAP`
@@ -572,7 +604,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] exact PCI serial selection + capability-bound physical command
 [done] native ring-3 Driver Agent Calls + preempted PCI serial execution
 [done] PCI INTx routing + Driver fault containment and restart
-[next] dedicated QEMU ATA image + emulator power-loss proof
+[done] dedicated QEMU ATA image + SIGKILL power-loss recovery proof
 [next] DMA/IOMMU domains + MSI/MSI-X
 [next] network + graphics + USB controllers + formal verification
 ```
@@ -586,7 +618,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | PCI discovery | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI authority | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
-| Active milestone | [Native PCI INTx Driver V25](docs/superpowers/specs/2026-07-27-native-pci-intx-driver-v25-design.md) |
+| Active milestone | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
 
 ## `10 // PROJECT`
 

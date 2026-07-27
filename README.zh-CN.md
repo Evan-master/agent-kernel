@@ -23,14 +23,14 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://devices/v25-pci-intx-recovery
+kernel://durability/v26-qemu-ata-power-loss
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V25 / QEMU debug + release   PCI INTx + restart      │
+│ VERIFIED   V26 / QEMU debug + release   ATA cut + cold boot     │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -176,7 +176,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V25 不变量 |
+| 契约 | V13 至 V26 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -299,7 +299,16 @@ commands          Configure(ARM_THRE_INTERRUPT) / Write(0x50)
 proof             两次 Invocation / 真实 INTx / 两次地址空间回收
 ```
 
-`TPM CRB PATH` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成 · `PCI INTX + RESTART` 完成
+```text
+V26 QEMU ATA POWER-LOSS
+writer            Signed Package v3 / 复用 Agent 11 / Calls 54,56,55
+TPM               swtpm CRB / PCR 23 / TPM2_CC_Sign / P-256
+storage           ATA Primary Slave / A/B 槽 / Generation 1 / Event 1..64
+cut               宿主在持久提交标记后执行 SIGKILL
+recovery          无 TPM / Event 65..516 / 磁盘不变 / PCI 字节 0x50
+```
+
+`TPM CRB PATH` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成 · `QEMU ATA POWER-LOSS` 完成
 
 ## `05 // AGENT CALL`
 
@@ -329,9 +338,11 @@ proof             两次 Invocation / 真实 INTx / 两次地址空间回收
 ## `06 // 启动证据`
 
 ```text
-PROFILE            V25 native-pci-intx-driver
-QEMU               debug + release
-EVENTS             1..451 / 精确历史
+PROFILE            V26 qemu-ata-power-loss
+QEMU               debug + release / Writer SIGKILL + 冷启动恢复
+BASELINE EVENTS     1..451 / 精确 V25 历史
+DURABLE HEAD        Generation 1 / Event 1..64
+RECOVERY EVENTS     65..516 / 有序连续历史
 AGENT ENTRIES       12 个活跃入口 / 回收槽
 TASK DISPATCHES     35
 V25 DRIVER RUNS     6 / 三次 Quantum Expiry / 一次重启
@@ -359,6 +370,8 @@ BOOT FRAME POOL     77 帧封存
 | PCI 物理命令 | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
 | Driver 地址空间回收 | `AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK` |
 | PCI 终态 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
+| 持久 Writer 提交 | `AGENT_KERNEL_QEMU_DURABLE_COMMIT_OK` |
+| 强制断电恢复 | `AGENT_KERNEL_QEMU_DURABLE_POWER_LOSS_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -468,13 +481,24 @@ hardware            Configure IER 0x02 / 真实 INTx / 单次 Write(0x50)
 reclamation         两次 Invocation 分别执行 SMP TLB Shootdown
 ```
 
+```text
+V26 QEMU ATA POWER-LOSS
+writer              Ring-3 State Signer / Agent 11 / Event 1..64
+signing             TPM CRB / PCR Policy / 低 S P-256
+media               Raw ATA Slave / Slot A Committed / Generation 1
+power cut           宿主 SIGKILL / 不经过 Guest Shutdown
+inspection          Canonical Manifest / Payload Digest / Signature / Chain
+recovery            无 TPM 设备 / 首条 Event 65 / 终态 Event 516
+immutability        恢复前后持久镜像 SHA-256 相同
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
 | 原生镜像 | 格式 | Calls | 字节 | SHA-256 |
 | :--- | :--- | ---: | ---: | :--- |
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
-| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
+| Admission Supervisor | Capsule v1 | 44 | 4,122 | `54eaa321a65c...923e10970` |
 | PCI Serial Driver | Capsule v1 / kind 6 | 5 | 437 | `95787586c02f...eec2e402` |
 
 `AUDIT` 9 个原生镜像 · 2 个签名 Package v3 镜像 · 5 个精确 Assembly 源
@@ -496,6 +520,13 @@ $ scripts/run-qemu.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
+$ ruby scripts/test-inspect-qemu-durable-disk.rb
+$ ruby scripts/test-qemu-durable-profile.rb
+```
+
+```console
+$ ruby scripts/run-qemu-durable-power-loss.rb
+$ ruby scripts/run-qemu-durable-power-loss.rb --release
 ```
 
 ```console
@@ -529,7 +560,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // 源码树`
 
@@ -545,7 +576,8 @@ crates/
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect-tpm-state-signer.rb}
+scripts/{run-qemu.sh,run-qemu-durable-power-loss.rb,inspect-qemu-durable-disk.rb}
+tools/qemu-tpm-provision/
 ```
 
 ## `09 // 路线图`
@@ -572,7 +604,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] 精确 PCI Serial 选择 + Capability 绑定的物理命令
 [done] 原生 Ring-3 Driver Agent Call + 可抢占 PCI Serial 执行
 [done] PCI INTx 路由 + Driver Fault 隔离与重启
-[next] QEMU 独立 ATA 镜像 + 模拟器断电验证
+[done] QEMU 独立 ATA 镜像 + SIGKILL 断电恢复证明
 [next] DMA/IOMMU Domain + MSI/MSI-X
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
@@ -586,7 +618,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | PCI 发现 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI 权限 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI 设备路径 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
-| 当前里程碑 | [Native PCI INTx Driver V25](docs/superpowers/specs/2026-07-27-native-pci-intx-driver-v25-design.md) |
+| 当前里程碑 | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
 
 ## `10 // 项目`
 

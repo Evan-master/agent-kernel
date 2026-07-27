@@ -371,6 +371,7 @@ public_key = public_der.byteslice(ED25519_SPKI_PREFIX.bytesize, 32)
 image_signer_id = Digest::SHA256.digest(SIGNER_DOMAIN + public_key)
 
 package = nil
+return_offsets = nil
 Dir.mktmpdir("agent-kernel-state-signer") do |directory|
   entry_object = File.join(directory, "state_signer_entry.o")
   built_in_provider_object = File.join(directory, "tpm_call_provider.o")
@@ -422,6 +423,26 @@ Dir.mktmpdir("agent-kernel-state-signer") do |directory|
   unless symbol_address(nm, linked_elf, "state_signer_entry") == ENTRY_ADDRESS
     fail_with("State Signer entry is not at the fixed Agent code address")
   end
+  return_symbols = %w[
+    state_signer_describe_return
+    state_signer_prepare_return
+  ]
+  return_symbols << "state_signer_provider_sign_return" if options[:kernel_tpm_provider]
+  return_symbols.concat(
+    %w[
+      state_signer_commit_return
+      state_signer_submit_return
+      state_signer_complete_return
+    ]
+  )
+  return_offsets = return_symbols.map do |symbol|
+    address = symbol_address(nm, linked_elf, symbol)
+    fail_with("#{symbol} is outside Agent code") unless
+      address > ENTRY_ADDRESS && address - ENTRY_ADDRESS <= MAX_SEGMENT_BYTES
+    address - ENTRY_ADDRESS
+  end
+  fail_with("State Signer return offsets are not unique") unless
+    return_offsets.uniq.length == return_offsets.length
 
   run_command(objcopy, "--only-section=.text", "-O", "binary", linked_elf, code_path)
   run_command(objcopy, "--only-section=.rodata", "-O", "binary", linked_elf, rodata_path)
@@ -498,4 +519,5 @@ puts "package=#{output_path}"
 puts "bytes=#{package.bytesize}"
 puts "public_key=#{public_key.unpack1("H*")}"
 puts "image_signer_id=#{image_signer_id.unpack1("H*")}"
+puts "return_offsets=#{return_offsets.join(",")}"
 puts "sha256=#{Digest::SHA256.hexdigest(package)}"

@@ -831,10 +831,17 @@ admission_supervisor_third_capability_compaction_return:
     test rbp, rbp
     jne .halt
 
+    movabs rax, 0x0000400000020000
+    mov r11, qword ptr [rax + 8]
+    test r11, r11
+    je .halt
+    add r11, 63
+    jc .halt
+    push r11
+    movabs rax, 0x4c4c4143544e4741
     mov ecx, 40
     xor edx, edx
     mov r10d, 25
-    mov r11d, 64
     xor r12d, r12d
     xor r13d, r13d
     xor r14d, r14d
@@ -847,24 +854,22 @@ admission_supervisor_event_archive_return:
     jne .halt
     cmp rdx, 40
     jne .halt
-    cmp r10, 1
+    cmp r11, qword ptr [rsp]
     jne .halt
-    cmp r11, 64
+    mov rax, r11
+    sub rax, 63
+    jc .halt
+    cmp r10, rax
     jne .halt
+    add rsp, 8
     cmp r12, 64
     jne .halt
-    movabs r12, 0x25a01c824691be1f
-    cmp r13, r12
-    jne .halt
-    movabs r12, 0xfabeeae988e4fcf7
-    cmp r14, r12
-    jne .halt
-    movabs r12, 0x351523be4758b786
-    cmp r15, r12
-    jne .halt
-    movabs r12, 0x0421a8621c4a4e4a
-    cmp rbp, r12
-    jne .halt
+    mov rax, r13
+    or rax, r14
+    or rax, r15
+    or rax, rbp
+    je .halt
+    movabs rax, 0x4c4c4143544e4741
 
     mov ecx, 42
     xor edx, edx

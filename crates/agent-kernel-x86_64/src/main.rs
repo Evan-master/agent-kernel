@@ -41,7 +41,10 @@ mod timer_task_flow;
 mod uart_interrupt;
 mod verifier_task_flow;
 
-use boot_config::{durable_storage_profile, tpm_signer_profile, BOOTLOADER_CONFIG};
+use boot_config::{
+    durable_proof_role, durable_storage_profile, state_signer_profile, tpm_signer_profile,
+    BOOTLOADER_CONFIG,
+};
 use privilege_runtime::PrivilegeBoundary;
 use smp_boot::SmpBootstrap;
 
@@ -50,13 +53,16 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 pub(crate) const X86_TASK_CAPACITY: usize = 12;
 pub(crate) const X86_INTENT_CAPACITY: usize = 12;
 pub(crate) const X86_AGENT_RESOURCE_CAPACITY: usize = 10;
+pub(crate) const X86_DURABLE_RESOURCE_RESERVE: usize = 1;
 pub(crate) const X86_PCI_RESOURCE_RESERVE: usize = 7;
 pub(crate) const X86_RESOURCE_CAPACITY: usize =
-    X86_AGENT_RESOURCE_CAPACITY + X86_PCI_RESOURCE_RESERVE;
+    X86_AGENT_RESOURCE_CAPACITY + X86_DURABLE_RESOURCE_RESERVE + X86_PCI_RESOURCE_RESERVE;
 pub(crate) const X86_AGENT_CAPABILITY_CAPACITY: usize = 30;
+pub(crate) const X86_DURABLE_CAPABILITY_RESERVE: usize = 4;
+pub(crate) const X86_DURABLE_BIND_EVENT_RESERVE: usize = 1;
 pub(crate) const X86_PCI_CAPABILITY_RESERVE: usize = 7;
 pub(crate) const X86_CAPABILITY_CAPACITY: usize =
-    X86_AGENT_CAPABILITY_CAPACITY + X86_PCI_CAPABILITY_RESERVE;
+    X86_AGENT_CAPABILITY_CAPACITY + X86_DURABLE_CAPABILITY_RESERVE + X86_PCI_CAPABILITY_RESERVE;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
 pub(crate) const X86_DEVICE_EVENT_CAPACITY: usize = 3;
 pub(crate) const X86_DRIVER_COMMAND_CAPACITY: usize = 3;
@@ -131,12 +137,23 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         fatal_boot("AGENT_KERNEL_ACPI_TOPOLOGY_ERROR");
     };
     serial_write_line("AGENT_KERNEL_ACPI_TOPOLOGY_OK");
+    let Some(durable_role) = durable_proof_role() else {
+        fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
+    };
+    let Some(durable_profile) = durable_storage_profile(durable_role) else {
+        fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
+    };
+    let Some(tpm_profile) = tpm_signer_profile(durable_role) else {
+        fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
+    };
     agent_boot_flow::run(
         boot_info,
         privilege_boundary,
         smp_bootstrap,
-        durable_storage_profile(),
-        tpm_signer_profile(),
+        durable_profile,
+        tpm_profile,
+        durable_role,
+        state_signer_profile(durable_role),
     )
 }
 

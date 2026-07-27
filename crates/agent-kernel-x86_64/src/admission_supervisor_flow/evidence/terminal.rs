@@ -24,6 +24,13 @@ impl PreparedAdmissionSupervisorFlow {
         let Some(completed) = report.completed(ADMISSION_SUPERVISOR) else {
             return false;
         };
+        let Some(sequence_offset) = report
+            .event_archive()
+            .proposal()
+            .and_then(|proposal| proposal.first_sequence().checked_sub(1))
+        else {
+            return false;
+        };
         let kernel = booted.kernel();
         let task = kernel
             .tasks()
@@ -64,12 +71,12 @@ impl PreparedAdmissionSupervisorFlow {
             })
             && self.first_batch_compacted(booted, targets)
             && self.initial_task_prefix_compacted(booted)
-            && self.fault_store_compacted(booted)
+            && self.fault_store_compacted(booted, sequence_offset)
             && self.initial_intent_prefix_compacted(booted)
             && self.first_batch_entries_retired(booted, targets)
-            && self.capability_store_compacted(booted)
-            && self.resource_store_preserves_workspace(booted)
-            && self.memory_cell_record_retired_and_reused(booted, report)
+            && self.capability_store_compacted(booted, sequence_offset)
+            && self.resource_store_preserves_workspace(booted, sequence_offset)
+            && self.memory_cell_record_retired_and_reused(booted, report, sequence_offset)
             && retained_boot_messages(booted)
             && kernel.waiters().is_empty()
             && self.waiter_store_compacted(booted)

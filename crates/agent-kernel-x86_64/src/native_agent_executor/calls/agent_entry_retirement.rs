@@ -23,6 +23,7 @@ pub(super) fn retire(
 
     let context = pending.context();
     let event_start = booted.kernel().events().len();
+    let next_sequence = booted.kernel().next_event_sequence();
     let task_len = booted.kernel().tasks().len();
     let admission_len = booted.kernel().runtime_admissions().len();
     let capability_count = booted.kernel().capability_count();
@@ -47,7 +48,7 @@ pub(super) fn retire(
         || kernel.capability(target_record.capability).is_err()
         || kernel.tasks().len() != task_len
         || kernel.runtime_admissions().len() != admission_len
-        || event.sequence != (event_start + 1) as u64
+        || event.sequence != next_sequence
         || event.kind != EventKind::AgentEntryRetired
         || event.agent != context.agent()
         || event.target_agent != Some(target)

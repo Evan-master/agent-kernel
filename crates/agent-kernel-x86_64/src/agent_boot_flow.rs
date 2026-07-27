@@ -8,6 +8,7 @@ mod address_space_reuse;
 mod pci_claim;
 mod pci_inventory;
 mod runtime_loop;
+mod state_signer_flow;
 
 use agent_kernel_boot::BootConfig;
 use agent_kernel_core::{
@@ -35,6 +36,7 @@ use crate::{
     boot_agent_trust::{
         RESOURCE_MANAGER_PUBLIC_KEY, RESOURCE_MANAGER_SCOPE, RESOURCE_MANAGER_SIGNER_ID,
     },
+    boot_config::{DurableProofRole, StateSignerBootProfile},
     event_trace, exception_runtime, exit_qemu, fatal_boot,
     fault_handler_flow::FaultHandlerFlow,
     fault_task_flow::FaultTaskFlow,
@@ -61,6 +63,8 @@ pub(super) fn run(
     mut smp_bootstrap: SmpBootstrap,
     durable_profile: NativeDurableStorageProfile,
     tpm_profile: NativeTpmSignerProfile,
+    durable_role: DurableProofRole,
+    state_signer_profile: Option<StateSignerBootProfile>,
 ) -> ! {
     if let Err(error) = smp_bootstrap.prepare_apic_mmio(boot_info) {
         serial_write_line(error.diagnostic_marker());
@@ -144,18 +148,12 @@ pub(super) fn run(
         fatal_boot("AGENT_KERNEL_BOOT_ERROR");
     };
     let report = *booted.report();
-    let _durable_resource = durable_session.as_ref().map(|session| {
-        bind_native_durable_resource(&mut booted, session.config())
-            .unwrap_or_else(|| fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_ERROR"))
-    });
     match durable_boot_state {
         Some(NativeAtaDurableBootState::Genesis) => {
             serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_GENESIS_OK");
-            serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_OK");
         }
         Some(NativeAtaDurableBootState::Recovered(_)) => {
             serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RECOVERY_OK");
-            serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_OK");
         }
         None => {}
     }
@@ -504,6 +502,52 @@ pub(super) fn run(
     ) else {
         fatal_boot("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_ERROR");
     };
+    let durable_binding = durable_session.as_ref().map(|session| {
+        bind_native_durable_resource(&mut booted, session.config())
+            .unwrap_or_else(|| fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_ERROR"))
+    });
+    if durable_role.is_enabled() {
+        if durable_binding.is_none() {
+            fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_ERROR");
+        }
+        serial_write_line("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_OK");
+    } else if durable_binding.is_some() {
+        fatal_boot("AGENT_KERNEL_NATIVE_DURABLE_RESOURCE_ERROR");
+    }
+    if durable_role.is_writer() {
+        let Some(profile) = state_signer_profile else {
+            fatal_boot("AGENT_KERNEL_NATIVE_STATE_SIGNER_PROFILE_ERROR");
+        };
+        let Some((_, bootstrap_storage_authority)) = durable_binding else {
+            fatal_boot("AGENT_KERNEL_NATIVE_STATE_SIGNER_PROFILE_ERROR");
+        };
+        let Some(session) = durable_session.as_mut() else {
+            fatal_boot("AGENT_KERNEL_NATIVE_STATE_SIGNER_PROFILE_ERROR");
+        };
+        let Some(committed_archive) = state_signer_flow::run(
+            &mut booted,
+            &mut native_runtime,
+            &mut runtime_memory_pool,
+            &mut address_space_frame_pool,
+            &mut smp_bootstrap,
+            &cpu_runtime,
+            session,
+            &mut state_signer_service,
+            bootstrap_storage_authority,
+            profile,
+            &event_archive,
+        ) else {
+            fatal_boot("AGENT_KERNEL_NATIVE_STATE_SIGNER_ERROR");
+        };
+        if !committed_archive.is_released() {
+            fatal_boot("AGENT_KERNEL_NATIVE_STATE_SIGNER_HISTORY_ERROR");
+        }
+        serial_write_line("AGENT_KERNEL_NATIVE_STATE_SIGNER_OK");
+        serial_write_line("AGENT_KERNEL_QEMU_DURABLE_COMMIT_OK");
+        halt_forever();
+    } else if state_signer_profile.is_some() || state_signer_service.is_some() {
+        fatal_boot("AGENT_KERNEL_NATIVE_STATE_SIGNER_PROFILE_ERROR");
+    }
     serial_write_line("AGENT_KERNEL_AGENT_CALL_ABI_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_RETURN_OK");
     serial_write_line("AGENT_KERNEL_AGENT_CALL_AUTHORITY_OK");
@@ -513,6 +557,7 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK");
     complete_driver_flow(&mut booted, &mut smp_bootstrap, driver_setup);
     if !event_archive.proves_terminal_history(&booted) {
+        event_archive.write_terminal_history_diagnostics(&booted);
         fatal_boot("AGENT_KERNEL_NATIVE_EVENT_HISTORY_ERROR");
     }
     if event_archive.is_released() {

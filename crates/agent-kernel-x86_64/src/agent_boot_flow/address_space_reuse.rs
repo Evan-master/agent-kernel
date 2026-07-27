@@ -23,6 +23,7 @@ use agent_kernel_core::{
     AgentImageId, AgentImageKind, AgentImageStatus, EventKind, Operation, RunQueueEntry,
 };
 use agent_kernel_x86_64::agent_image::{AgentImageFormat, AgentImageTrust};
+use agent_kernel_x86_64::boot_event_window::BootEventWindow;
 use agent_kernel_x86_64::tpm2::KernelStateSigner;
 
 pub(super) fn run(
@@ -50,6 +51,7 @@ pub(super) fn run(
     {
         return None;
     }
+    let boot_event_window = BootEventWindow::new(booted.kernel().events().first()?.sequence, 64)?;
     serial_write_line("AGENT_KERNEL_RUNTIME_ADMISSION_CAPACITY_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_FAULT_STORE_FULL_OK");
 
@@ -82,13 +84,14 @@ pub(super) fn run(
         return None;
     }
 
-    let supervisor_admission = NativeAddressSpaceService::admit(
+    let supervisor_admission = NativeAddressSpaceService::admit_for_boot_event_sequence(
         address_space_pool,
         runtime,
         cpu_runtime,
         memory_pool,
         supervisor.verified_image(booted, supervisor_contract.bytes())?,
         supervisor_context,
+        boot_event_window.first_sequence(),
     )?
     .ok()?;
     if supervisor_admission.agent() != ADMISSION_SUPERVISOR
@@ -300,7 +303,11 @@ pub(super) fn run(
         supervisor_admission,
         second_admissions,
     )?;
-    prove_agent_image_slot_reuse(booted, worker_contract)?;
+    if state_signer.is_some() {
+        serial_write_line("AGENT_KERNEL_NATIVE_STATE_SIGNER_IMAGE_SLOT_RESERVED_OK");
+    } else {
+        prove_agent_image_slot_reuse(booted, worker_contract)?;
+    }
     Some(report.into_event_archive())
 }
 

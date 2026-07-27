@@ -5,8 +5,8 @@ use agent_kernel_core::{
 };
 use agent_kernel_hal::TpmCommandTransport;
 use agent_kernel_x86_64::tpm2::{
-    DigestSignCommand, ProvisionedTpmSigner, ProvisionedTpmSignerConfig, TpmPersistentHandle,
-    TpmPublicError, TpmSignerError, TpmWireError,
+    DigestSignCommand, KernelStateSigner, KernelStateSignerError, ProvisionedTpmSigner,
+    ProvisionedTpmSignerConfig, TpmPersistentHandle, TpmPublicError, TpmSignerError, TpmWireError,
 };
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -164,6 +164,34 @@ fn a_runtime_tpm_failure_disables_the_signer_for_the_boot() {
     assert_eq!(
         signer.sign_manifest(&manifest),
         Err(TpmSignerError::Disabled)
+    );
+}
+
+#[test]
+fn kernel_state_signer_preserves_the_tpm_response_code() {
+    let key = SigningKey::from_slice(&[0x3b; 32]).unwrap();
+    let fixture = public_fixture(&key, 0x0004_0072);
+    let config = ProvisionedTpmSignerConfig::new(
+        HANDLE,
+        DigestSignCommand::SignDigestV185,
+        POLICY_GENERATION,
+        fixture.name,
+        fixture.compressed,
+    )
+    .unwrap();
+    let error_response = vec![0x80, 0x01, 0, 0, 0, 10, 0, 0, 1, 0x01];
+    let mut signer =
+        ProvisionedTpmSigner::bind(ScriptedTpm::new([fixture.response, error_response]), config)
+            .unwrap();
+    let manifest = [0x5e; DURABLE_ARCHIVE_MANIFEST_BYTES];
+
+    assert_eq!(
+        KernelStateSigner::sign_manifest(&mut signer, &manifest),
+        Err(KernelStateSignerError::TpmResponseCode(0x101))
+    );
+    assert_eq!(
+        KernelStateSigner::sign_manifest(&mut signer, &manifest),
+        Err(KernelStateSignerError::Unavailable)
     );
 }
 

@@ -60,6 +60,8 @@ state_signer_provider_sign:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global state_signer_provider_sign_return
+state_signer_provider_sign_return:
 
     test rcx, rcx
     jne .call_rejected

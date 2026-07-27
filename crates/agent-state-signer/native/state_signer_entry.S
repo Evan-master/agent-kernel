@@ -65,6 +65,8 @@ state_signer_entry:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global state_signer_describe_return
+state_signer_describe_return:
     test rcx, rcx
     jne .fault
     cmp rdx, AGENT_CALL_DESCRIBE
@@ -82,6 +84,8 @@ state_signer_entry:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global state_signer_prepare_return
+state_signer_prepare_return:
     test rcx, rcx
     jne .fault
     cmp rdx, AGENT_CALL_PREPARE_DURABLE
@@ -150,7 +154,7 @@ state_signer_entry:
     cmp word ptr [r12 + MANIFEST_OFFSET + MANIFEST_ALGORITHM_OFFSET + 2], 0
     jne .fault
 
-    mov rax, qword ptr [rsp + 24]
+    mov rax, qword ptr [rsp + 8]
     cmp qword ptr [r12 + MANIFEST_ACTOR_OFFSET], rax
     jne .fault
     mov rax, qword ptr [rip + state_signer_config_archive_authority]
@@ -249,6 +253,8 @@ state_signer_entry:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global state_signer_commit_return
+state_signer_commit_return:
     test rcx, rcx
     jne .fault
     cmp rdx, AGENT_CALL_COMMIT_DURABLE
@@ -272,6 +278,8 @@ state_signer_entry:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global state_signer_submit_return
+state_signer_submit_return:
     test rcx, rcx
     jne .fault
     cmp rdx, AGENT_CALL_SUBMIT_RESULT
@@ -289,6 +297,8 @@ state_signer_entry:
     xor r15d, r15d
     xor ebp, ebp
     int 0x90
+.global state_signer_complete_return
+state_signer_complete_return:
 
 .fault:
     ud2

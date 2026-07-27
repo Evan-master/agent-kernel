@@ -54,7 +54,12 @@ impl<T: TpmCommandTransport> KernelStateSigner for ProvisionedTpmSigner<T> {
     ) -> Result<DurableArchiveSignature, KernelStateSignerError> {
         ProvisionedTpmSigner::sign_manifest(self, manifest)
             .map(DurableArchiveSignature::new)
-            .map_err(|_| KernelStateSignerError::Unavailable)
+            .map_err(|error| match error {
+                TpmSignerError::Wire(TpmWireError::TpmResponseCode(code)) => {
+                    KernelStateSignerError::TpmResponseCode(code)
+                }
+                _ => KernelStateSignerError::Unavailable,
+            })
     }
 }
 
