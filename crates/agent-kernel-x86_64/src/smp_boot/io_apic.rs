@@ -7,12 +7,12 @@
 use agent_kernel_x86_64::{
     acpi_topology::{AcpiMachineTopology, MAX_IO_APICS},
     apic::{
-        resolve_legacy_irq_route, ApicVector, IoApicMmio, IoApicPolarity, IoApicRedirectionEntry,
-        IoApicRedirectionIndex, IoApicRoute, IoApicRouteError, IoApicTrigger, IoApicVersion,
-        VolatileMmio, APIC_SPURIOUS_VECTOR,
+        resolve_legacy_irq_route, resolve_pci_intx_route, ApicVector, IoApicMmio, IoApicPolarity,
+        IoApicRedirectionEntry, IoApicRedirectionIndex, IoApicRoute, IoApicRouteError,
+        IoApicTrigger, IoApicVersion, VolatileMmio, APIC_SPURIOUS_VECTOR,
     },
     cpu::{ApicId, MAX_CPU_COUNT},
-    interrupt::{UART_IRQ_LINE, UART_IRQ_VECTOR},
+    interrupt::{PCI_INTX_IRQ_VECTOR, UART_IRQ_LINE, UART_IRQ_VECTOR},
 };
 
 use crate::agent_memory::PHYSICAL_MEMORY_OFFSET;
@@ -25,13 +25,21 @@ pub(crate) enum IoApicRoutingError {
     InvalidRedirectionIndex { controller: u8, index: u16 },
     Route(IoApicRouteError),
     InvalidUartVector,
+    InvalidPciIntxVector,
+    PciIntxRouteAlreadyPrepared,
     UnexpectedUartRouteState,
+    UnexpectedPciIntxRouteState,
 }
 
 pub(super) struct IoApicRouting {
+    versions: [IoApicVersion; MAX_IO_APICS],
+    controller_count: usize,
     uart_route: IoApicRoute,
     uart_entry: IoApicRedirectionEntry,
     uart_masked: bool,
+    pci_intx_route: Option<IoApicRoute>,
+    pci_intx_entry: Option<IoApicRedirectionEntry>,
+    pci_intx_masked: bool,
 }
 
 impl IoApicRouting {
@@ -68,9 +76,14 @@ impl IoApicRouting {
             true,
         );
         let mut routing = Self {
+            versions,
+            controller_count: controllers.len(),
             uart_route,
             uart_entry,
             uart_masked: true,
+            pci_intx_route: None,
+            pci_intx_entry: None,
+            pci_intx_masked: true,
         };
         routing.write_uart(true)?;
         Ok(routing)
@@ -94,18 +107,84 @@ impl IoApicRouting {
         self.uart_masked
     }
 
-    fn write_uart(&mut self, masked: bool) -> Result<(), IoApicRoutingError> {
-        let descriptor = self.uart_route.controller();
-        let mut controller =
-            IoApicMmio::new(descriptor.address(), PHYSICAL_MEMORY_OFFSET, VolatileMmio)
-                .ok_or(IoApicRoutingError::InvalidMapping(descriptor.id()))?;
-        controller.write_redirection(
-            self.uart_route.redirection_index(),
-            self.uart_entry.with_masked(masked),
+    pub(super) fn prepare_pci_intx(
+        &mut self,
+        topology: &AcpiMachineTopology<MAX_CPU_COUNT>,
+        interrupt_line: u8,
+    ) -> Result<(), IoApicRoutingError> {
+        if self.pci_intx_route.is_some() {
+            return Err(IoApicRoutingError::PciIntxRouteAlreadyPrepared);
+        }
+        let route = resolve_pci_intx_route(
+            topology,
+            &self.versions[..self.controller_count],
+            interrupt_line,
+        )
+        .map_err(IoApicRoutingError::Route)?;
+        let vector =
+            ApicVector::new(PCI_INTX_IRQ_VECTOR).ok_or(IoApicRoutingError::InvalidPciIntxVector)?;
+        let entry = IoApicRedirectionEntry::fixed(
+            vector,
+            self.uart_entry.destination(),
+            route.polarity(),
+            route.trigger(),
+            true,
         );
+        write_route(route, entry, true)?;
+        self.pci_intx_route = Some(route);
+        self.pci_intx_entry = Some(entry);
+        self.pci_intx_masked = true;
+        Ok(())
+    }
+
+    pub(super) fn arm_pci_intx(&mut self) -> Result<(), IoApicRoutingError> {
+        if self.pci_intx_route.is_none() || !self.pci_intx_masked {
+            return Err(IoApicRoutingError::UnexpectedPciIntxRouteState);
+        }
+        self.write_pci_intx(false)
+    }
+
+    pub(super) fn mask_pci_intx(&mut self) -> Result<(), IoApicRoutingError> {
+        if self.pci_intx_route.is_none() || self.pci_intx_masked {
+            return Err(IoApicRoutingError::UnexpectedPciIntxRouteState);
+        }
+        self.write_pci_intx(true)
+    }
+
+    pub(super) const fn pci_intx_masked(&self) -> bool {
+        self.pci_intx_route.is_some() && self.pci_intx_masked
+    }
+
+    fn write_uart(&mut self, masked: bool) -> Result<(), IoApicRoutingError> {
+        write_route(self.uart_route, self.uart_entry, masked)?;
         self.uart_masked = masked;
         Ok(())
     }
+
+    fn write_pci_intx(&mut self, masked: bool) -> Result<(), IoApicRoutingError> {
+        let route = self
+            .pci_intx_route
+            .ok_or(IoApicRoutingError::UnexpectedPciIntxRouteState)?;
+        let entry = self
+            .pci_intx_entry
+            .ok_or(IoApicRoutingError::UnexpectedPciIntxRouteState)?;
+        write_route(route, entry, masked)?;
+        self.pci_intx_masked = masked;
+        Ok(())
+    }
+}
+
+fn write_route(
+    route: IoApicRoute,
+    entry: IoApicRedirectionEntry,
+    masked: bool,
+) -> Result<(), IoApicRoutingError> {
+    let descriptor = route.controller();
+    let mut controller =
+        IoApicMmio::new(descriptor.address(), PHYSICAL_MEMORY_OFFSET, VolatileMmio)
+            .ok_or(IoApicRoutingError::InvalidMapping(descriptor.id()))?;
+    controller.write_redirection(route.redirection_index(), entry.with_masked(masked));
+    Ok(())
 }
 
 fn mask_all(

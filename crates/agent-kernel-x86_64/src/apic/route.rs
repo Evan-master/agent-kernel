@@ -51,6 +51,7 @@ impl IoApicRoute {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IoApicRouteError {
     UnsupportedLegacyIrq(u8),
+    InvalidPciInterruptLine(u8),
     VersionCountMismatch { controllers: usize, versions: usize },
     InvalidControllerVersion(u8),
     GsiRangeOverflow(u8),
@@ -67,14 +68,6 @@ pub fn resolve_legacy_irq_route<const CPU_CAPACITY: usize>(
     if source_irq >= ISA_IRQ_COUNT {
         return Err(IoApicRouteError::UnsupportedLegacyIrq(source_irq));
     }
-    let controllers = topology.io_apics();
-    if controllers.len() != versions.len() {
-        return Err(IoApicRouteError::VersionCountMismatch {
-            controllers: controllers.len(),
-            versions: versions.len(),
-        });
-    }
-
     let source_override = topology
         .interrupt_overrides()
         .iter()
@@ -91,6 +84,42 @@ pub fn resolve_legacy_irq_route<const CPU_CAPACITY: usize>(
         Some(InterruptTrigger::Level) => IoApicTrigger::Level,
     };
 
+    resolve_gsi_route(topology, versions, source_irq, gsi, polarity, trigger)
+}
+
+pub fn resolve_pci_intx_route<const CPU_CAPACITY: usize>(
+    topology: &AcpiMachineTopology<CPU_CAPACITY>,
+    versions: &[IoApicVersion],
+    interrupt_line: u8,
+) -> Result<IoApicRoute, IoApicRouteError> {
+    if interrupt_line == u8::MAX {
+        return Err(IoApicRouteError::InvalidPciInterruptLine(interrupt_line));
+    }
+    resolve_gsi_route(
+        topology,
+        versions,
+        interrupt_line,
+        u32::from(interrupt_line),
+        IoApicPolarity::ActiveLow,
+        IoApicTrigger::Level,
+    )
+}
+
+fn resolve_gsi_route<const CPU_CAPACITY: usize>(
+    topology: &AcpiMachineTopology<CPU_CAPACITY>,
+    versions: &[IoApicVersion],
+    source_irq: u8,
+    gsi: u32,
+    polarity: IoApicPolarity,
+    trigger: IoApicTrigger,
+) -> Result<IoApicRoute, IoApicRouteError> {
+    let controllers = topology.io_apics();
+    if controllers.len() != versions.len() {
+        return Err(IoApicRouteError::VersionCountMismatch {
+            controllers: controllers.len(),
+            versions: versions.len(),
+        });
+    }
     let mut resolved = None;
     for (controller, version) in controllers.iter().copied().zip(versions.iter().copied()) {
         if version.version() == 0 {

@@ -51,11 +51,8 @@ pub(super) fn continue_run<B: DriverBackend>(
                         cpu
                     }
                     AgentCallRequest::CompleteDriverInvocation { .. } => {
-                        return Some(DriverRunProgress::Completed(complete_invocation(
-                            booted,
-                            pending,
-                            *command.as_ref()?,
-                        )?));
+                        let completed = complete_invocation(booted, pending, *command.as_ref()?)?;
+                        return Some(DriverRunProgress::Completed(completed));
                     }
                     _ => return None,
                 };
@@ -64,7 +61,9 @@ pub(super) fn continue_run<B: DriverBackend>(
             AgentRunOutcome::Preempted(cpu) => {
                 return Some(DriverRunProgress::Preempted(cpu));
             }
-            AgentRunOutcome::Fault(_) => return None,
+            AgentRunOutcome::Fault(cpu) => {
+                return Some(DriverRunProgress::Faulted(cpu));
+            }
         }
     }
 }

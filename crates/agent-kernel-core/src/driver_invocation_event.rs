@@ -5,8 +5,8 @@
 //! records their already-authorized transition data without allocation or I/O.
 
 use crate::{
-    AgentId, CapabilityId, DriverInvocationId, Event, EventKind, KernelCore, KernelError,
-    Operation, OperationSet, VerificationRequirement,
+    AgentId, CapabilityId, DriverInvocationId, Event, EventKind, FaultKind, KernelCore,
+    KernelError, Operation, OperationSet, VerificationRequirement,
 };
 
 impl<
@@ -71,10 +71,67 @@ impl<
         ticks: Option<u64>,
         quantum: Option<u64>,
     ) -> Result<Event, KernelError> {
+        let event = self.driver_invocation_event(
+            kind,
+            driver,
+            capability,
+            None,
+            invocation,
+            Some(operation),
+            ticks,
+            quantum,
+            None,
+            None,
+        )?;
+        self.record(event)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn record_driver_invocation_fault_event(
+        &mut self,
+        kind: EventKind,
+        actor: AgentId,
+        capability: Option<CapabilityId>,
+        target_agent: Option<AgentId>,
+        invocation: DriverInvocationId,
+        operation: Option<Operation>,
+        fault_kind: FaultKind,
+        fault_detail: u64,
+    ) -> Result<Event, KernelError> {
         let record = self.find_driver_invocation(invocation)?;
-        self.record(Event {
+        let event = self.driver_invocation_event(
+            kind,
+            actor,
+            capability,
+            target_agent,
+            invocation,
+            operation,
+            Some(record.run_ticks),
+            Some(record.quantum_remaining),
+            Some(fault_kind),
+            Some(fault_detail),
+        )?;
+        self.record(event)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn driver_invocation_event(
+        &self,
+        kind: EventKind,
+        actor: AgentId,
+        capability: Option<CapabilityId>,
+        target_agent: Option<AgentId>,
+        invocation: DriverInvocationId,
+        operation: Option<Operation>,
+        ticks: Option<u64>,
+        quantum: Option<u64>,
+        fault_kind: Option<FaultKind>,
+        fault_detail: Option<u64>,
+    ) -> Result<Event, KernelError> {
+        let record = self.find_driver_invocation(invocation)?;
+        Ok(Event {
             sequence: 0,
-            agent: driver,
+            agent: actor,
             kind,
             resource: Some(record.resource),
             capability,
@@ -89,7 +146,7 @@ impl<
             namespace_entry: None,
             namespace_key: None,
             namespace_object: None,
-            operation: Some(operation),
+            operation,
             operations: OperationSet::empty(),
             verification: VerificationRequirement::Optional,
             checkpoint: None,
@@ -99,14 +156,14 @@ impl<
             task_ticks: None,
             task_quantum: None,
             fault: None,
-            fault_kind: None,
-            fault_detail: None,
+            fault_kind,
+            fault_detail,
             fault_policy: None,
             fault_policy_action: None,
             waiter: None,
             waiter_kind: None,
             signal: None,
-            target_agent: None,
+            target_agent,
             driver_binding: Some(record.binding),
             device_event: Some(record.event),
             device_event_kind: None,

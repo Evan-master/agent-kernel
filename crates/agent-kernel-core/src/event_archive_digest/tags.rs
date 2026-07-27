@@ -39,6 +39,8 @@ pub(super) const fn event_kind(value: EventKind) -> u16 {
         EventKind::DriverInvocationDispatched => 27,
         EventKind::DriverInvocationTicked => 28,
         EventKind::DriverInvocationQuantumExpired => 29,
+        EventKind::DriverInvocationFaulted => 90,
+        EventKind::DriverInvocationRecovered => 91,
         EventKind::DriverInvocationCompleted => 30,
         EventKind::ResourceCreated => 31,
         EventKind::ResourceRetired => 32,

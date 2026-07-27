@@ -84,6 +84,12 @@ pub fn format_event(event: &Event) -> String {
         EventKind::DriverInvocationQuantumExpired => {
             format_driver_invocation_event(event, "driver_invocation_quantum_expired")
         }
+        EventKind::DriverInvocationFaulted => {
+            format_driver_invocation_event(event, "driver_invocation_faulted")
+        }
+        EventKind::DriverInvocationRecovered => {
+            format_driver_invocation_event(event, "driver_invocation_recovered")
+        }
         EventKind::DriverInvocationCompleted => {
             format_driver_invocation_event(event, "driver_invocation_completed")
         }

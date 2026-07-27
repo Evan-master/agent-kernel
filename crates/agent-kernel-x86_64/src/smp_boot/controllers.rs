@@ -115,6 +115,29 @@ impl SmpBootstrap {
         Ok(())
     }
 
+    pub(crate) fn arm_pci_intx_irq(&mut self) -> Result<(), SmpBootError> {
+        self.io_apic_routing
+            .as_mut()
+            .ok_or(SmpBootError::InvalidLocalApicMapping)?
+            .arm_pci_intx()
+            .map_err(SmpBootError::IoApicRouting)
+    }
+
+    pub(crate) fn complete_pci_intx_irq(&mut self, delivered: bool) -> Result<(), SmpBootError> {
+        self.io_apic_routing
+            .as_mut()
+            .ok_or(SmpBootError::InvalidLocalApicMapping)?
+            .mask_pci_intx()
+            .map_err(SmpBootError::IoApicRouting)?;
+        if delivered {
+            self.local_apic
+                .as_mut()
+                .ok_or(SmpBootError::InvalidLocalApicMapping)?
+                .end_of_interrupt();
+        }
+        Ok(())
+    }
+
     pub(crate) fn ready_for_agent_boot(&self) -> bool {
         self.registry.state(CpuIndex::BSP) == Some(CpuLifecycleState::Online)
             && self.registry.online_mask().count() == 1
@@ -126,7 +149,7 @@ impl SmpBootstrap {
             && self
                 .io_apic_routing
                 .as_ref()
-                .is_some_and(IoApicRouting::uart_masked)
+                .is_some_and(|routing| routing.uart_masked() && routing.pci_intx_masked())
             && self.legacy_pic_disabled
             && self.pci_inventory.is_some()
             && self.pci_resources.is_some()

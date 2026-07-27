@@ -45,6 +45,8 @@ const fn label(kind: EventKind) -> &'static str {
         EventKind::DriverInvocationDispatched => "driver_invocation_dispatched",
         EventKind::DriverInvocationTicked => "driver_invocation_ticked",
         EventKind::DriverInvocationQuantumExpired => "driver_invocation_quantum_expired",
+        EventKind::DriverInvocationFaulted => "driver_invocation_faulted",
+        EventKind::DriverInvocationRecovered => "driver_invocation_recovered",
         EventKind::DriverInvocationCompleted => "driver_invocation_completed",
         EventKind::DriverCommandSubmitted => "driver_command_submitted",
         EventKind::DriverCommandDispatched => "driver_command_dispatched",

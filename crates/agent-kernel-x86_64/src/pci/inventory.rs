@@ -1,7 +1,8 @@
 //! Deterministic fixed-capacity PCI function discovery.
 //!
-//! The scanner reads only the four common-header DWORDs needed to identify and
-//! classify functions. It publishes no partial inventory after a failure.
+//! The scanner reads the common-header identity and interrupt metadata needed
+//! to classify and route functions. It publishes no partial inventory after a
+//! failure.
 
 use super::{PciConfigAccess, PciConfigRegister, PciFunction, PciFunctionAddress};
 
@@ -103,5 +104,13 @@ fn read_present_function<A: PciConfigAccess>(
     let command_status = access.read_u32(address, PciConfigRegister::COMMAND_STATUS);
     let class_revision = access.read_u32(address, PciConfigRegister::CLASS_REVISION);
     let header = access.read_u32(address, PciConfigRegister::HEADER);
-    PciFunction::from_common_header(address, identity, command_status, class_revision, header)
+    let interrupt = access.read_u32(address, PciConfigRegister::INTERRUPT);
+    PciFunction::from_common_header(
+        address,
+        identity,
+        command_status,
+        class_revision,
+        header,
+        interrupt,
+    )
 }

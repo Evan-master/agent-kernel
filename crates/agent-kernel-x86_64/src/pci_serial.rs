@@ -14,9 +14,13 @@ use crate::port::PortIo;
 
 const UART_REGISTER_SPAN: u64 = 8;
 const UART_TRANSMIT_OFFSET: u16 = 0;
+const UART_INTERRUPT_ENABLE_OFFSET: u16 = 1;
+const UART_INTERRUPT_IDENTIFICATION_OFFSET: u16 = 2;
 const UART_LINE_STATUS_OFFSET: u16 = 5;
+const UART_INTERRUPT_ENABLE_THRE: u8 = 0x02;
 const UART_LINE_STATUS_THRE: u8 = 0x20;
 
+pub const PCI_SERIAL_COMMAND_ARM_THRE_INTERRUPT: u16 = 1;
 pub const PCI_SERIAL_RESULT_OK: u16 = 0;
 pub const PCI_SERIAL_RESULT_RESOURCE_MISMATCH: u16 = 1;
 pub const PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND: u16 = 2;
@@ -100,9 +104,36 @@ impl<I: PortIo> DriverBackend for PciSerialBackend<I> {
         if request.resource != self.resource {
             return Self::failed(PCI_SERIAL_RESULT_RESOURCE_MISMATCH);
         }
-        if request.kind != DriverCommandKind::Write {
+        match request.kind {
+            DriverCommandKind::Configure => self.configure(request),
+            DriverCommandKind::Write => self.write(request),
+            DriverCommandKind::Read | DriverCommandKind::Reset => {
+                Self::failed(PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND)
+            }
+        }
+    }
+}
+
+impl<I: PortIo> PciSerialBackend<I> {
+    fn configure(&mut self, request: DriverCommandRequest) -> DriverCommandOutcome {
+        if request.payload.opcode != PCI_SERIAL_COMMAND_ARM_THRE_INTERRUPT
+            || request.payload.value != 0
+        {
             return Self::failed(PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND);
         }
+        self.io
+            .read_u8(self.base + UART_INTERRUPT_IDENTIFICATION_OFFSET);
+        self.io.write_u8(
+            self.base + UART_INTERRUPT_ENABLE_OFFSET,
+            UART_INTERRUPT_ENABLE_THRE,
+        );
+        DriverCommandOutcome::Completed(DriverCommandResult {
+            code: PCI_SERIAL_RESULT_OK,
+            value: 0,
+        })
+    }
+
+    fn write(&mut self, request: DriverCommandRequest) -> DriverCommandOutcome {
         if request.payload.opcode != UART_TRANSMIT_OFFSET {
             return Self::failed(PCI_SERIAL_RESULT_INVALID_REGISTER);
         }

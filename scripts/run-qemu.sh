@@ -37,6 +37,7 @@ for expected in \
   "AGENT_KERNEL_LEGACY_PIC_DISABLED_OK" \
   "AGENT_KERNEL_PCI_CONFIG_IO_OK" \
   "AGENT_KERNEL_PCI_INVENTORY_OK" \
+  "AGENT_KERNEL_PCI_INTX_ROUTE_OK" \
   "AGENT_KERNEL_PCI_BAR_CATALOG_OK" \
   "AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK" \
   "AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK" \
@@ -44,6 +45,12 @@ for expected in \
   "AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK" \
   "AGENT_KERNEL_PCI_SERIAL_CAPABILITY_OK" \
   "AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_IRQ_CAPTURE_READY_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_STATE_INVOCATION_READY_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_DRIVER_FAULT_CONTAINED_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_DRIVER_RESTARTED_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_INTERRUPT_CONFIGURED_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_INTX_OK" \
   "AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK" \
   "AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK" \
   "AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK" \
@@ -642,11 +649,27 @@ for expected in \
   "event[428] driver_invocation_dispatched" \
   "event[429] driver_invocation_quantum_expired" \
   "event[430] driver_invocation_dispatched" \
-  "event[431] device_event_acknowledged" \
-  "event[432] driver_command_submitted" \
-  "event[433] driver_command_dispatched" \
-  "event[434] driver_command_completed" \
-  "event[435] driver_invocation_completed" \
+  "event[431] driver_invocation_faulted" \
+  "event[432] driver_invocation_recovered" \
+  "event[433] driver_invocation_dispatched" \
+  "event[434] driver_invocation_quantum_expired" \
+  "event[435] driver_invocation_dispatched" \
+  "event[436] device_event_acknowledged" \
+  "event[437] driver_command_submitted" \
+  "event[438] driver_command_dispatched" \
+  "event[439] driver_command_completed" \
+  "event[440] driver_invocation_completed" \
+  "event[441] device_event_raised" \
+  "event[442] device_event_delivered" \
+  "event[443] driver_invocation_queued" \
+  "event[444] driver_invocation_dispatched" \
+  "event[445] driver_invocation_quantum_expired" \
+  "event[446] driver_invocation_dispatched" \
+  "event[447] device_event_acknowledged" \
+  "event[448] driver_command_submitted" \
+  "event[449] driver_command_dispatched" \
+  "event[450] driver_command_completed" \
+  "event[451] driver_invocation_completed" \
   "AGENT_KERNEL_SMP_HANDOFF_READY" \
   "SUPERVISOR_HANDOFF_READY"
 do
@@ -657,8 +680,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Ec '^event\[[0-9]+\] ' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 435 ]]; then
-  printf 'expected exactly 435 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 451 ]]; then
+  printf 'expected exactly 451 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -673,7 +696,7 @@ while IFS= read -r event_line; do
   EXPECTED_EVENT_SEQUENCE=$((EXPECTED_EVENT_SEQUENCE + 1))
 done < <(grep -E '^event\[[0-9]+\] ' <<<"$OUTPUT")
 
-if [[ "$EXPECTED_EVENT_SEQUENCE" -ne 436 ]]; then
+if [[ "$EXPECTED_EVENT_SEQUENCE" -ne 452 ]]; then
   printf 'ordered kernel event sequence ended at %s\n' \
     "$((EXPECTED_EVENT_SEQUENCE - 1))" >&2
   exit 1
@@ -696,6 +719,7 @@ check_marker_count "AGENT_KERNEL_IO_APIC_IRQ_ROUTING_OK" 1
 check_marker_count "AGENT_KERNEL_LEGACY_PIC_DISABLED_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_CONFIG_IO_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_INVENTORY_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_INTX_ROUTE_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_BAR_CATALOG_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK" 1
@@ -703,6 +727,12 @@ check_marker_count "AGENT_KERNEL_PCI_SERIAL_TARGET_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_CAPABILITY_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_IRQ_CAPTURE_READY_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_STATE_INVOCATION_READY_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_DRIVER_FAULT_CONTAINED_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_DRIVER_RESTARTED_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_INTERRUPT_CONFIGURED_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_INTX_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK" 1

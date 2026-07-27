@@ -11,7 +11,7 @@ use agent_kernel_core::{
 
 use super::{
     ensure_extended_reserved_zero, ensure_reserved_zero, AgentCallDecodeError, AgentCallOperation,
-    AgentCallRequest, AGENT_CALL_DRIVER_COMMAND_WRITE,
+    AgentCallRequest, AGENT_CALL_DRIVER_COMMAND_CONFIGURE, AGENT_CALL_DRIVER_COMMAND_WRITE,
 };
 use crate::context::PrivilegeInterruptStackFrame;
 
@@ -55,6 +55,7 @@ pub(super) fn decode(
             }
             let kind = match frame.r11 {
                 AGENT_CALL_DRIVER_COMMAND_WRITE => DriverCommandKind::Write,
+                AGENT_CALL_DRIVER_COMMAND_CONFIGURE => DriverCommandKind::Configure,
                 _ => return Err(AgentCallDecodeError::InvalidPayload),
             };
             let opcode =

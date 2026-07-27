@@ -40,6 +40,7 @@ use crate::{
     fault_task_flow::FaultTaskFlow,
     halt_forever,
     native_agent_runtime::NativeAgentRuntime,
+    pci_serial_interrupt,
     port_driver_flow::PortDriverSetup,
     privilege_runtime::PrivilegeBoundary,
     resource_manager_flow::ResourceManagerFlow,
@@ -357,6 +358,7 @@ pub(super) fn run(
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
     if uart_interrupt::install_gate().is_none()
+        || pci_serial_interrupt::install_gate().is_none()
         || smp_bootstrap.install_ipi_gate().is_err()
         || exception_runtime::freeze_for_smp().is_none()
     {

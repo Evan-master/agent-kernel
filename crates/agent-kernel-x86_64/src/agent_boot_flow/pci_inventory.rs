@@ -13,6 +13,9 @@ pub(super) fn prepare(smp_bootstrap: &mut SmpBootstrap) {
     {
         fatal_boot("AGENT_KERNEL_PCI_INVENTORY_ERROR");
     }
+    smp_bootstrap
+        .prepare_pci_intx_route()
+        .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_PCI_INTX_ROUTE_ERROR"));
     let resource_count = smp_bootstrap
         .prepare_pci_resources()
         .unwrap_or_else(|_| fatal_boot("AGENT_KERNEL_PCI_BAR_PROBE_ERROR"));
@@ -25,5 +28,6 @@ pub(super) fn prepare(smp_bootstrap: &mut SmpBootstrap) {
     }
     serial_write_line("AGENT_KERNEL_PCI_CONFIG_IO_OK");
     serial_write_line("AGENT_KERNEL_PCI_INVENTORY_OK");
+    serial_write_line("AGENT_KERNEL_PCI_INTX_ROUTE_OK");
     serial_write_line("AGENT_KERNEL_PCI_BAR_CATALOG_OK");
 }

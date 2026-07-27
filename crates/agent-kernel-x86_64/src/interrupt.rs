@@ -23,6 +23,8 @@ pub const PIT_IRQ_VECTOR: u8 = PIC_MASTER_OFFSET + PIT_IRQ_LINE;
 pub const AGENT_CALL_VECTOR: u8 = 0x90;
 pub const UART_IRQ_LINE: u8 = 4;
 pub const UART_IRQ_VECTOR: u8 = PIC_MASTER_OFFSET + UART_IRQ_LINE;
+pub const PCI_INTX_IRQ_LINE: u8 = 11;
+pub const PCI_INTX_IRQ_VECTOR: u8 = PIC_SLAVE_OFFSET + (PCI_INTX_IRQ_LINE - 8);
 
 #[repr(C, packed)]
 #[derive(Copy, Clone)]

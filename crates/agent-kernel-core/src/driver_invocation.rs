@@ -4,12 +4,13 @@
 //! records created from delivered device events. Queueing and scheduling live
 //! in separate runtime modules; this file performs no I/O or allocation.
 
-use crate::{AgentId, DeviceEventId, DriverBindingId, DriverInvocationId, ResourceId};
+use crate::{AgentId, DeviceEventId, DriverBindingId, DriverInvocationId, FaultKind, ResourceId};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DriverInvocationStatus {
     Queued,
     Running,
+    Faulted,
     Completed,
 }
 
@@ -23,6 +24,9 @@ pub struct DriverInvocationRecord {
     pub status: DriverInvocationStatus,
     pub run_ticks: u64,
     pub quantum_remaining: u64,
+    pub fault_kind: Option<FaultKind>,
+    pub fault_detail: Option<u64>,
+    pub restart_generation: u8,
 }
 
 impl DriverInvocationRecord {
@@ -36,6 +40,9 @@ impl DriverInvocationRecord {
             status: DriverInvocationStatus::Completed,
             run_ticks: 0,
             quantum_remaining: 0,
+            fault_kind: None,
+            fault_detail: None,
+            restart_generation: 0,
         }
     }
 }

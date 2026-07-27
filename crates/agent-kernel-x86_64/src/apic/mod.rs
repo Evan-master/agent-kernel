@@ -19,7 +19,7 @@ pub use io::{
 };
 pub use local::{LocalApicBase, LocalApicRegister};
 pub use mmio::{ApicMmioError, IoApicMmio, LocalApicMmio, Mmio32, VolatileMmio};
-pub use route::{resolve_legacy_irq_route, IoApicRoute, IoApicRouteError};
+pub use route::{resolve_legacy_irq_route, resolve_pci_intx_route, IoApicRoute, IoApicRouteError};
 pub use vector::{
     ApicVector, StartupVector, APIC_RESCHEDULE_VECTOR, APIC_SPURIOUS_VECTOR,
     APIC_STARTUP_ERROR_VECTOR, APIC_TIMER_VECTOR, APIC_TLB_SHOOTDOWN_VECTOR,

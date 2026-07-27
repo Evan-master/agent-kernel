@@ -1,6 +1,6 @@
 use agent_kernel_x86_64::pci::{
     discover_pci_functions, PciClassCode, PciConfigAccess, PciConfigRegister, PciDiscoveryError,
-    PciFunctionAddress,
+    PciFunctionAddress, PciInterruptPin,
 };
 
 #[derive(Default)]
@@ -18,6 +18,7 @@ impl ScriptedConfig {
         class: PciClassCode,
         revision: u8,
         header: u8,
+        interrupt: (u8, u8),
     ) {
         self.set(
             address,
@@ -38,6 +39,11 @@ impl ScriptedConfig {
                 | (u32::from(class.base()) << 24),
         );
         self.set(address, 0x0c, u32::from(header) << 16);
+        self.set(
+            address,
+            0x3c,
+            u32::from(interrupt.0) | (u32::from(interrupt.1) << 8),
+        );
     }
 
     fn set(&mut self, address: PciFunctionAddress, register: u8, value: u32) {
@@ -84,6 +90,8 @@ fn discovery_decodes_functions_in_stable_bdf_order() {
     assert_eq!(host.revision_id(), 2);
     assert_eq!(host.header_type(), 0);
     assert!(!host.multifunction());
+    assert_eq!(host.interrupt_line(), 0);
+    assert_eq!(host.interrupt_pin(), None);
 
     let network = functions[1];
     assert!(network.class().is_network_controller());
@@ -92,6 +100,9 @@ fn discovery_decodes_functions_in_stable_bdf_order() {
     let usb = functions[2];
     assert!(usb.class().is_usb_controller());
     assert_eq!(usb.class().programming_interface(), 0x20);
+    assert_eq!(usb.interrupt_line(), 11);
+    assert_eq!(usb.interrupt_pin(), Some(PciInterruptPin::IntA));
+    assert!(config.was_read(usb.address(), 0x3c));
 
     let display = functions[3];
     assert!(display.class().is_display_controller());
@@ -132,6 +143,7 @@ fn representative_fabric() -> ScriptedConfig {
         PciClassCode::new(0x06, 0x00, 0x00),
         2,
         0,
+        (0, 0),
     );
     config.install_function(
         PciFunctionAddress::new(0, 1, 0).unwrap(),
@@ -140,6 +152,7 @@ fn representative_fabric() -> ScriptedConfig {
         PciClassCode::new(0x02, 0x00, 0x00),
         1,
         0x80,
+        (10, 2),
     );
     config.install_function(
         PciFunctionAddress::new(0, 1, 2).unwrap(),
@@ -148,6 +161,7 @@ fn representative_fabric() -> ScriptedConfig {
         PciClassCode::new(0x0c, 0x03, 0x20),
         4,
         0,
+        (11, 1),
     );
     config.install_function(
         PciFunctionAddress::new(2, 5, 0).unwrap(),
@@ -156,6 +170,7 @@ fn representative_fabric() -> ScriptedConfig {
         PciClassCode::new(0x03, 0x00, 0x00),
         3,
         0,
+        (12, 1),
     );
     config
 }

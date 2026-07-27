@@ -29,6 +29,7 @@ mod native_agent_runtime;
 mod native_driver_executor;
 mod native_runtime_admission_broker;
 mod pci_serial_driver_flow;
+mod pci_serial_interrupt;
 mod pci_serial_profile;
 mod pic;
 mod port_driver_flow;
@@ -57,6 +58,9 @@ pub(crate) const X86_PCI_CAPABILITY_RESERVE: usize = 7;
 pub(crate) const X86_CAPABILITY_CAPACITY: usize =
     X86_AGENT_CAPABILITY_CAPACITY + X86_PCI_CAPABILITY_RESERVE;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
+pub(crate) const X86_DEVICE_EVENT_CAPACITY: usize = 3;
+pub(crate) const X86_DRIVER_COMMAND_CAPACITY: usize = 3;
+pub(crate) const X86_DRIVER_INVOCATION_CAPACITY: usize = 3;
 pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) const X86_FAULT_CAPACITY: usize = 4;
 pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
@@ -65,7 +69,7 @@ pub(crate) const X86_EVENT_ARCHIVE_WATERMARK: usize = 378;
 pub(crate) const X86_TERMINAL_EVENT_SEQUENCE: usize = 412;
 pub(crate) const X86_PCI_CLAIM_EVENT_RESERVE: usize =
     2 + agent_kernel_core::DRIVER_RESOURCE_REGION_CAPACITY * 3;
-pub(crate) const X86_PCI_DRIVER_EVENT_RESERVE: usize = 18;
+pub(crate) const X86_PCI_DRIVER_EVENT_RESERVE: usize = 34;
 pub(crate) const X86_PCI_EVENT_RESERVE: usize =
     X86_PCI_CLAIM_EVENT_RESERVE + X86_PCI_DRIVER_EVENT_RESERVE;
 pub(crate) const X86_HANDOFF_EVENT_RESERVE: usize = 64;
@@ -87,9 +91,9 @@ pub(crate) type X86BootedKernel = BootedKernel<
     X86_TASK_CAPACITY,
     2,
     2,
-    2,
-    2,
-    2,
+    X86_DEVICE_EVENT_CAPACITY,
+    X86_DRIVER_COMMAND_CAPACITY,
+    X86_DRIVER_INVOCATION_CAPACITY,
     4,
     X86_WAITER_CAPACITY,
     X86_FAULT_CAPACITY,

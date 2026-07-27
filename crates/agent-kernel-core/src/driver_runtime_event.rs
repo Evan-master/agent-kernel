@@ -95,6 +95,9 @@ impl<
             status: DriverInvocationStatus::Queued,
             run_ticks: 0,
             quantum_remaining: 0,
+            fault_kind: None,
+            fault_detail: None,
+            restart_generation: 0,
         };
         self.driver_invocation_len += 1;
         self.find_device_event_mut(event)?.status = DeviceEventStatus::Delivered;

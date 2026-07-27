@@ -8,13 +8,14 @@ mod calls;
 mod state;
 
 use agent_kernel_core::{
-    AgentId, DriverCommandId, DriverCommandResult, DriverInvocationId, DriverInvocationStatus,
-    EventKind,
+    AgentExecutionState, AgentId, CapabilityId, DriverCommandId, DriverCommandResult,
+    DriverInvocationId, DriverInvocationStatus, EventKind, FaultKind,
 };
 use agent_kernel_hal::DriverBackend;
+use agent_kernel_x86_64::{agent_call::AgentCallOperation, native_runtime::NativeAgentFault};
 
 use crate::{
-    agent_cpu::{CompletedAgentCpu, PreemptedAgentCpu},
+    agent_cpu::{CompletedAgentCpu, FaultedAgentCpu, PreemptedAgentCpu},
     native_agent_runtime::{NativeAgentContext, NativeAgentRuntime},
     X86BootedKernel,
 };
@@ -33,6 +34,31 @@ pub(crate) struct NativeDriverExecution {
     result: DriverCommandResult,
     dispatches: u8,
     quantum_expiries: u8,
+    fault: Option<NativeDriverFaultEvidence>,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct DriverRecoveryAuthority {
+    actor: AgentId,
+    capability: CapabilityId,
+}
+
+impl DriverRecoveryAuthority {
+    pub(crate) const fn new(actor: AgentId, capability: CapabilityId) -> Option<Self> {
+        if actor.raw() == 0 || capability.raw() == 0 {
+            None
+        } else {
+            Some(Self { actor, capability })
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct NativeDriverFaultEvidence {
+    detail: u64,
+    offset: u32,
+    nonce: u64,
+    physical_quantum_generation: u8,
 }
 
 // One bounded execution loop owns either state directly; heap indirection would
@@ -40,6 +66,7 @@ pub(crate) struct NativeDriverExecution {
 #[allow(clippy::large_enum_variant)]
 pub(super) enum DriverRunProgress {
     Preempted(PreemptedAgentCpu),
+    Faulted(FaultedAgentCpu),
     Completed(CompletedAgentCpu),
 }
 
@@ -48,11 +75,13 @@ pub(crate) fn run<B: DriverBackend>(
     runtime: &mut NativeAgentRuntime,
     driver: AgentId,
     expected_invocation: DriverInvocationId,
+    recovery_authority: DriverRecoveryAuthority,
     backend: &mut B,
 ) -> Option<NativeDriverExecution> {
     let mut command = None;
     let mut dispatches = 0_u8;
     let mut quantum_expiries = 0_u8;
+    let mut fault = None;
     loop {
         let dispatched = runtime.dispatch_next_driver(booted, driver, DRIVER_QUANTUM)?;
         if dispatched.invocation() != expected_invocation {
@@ -71,6 +100,19 @@ pub(crate) fn run<B: DriverBackend>(
                 expire_quantum(booted, runtime, driver, expected_invocation, cpu)?;
                 quantum_expiries = quantum_expiries.checked_add(1)?;
             }
+            DriverRunProgress::Faulted(cpu) => {
+                if command.is_some() || fault.is_some() {
+                    return None;
+                }
+                fault = Some(recover_fault(
+                    booted,
+                    runtime,
+                    driver,
+                    expected_invocation,
+                    recovery_authority,
+                    cpu,
+                )?);
+            }
             DriverRunProgress::Completed(completed) => {
                 let command = command?;
                 return Some(NativeDriverExecution {
@@ -79,10 +121,107 @@ pub(crate) fn run<B: DriverBackend>(
                     result: command.result,
                     dispatches,
                     quantum_expiries,
+                    fault,
                 });
             }
         }
     }
+}
+
+fn recover_fault(
+    booted: &mut X86BootedKernel,
+    runtime: &mut NativeAgentRuntime,
+    driver: AgentId,
+    invocation: DriverInvocationId,
+    authority: DriverRecoveryAuthority,
+    faulted: FaultedAgentCpu,
+) -> Option<NativeDriverFaultEvidence> {
+    let context = faulted.context();
+    let fault = faulted.fault();
+    let detail = fault.detail();
+    let offset = faulted.fault_offset()?;
+    let nonce = faulted.call_nonce()?;
+    let physical_quantum_generation = faulted.physical_quantum_generation();
+    if context.agent() != driver
+        || context.driver_invocation() != Some(invocation)
+        || fault != NativeAgentFault::InvalidOpcode
+        || detail != u64::from(NativeAgentFault::InvalidOpcode.vector())
+        || faulted.restart_generation() != 0
+        || physical_quantum_generation != 1
+        || !faulted.runtime_memory_is_clear()
+        || faulted.call_count() != 2
+        || faulted.operations()
+            != [
+                AgentCallOperation::DescribeContext,
+                AgentCallOperation::InspectDriverInvocation,
+            ]
+    {
+        return None;
+    }
+
+    let transition = booted
+        .kernel_mut()
+        .sys_fault_driver_invocation(driver, invocation, FaultKind::ExecutionTrap, detail)
+        .ok()?;
+    let record = booted
+        .kernel()
+        .driver_invocations()
+        .iter()
+        .find(|record| record.id == invocation)?;
+    let execution = booted
+        .kernel()
+        .execution_contexts()
+        .iter()
+        .find(|record| record.agent == driver)?;
+    if transition.kind != EventKind::DriverInvocationFaulted
+        || transition.driver_invocation != Some(invocation)
+        || transition.fault_kind != Some(FaultKind::ExecutionTrap)
+        || transition.fault_detail != Some(detail)
+        || record.status != DriverInvocationStatus::Faulted
+        || record.restart_generation != 0
+        || execution.state != AgentExecutionState::Faulted
+        || execution.driver_invocation != Some(invocation)
+    {
+        return None;
+    }
+
+    let restarted = faulted.restart()?;
+    if restarted.context() != context {
+        return None;
+    }
+    let recovery = booted
+        .kernel_mut()
+        .sys_recover_driver_invocation(authority.actor, authority.capability, driver, invocation)
+        .ok()?;
+    let record = booted
+        .kernel()
+        .driver_invocations()
+        .iter()
+        .find(|record| record.id == invocation)?;
+    let execution = booted
+        .kernel()
+        .execution_contexts()
+        .iter()
+        .find(|record| record.agent == driver)?;
+    if recovery.kind != EventKind::DriverInvocationRecovered
+        || recovery.agent != authority.actor
+        || recovery.capability != Some(authority.capability)
+        || recovery.target_agent != Some(driver)
+        || recovery.driver_invocation != Some(invocation)
+        || record.status != DriverInvocationStatus::Queued
+        || record.restart_generation != 1
+        || execution.state != AgentExecutionState::Idle
+        || runtime.register_prepared(restarted).is_some()
+    {
+        return None;
+    }
+
+    Some(NativeDriverFaultEvidence {
+        detail,
+        offset,
+        nonce,
+        physical_quantum_generation,
+    })
 }
 
 fn expire_quantum(
@@ -136,11 +275,33 @@ impl NativeDriverExecution {
         self.quantum_expiries
     }
 
+    pub(crate) const fn fault(&self) -> Option<NativeDriverFaultEvidence> {
+        self.fault
+    }
+
     pub(crate) const fn completed(&self) -> &CompletedAgentCpu {
         &self.completed
     }
 
     pub(crate) fn into_completed(self) -> CompletedAgentCpu {
         self.completed
+    }
+}
+
+impl NativeDriverFaultEvidence {
+    pub(crate) const fn detail(self) -> u64 {
+        self.detail
+    }
+
+    pub(crate) const fn offset(self) -> u32 {
+        self.offset
+    }
+
+    pub(crate) const fn nonce(self) -> u64 {
+        self.nonce
+    }
+
+    pub(crate) const fn physical_quantum_generation(self) -> u8 {
+        self.physical_quantum_generation
     }
 }

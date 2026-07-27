@@ -93,4 +93,15 @@ impl AgentExecutionContext {
             quantum_remaining: 0,
         }
     }
+
+    pub(crate) const fn faulted_driver(agent: AgentId, invocation: DriverInvocationId) -> Self {
+        Self {
+            agent,
+            state: AgentExecutionState::Faulted,
+            task: None,
+            driver_invocation: Some(invocation),
+            run_ticks: 0,
+            quantum_remaining: 0,
+        }
+    }
 }

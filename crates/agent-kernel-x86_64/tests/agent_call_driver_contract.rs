@@ -8,8 +8,8 @@ use agent_kernel_x86_64::{
         AgentCallContext, AgentCallDecodeError, AgentCallOperation, AgentCallRequest,
         AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_ACKNOWLEDGE_DEVICE_EVENT,
         AGENT_CALL_COMPLETE_DRIVER_INVOCATION, AGENT_CALL_CONTEXT_DRIVER,
-        AGENT_CALL_DRIVER_COMMAND_WRITE, AGENT_CALL_EVENT_STATE_CHANGED,
-        AGENT_CALL_INSPECT_DRIVER_INVOCATION, AGENT_CALL_STATUS_OK,
+        AGENT_CALL_DRIVER_COMMAND_CONFIGURE, AGENT_CALL_DRIVER_COMMAND_WRITE,
+        AGENT_CALL_EVENT_STATE_CHANGED, AGENT_CALL_INSPECT_DRIVER_INVOCATION, AGENT_CALL_STATUS_OK,
         AGENT_CALL_SUBMIT_DRIVER_COMMAND,
     },
     context::PrivilegeInterruptStackFrame,
@@ -45,6 +45,7 @@ fn driver_operation_numbers_extend_abi_v1_without_renumbering_tasks() {
     assert_eq!(AGENT_CALL_COMPLETE_DRIVER_INVOCATION, 60);
     assert_eq!(AGENT_CALL_CONTEXT_DRIVER, 1);
     assert_eq!(AGENT_CALL_DRIVER_COMMAND_WRITE, 1);
+    assert_eq!(AGENT_CALL_DRIVER_COMMAND_CONFIGURE, 2);
 }
 
 #[test]
@@ -126,6 +127,33 @@ fn driver_requests_decode_and_authenticate_only_in_driver_scope() {
                 event: EVENT,
                 kind: DriverCommandKind::Write,
                 payload: COMMAND_PAYLOAD,
+            },
+            AgentCallOperation::SubmitDriverCommand,
+        ),
+        (
+            driver_frame(
+                AGENT_CALL_SUBMIT_DRIVER_COMMAND,
+                [
+                    EVENT.raw(),
+                    AGENT_CALL_DRIVER_COMMAND_CONFIGURE,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+            ),
+            AgentCallRequest::SubmitDriverCommand {
+                agent: AGENT,
+                invocation: INVOCATION,
+                image: IMAGE,
+                nonce: NONCE,
+                event: EVENT,
+                kind: DriverCommandKind::Configure,
+                payload: DriverCommandPayload {
+                    opcode: 1,
+                    value: 0,
+                },
             },
             AgentCallOperation::SubmitDriverCommand,
         ),

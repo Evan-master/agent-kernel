@@ -3,7 +3,8 @@ use agent_kernel_x86_64::{
         parse_madt, AcpiTopologyError, InterruptPolarity, InterruptTrigger, MAX_INTERRUPT_OVERRIDES,
     },
     apic::{
-        resolve_legacy_irq_route, IoApicPolarity, IoApicRouteError, IoApicTrigger, IoApicVersion,
+        resolve_legacy_irq_route, resolve_pci_intx_route, IoApicPolarity, IoApicRouteError,
+        IoApicTrigger, IoApicVersion,
     },
     cpu::{ApicId, CpuIndex, ProcessorSource, TopologyError},
 };
@@ -286,6 +287,28 @@ fn madt_validates_interrupt_overrides_and_capacity() {
     assert_eq!(
         parse_madt::<4>(&madt(&overflow), ApicId::new(2)),
         Err(AcpiTopologyError::InterruptOverrideCapacity)
+    );
+}
+
+#[test]
+fn pci_intx_resolves_as_an_active_low_level_gsi() {
+    let mut entries = Vec::new();
+    append(&mut entries, local_apic(1, 2, 1));
+    append(&mut entries, io_apic(3, 0xfec0_0000, 0));
+    let topology = parse_madt::<4>(&madt(&entries), ApicId::new(2)).unwrap();
+    let versions = [IoApicVersion::from_raw(0x11 | (23 << 16))];
+
+    let route = resolve_pci_intx_route(&topology, &versions, 11).unwrap();
+
+    assert_eq!(route.source_irq(), 11);
+    assert_eq!(route.gsi(), 11);
+    assert_eq!(route.controller().id(), 3);
+    assert_eq!(route.redirection_index().low_register(), 0x26);
+    assert_eq!(route.polarity(), IoApicPolarity::ActiveLow);
+    assert_eq!(route.trigger(), IoApicTrigger::Level);
+    assert_eq!(
+        resolve_pci_intx_route(&topology, &versions, u8::MAX),
+        Err(IoApicRouteError::InvalidPciInterruptLine(u8::MAX))
     );
 }
 

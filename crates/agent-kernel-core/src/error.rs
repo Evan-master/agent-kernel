@@ -82,6 +82,8 @@ pub enum KernelError {
     DriverInvocationQueueEmpty,
     DriverInvocationQuantumInvalid,
     DriverInvocationNotRunnable,
+    DriverInvocationRecoveryUnsafe,
+    DriverInvocationRestartLimitReached,
     AgentAlreadyLaunched,
     AgentNotLaunched,
     AgentEntryScopeMismatch,

@@ -141,6 +141,32 @@ impl<
         Ok(())
     }
 
+    pub(crate) fn set_execution_context_faulted_driver(
+        &mut self,
+        agent: AgentId,
+        invocation: DriverInvocationId,
+    ) -> Result<(), KernelError> {
+        *self.find_execution_context_mut(agent)? =
+            AgentExecutionContext::faulted_driver(agent, invocation);
+        Ok(())
+    }
+
+    pub(crate) fn ensure_execution_context_faulted_driver(
+        &self,
+        agent: AgentId,
+        invocation: DriverInvocationId,
+    ) -> Result<(), KernelError> {
+        let context = self.find_execution_context(agent)?;
+        if context.state == AgentExecutionState::Faulted
+            && context.task.is_none()
+            && context.driver_invocation == Some(invocation)
+        {
+            Ok(())
+        } else {
+            Err(KernelError::DriverInvocationNotRunnable)
+        }
+    }
+
     pub(crate) fn clear_execution_context_for_task(&mut self, task: TaskId) {
         for context in &mut self.execution_contexts[..self.agent_len] {
             if context.task == Some(task) {

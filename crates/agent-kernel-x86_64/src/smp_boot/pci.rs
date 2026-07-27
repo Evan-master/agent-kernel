@@ -29,6 +29,7 @@ pub(crate) enum PciBootError {
     ResourceCatalog(PciResourceCatalogError),
     ClaimTargetUnavailable,
     ClaimCandidateMismatch,
+    InterruptProfileMismatch,
 }
 
 pub(super) fn discover() -> Result<BootPciInventory, PciBootError> {
@@ -64,6 +65,27 @@ impl SmpBootstrap {
 
     pub(crate) const fn pci_inventory(&self) -> Option<&BootPciInventory> {
         self.pci_inventory.as_ref()
+    }
+
+    pub(crate) fn prepare_pci_intx_route(&mut self) -> Result<(), SmpBootError> {
+        let selector = pci_serial_profile::selector()
+            .ok_or(SmpBootError::Pci(PciBootError::InterruptProfileMismatch))?;
+        let function = self
+            .pci_inventory
+            .as_ref()
+            .and_then(|inventory| inventory.find(selector.address()))
+            .filter(|function| selector.matches(*function))
+            .ok_or(SmpBootError::Pci(PciBootError::InterruptProfileMismatch))?;
+        if function.interrupt_line() != pci_serial_profile::INTERRUPT_LINE
+            || function.interrupt_pin() != Some(pci_serial_profile::INTERRUPT_PIN)
+        {
+            return Err(SmpBootError::Pci(PciBootError::InterruptProfileMismatch));
+        }
+        self.io_apic_routing
+            .as_mut()
+            .ok_or(SmpBootError::InvalidLocalApicMapping)?
+            .prepare_pci_intx(&self.topology, function.interrupt_line())
+            .map_err(SmpBootError::IoApicRouting)
     }
 
     pub(crate) fn prepare_pci_resources(&mut self) -> Result<usize, SmpBootError> {

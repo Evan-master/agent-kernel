@@ -25,4 +25,5 @@ pub use resource_catalog::{
 };
 pub use types::{
     PciClassCode, PciConfigRegister, PciFunction, PciFunctionAddress, PciFunctionSelector,
+    PciInterruptPin,
 };

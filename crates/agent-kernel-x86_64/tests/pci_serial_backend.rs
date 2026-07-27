@@ -6,10 +6,10 @@ use agent_kernel_core::{
 use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
 use agent_kernel_x86_64::{
     pci_serial::{
-        PciSerialBackend, PciSerialBackendError, PCI_SERIAL_RESULT_INVALID_REGISTER,
-        PCI_SERIAL_RESULT_OK, PCI_SERIAL_RESULT_RESOURCE_MISMATCH,
-        PCI_SERIAL_RESULT_TRANSMIT_TIMEOUT, PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND,
-        PCI_SERIAL_RESULT_VALUE_OUT_OF_RANGE,
+        PciSerialBackend, PciSerialBackendError, PCI_SERIAL_COMMAND_ARM_THRE_INTERRUPT,
+        PCI_SERIAL_RESULT_INVALID_REGISTER, PCI_SERIAL_RESULT_OK,
+        PCI_SERIAL_RESULT_RESOURCE_MISMATCH, PCI_SERIAL_RESULT_TRANSMIT_TIMEOUT,
+        PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND, PCI_SERIAL_RESULT_VALUE_OUT_OF_RANGE,
     },
     port::PortIo,
 };
@@ -118,6 +118,32 @@ fn constructor_accepts_only_a_complete_port_endpoint_and_nonzero_budget() {
 }
 
 #[test]
+fn configure_arms_only_the_thre_interrupt_after_reading_iir() {
+    let resource = ResourceId::new(1);
+    let mut backend = PciSerialBackend::new(
+        endpoint(resource, DriverEndpointDescriptor::port(0xd000, 8)),
+        RecordingPortIo::with_reads(&[0x01]),
+        3,
+    )
+    .unwrap();
+
+    assert_eq!(
+        backend.execute(request(
+            resource,
+            DriverCommandKind::Configure,
+            PCI_SERIAL_COMMAND_ARM_THRE_INTERRUPT,
+            0,
+        )),
+        DriverCommandOutcome::Completed(DriverCommandResult {
+            code: PCI_SERIAL_RESULT_OK,
+            value: 0,
+        })
+    );
+    assert_eq!(backend.io().reads, vec![0xd002]);
+    assert_eq!(backend.io().writes, vec![(0xd001, 0x02)]);
+}
+
+#[test]
 fn transmit_polls_until_thre_then_writes_exactly_one_byte() {
     let resource = ResourceId::new(1);
     let mut backend = PciSerialBackend::new(
@@ -178,7 +204,12 @@ fn rejected_requests_touch_no_port() {
             PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND,
         ),
         (
-            request(resource, DriverCommandKind::Configure, 0, 0),
+            request(
+                resource,
+                DriverCommandKind::Configure,
+                PCI_SERIAL_COMMAND_ARM_THRE_INTERRUPT + 1,
+                0,
+            ),
             PCI_SERIAL_RESULT_UNSUPPORTED_COMMAND,
         ),
         (

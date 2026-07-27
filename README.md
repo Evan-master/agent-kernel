@@ -23,14 +23,14 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://devices/v24-native-driver-call
+kernel://devices/v25-pci-intx-recovery
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V24 / QEMU debug + release   ring-3 PCI Driver       │
+│ VERIFIED   V25 / QEMU debug + release   PCI INTx + restart      │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -176,7 +176,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V24 invariant |
+| Contract | V13 through V25 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -290,7 +290,16 @@ authority         semantic IDs in ring 3 / endpoint and port retained in ring 0
 proof             five-call transcript / one 0x50 OUT / full frame reclamation
 ```
 
-`TPM CRB PATH` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete
+```text
+V25 PCI INTX + DRIVER RESTART
+route             IRQ 11 / INTA / active-low level / vector 0x2b
+ingress           one-shot IIR + LSR capture / source disable / mask + EOI
+state flow        #UD / Core Faulted / owner Rollback / generation 1
+commands          Configure(ARM_THRE_INTERRUPT) / Write(0x50)
+proof             two Invocations / real INTx / two address-space reclaims
+```
+
+`TPM CRB PATH` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete · `PCI INTX + RESTART` complete
 
 ## `05 // AGENT CALL`
 
@@ -320,12 +329,12 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ## `06 // PROOF`
 
 ```text
-PROFILE            V24 native-driver-agent-call
+PROFILE            V25 native-pci-intx-driver
 QEMU               debug + release
-EVENTS             1..435 / exact history
+EVENTS             1..451 / exact history
 AGENT ENTRIES       12 live / reclaimed slot
 TASK DISPATCHES     35
-V24 DRIVER RUNS     2 / one quantum expiry
+V25 DRIVER RUNS     6 / three quantum expiries / one restart
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
 ```
@@ -342,6 +351,10 @@ BOOT FRAME POOL     77 sealed
 | PCI authority | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
 | PCI Driver admission | `AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK` |
 | Driver image | `AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK` |
+| PCI INTx route | `AGENT_KERNEL_PCI_INTX_ROUTE_OK` |
+| Driver fault containment | `AGENT_KERNEL_PCI_SERIAL_DRIVER_FAULT_CONTAINED_OK` |
+| Driver restart | `AGENT_KERNEL_PCI_SERIAL_DRIVER_RESTARTED_OK` |
+| Physical PCI INTx | `AGENT_KERNEL_PCI_SERIAL_INTX_OK` |
 | Ring-3 Driver | `AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK` |
 | PCI physical command | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
 | Driver address-space reclaim | `AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK` |
@@ -444,6 +457,17 @@ reclamation         SMP TLB shootdown / exact frames zeroed and returned
 QEMU suffix         Events 418..435 / exact 0x50 chardev byte
 ```
 
+```text
+V25 NATIVE PCI INTX DRIVER
+capsule             437 bytes / fault offset 187 / generation signal
+route               INTA / IRQ 11 / active-low level / initially masked
+state Invocation    Events 425..440 / #UD / fault + recovery / Configure
+interrupt           Events 441..451 / hardware IIR 0x02 / LSR THRE
+recovery            Rollback Capability / one generation / zero command evidence
+hardware            Configure IER 0x02 / real INTx / one Write(0x50)
+reclamation         independent SMP TLB shootdown after both Invocations
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -451,7 +475,7 @@ QEMU suffix         Events 418..435 / exact 0x50 chardev byte
 | :--- | :--- | ---: | ---: | :--- |
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
 | Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
-| PCI Serial Driver | Capsule v1 / kind 6 | 5 | 323 | `4b6775ca088f...95fb191f` |
+| PCI Serial Driver | Capsule v1 / kind 6 | 5 | 437 | `95787586c02f...eec2e402` |
 
 `AUDIT` 9 native images · 2 signed Package v3 images · 5 exact assembly sources
 
@@ -547,8 +571,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] reversible PCI BAR probe + capability-bound Driver function claim
 [done] exact PCI serial selection + capability-bound physical command
 [done] native ring-3 Driver Agent Calls + preempted PCI serial execution
+[done] PCI INTx routing + Driver fault containment and restart
 [next] dedicated QEMU ATA image + emulator power-loss proof
-[next] PCI INTx routing + Driver fault containment and restart
 [next] DMA/IOMMU domains + MSI/MSI-X
 [next] network + graphics + USB controllers + formal verification
 ```
@@ -562,7 +586,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | PCI discovery | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI authority | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
-| Active milestone | [Native Driver Agent Call V24](docs/superpowers/specs/2026-07-27-native-driver-agent-call-v24-design.md) |
+| Active milestone | [Native PCI INTx Driver V25](docs/superpowers/specs/2026-07-27-native-pci-intx-driver-v25-design.md) |
 
 ## `10 // PROJECT`
 

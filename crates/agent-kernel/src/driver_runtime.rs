@@ -5,7 +5,8 @@
 //! mutation remains inside `agent-kernel-core`.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, DriverInvocationId, DriverInvocationRecord, Event, KernelError,
+    AgentId, CapabilityId, DriverInvocationId, DriverInvocationRecord, Event, FaultKind,
+    KernelError,
 };
 
 use crate::AgentKernel;
@@ -85,6 +86,28 @@ impl<
     ) -> Result<Event, KernelError> {
         self.core
             .complete_driver_invocation(driver, capability, invocation)
+    }
+
+    pub fn sys_fault_driver_invocation(
+        &mut self,
+        driver: AgentId,
+        invocation: DriverInvocationId,
+        kind: FaultKind,
+        detail: u64,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .fault_driver_invocation(driver, invocation, kind, detail)
+    }
+
+    pub fn sys_recover_driver_invocation(
+        &mut self,
+        actor: AgentId,
+        capability: CapabilityId,
+        driver: AgentId,
+        invocation: DriverInvocationId,
+    ) -> Result<Event, KernelError> {
+        self.core
+            .recover_driver_invocation(actor, capability, driver, invocation)
     }
 
     pub fn driver_invocations(&self) -> &[DriverInvocationRecord] {

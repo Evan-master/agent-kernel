@@ -47,6 +47,8 @@ pub enum EventKind {
     DriverInvocationDispatched,
     DriverInvocationTicked,
     DriverInvocationQuantumExpired,
+    DriverInvocationFaulted,
+    DriverInvocationRecovered,
     DriverInvocationCompleted,
     ResourceCreated,
     ResourceRetired,

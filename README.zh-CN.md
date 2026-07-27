@@ -23,14 +23,14 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://devices/v24-native-driver-call
+kernel://devices/v25-pci-intx-recovery
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V24 / QEMU debug + release   ring-3 PCI Driver       │
+│ VERIFIED   V25 / QEMU debug + release   PCI INTx + restart      │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -176,7 +176,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V24 不变量 |
+| 契约 | V13 至 V25 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -290,7 +290,16 @@ authority         Ring 3 使用语义 ID / Ring 0 持有 Endpoint 与 Port
 proof             五次 Call Transcript / 单次 0x50 OUT / 完整帧回收
 ```
 
-`TPM CRB PATH` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成
+```text
+V25 PCI INTX + DRIVER RESTART
+route             IRQ 11 / INTA / 低电平 Level / Vector 0x2b
+ingress           单次 IIR + LSR 捕获 / 关闭源 / Mask + EOI
+state flow        #UD / Core Faulted / Owner Rollback / Generation 1
+commands          Configure(ARM_THRE_INTERRUPT) / Write(0x50)
+proof             两次 Invocation / 真实 INTx / 两次地址空间回收
+```
+
+`TPM CRB PATH` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成 · `PCI INTX + RESTART` 完成
 
 ## `05 // AGENT CALL`
 
@@ -320,12 +329,12 @@ proof             五次 Call Transcript / 单次 0x50 OUT / 完整帧回收
 ## `06 // 启动证据`
 
 ```text
-PROFILE            V24 native-driver-agent-call
+PROFILE            V25 native-pci-intx-driver
 QEMU               debug + release
-EVENTS             1..435 / 精确历史
+EVENTS             1..451 / 精确历史
 AGENT ENTRIES       12 个活跃入口 / 回收槽
 TASK DISPATCHES     35
-V24 DRIVER RUNS     2 / 一次 Quantum Expiry
+V25 DRIVER RUNS     6 / 三次 Quantum Expiry / 一次重启
 FRAME OWNERSHIP     每 Agent 12..43
 BOOT FRAME POOL     77 帧封存
 ```
@@ -342,6 +351,10 @@ BOOT FRAME POOL     77 帧封存
 | PCI 权限边界 | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
 | PCI Driver 准入 | `AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK` |
 | Driver 镜像 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK` |
+| PCI INTx 路由 | `AGENT_KERNEL_PCI_INTX_ROUTE_OK` |
+| Driver Fault 隔离 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_FAULT_CONTAINED_OK` |
+| Driver 重启 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_RESTARTED_OK` |
+| 物理 PCI INTx | `AGENT_KERNEL_PCI_SERIAL_INTX_OK` |
 | Ring-3 Driver | `AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK` |
 | PCI 物理命令 | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
 | Driver 地址空间回收 | `AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK` |
@@ -444,6 +457,17 @@ reclamation         SMP TLB Shootdown / 精确帧清零并归还
 QEMU suffix         Event 418..435 / 精确 0x50 Chardev 字节
 ```
 
+```text
+V25 NATIVE PCI INTX DRIVER
+capsule             437 字节 / Fault Offset 187 / Generation Signal
+route               INTA / IRQ 11 / 低电平 Level / 初始 Mask
+state Invocation    Event 425..440 / #UD / Fault + Recovery / Configure
+interrupt           Event 441..451 / 硬件 IIR 0x02 / LSR THRE
+recovery            Rollback Capability / 单代 / 零 Command Evidence
+hardware            Configure IER 0x02 / 真实 INTx / 单次 Write(0x50)
+reclamation         两次 Invocation 分别执行 SMP TLB Shootdown
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -451,7 +475,7 @@ QEMU suffix         Event 418..435 / 精确 0x50 Chardev 字节
 | :--- | :--- | ---: | ---: | :--- |
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
 | Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
-| PCI Serial Driver | Capsule v1 / kind 6 | 5 | 323 | `4b6775ca088f...95fb191f` |
+| PCI Serial Driver | Capsule v1 / kind 6 | 5 | 437 | `95787586c02f...eec2e402` |
 
 `AUDIT` 9 个原生镜像 · 2 个签名 Package v3 镜像 · 5 个精确 Assembly 源
 
@@ -547,8 +571,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] 可逆 PCI BAR Probe + Capability 绑定的 Driver Function 认领
 [done] 精确 PCI Serial 选择 + Capability 绑定的物理命令
 [done] 原生 Ring-3 Driver Agent Call + 可抢占 PCI Serial 执行
+[done] PCI INTx 路由 + Driver Fault 隔离与重启
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
-[next] PCI INTx 路由 + Driver Fault 隔离与重启
 [next] DMA/IOMMU Domain + MSI/MSI-X
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
@@ -562,7 +586,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | PCI 发现 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI 权限 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI 设备路径 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
-| 当前里程碑 | [Native Driver Agent Call V24](docs/superpowers/specs/2026-07-27-native-driver-agent-call-v24-design.md) |
+| 当前里程碑 | [Native PCI INTx Driver V25](docs/superpowers/specs/2026-07-27-native-pci-intx-driver-v25-design.md) |
 
 ## `10 // 项目`
 

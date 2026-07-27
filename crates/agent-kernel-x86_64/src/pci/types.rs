@@ -64,9 +64,39 @@ impl PciConfigRegister {
     pub(super) const COMMAND_STATUS: Self = Self(0x04);
     pub(super) const CLASS_REVISION: Self = Self(0x08);
     pub(super) const HEADER: Self = Self(0x0c);
+    pub(super) const INTERRUPT: Self = Self(0x3c);
 
     pub(super) const fn bar(index: u8) -> Self {
         Self(0x10 + index * 4)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum PciInterruptPin {
+    IntA,
+    IntB,
+    IntC,
+    IntD,
+}
+
+impl PciInterruptPin {
+    pub const fn from_raw(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::IntA),
+            2 => Some(Self::IntB),
+            3 => Some(Self::IntC),
+            4 => Some(Self::IntD),
+            _ => None,
+        }
+    }
+
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::IntA => 1,
+            Self::IntB => 2,
+            Self::IntC => 3,
+            Self::IntD => 4,
+        }
     }
 }
 
@@ -124,6 +154,8 @@ pub struct PciFunction {
     class: PciClassCode,
     header_type: u8,
     multifunction: bool,
+    interrupt_line: u8,
+    interrupt_pin: u8,
 }
 
 impl PciFunction {
@@ -163,12 +195,25 @@ impl PciFunction {
         self.multifunction
     }
 
+    pub const fn interrupt_line(self) -> u8 {
+        self.interrupt_line
+    }
+
+    pub const fn interrupt_pin(self) -> Option<PciInterruptPin> {
+        PciInterruptPin::from_raw(self.interrupt_pin)
+    }
+
+    pub const fn interrupt_pin_raw(self) -> u8 {
+        self.interrupt_pin
+    }
+
     pub(super) const fn from_common_header(
         address: PciFunctionAddress,
         identity: u32,
         command_status: u32,
         class_revision: u32,
         header: u32,
+        interrupt: u32,
     ) -> Self {
         let raw_header = ((header >> 16) & 0xff) as u8;
         Self {
@@ -185,6 +230,8 @@ impl PciFunction {
             ),
             header_type: raw_header & 0x7f,
             multifunction: raw_header & 0x80 != 0,
+            interrupt_line: interrupt as u8,
+            interrupt_pin: (interrupt >> 8) as u8,
         }
     }
 
@@ -198,6 +245,8 @@ impl PciFunction {
         class: PciClassCode::EMPTY,
         header_type: 0,
         multifunction: false,
+        interrupt_line: 0,
+        interrupt_pin: 0,
     };
 }
 

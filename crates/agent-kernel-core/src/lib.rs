@@ -49,6 +49,7 @@ mod driver_endpoint_store;
 mod driver_event;
 mod driver_invocation;
 mod driver_invocation_event;
+mod driver_invocation_fault;
 mod driver_invocation_runtime;
 mod driver_invocation_tick;
 mod driver_resource_tree;

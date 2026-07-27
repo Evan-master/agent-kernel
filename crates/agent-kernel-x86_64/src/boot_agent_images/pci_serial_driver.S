@@ -39,14 +39,41 @@ pci_serial_driver_inspect_return:
     je .halt
     test r12, r12
     je .halt
-    cmp r13, 4
+    test rbp, rbp
     jne .halt
+
+    cmp r13, 4
+    je .state_changed
+    cmp r13, 1
+    je .interrupt
+    jmp .halt
+
+.state_changed:
     cmp r14, 0x1b36
     jne .halt
     cmp r15, 2
     jne .halt
-    test rbp, rbp
+    movabs rax, 0x0000400000020002
+    cmp byte ptr [rax], 0
+    je .fault_generation_zero
+    cmp byte ptr [rax], 1
     jne .halt
+    jmp .remember_event
+
+.fault_generation_zero:
+.global pci_serial_driver_fault_site
+pci_serial_driver_fault_site:
+    ud2
+
+.interrupt:
+    cmp r14, 2
+    jne .halt
+    test r15, 0x20
+    je .halt
+
+.remember_event:
+    movabs rax, 0x4c4c4143544e4741
+    push r13
     push r10
 
     mov ecx, 58
@@ -65,9 +92,21 @@ pci_serial_driver_acknowledge_return:
 
     mov ecx, 59
     xor edx, edx
+    cmp qword ptr [rsp + 8], 4
+    je .configure
+
+.write:
     mov r11d, 1
     xor r12d, r12d
     mov r13d, 0x50
+    jmp .submit
+
+.configure:
+    mov r11d, 2
+    mov r12d, 1
+    xor r13d, r13d
+
+.submit:
     xor r14d, r14d
     xor r15d, r15d
     xor ebp, ebp
@@ -78,8 +117,17 @@ pci_serial_driver_submit_return:
     je .halt
     test r11, r11
     jne .halt
+    cmp qword ptr [rsp + 8], 4
+    je .configure_result
     cmp r12, 0x50
     jne .halt
+    jmp .result_checked
+
+.configure_result:
+    test r12, r12
+    jne .halt
+
+.result_checked:
     test r13, r13
     jne .halt
     test r14, r14
@@ -88,7 +136,7 @@ pci_serial_driver_submit_return:
     jne .halt
     test rbp, rbp
     jne .halt
-    add rsp, 8
+    add rsp, 16
 
     mov ecx, 60
     xor edx, edx
