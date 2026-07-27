@@ -7,7 +7,7 @@
 use agent_kernel_core::{
     AgentId, CapabilityId, DurableArchivePreflight, DurableArchiveReceipt,
     DurableArchiveRecoveryVerifier, DurableArchiveVerifier, DurableRecoveredHead,
-    EventArchiveCheckpoint, EventArchiveProposal, KernelError, ResourceId,
+    EventArchiveCheckpoint, EventArchiveProposal, EventArchiveSnapshot, KernelError, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -63,6 +63,16 @@ impl<
         RUNTIME_ADMISSIONS,
     >
 {
+    pub fn sys_prepare_event_archive_snapshot(
+        &self,
+        actor: AgentId,
+        authority: CapabilityId,
+        through_sequence: u64,
+    ) -> Result<EventArchiveSnapshot, KernelError> {
+        self.core
+            .prepare_event_archive_snapshot(actor, authority, through_sequence)
+    }
+
     pub fn sys_prepare_event_archive(
         &self,
         through_sequence: u64,

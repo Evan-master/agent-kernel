@@ -5,8 +5,8 @@
 //! and audit events to `agent-kernel-core`. It performs no architecture I/O.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, DriverEndpointDescriptor, DriverEndpointRecord, Event, KernelError,
-    ResourceId,
+    AgentId, CapabilityId, DriverEndpointDescriptor, DriverEndpointRecord, DriverResourceTree,
+    DriverResourceTreeSpec, Event, KernelError, OperationSet, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -62,6 +62,17 @@ impl<
         RUNTIME_ADMISSIONS,
     >
 {
+    pub fn sys_create_driver_resource_tree(
+        &mut self,
+        owner: AgentId,
+        parent: Option<(ResourceId, CapabilityId)>,
+        operations: OperationSet,
+        spec: DriverResourceTreeSpec,
+    ) -> Result<DriverResourceTree, KernelError> {
+        self.core
+            .create_driver_resource_tree(owner, parent, operations, spec)
+    }
+
     pub fn sys_register_driver_endpoint(
         &mut self,
         installer: AgentId,

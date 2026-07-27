@@ -1,12 +1,12 @@
-//! Read-only authorization boundary for one durable Event archive commit.
+//! Read-only authorization boundaries for Event archive handoff.
 //!
-//! Core validates the launched State Signer, root Rollback authority, storage
-//! Checkpoint authority, and exact current proposal before machine code may
-//! write durable media. The returned record is immutable and emits no Event.
+//! Core validates a Supervisor snapshot or State Signer durable commit against
+//! root authority and the exact current proposal. These immutable preflights
+//! emit no Event and never release resident history.
 
 use crate::{
-    AgentEntryKind, AgentId, CapabilityId, EventArchiveProposal, KernelCore, KernelError,
-    Operation, ResourceId, ResourceStatus,
+    AgentEntryKind, AgentId, CapabilityId, EventArchiveProposal, EventArchiveSnapshot, KernelCore,
+    KernelError, Operation, ResourceId, ResourceStatus,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -96,6 +96,38 @@ impl<
         RUNTIME_ADMISSIONS,
     >
 {
+    pub fn prepare_event_archive_snapshot(
+        &self,
+        actor: AgentId,
+        archive_authority: CapabilityId,
+        through_sequence: u64,
+    ) -> Result<EventArchiveSnapshot, KernelError> {
+        let entry = self
+            .find_agent_entry(actor)
+            .map_err(|_| KernelError::AgentNotLaunched)?;
+        if entry.kind != AgentEntryKind::Supervisor {
+            return Err(KernelError::AgentEntryKindMismatch);
+        }
+
+        let capability = self.find_capability(archive_authority)?;
+        let root = self.find_resource(capability.resource)?;
+        if root.parent.is_some() {
+            return Err(KernelError::EventArchiveAuthorityScopeMismatch);
+        }
+        if root.status != ResourceStatus::Active {
+            return Err(KernelError::ResourceRetired);
+        }
+        self.ensure_authorized(actor, archive_authority, root.id, Operation::Rollback)?;
+
+        let proposal = self.prepare_event_archive(through_sequence)?;
+        Ok(EventArchiveSnapshot::new(
+            proposal,
+            actor,
+            archive_authority,
+            root.id,
+        ))
+    }
+
     pub fn preflight_durable_event_archive(
         &self,
         actor: AgentId,

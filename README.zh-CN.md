@@ -22,15 +22,15 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-[06] PCI device fabric ...... inventoried
-kernel://devices/v21-pci-inventory
+[06] PCI device fabric ...... capability-bound
+kernel://devices/v22-resource-claims
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V21 PCI inventory │
+│ VERIFIED   V22 / QEMU debug + release   PCI BAR authority       │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -100,7 +100,7 @@ Agent Package
 | 恢复 | `#UD`、`#GP`、`#PF`、修复、重启、回滚 |
 | IPC | 阻塞 Mailbox、唤醒、确认、回收 |
 | 内存 | 页/区域分配、First-Fit 复用、清零 |
-| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、PCI 清单、端口与 ATA PIO 访问 |
+| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、PCI BAR 认领、端口与 ATA PIO 访问 |
 
 <details>
 <summary><code>用户地址空间</code></summary>
@@ -176,7 +176,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V20 不变量 |
+| 契约 | V13 至 V22 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -192,6 +192,7 @@ commit(55) <── 精确 384B request <── 低 S P-256 signature
 | 原生设备 | ATA LBA48、512 字节扇区、有界轮询、`FLUSH CACHE EXT` |
 | 原生映射 | 每槽 128 个扇区；一个对齐的 256 扇区保留区间 |
 | TPM 权限 | Ring 0 独占 MMIO 与命令传输；Ring 3 仅可请求一次保留 Manifest 签名 |
+| Event 历史 | Disabled 保留授权只读快照；持久提交仅释放已验证前缀 |
 
 ```text
 ATA IDENTIFY ──> 双槽扫描 ──> 链路 + 签名验证
@@ -258,7 +259,17 @@ classes           Network / Display / USB 发现
 ownership         BSP 持有 / Agent 原始配置访问关闭
 ```
 
-`TPM CRB PATH` 完成 · `PCR POLICY` 完成 · `PCI INVENTORY` 完成
+```text
+V22 PCI RESOURCE CLAIMS
+probe             关闭 Decode / 全一值测量 / 精确恢复
+catalog           稳定 BDF / Type 0 Endpoint / 已分配 BAR
+tree              Function Resource + 1..6 个 BAR Region Resource
+authority         每节点 Owner Capability / 每 BAR Physical Endpoint
+transaction       完整预检 / 有序 Event / 原子提交
+agent surface     ResourceId + Capability / 关闭原始配置修改
+```
+
+`TPM CRB PATH` 完成 · `PCR POLICY` 完成 · `PCI AUTHORITY` 完成
 
 ## `05 // AGENT CALL`
 
@@ -287,9 +298,9 @@ ownership         BSP 持有 / Agent 原始配置访问关闭
 ## `06 // 启动证据`
 
 ```text
-PROFILE            V10 signed-v3
+PROFILE            V22 pci-resource-claims
 QEMU               debug + release
-EVENTS             1..412 / 精确重放
+EVENTS             1..417 / 精确历史
 AGENT CONTEXTS      11 个隔离上下文
 DISPATCHES          35
 FRAME OWNERSHIP     每 Agent 12..43
@@ -303,7 +314,9 @@ BOOT FRAME POOL     77 帧封存
 | 上下文切换 | `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` |
 | Fault 恢复 | `AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK` |
 | Namespace 路径 | `AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK` |
-| 归档重放 | `AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
+| Event 历史 | `AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK` |
+| PCI Function 认领 | `AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK` |
+| PCI 权限边界 | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -379,13 +392,23 @@ failure            无 Function / 容量溢出 -> 停止启动
 boot evidence      PCI_CONFIG_IO_OK / PCI_INVENTORY_OK
 ```
 
+```text
+V22 PCI AUTHORITY
+BAR probe           I/O + 32-bit + below-1-MiB + 64-bit
+hardware safety     关闭 Command Decode / 恢复 BAR
+Core transaction    Resource + Capability + Driver Endpoint
+claim mapping       每个 BAR Slot 绑定精确内核权限
+QEMU suffix         Event 413..417 / 一个已分配 BAR
+boot evidence       BAR_CATALOG_OK / FUNCTION_CLAIM_OK / CAPABILITY_BOUNDARY_OK
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
 | 原生镜像 | 格式 | Calls | 字节 | SHA-256 |
 | :--- | :--- | ---: | ---: | :--- |
-| Resource Manager | Signed Package v3 | 43 | 16,738 | `8fed932cf0a4...6699f9b3d` |
-| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5a657ca1ecde...9339078` |
+| Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
+| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
 
 </details>
 
@@ -401,8 +424,9 @@ $ cargo run -p agent-supervisor
 ```console
 $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
-$ scripts/audit-agent-images.rb --assembly
+$ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
+$ ruby scripts/test-inspect-tpm-state-signer.rb
 ```
 
 ```console
@@ -475,8 +499,10 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] SHA-256 PCR Policy Session + 命令绑定 TPM 授权
 [done] 策略门控 TPM 签名 + ATA 断电恢复证明
 [done] 原生 PCI 配置访问 + 固定容量 Function 清单
+[done] 可逆 PCI BAR Probe + Capability 绑定的 Driver Function 认领
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
-[next] PCI BAR 归属 + Capability 绑定的 Driver Function 认领
+[next] Capability 绑定的 PCI Controller Driver 执行
+[next] DMA/IOMMU Domain + MSI/MSI-X
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
 
@@ -486,7 +512,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
+| PCI 发现 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
+| 当前里程碑 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 
 ## `10 // 项目`
 

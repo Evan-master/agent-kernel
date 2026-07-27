@@ -1,6 +1,6 @@
 use agent_kernel_x86_64::pci::{
     PciConfigAccess, PciConfigIo, PciConfigMechanismOne, PciConfigMechanismOneError,
-    PciConfigRegister, PciFunctionAddress,
+    PciConfigMutationAccess, PciConfigRegister, PciConfigWriteIo, PciFunctionAddress,
 };
 
 #[derive(Default)]
@@ -10,6 +10,7 @@ struct RecordingConfigIo {
     address_read_count: usize,
     data: u32,
     address_writes: Vec<u32>,
+    data_writes: Vec<u32>,
 }
 
 impl PciConfigIo for RecordingConfigIo {
@@ -29,6 +30,13 @@ impl PciConfigIo for RecordingConfigIo {
 
     fn read_data(&mut self) -> u32 {
         self.data
+    }
+}
+
+impl PciConfigWriteIo for RecordingConfigIo {
+    fn write_data(&mut self, value: u32) {
+        self.data = value;
+        self.data_writes.push(value);
     }
 }
 
@@ -62,6 +70,20 @@ fn configuration_read_emits_one_exact_selector_then_reads_data() {
 
     let io = config.into_io();
     assert_eq!(io.address_writes, [0x805a_dedc]);
+}
+
+#[test]
+fn configuration_write_emits_one_exact_selector_then_one_data_write() {
+    let io = RecordingConfigIo::default();
+    let mut config = PciConfigMechanismOne::new(io);
+    let address = PciFunctionAddress::new(0x20, 0x1a, 3).unwrap();
+    let register = PciConfigRegister::new(0x24).unwrap();
+
+    config.write_u32(address, register, 0xfeed_cafe);
+
+    let io = config.into_io();
+    assert_eq!(io.address_writes, [0x8020_d324]);
+    assert_eq!(io.data_writes, [0xfeed_cafe]);
 }
 
 #[test]

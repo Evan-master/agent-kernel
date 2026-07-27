@@ -83,34 +83,66 @@ pub(super) fn terminal(
     admissions: [NativeAddressSpaceAdmission; 2],
 ) -> Option<()> {
     for flow in flows {
-        flow.verify_completed(booted)?;
+        if flow.verify_completed(booted).is_none() {
+            serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_WORKER_VERIFICATION_ERROR");
+            return None;
+        }
     }
-    supervisor.verify_completed(booted)?;
-    let release_ids = [
-        booted.kernel().runtime_admissions().first()?.id,
-        booted.kernel().runtime_admissions().get(1)?.id,
-    ];
-    let release = booted
+    if supervisor.verify_completed(booted).is_none() {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_SUPERVISOR_VERIFICATION_ERROR");
+        return None;
+    }
+    let Some(first) = booted.kernel().runtime_admissions().first() else {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_RELEASE_TARGET_ERROR");
+        return None;
+    };
+    let Some(second) = booted.kernel().runtime_admissions().get(1) else {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_RELEASE_TARGET_ERROR");
+        return None;
+    };
+    let release_ids = [first.id, second.id];
+    let Ok(release) = booted
         .kernel()
         .sys_prepare_runtime_admission_release_batch(release_ids)
-        .ok()?;
+    else {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_RELEASE_PREPARE_ERROR");
+        return None;
+    };
     let event_start = booted.kernel().events().len();
     let targets = [flows[0].admission_target(), flows[1].admission_target()];
-    report.reclaim_completed_address_spaces(
-        pool,
-        smp,
-        [ADMISSION_SUPERVISOR, targets[0].0, targets[1].0],
-    )?;
-    if report.len() != 0
-        || report.faulted_len() != 0
-        || !runtime.is_empty()
-        || !pool.all_reclaimed_and_zero()
+    if report
+        .reclaim_completed_address_spaces(
+            pool,
+            smp,
+            [ADMISSION_SUPERVISOR, targets[0].0, targets[1].0],
+        )
+        .is_none()
+    {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_PHYSICAL_RECLAIM_ERROR");
+        return None;
+    }
+    if report.len() != 0 || report.faulted_len() != 0 {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_REPORT_ERROR");
+        return None;
+    }
+    if !runtime.is_empty() {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_RUNTIME_STATE_ERROR");
+        return None;
+    }
+    if !pool.all_reclaimed_and_zero()
         || !pool.owns_zeroed(supervisor_admission.identity())
         || !pool.owns_zeroed(admissions[0].identity())
         || !pool.owns_zeroed(admissions[1].identity())
-        || !memory_pool.all_available_and_zero()
-        || booted.kernel().events().len() != event_start
     {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_FRAME_POOL_ERROR");
+        return None;
+    }
+    if !memory_pool.all_available_and_zero() {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_MEMORY_POOL_ERROR");
+        return None;
+    }
+    if booted.kernel().events().len() != event_start {
+        serial_write_line("AGENT_KERNEL_NATIVE_TERMINAL_EVENT_SILENCE_ERROR");
         return None;
     }
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK");

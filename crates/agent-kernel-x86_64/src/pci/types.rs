@@ -64,6 +64,10 @@ impl PciConfigRegister {
     pub(super) const COMMAND_STATUS: Self = Self(0x04);
     pub(super) const CLASS_REVISION: Self = Self(0x08);
     pub(super) const HEADER: Self = Self(0x0c);
+
+    pub(super) const fn bar(index: u8) -> Self {
+        Self(0x10 + index * 4)
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

@@ -1,22 +1,30 @@
-//! Architecture-owned handoff buffer for committed Event archives.
+//! Architecture-owned handoff buffer for Event archive evidence.
 //!
 //! This x86 execution-layer store retains one complete bounded Event segment
-//! outside Core, together with its checkpoint and source occupancy. It enables
-//! exact replay evidence after Core releases the corresponding live slots.
+//! outside Core, together with its proposal, optional durable checkpoint, and
+//! source occupancy. Disk-free boots retain Core Events; durable boots may
+//! release the committed prefix after receipt verification.
 
-use agent_kernel_core::{Event, EventArchiveCheckpoint, EventArchiveDigest, EventArchiveProposal};
+mod history;
+
+use agent_kernel_core::{
+    AgentId, CapabilityId, Event, EventArchiveCheckpoint, EventArchiveProposal,
+    EventArchiveSnapshot, ResourceId,
+};
 
 use super::NativeExecutionReport;
-use crate::{X86BootedKernel, X86_EVENT_CAPACITY};
 
 pub(crate) const NATIVE_EVENT_ARCHIVE_CAPACITY: usize = 64;
-const TERMINAL_EVENT_SEQUENCE: u64 = 412;
 
 pub(crate) struct NativeEventArchive {
     events: [Option<Event>; NATIVE_EVENT_ARCHIVE_CAPACITY],
     len: usize,
     source_live_len: usize,
+    proposal: Option<EventArchiveProposal>,
     checkpoint: Option<EventArchiveCheckpoint>,
+    actor: Option<AgentId>,
+    authority: Option<CapabilityId>,
+    root: Option<ResourceId>,
 }
 
 impl NativeEventArchive {
@@ -25,27 +33,70 @@ impl NativeEventArchive {
             events: [None; NATIVE_EVENT_ARCHIVE_CAPACITY],
             len: 0,
             source_live_len: 0,
+            proposal: None,
             checkpoint: None,
+            actor: None,
+            authority: None,
+            root: None,
         }
     }
 
     pub(super) const fn can_record(&self, count: usize) -> bool {
-        self.checkpoint.is_none()
+        self.proposal.is_none()
             && count > 0
             && count <= NATIVE_EVENT_ARCHIVE_CAPACITY.saturating_sub(self.len)
     }
 
-    pub(super) fn record(
+    pub(super) fn record_checkpoint(
         &mut self,
         source_live_len: usize,
         events: &[Option<Event>],
         checkpoint: EventArchiveCheckpoint,
     ) -> Option<()> {
+        self.record(
+            source_live_len,
+            events,
+            checkpoint.proposal(),
+            Some(checkpoint),
+            checkpoint.actor(),
+            checkpoint.authority(),
+            checkpoint.root(),
+        )
+    }
+
+    pub(super) fn record_snapshot(
+        &mut self,
+        source_live_len: usize,
+        events: &[Option<Event>],
+        snapshot: EventArchiveSnapshot,
+    ) -> Option<()> {
+        self.record(
+            source_live_len,
+            events,
+            snapshot.proposal(),
+            None,
+            snapshot.actor(),
+            snapshot.authority(),
+            snapshot.root(),
+        )
+    }
+
+    fn record(
+        &mut self,
+        source_live_len: usize,
+        events: &[Option<Event>],
+        proposal: EventArchiveProposal,
+        checkpoint: Option<EventArchiveCheckpoint>,
+        actor: AgentId,
+        authority: CapabilityId,
+        root: ResourceId,
+    ) -> Option<()> {
         if !self.can_record(events.len())
             || events.iter().any(Option::is_none)
-            || checkpoint.count() != events.len()
-            || checkpoint.first_sequence() != events.first()?.as_ref()?.sequence
-            || checkpoint.through_sequence() != events.last()?.as_ref()?.sequence
+            || proposal.count() != events.len()
+            || proposal.first_sequence() != events.first()?.as_ref()?.sequence
+            || proposal.through_sequence() != events.last()?.as_ref()?.sequence
+            || checkpoint.is_some_and(|checkpoint| checkpoint.proposal() != proposal)
         {
             return None;
         }
@@ -54,7 +105,11 @@ impl NativeEventArchive {
         }
         self.len = events.len();
         self.source_live_len = source_live_len;
-        self.checkpoint = Some(checkpoint);
+        self.proposal = Some(proposal);
+        self.checkpoint = checkpoint;
+        self.actor = Some(actor);
+        self.authority = Some(authority);
+        self.root = Some(root);
         Some(())
     }
 
@@ -70,47 +125,32 @@ impl NativeEventArchive {
         self.source_live_len
     }
 
+    pub(crate) const fn proposal(&self) -> Option<EventArchiveProposal> {
+        self.proposal
+    }
+
     pub(crate) const fn checkpoint(&self) -> Option<EventArchiveCheckpoint> {
         self.checkpoint
     }
 
-    pub(crate) fn proves_terminal_replay(&self, booted: &X86BootedKernel) -> bool {
-        let Some(checkpoint) = self.checkpoint else {
-            return false;
-        };
-        let Some(first) = self.events().next().copied() else {
-            return false;
-        };
-        let mut segment = [first; NATIVE_EVENT_ARCHIVE_CAPACITY];
-        let mut copied = 0;
-        for (index, event) in self.events().copied().enumerate() {
-            segment[index] = event;
-            copied = index + 1;
-        }
-        let kernel = booted.kernel();
-        let live = kernel.events();
+    pub(crate) const fn actor(&self) -> Option<AgentId> {
+        self.actor
+    }
 
-        self.source_live_len == X86_EVENT_CAPACITY
-            && self.len == NATIVE_EVENT_ARCHIVE_CAPACITY
-            && copied == NATIVE_EVENT_ARCHIVE_CAPACITY
-            && checkpoint.generation() == 1
-            && checkpoint.first_sequence() == 1
-            && checkpoint.through_sequence() == NATIVE_EVENT_ARCHIVE_CAPACITY as u64
-            && checkpoint.count() == NATIVE_EVENT_ARCHIVE_CAPACITY
-            && checkpoint.previous_digest() == EventArchiveDigest::ZERO
-            && kernel.event_archive_checkpoint() == Some(checkpoint)
-            && EventArchiveProposal::from_segment(None, &segment) == Some(checkpoint.proposal())
-            && live.len() + self.len == TERMINAL_EVENT_SEQUENCE as usize
-            && live.first().is_some_and(|event| event.sequence == 65)
-            && live
-                .last()
-                .is_some_and(|event| event.sequence == TERMINAL_EVENT_SEQUENCE)
-            && kernel.next_event_sequence() == TERMINAL_EVENT_SEQUENCE + 1
-            && self
-                .events()
-                .chain(live.iter())
-                .enumerate()
-                .all(|(index, event)| event.sequence == index as u64 + 1)
+    pub(crate) const fn authority(&self) -> Option<CapabilityId> {
+        self.authority
+    }
+
+    pub(crate) const fn root(&self) -> Option<ResourceId> {
+        self.root
+    }
+
+    pub(crate) const fn is_released(&self) -> bool {
+        self.checkpoint.is_some()
+    }
+
+    pub(crate) const fn is_retained_snapshot(&self) -> bool {
+        self.proposal.is_some() && self.checkpoint.is_none()
     }
 }
 
@@ -126,7 +166,17 @@ impl NativeExecutionReport {
         checkpoint: EventArchiveCheckpoint,
     ) -> Option<()> {
         self.event_archive
-            .record(source_live_len, events, checkpoint)
+            .record_checkpoint(source_live_len, events, checkpoint)
+    }
+
+    pub(super) fn record_event_snapshot(
+        &mut self,
+        source_live_len: usize,
+        events: &[Option<Event>],
+        snapshot: EventArchiveSnapshot,
+    ) -> Option<()> {
+        self.event_archive
+            .record_snapshot(source_live_len, events, snapshot)
     }
 
     pub(crate) const fn event_archive(&self) -> &NativeEventArchive {

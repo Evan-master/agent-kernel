@@ -126,7 +126,7 @@ impl<
         })
     }
 
-    fn record_resource_created_event(
+    pub(crate) fn record_resource_created_event(
         &mut self,
         agent: AgentId,
         resource: ResourceId,

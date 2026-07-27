@@ -1,8 +1,8 @@
-//! Permanent x86_64 GDT, TSS, and privileged-entry stack.
+//! Permanent x86_64 GDT, TSS, and per-CPU kernel stacks.
 //!
 //! This architecture-binary module installs the segment authority model and
-//! owns one indexed RSP0 stack per logical CPU. Descriptor bytes come from the
-//! host-tested architecture library.
+//! owns disjoint worker and RSP0 entry stacks per logical CPU. Descriptor bytes
+//! come from the host-tested architecture library.
 
 mod assembly;
 mod guard_pages;
@@ -11,6 +11,7 @@ mod stack;
 use core::{
     arch::asm,
     cell::UnsafeCell,
+    mem::MaybeUninit,
     sync::atomic::{AtomicU8, Ordering},
 };
 
@@ -24,9 +25,10 @@ use bootloader_api::BootInfo;
 use self::stack::PrivilegedStack;
 
 const PRIVILEGED_STACK_CANARY: u64 = 0x5253_5030_5354_414b;
+const WORKER_STACK_CANARY: u64 = 0x574f_524b_5354_414b;
 
 struct TssStorage {
-    value: UnsafeCell<TaskStateSegment64>,
+    value: UnsafeCell<MaybeUninit<TaskStateSegment64>>,
 }
 
 struct GdtStorage {
@@ -34,7 +36,8 @@ struct GdtStorage {
 }
 
 struct CpuPrivilegeSlot {
-    stack: PrivilegedStack,
+    entry_stack: PrivilegedStack,
+    worker_stack: PrivilegedStack,
     tss: TssStorage,
     gdt: GdtStorage,
     install_state: AtomicU8,
@@ -43,9 +46,10 @@ struct CpuPrivilegeSlot {
 impl CpuPrivilegeSlot {
     const fn new() -> Self {
         Self {
-            stack: PrivilegedStack::new(),
+            entry_stack: PrivilegedStack::new(),
+            worker_stack: PrivilegedStack::new(),
             tss: TssStorage {
-                value: UnsafeCell::new(TaskStateSegment64::new(0)),
+                value: UnsafeCell::new(MaybeUninit::uninit()),
             },
             gdt: GdtStorage {
                 entries: UnsafeCell::new([0; GDT_ENTRY_COUNT]),
@@ -87,7 +91,7 @@ impl PrivilegeBoundary {
             return None;
         }
 
-        let layout = slot.stack.layout()?;
+        let layout = slot.entry_stack.layout()?;
         let start = layout.stack_start();
         let end = layout.stack_end();
         if !start.is_multiple_of(PRIVILEGED_STACK_GUARD_BYTES) || !end.is_multiple_of(16) {
@@ -98,7 +102,7 @@ impl PrivilegeBoundary {
             (start as *mut u64).write_volatile(PRIVILEGED_STACK_CANARY);
         }
 
-        let tss_ptr = slot.tss.value.get();
+        let tss_ptr = slot.tss.value.get().cast::<TaskStateSegment64>();
         // SAFETY: IF is clear and the TSS has not been loaded before this write.
         unsafe {
             tss_ptr.write_volatile(TaskStateSegment64::new(end as u64));
@@ -152,17 +156,40 @@ impl PrivilegeBoundary {
     }
 }
 
-pub(crate) fn startup_stack_top(cpu: CpuIndex) -> Option<u64> {
+pub(crate) fn prepare_worker_stack_top(cpu: CpuIndex) -> Option<u64> {
     if !guard_pages::ready() {
         return None;
     }
     let slot = PRIVILEGE_SLOTS.get(cpu.as_usize())?;
-    let layout = slot.stack.layout()?;
-    (layout
+    let layout = slot.worker_stack.layout()?;
+    let valid = layout
         .stack_start()
         .is_multiple_of(PRIVILEGED_STACK_GUARD_BYTES)
-        && layout.stack_end().is_multiple_of(16))
-    .then_some(layout.stack_end() as u64)
+        && layout.stack_end().is_multiple_of(16);
+    if !valid {
+        return None;
+    }
+    // SAFETY: the BSP initializes this AP-only worker stack before publishing
+    // its trampoline descriptor, and the AP has not started yet.
+    unsafe {
+        (layout.stack_start() as *mut u64).write_volatile(WORKER_STACK_CANARY);
+    }
+    Some(layout.stack_end() as u64)
+}
+
+pub(crate) fn worker_stack_bounds(cpu: CpuIndex) -> Option<PrivilegedStackBounds> {
+    if !guard_pages::ready() {
+        return None;
+    }
+    let layout = PRIVILEGE_SLOTS.get(cpu.as_usize())?.worker_stack.layout()?;
+    let bounds = PrivilegedStackBounds {
+        guard_start: layout.guard_start(),
+        start: layout.stack_start(),
+        end: layout.stack_end(),
+    };
+    // SAFETY: the worker stack belongs exclusively to this indexed CPU.
+    (unsafe { (bounds.start as *const u64).read_volatile() == WORKER_STACK_CANARY })
+        .then_some(bounds)
 }
 
 pub(crate) fn stack_canary_valid(stack: PrivilegedStackBounds) -> bool {

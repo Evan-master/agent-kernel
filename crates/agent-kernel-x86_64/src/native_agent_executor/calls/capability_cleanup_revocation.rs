@@ -4,7 +4,7 @@
 //! marked revoked without changing Store occupancy. It binds the reply to the
 //! exact target, Resource, ancestor authority, and ordered Rollback Event.
 
-use agent_kernel_core::{CapabilityId, EventKind, Operation, ResourceStatus};
+use agent_kernel_core::{CapabilityId, EventKind, KernelError, Operation, ResourceStatus};
 
 use super::super::state;
 use crate::{
@@ -18,26 +18,60 @@ pub(super) fn revoke(
     authority: CapabilityId,
     target: CapabilityId,
 ) -> Option<ResumableAgentCpu> {
-    pending.authenticated_request()?;
+    if pending.authenticated_request().is_none() {
+        serial_write_line("AGENT_KERNEL_CAPABILITY_CLEANUP_AUTHENTICATION_ERROR");
+        return None;
+    }
     let context = pending.context();
-    let target_record = booted.kernel().capability(target).ok()?;
-    let resource = booted
+    let target_record = match booted.kernel().capability(target) {
+        Ok(record) => record,
+        Err(_) => {
+            serial_write_line("AGENT_KERNEL_CAPABILITY_CLEANUP_TARGET_ERROR");
+            return None;
+        }
+    };
+    let Some(resource) = booted
         .kernel()
         .resources()
         .iter()
         .find(|record| record.id == target_record.resource)
-        .copied()?;
+        .copied()
+    else {
+        serial_write_line("AGENT_KERNEL_CAPABILITY_CLEANUP_RESOURCE_ERROR");
+        return None;
+    };
     let event_start = booted.kernel().events().len();
     let next_sequence = booted.kernel().next_event_sequence();
     let capability_capacity = booted.kernel().capability_capacity();
     let capability_count = booted.kernel().capability_count();
 
-    let recorded = booted
-        .kernel_mut()
-        .sys_revoke_capability_for_cleanup(context.agent(), authority, target)
-        .ok()?;
+    let recorded = match booted.kernel_mut().sys_revoke_capability_for_cleanup(
+        context.agent(),
+        authority,
+        target,
+    ) {
+        Ok(event) => event,
+        Err(error) => {
+            let marker = match error {
+                KernelError::CapabilityCleanupNotReady => {
+                    "AGENT_KERNEL_CAPABILITY_CLEANUP_RESOURCE_NOT_RETIRED_ERROR"
+                }
+                KernelError::CapabilityRevoked => {
+                    "AGENT_KERNEL_CAPABILITY_CLEANUP_ALREADY_REVOKED_ERROR"
+                }
+                KernelError::OperationDenied => "AGENT_KERNEL_CAPABILITY_CLEANUP_OPERATION_ERROR",
+                KernelError::EventLogFull => "AGENT_KERNEL_CAPABILITY_CLEANUP_EVENT_LOG_FULL_ERROR",
+                _ => "AGENT_KERNEL_CAPABILITY_CLEANUP_SYSCALL_ERROR",
+            };
+            serial_write_line(marker);
+            return None;
+        }
+    };
     let kernel = booted.kernel();
-    let event = kernel.events().get(event_start)?;
+    let Some(event) = kernel.events().get(event_start) else {
+        serial_write_line("AGENT_KERNEL_CAPABILITY_CLEANUP_EVENT_ERROR");
+        return None;
+    };
     let mut expected_target = target_record;
     expected_target.revoked = true;
     if target_record.revoked
@@ -61,9 +95,15 @@ pub(super) fn revoke(
         || event.target_agent != Some(target_record.agent)
         || !state::running(booted, context)
     {
+        serial_write_line("AGENT_KERNEL_CAPABILITY_CLEANUP_INVARIANT_ERROR");
         return None;
     }
 
     serial_write_line("AGENT_KERNEL_AGENT_CALL_CAPABILITY_CLEANUP_REVOCATION_OK");
-    pending.acknowledge_capability_cleanup_revocation(target, target_record.resource)
+    let resumable =
+        pending.acknowledge_capability_cleanup_revocation(target, target_record.resource);
+    if resumable.is_none() {
+        serial_write_line("AGENT_KERNEL_CAPABILITY_CLEANUP_REPLY_ERROR");
+    }
+    resumable
 }

@@ -10,7 +10,10 @@ use core::{
 
 use agent_kernel_x86_64::cpu::CpuIndex;
 
-use crate::agent_cpu::{AgentCpuRuntime, AgentRunOutcome, PreemptedAgentCpu, PreparedAgentCpu};
+use crate::{
+    agent_cpu::{AgentCpuRuntime, AgentRunOutcome, PreemptedAgentCpu, PreparedAgentCpu},
+    serial_write_line,
+};
 
 const SLOT_IDLE: u8 = 0;
 const SLOT_WRITING: u8 = 1;
@@ -46,8 +49,36 @@ impl ApWorkInput {
 
     fn run(self, runtime: AgentCpuRuntime) -> Option<AgentRunOutcome> {
         match self {
-            Self::Prepared(cpu) => cpu.rebind_runtime(runtime)?.run_until_boundary(),
-            Self::Preempted(cpu) => cpu.rebind_runtime(runtime)?.resume_until_boundary(),
+            Self::Prepared(cpu) => {
+                if let Some(rejection) = cpu.rebind_rejection(runtime) {
+                    serial_write_line(rejection.marker());
+                    return None;
+                }
+                let Some(cpu) = cpu.rebind_runtime(runtime) else {
+                    serial_write_line("AGENT_KERNEL_AP_WORKER_PREPARED_REBIND_ERROR");
+                    return None;
+                };
+                let outcome = cpu.run_until_boundary();
+                if outcome.is_none() {
+                    serial_write_line("AGENT_KERNEL_AP_WORKER_PREPARED_BOUNDARY_ERROR");
+                }
+                outcome
+            }
+            Self::Preempted(cpu) => {
+                if let Some(rejection) = cpu.rebind_rejection(runtime) {
+                    serial_write_line(rejection.marker());
+                    return None;
+                }
+                let Some(cpu) = cpu.rebind_runtime(runtime) else {
+                    serial_write_line("AGENT_KERNEL_AP_WORKER_PREEMPTED_REBIND_ERROR");
+                    return None;
+                };
+                let outcome = cpu.resume_until_boundary();
+                if outcome.is_none() {
+                    serial_write_line("AGENT_KERNEL_AP_WORKER_PREEMPTED_BOUNDARY_ERROR");
+                }
+                outcome
+            }
         }
     }
 }

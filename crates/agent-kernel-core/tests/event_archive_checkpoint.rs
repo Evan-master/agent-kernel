@@ -227,3 +227,64 @@ fn commit_requires_state_signer_and_root_rollback_authority() {
     );
     assert_eq!(core.events(), before.as_slice());
 }
+
+#[test]
+fn retained_snapshot_requires_supervisor_root_authority_and_mutates_nothing() {
+    let (mut core, state) = fixture::<32>(agent_kernel_core::AgentEntryKind::Supervisor);
+    emit(&mut core, state, 401);
+    let through = core.events()[3].sequence;
+    let before = core.events().to_vec();
+    let next_sequence = core.next_event_sequence();
+
+    let snapshot = core
+        .prepare_event_archive_snapshot(state.actor, state.authority, through)
+        .unwrap();
+
+    assert_eq!(snapshot.actor(), state.actor);
+    assert_eq!(snapshot.authority(), state.authority);
+    assert_eq!(snapshot.root(), state.root);
+    assert_eq!(
+        snapshot.proposal(),
+        core.prepare_event_archive(through).unwrap()
+    );
+    assert_eq!(core.events(), before.as_slice());
+    assert_eq!(core.next_event_sequence(), next_sequence);
+    assert_eq!(core.event_archive_checkpoint(), None);
+    assert_eq!(core.durable_archive_receipt(), None);
+
+    let observe = core
+        .derive_capability(
+            state.actor,
+            state.authority,
+            state.actor,
+            OperationSet::only(Operation::Observe),
+        )
+        .unwrap();
+    assert_eq!(
+        core.prepare_event_archive_snapshot(state.actor, observe, through),
+        Err(KernelError::OperationDenied)
+    );
+
+    let child = core
+        .create_resource(
+            state.actor,
+            ResourceKind::Service,
+            Some((state.root, state.authority)),
+            all_operations(),
+        )
+        .unwrap();
+    assert_eq!(
+        core.prepare_event_archive_snapshot(state.actor, child.capability, through),
+        Err(KernelError::EventArchiveAuthorityScopeMismatch)
+    );
+
+    let (worker, worker_fixture) = fixture::<32>(agent_kernel_core::AgentEntryKind::Worker);
+    assert_eq!(
+        worker.prepare_event_archive_snapshot(
+            worker_fixture.actor,
+            worker_fixture.authority,
+            worker.events()[1].sequence,
+        ),
+        Err(KernelError::AgentEntryKindMismatch)
+    );
+}

@@ -71,6 +71,7 @@ pub enum KernelError {
     DriverEndpointAlreadyExists,
     DriverEndpointDescriptorInvalid,
     DriverEndpointOverlap,
+    DriverResourceTreeEmpty,
     DeviceEventNotFound,
     DeviceEventStatusMismatch,
     DriverCommandNotFound,

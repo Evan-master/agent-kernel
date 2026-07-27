@@ -22,15 +22,15 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-[06] PCI device fabric ...... inventoried
-kernel://devices/v21-pci-inventory
+[06] PCI device fabric ...... capability-bound
+kernel://devices/v22-resource-claims
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V21 PCI inventory │
+│ VERIFIED   V22 / QEMU debug + release   PCI BAR authority       │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -100,7 +100,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, I/O APIC IRQ, PCI inventory, port and ATA PIO access |
+| I/O | Capability-authorized HAL request, I/O APIC IRQ, PCI BAR claims, port and ATA PIO access |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -176,7 +176,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V20 invariant |
+| Contract | V13 through V22 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -192,6 +192,7 @@ commit(55) <── exact 384B request <── low-S P-256 signature
 | Native device | ATA LBA48, 512-byte sectors, bounded polling, `FLUSH CACHE EXT` |
 | Native mapping | 128 sectors per slot; one aligned 256-sector reserved range |
 | TPM authority | Ring 0 owns MMIO and command transport; ring 3 can request one retained-manifest signature |
+| Event history | Disabled retains an authorized read-only snapshot; durable commit releases only a verified prefix |
 
 ```text
 ATA IDENTIFY ──> dual-slot scan ──> chain + signature verification
@@ -258,7 +259,17 @@ classes           network / display / USB discovery
 ownership         BSP retained / Agent raw config access closed
 ```
 
-`TPM CRB PATH` complete · `PCR POLICY` complete · `PCI INVENTORY` complete
+```text
+V22 PCI RESOURCE CLAIMS
+probe             decode off / all-ones sizing / exact restore
+catalog           stable BDF / Type 0 endpoints / assigned BARs
+tree              function Resource + 1..6 BAR region Resources
+authority         owner Capability per node / physical endpoint per BAR
+transaction       full preflight / ordered Events / atomic commit
+agent surface     ResourceId + Capability / raw config mutation closed
+```
+
+`TPM CRB PATH` complete · `PCR POLICY` complete · `PCI AUTHORITY` complete
 
 ## `05 // AGENT CALL`
 
@@ -287,9 +298,9 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ## `06 // PROOF`
 
 ```text
-PROFILE            V10 signed-v3
+PROFILE            V22 pci-resource-claims
 QEMU               debug + release
-EVENTS             1..412 / exact replay
+EVENTS             1..417 / exact history
 AGENT CONTEXTS      11 isolated
 DISPATCHES          35
 FRAME OWNERSHIP     12..43 per Agent
@@ -303,7 +314,9 @@ BOOT FRAME POOL     77 sealed
 | Context switching | `AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK` |
 | Fault recovery | `AGENT_KERNEL_NATIVE_AGENT_FAULT_RESTART_OK` |
 | Namespace paths | `AGENT_KERNEL_AGENT_CALL_NAMESPACE_MEMORY_PATH_OK` |
-| Archive replay | `AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK` |
+| Event history | `AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK` |
+| PCI Function claim | `AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK` |
+| PCI authority | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -379,13 +392,23 @@ failure            no functions / capacity overflow -> stop boot
 boot evidence      PCI_CONFIG_IO_OK / PCI_INVENTORY_OK
 ```
 
+```text
+V22 PCI AUTHORITY
+BAR probe           I/O + 32-bit + below-1-MiB + 64-bit
+hardware safety     command decode disabled / BARs restored
+Core transaction    Resource + Capability + Driver Endpoint
+claim mapping       each BAR slot bound to exact kernel authority
+QEMU suffix         events 413..417 / one assigned BAR
+boot evidence       BAR_CATALOG_OK / FUNCTION_CLAIM_OK / CAPABILITY_BOUNDARY_OK
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
 | Native image | Format | Calls | Bytes | SHA-256 |
 | :--- | :--- | ---: | ---: | :--- |
-| Resource Manager | Signed Package v3 | 43 | 16,738 | `8fed932cf0a4...6699f9b3d` |
-| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5a657ca1ecde...9339078` |
+| Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
+| Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
 
 </details>
 
@@ -401,8 +424,9 @@ $ cargo run -p agent-supervisor
 ```console
 $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
-$ scripts/audit-agent-images.rb --assembly
+$ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
+$ ruby scripts/test-inspect-tpm-state-signer.rb
 ```
 
 ```console
@@ -475,8 +499,10 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] SHA-256 PCR policy sessions + command-bound TPM authorization
 [done] policy-gated TPM signature + ATA power-loss recovery proof
 [done] native PCI configuration access + fixed-capacity function inventory
+[done] reversible PCI BAR probe + capability-bound Driver function claim
 [next] dedicated QEMU ATA image + emulator power-loss proof
-[next] PCI BAR ownership + capability-bound Driver function claims
+[next] capability-bound PCI controller Driver execution
+[next] DMA/IOMMU domains + MSI/MSI-X
 [next] network + graphics + USB controllers + formal verification
 ```
 
@@ -486,7 +512,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| Active milestone | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
+| PCI discovery | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
+| Active milestone | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 
 ## `10 // PROJECT`
 

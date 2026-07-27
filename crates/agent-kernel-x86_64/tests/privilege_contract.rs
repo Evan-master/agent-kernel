@@ -93,7 +93,8 @@ fn per_cpu_privilege_stack_reserves_one_lower_guard_page() {
     assert!(layout.contains_stack_address(layout.stack_end() - 1));
     assert!(!layout.contains_stack_address(layout.guard_start()));
     assert!(!layout.contains_stack_address(layout.stack_end()));
-    assert_eq!(PRIVILEGED_STACK_SLOT_BYTES, 9 * 4096);
+    assert_eq!(PRIVILEGED_STACK_BYTES, 64 * 1024);
+    assert_eq!(PRIVILEGED_STACK_SLOT_BYTES, 17 * 4096);
     assert!(PrivilegedStackLayout::new(guard_start + 1).is_none());
     assert!(PrivilegedStackLayout::new(0x0000_7fff_ffff_f000).is_none());
     assert!(PrivilegedStackLayout::new(0xffff_ffff_ffff_f000).is_none());

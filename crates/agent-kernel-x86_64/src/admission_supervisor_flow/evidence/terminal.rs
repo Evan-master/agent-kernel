@@ -51,7 +51,7 @@ impl PreparedAdmissionSupervisorFlow {
             && completed.return_offsets() == contract.expected_return_offsets()
             && completed.physical_quantum_generation() == 1
             && completed.reclamation_log().len() == 1
-            && self.event_archive_committed(booted, report)
+            && self.event_history_recorded(booted, report)
             && admissions.len() == 2
             && admissions.iter().enumerate().all(|(index, admission)| {
                 admission_matches(

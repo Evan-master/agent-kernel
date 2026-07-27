@@ -6,7 +6,7 @@ use x86_64::{
     registers::control::Cr3,
     structures::paging::{
         mapper::TranslateError, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags,
-        PhysFrame, Size4KiB,
+        PhysFrame, Size2MiB, Size4KiB,
     },
     PhysAddr, VirtAddr,
 };
@@ -125,13 +125,47 @@ fn map_device_page(
     let virtual_address = physical_offset
         .checked_add(physical_address)
         .ok_or(ApicMappingError::AddressOverflow)?;
-    map_page(
+    match map_page(
         mapper,
         allocator,
         virtual_address,
         physical_address,
         DEVICE_FLAGS,
-    )
+    ) {
+        Err(ApicMappingError::ParentHugePage) => {
+            tighten_huge_device_mapping(mapper, virtual_address, physical_address)
+        }
+        result => result,
+    }
+}
+
+fn tighten_huge_device_mapping(
+    mapper: &mut OffsetPageTable<'_>,
+    virtual_address: u64,
+    physical_address: u64,
+) -> Result<(), ApicMappingError> {
+    let page = Page::<Size2MiB>::containing_address(
+        VirtAddr::try_new(virtual_address).map_err(|_| ApicMappingError::AddressOverflow)?,
+    );
+    let expected = PhysFrame::<Size2MiB>::containing_address(PhysAddr::new(physical_address));
+
+    match mapper.translate_page(page) {
+        Ok(existing) if existing == expected => {
+            // SAFETY: the existing direct-map huge page is verified to map the
+            // expected physical window before its MMIO cache policy is tightened.
+            unsafe { mapper.update_flags(page, DEVICE_FLAGS) }
+                .map_err(|_| ApicMappingError::FlagUpdateFailed)?
+                .flush();
+        }
+        Ok(_) => return Err(ApicMappingError::MappingConflict),
+        Err(TranslateError::ParentEntryHugePage) => {
+            return Err(ApicMappingError::ParentHugePage);
+        }
+        Err(TranslateError::InvalidFrameAddress(_)) | Err(TranslateError::PageNotMapped) => {
+            return Err(ApicMappingError::MappingConflict);
+        }
+    }
+    Ok(())
 }
 
 fn map_page(

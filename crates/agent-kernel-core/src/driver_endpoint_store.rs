@@ -113,7 +113,7 @@ impl<
             .ok_or(KernelError::DriverEndpointNotFound)
     }
 
-    fn validate_driver_endpoint_descriptor(
+    pub(crate) fn validate_driver_endpoint_descriptor(
         &self,
         descriptor: DriverEndpointDescriptor,
     ) -> Result<(), KernelError> {
@@ -126,7 +126,7 @@ impl<
         Ok(())
     }
 
-    fn ensure_driver_endpoint_does_not_overlap(
+    pub(crate) fn ensure_driver_endpoint_does_not_overlap(
         &self,
         candidate: DriverEndpointDescriptor,
     ) -> Result<(), KernelError> {
@@ -146,5 +146,18 @@ impl<
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn driver_endpoint_descriptors_overlap(
+        first: DriverEndpointDescriptor,
+        second: DriverEndpointDescriptor,
+    ) -> Result<bool, KernelError> {
+        let first_end = first
+            .end()
+            .ok_or(KernelError::DriverEndpointDescriptorInvalid)?;
+        let second_end = second
+            .end()
+            .ok_or(KernelError::DriverEndpointDescriptorInvalid)?;
+        Ok(first.kind == second.kind && first.base <= second_end && second.base <= first_end)
     }
 }

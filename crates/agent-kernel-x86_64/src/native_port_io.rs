@@ -6,7 +6,11 @@
 
 use core::arch::asm;
 
-use crate::{ata::AtaRegisterIo, pci::PciConfigIo, port::PortIo};
+use crate::{
+    ata::AtaRegisterIo,
+    pci::{PciConfigIo, PciConfigWriteIo},
+    port::PortIo,
+};
 
 const PCI_CONFIG_ADDRESS_PORT: u16 = 0x0cf8;
 const PCI_CONFIG_DATA_PORT: u16 = 0x0cfc;
@@ -123,5 +127,18 @@ impl PciConfigIo for NativePortIo {
             );
         }
         value
+    }
+}
+
+impl PciConfigWriteIo for NativePortIo {
+    fn write_data(&mut self, value: u32) {
+        unsafe {
+            asm!(
+                "out dx, eax",
+                in("dx") PCI_CONFIG_DATA_PORT,
+                in("eax") value,
+                options(nomem, nostack, preserves_flags)
+            );
+        }
     }
 }

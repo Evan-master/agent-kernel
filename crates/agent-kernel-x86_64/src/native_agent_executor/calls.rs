@@ -105,9 +105,19 @@ pub(super) fn run(
                 target,
                 operations,
                 ..
-            } => capability::derive(booted, pending, source, target, operations)?,
+            } => {
+                let resumable = capability::derive(booted, pending, source, target, operations);
+                if resumable.is_none() {
+                    crate::serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_HANDLER_ERROR");
+                }
+                resumable?
+            }
             AgentCallRequest::RevokeDerivedCapability { source, target, .. } => {
-                capability::revoke(booted, pending, source, target)?
+                let resumable = capability::revoke(booted, pending, source, target);
+                if resumable.is_none() {
+                    crate::serial_write_line("AGENT_KERNEL_REVOKE_CAPABILITY_HANDLER_ERROR");
+                }
+                resumable?
             }
             AgentCallRequest::DeclareIntent {
                 authority,
@@ -357,21 +367,33 @@ pub(super) fn run(
                 return Some(());
             }
         };
-        match resume_next(resumable)? {
+        let Some(outcome) = resume_next(resumable) else {
+            crate::serial_write_line("AGENT_KERNEL_NATIVE_CALL_RESUME_ERROR");
+            return None;
+        };
+        match outcome {
             AgentRunOutcome::Call(next) => pending = next,
             AgentRunOutcome::Preempted(cpu) => {
-                super::expire_quantum(booted, runtime, evidence, cpu)?;
+                if super::expire_quantum(booted, runtime, evidence, cpu).is_none() {
+                    crate::serial_write_line("AGENT_KERNEL_NATIVE_CALL_QUANTUM_ERROR");
+                    return None;
+                }
                 return Some(());
             }
             AgentRunOutcome::Fault(cpu) => {
-                super::contain_fault(
+                if super::contain_fault(
                     booted,
                     memory_pool,
                     report,
                     evidence,
                     durable_session.as_deref_mut(),
                     cpu,
-                )?;
+                )
+                .is_none()
+                {
+                    crate::serial_write_line("AGENT_KERNEL_NATIVE_CALL_FAULT_CONTAINMENT_ERROR");
+                    return None;
+                }
                 return Some(());
             }
         }

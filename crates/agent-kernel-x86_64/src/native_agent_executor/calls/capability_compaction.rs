@@ -55,5 +55,9 @@ pub(super) fn compact(
     }
 
     serial_write_line("AGENT_KERNEL_AGENT_CALL_CAPABILITY_COMPACTION_OK");
-    pending.acknowledge_capability_compaction(receipt)
+    let resumable = pending.acknowledge_capability_compaction(receipt);
+    if resumable.is_none() {
+        serial_write_line("AGENT_KERNEL_CAPABILITY_COMPACTION_REPLY_ERROR");
+    }
+    resumable
 }

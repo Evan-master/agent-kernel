@@ -6,7 +6,7 @@ use agent_kernel_core::{
 
 use crate::{
     admission_supervisor_flow::{PreparedAdmissionSupervisorFlow, ADMISSION_SUPERVISOR},
-    X86BootedKernel, X86_CAPABILITY_CAPACITY,
+    X86BootedKernel, X86_AGENT_CAPABILITY_CAPACITY, X86_CAPABILITY_CAPACITY,
 };
 
 const AUTHORITY: CapabilityId = CapabilityId::new(25);
@@ -36,7 +36,7 @@ impl PreparedAdmissionSupervisorFlow {
         };
 
         kernel.capability_capacity() == X86_CAPABILITY_CAPACITY
-            && kernel.capability_count() == X86_CAPABILITY_CAPACITY
+            && kernel.capability_count() == X86_AGENT_CAPABILITY_CAPACITY
             && missing(booted, RETIRED_MEMORY_CAPABILITY)
             && missing(booted, TRANSIENT_CAPABILITY)
             && missing(booted, SECOND_TRANSIENT_CAPABILITY)

@@ -4,12 +4,12 @@
 //! the exact capability records and events before returning kernel-issued
 //! handles to the authenticated ring-3 caller.
 
-use agent_kernel_core::{AgentId, CapabilityId, EventKind, Operation, OperationSet};
+use agent_kernel_core::{AgentId, CapabilityId, EventKind, KernelError, Operation, OperationSet};
 
 use super::super::state;
 use crate::{
     agent_cpu::{PendingAgentCallCpu, ResumableAgentCpu},
-    X86BootedKernel,
+    serial_write_line, X86BootedKernel,
 };
 
 pub(super) fn derive(
@@ -19,16 +19,72 @@ pub(super) fn derive(
     target: AgentId,
     operations: OperationSet,
 ) -> Option<ResumableAgentCpu> {
-    let context = authenticated_context(&pending)?;
+    let Some(context) = authenticated_context(&pending) else {
+        serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_AUTHENTICATION_ERROR");
+        return None;
+    };
     let event_start = booted.kernel().events().len();
-    let derived = booted
-        .kernel_mut()
-        .sys_derive_capability(context.agent(), source, target, operations)
-        .ok()?;
+    let derived =
+        match booted
+            .kernel_mut()
+            .sys_derive_capability(context.agent(), source, target, operations)
+        {
+            Ok(derived) => derived,
+            Err(error) => {
+                let marker = match error {
+                    KernelError::CapabilityStoreFull => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_STORE_FULL_ERROR"
+                    }
+                    KernelError::CapabilityNotFound => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_SOURCE_NOT_FOUND_ERROR"
+                    }
+                    KernelError::CapabilityRevoked => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_SOURCE_REVOKED_ERROR"
+                    }
+                    KernelError::CapabilityScopeMismatch => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_SCOPE_ERROR"
+                    }
+                    KernelError::AgentMismatch => "AGENT_KERNEL_DERIVE_CAPABILITY_AGENT_ERROR",
+                    KernelError::AgentNotFound => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_AGENT_NOT_FOUND_ERROR"
+                    }
+                    KernelError::AgentSuspended => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_AGENT_SUSPENDED_ERROR"
+                    }
+                    KernelError::AgentRetired => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_AGENT_RETIRED_ERROR"
+                    }
+                    KernelError::ResourceNotFound => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_RESOURCE_NOT_FOUND_ERROR"
+                    }
+                    KernelError::ResourceRetired => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_RESOURCE_RETIRED_ERROR"
+                    }
+                    KernelError::OperationDenied => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_OPERATION_ERROR"
+                    }
+                    KernelError::EventLogFull => {
+                        "AGENT_KERNEL_DERIVE_CAPABILITY_EVENT_LOG_FULL_ERROR"
+                    }
+                    _ => "AGENT_KERNEL_DERIVE_CAPABILITY_SYSCALL_ERROR",
+                };
+                serial_write_line(marker);
+                return None;
+            }
+        };
     let kernel = booted.kernel();
-    let event = kernel.events().get(event_start)?;
-    let source_record = kernel.capability(source).ok()?;
-    let derived_record = kernel.capability(derived).ok()?;
+    let Some(event) = kernel.events().get(event_start) else {
+        serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_EVENT_ERROR");
+        return None;
+    };
+    let Ok(source_record) = kernel.capability(source) else {
+        serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_SOURCE_ERROR");
+        return None;
+    };
+    let Ok(derived_record) = kernel.capability(derived) else {
+        serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_RECORD_ERROR");
+        return None;
+    };
     if kernel.events().len() != event_start + 1
         || event.kind != EventKind::CapabilityDerived
         || event.agent != context.agent()
@@ -50,9 +106,14 @@ pub(super) fn derive(
         || derived_record.parent != Some(source)
         || !state::running(booted, context)
     {
+        serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_INVARIANT_ERROR");
         return None;
     }
-    pending.acknowledge_capability_derived(derived)
+    let resumable = pending.acknowledge_capability_derived(derived);
+    if resumable.is_none() {
+        serial_write_line("AGENT_KERNEL_DERIVE_CAPABILITY_REPLY_ERROR");
+    }
+    resumable
 }
 
 pub(super) fn revoke(

@@ -70,7 +70,7 @@ pub(super) fn start_all(
         registry
             .request_startup(cpu, generation)
             .map_err(|_| ApStartError::RegistryTransition)?;
-        let descriptor = privilege_runtime::startup_stack_top(cpu).and_then(|stack_top| {
+        let descriptor = privilege_runtime::prepare_worker_stack_top(cpu).and_then(|stack_top| {
             ApStartupDescriptor::new(
                 cpu,
                 processor.apic_id(),
@@ -210,6 +210,15 @@ fn current_cr3() -> u64 {
     cr3
 }
 
+fn current_stack_pointer() -> u64 {
+    let stack_pointer: u64;
+    // SAFETY: reading RSP does not mutate the active worker stack.
+    unsafe {
+        asm!("mov {}, rsp", out(reg) stack_pointer, options(nomem, nostack, preserves_flags));
+    }
+    stack_pointer
+}
+
 #[no_mangle]
 extern "C" fn agent_kernel_ap_entry(
     cpu_raw: u32,
@@ -260,6 +269,16 @@ fn initialize_ap(
         return Err((cpu, generation));
     }
     let privilege = PrivilegeBoundary::install(cpu).ok_or((cpu, generation))?;
+    let worker_stack = privilege_runtime::worker_stack_bounds(cpu).ok_or((cpu, generation))?;
+    let entry_stack = privilege.stack_bounds();
+    let stack_pointer = current_stack_pointer();
+    if descriptor.stack_top() != worker_stack.end as u64
+        || stack_pointer < worker_stack.start as u64
+        || stack_pointer > worker_stack.end as u64
+        || (worker_stack.start < entry_stack.end && entry_stack.start < worker_stack.end)
+    {
+        return Err((cpu, generation));
+    }
     exception_runtime::load_for_current_cpu().ok_or((cpu, generation))?;
     let transition =
         agent_cpu::install_ap_transition_slot(descriptor.cr3(), cpu).ok_or((cpu, generation))?;

@@ -45,14 +45,26 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 pub(crate) const X86_TASK_CAPACITY: usize = 12;
 pub(crate) const X86_INTENT_CAPACITY: usize = 12;
-pub(crate) const X86_RESOURCE_CAPACITY: usize = 10;
-pub(crate) const X86_CAPABILITY_CAPACITY: usize = 30;
+pub(crate) const X86_AGENT_RESOURCE_CAPACITY: usize = 10;
+pub(crate) const X86_PCI_RESOURCE_RESERVE: usize = 7;
+pub(crate) const X86_RESOURCE_CAPACITY: usize =
+    X86_AGENT_RESOURCE_CAPACITY + X86_PCI_RESOURCE_RESERVE;
+pub(crate) const X86_AGENT_CAPABILITY_CAPACITY: usize = 30;
+pub(crate) const X86_PCI_CAPABILITY_RESERVE: usize = 7;
+pub(crate) const X86_CAPABILITY_CAPACITY: usize =
+    X86_AGENT_CAPABILITY_CAPACITY + X86_PCI_CAPABILITY_RESERVE;
 pub(crate) const X86_RUNTIME_ADMISSION_CAPACITY: usize = 16;
 pub(crate) const X86_WAITER_CAPACITY: usize = 3;
 pub(crate) const X86_FAULT_CAPACITY: usize = 4;
 pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
 pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 4;
-pub(crate) const X86_EVENT_CAPACITY: usize = 375;
+pub(crate) const X86_EVENT_ARCHIVE_WATERMARK: usize = 378;
+pub(crate) const X86_TERMINAL_EVENT_SEQUENCE: usize = 412;
+pub(crate) const X86_PCI_EVENT_RESERVE: usize =
+    2 + agent_kernel_core::DRIVER_RESOURCE_REGION_CAPACITY * 3;
+pub(crate) const X86_HANDOFF_EVENT_RESERVE: usize = 64;
+pub(crate) const X86_EVENT_CAPACITY: usize =
+    X86_TERMINAL_EVENT_SEQUENCE + X86_PCI_EVENT_RESERVE + X86_HANDOFF_EVENT_RESERVE;
 pub(crate) type NativeDurableSession<'a> = agent_kernel_x86_64::ata::NativeAtaDurableSession<
     'a,
     agent_kernel_x86_64::ata::AtaPioDevice<agent_kernel_x86_64::NativePortIo>,

@@ -5,6 +5,7 @@
 //! existing UART Driver flow. All failures terminate through explicit markers.
 
 mod address_space_reuse;
+mod pci_claim;
 mod pci_inventory;
 mod runtime_loop;
 
@@ -60,7 +61,8 @@ pub(super) fn run(
     durable_profile: NativeDurableStorageProfile,
     tpm_profile: NativeTpmSignerProfile,
 ) -> ! {
-    if smp_bootstrap.prepare_apic_mmio(boot_info).is_err() {
+    if let Err(error) = smp_bootstrap.prepare_apic_mmio(boot_info) {
+        serial_write_line(error.diagnostic_marker());
         fatal_boot("AGENT_KERNEL_APIC_MMIO_ERROR");
     }
     serial_write_line("AGENT_KERNEL_APIC_MMIO_OK");
@@ -368,6 +370,7 @@ pub(super) fn run(
     }
     serial_write_line("AGENT_KERNEL_SMP_AP_ONLINE_OK");
     serial_write_line("AGENT_KERNEL_PER_CPU_PRIVILEGE_OK");
+    serial_write_line("AGENT_KERNEL_PER_CPU_STACK_ISOLATION_OK");
     let Some(agent_a_cpu) = cpu_runtime.prepare(agent_a_memory, agent_a_context) else {
         fatal_boot("AGENT_KERNEL_AGENT_CPU_SETUP_ERROR");
     };
@@ -507,11 +510,20 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_MULTI_AGENT_CONTEXT_SWITCH_OK");
     serial_write_line("AGENT_KERNEL_HETEROGENEOUS_AGENT_EXECUTION_OK");
     complete_driver_flow(&mut booted, &mut smp_bootstrap, driver_setup);
-    if !event_archive.proves_terminal_replay(&booted) {
-        fatal_boot("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_ERROR");
+    if !event_archive.proves_terminal_history(&booted) {
+        fatal_boot("AGENT_KERNEL_NATIVE_EVENT_HISTORY_ERROR");
     }
-    serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK");
-    event_trace::write(event_archive.events());
+    if event_archive.is_released() {
+        serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_REPLAY_OK");
+    } else {
+        serial_write_line("AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK");
+    }
+    if pci_claim::install(&mut booted, &mut smp_bootstrap).is_none() {
+        fatal_boot("AGENT_KERNEL_PCI_FUNCTION_CLAIM_ERROR");
+    }
+    if event_archive.is_released() {
+        event_trace::write(event_archive.events());
+    }
     event_trace::write(booted.kernel().events());
     serial_write_line("AGENT_KERNEL_SMP_HANDOFF_READY");
     serial_write_line("SUPERVISOR_HANDOFF_READY");

@@ -32,6 +32,7 @@ use agent_kernel_x86_64::{
         APIC_TLB_SHOOTDOWN_VECTOR,
     },
     cpu::{CpuIndex, CpuRegistry, MAX_CPU_COUNT},
+    pci::PciFunctionClaim,
     tlb::{
         TlbAddressSpace, TlbFlushScope, TlbShootdownCompletion, TlbShootdownCoordinator,
         TlbShootdownRequest,
@@ -69,6 +70,8 @@ pub(crate) enum SmpBootError {
     InvalidTpmCrbMapping,
     Pci(pci::PciBootError),
     PciAlreadyDiscovered,
+    PciResourcesAlreadyProbed,
+    PciClaimAlreadyInstalled,
     ApicBaseMismatch { msr: LocalApicBase, madt: u64 },
     ApicMapping(ApicMappingError),
     IoApicRouting(IoApicRoutingError),
@@ -86,6 +89,46 @@ pub(crate) enum SmpBootError {
     TlbShootdownFailed,
 }
 
+impl SmpBootError {
+    pub(crate) fn diagnostic_marker(self) -> &'static str {
+        match self {
+            Self::ApicMapping(ApicMappingError::MissingPhysicalMap) => {
+                "AGENT_KERNEL_APIC_MAPPING_MISSING_PHYSICAL_MAP_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::UnexpectedPhysicalOffset) => {
+                "AGENT_KERNEL_APIC_MAPPING_PHYSICAL_OFFSET_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::AddressOverflow) => {
+                "AGENT_KERNEL_APIC_MAPPING_ADDRESS_OVERFLOW_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::InvalidPage) => {
+                "AGENT_KERNEL_APIC_MAPPING_INVALID_PAGE_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::MappingConflict) => {
+                "AGENT_KERNEL_APIC_MAPPING_CONFLICT_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::ParentHugePage) => {
+                "AGENT_KERNEL_APIC_MAPPING_PARENT_HUGE_PAGE_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::FrameAllocationFailed) => {
+                "AGENT_KERNEL_APIC_MAPPING_FRAME_ALLOCATION_ERROR"
+            }
+            Self::ApicMapping(ApicMappingError::FlagUpdateFailed) => {
+                "AGENT_KERNEL_APIC_MAPPING_FLAG_UPDATE_ERROR"
+            }
+            Self::IoApicRouting(_) => "AGENT_KERNEL_IO_APIC_ROUTING_ERROR",
+            Self::InvalidLocalApicMapping => "AGENT_KERNEL_LOCAL_APIC_MAPPING_ERROR",
+            Self::LocalApicIdentityMismatch => "AGENT_KERNEL_LOCAL_APIC_IDENTITY_ERROR",
+            Self::InvalidLocalApicVersion => "AGENT_KERNEL_LOCAL_APIC_VERSION_ERROR",
+            Self::LocalApicTimerCalibrationFailed => {
+                "AGENT_KERNEL_LOCAL_APIC_TIMER_CALIBRATION_ERROR"
+            }
+            Self::SpuriousGateInstallFailed => "AGENT_KERNEL_APIC_GATE_ERROR",
+            _ => "AGENT_KERNEL_APIC_PREPARATION_ERROR",
+        }
+    }
+}
+
 pub(crate) struct SmpBootstrap {
     topology: AcpiMachineTopology<MAX_CPU_COUNT>,
     tpm2_table: Result<Option<Tpm2AcpiTable>, AcpiTpm2DiscoveryError>,
@@ -98,6 +141,8 @@ pub(crate) struct SmpBootstrap {
     trampoline: Option<TrampolinePage>,
     tpm_crb_prepared: bool,
     pci_inventory: Option<pci::BootPciInventory>,
+    pci_resources: Option<pci::BootPciResourceCatalog>,
+    pci_claim: Option<PciFunctionClaim>,
     tlb_coordinator: TlbShootdownCoordinator,
 }
 
@@ -168,6 +213,8 @@ impl SmpBootstrap {
             trampoline: None,
             tpm_crb_prepared: false,
             pci_inventory: None,
+            pci_resources: None,
+            pci_claim: None,
             tlb_coordinator: TlbShootdownCoordinator::new(),
         })
     }

@@ -853,16 +853,16 @@ admission_supervisor_event_archive_return:
     jne .halt
     cmp r12, 64
     jne .halt
-    movabs r12, 0xec72ca2f18dfdf64
+    movabs r12, 0x25a01c824691be1f
     cmp r13, r12
     jne .halt
-    movabs r12, 0xe1e332af9e880408
+    movabs r12, 0xfabeeae988e4fcf7
     cmp r14, r12
     jne .halt
-    movabs r12, 0xa6c5477a0f27d6ae
+    movabs r12, 0x351523be4758b786
     cmp r15, r12
     jne .halt
-    movabs r12, 0x50c4bbbdff067ca1
+    movabs r12, 0x0421a8621c4a4e4a
     cmp rbp, r12
     jne .halt
 

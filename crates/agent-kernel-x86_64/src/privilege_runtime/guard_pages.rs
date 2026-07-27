@@ -1,4 +1,4 @@
-//! Early BSP removal of every per-CPU privileged-stack guard mapping.
+//! Early BSP removal of every per-CPU kernel-stack guard mapping.
 //!
 //! This architecture-binary child edits the shared kernel root before AP startup.
 //! Guard frames remain reserved by the kernel image; only their virtual mappings
@@ -9,7 +9,7 @@ use core::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use agent_kernel_x86_64::cpu::CpuIndex;
+use agent_kernel_x86_64::{cpu::CpuIndex, privilege::PrivilegedStackLayout};
 use bootloader_api::BootInfo;
 use x86_64::{
     registers::control::Cr3,
@@ -79,31 +79,45 @@ fn prepare_inner(boot_info: &BootInfo) -> Result<(), GuardPageError> {
 
     for (raw, slot) in PRIVILEGE_SLOTS.iter().enumerate() {
         let cpu = CpuIndex::new(raw as u16).ok_or(GuardPageError::AddressOverflow)?;
-        let layout = slot
-            .stack
+        let entry = slot
+            .entry_stack
             .layout()
             .ok_or(GuardPageError::InvalidStackLayout(cpu))?;
-        require_mapped(&mapper, layout.guard_start(), cpu, true)?;
-        require_mapped(&mapper, layout.stack_start(), cpu, false)?;
-        require_mapped(&mapper, layout.stack_end() - 1, cpu, false)?;
-
-        let address = VirtAddr::try_new(layout.guard_start() as u64)
-            .map_err(|_| GuardPageError::AddressOverflow)?;
-        let page = Page::<Size4KiB>::from_start_address(address)
-            .map_err(|_| GuardPageError::InvalidStackLayout(cpu))?;
-        let (_, flush) = mapper.unmap(page).map_err(|error| match error {
-            UnmapError::PageNotMapped => GuardPageError::GuardPageNotMapped(cpu),
-            UnmapError::ParentEntryHugePage => GuardPageError::ParentHugePage(cpu),
-            UnmapError::InvalidFrameAddress(_) => GuardPageError::InvalidFrameAddress(cpu),
-        })?;
-        flush.flush();
-
-        if !matches!(mapper.translate(address), TranslateResult::NotMapped) {
-            return Err(GuardPageError::GuardPageStillMapped(cpu));
-        }
-        require_mapped(&mapper, layout.stack_start(), cpu, false)?;
-        require_mapped(&mapper, layout.stack_end() - 1, cpu, false)?;
+        let worker = slot
+            .worker_stack
+            .layout()
+            .ok_or(GuardPageError::InvalidStackLayout(cpu))?;
+        unmap_guard(&mut mapper, entry, cpu)?;
+        unmap_guard(&mut mapper, worker, cpu)?;
     }
+    Ok(())
+}
+
+fn unmap_guard(
+    mapper: &mut OffsetPageTable<'_>,
+    layout: PrivilegedStackLayout,
+    cpu: CpuIndex,
+) -> Result<(), GuardPageError> {
+    require_mapped(mapper, layout.guard_start(), cpu, true)?;
+    require_mapped(mapper, layout.stack_start(), cpu, false)?;
+    require_mapped(mapper, layout.stack_end() - 1, cpu, false)?;
+
+    let address = VirtAddr::try_new(layout.guard_start() as u64)
+        .map_err(|_| GuardPageError::AddressOverflow)?;
+    let page = Page::<Size4KiB>::from_start_address(address)
+        .map_err(|_| GuardPageError::InvalidStackLayout(cpu))?;
+    let (_, flush) = mapper.unmap(page).map_err(|error| match error {
+        UnmapError::PageNotMapped => GuardPageError::GuardPageNotMapped(cpu),
+        UnmapError::ParentEntryHugePage => GuardPageError::ParentHugePage(cpu),
+        UnmapError::InvalidFrameAddress(_) => GuardPageError::InvalidFrameAddress(cpu),
+    })?;
+    flush.flush();
+
+    if !matches!(mapper.translate(address), TranslateResult::NotMapped) {
+        return Err(GuardPageError::GuardPageStillMapped(cpu));
+    }
+    require_mapped(mapper, layout.stack_start(), cpu, false)?;
+    require_mapped(mapper, layout.stack_end() - 1, cpu, false)?;
     Ok(())
 }
 

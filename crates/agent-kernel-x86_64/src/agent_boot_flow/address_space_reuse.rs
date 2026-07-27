@@ -279,8 +279,13 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_CELL_RECORD_RETIREMENT_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_MEMORY_CELL_STORE_REUSE_OK");
     serial_write_line("AGENT_KERNEL_NATIVE_WAITER_COMPACTION_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_EVENT_LOG_FULL_OK");
-    serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_OK");
+    if report.event_archive().is_released() {
+        serial_write_line("AGENT_KERNEL_NATIVE_EVENT_ARCHIVE_OK");
+    } else if report.event_archive().is_retained_snapshot() {
+        serial_write_line("AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_RETAINED_OK");
+    } else {
+        return None;
+    }
     serial_write_line("AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK");
 
     release::terminal(

@@ -17,8 +17,16 @@ pub trait PciConfigIo {
     fn read_data(&mut self) -> u32;
 }
 
+pub trait PciConfigWriteIo {
+    fn write_data(&mut self, value: u32);
+}
+
 pub trait PciConfigAccess {
     fn read_u32(&mut self, address: PciFunctionAddress, register: PciConfigRegister) -> u32;
+}
+
+pub trait PciConfigMutationAccess: PciConfigAccess {
+    fn write_u32(&mut self, address: PciFunctionAddress, register: PciConfigRegister, value: u32);
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -61,5 +69,13 @@ impl<I: PciConfigIo> PciConfigAccess for PciConfigMechanismOne<I> {
         self.io
             .write_address(CONFIG_ENABLE | address.selector_bits() | u32::from(register.offset()));
         self.io.read_data()
+    }
+}
+
+impl<I: PciConfigIo + PciConfigWriteIo> PciConfigMutationAccess for PciConfigMechanismOne<I> {
+    fn write_u32(&mut self, address: PciFunctionAddress, register: PciConfigRegister, value: u32) {
+        self.io
+            .write_address(CONFIG_ENABLE | address.selector_bits() | u32::from(register.offset()));
+        self.io.write_data(value);
     }
 }

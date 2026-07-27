@@ -7,7 +7,7 @@ use agent_kernel_core::{
 
 use crate::{
     admission_supervisor_flow::{PreparedAdmissionSupervisorFlow, ADMISSION_SUPERVISOR},
-    X86BootedKernel, X86_RESOURCE_CAPACITY,
+    X86BootedKernel, X86_AGENT_RESOURCE_CAPACITY, X86_RESOURCE_CAPACITY,
 };
 
 const AUTHORITY: CapabilityId = CapabilityId::new(25);
@@ -37,7 +37,8 @@ impl PreparedAdmissionSupervisorFlow {
             return false;
         };
 
-        resources.len() == X86_RESOURCE_CAPACITY
+        X86_RESOURCE_CAPACITY > X86_AGENT_RESOURCE_CAPACITY
+            && resources.len() == X86_AGENT_RESOURCE_CAPACITY
             && resources
                 .iter()
                 .map(|record| record.id.raw())

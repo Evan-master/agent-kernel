@@ -4,11 +4,14 @@
 //! preempted context owns a copied privilege frame, so the shared TSS RSP0 stack
 //! can accept another Agent interrupt before the first context resumes.
 
+mod rejection;
+mod timer;
+
 use agent_kernel_core::MemoryCellId;
 use agent_kernel_x86_64::{
     address_space::AddressSpaceRoots,
     agent_call::AgentCallContext,
-    apic::{LocalApicBase, LocalApicMmio, VolatileMmio, APIC_RESCHEDULE_VECTOR},
+    apic::{LocalApicBase, APIC_RESCHEDULE_VECTOR},
     context::SavedAgentFrame,
     cpu::CpuIndex,
     interrupt::AGENT_CALL_VECTOR,
@@ -30,6 +33,9 @@ use crate::{
     },
 };
 
+pub(crate) use rejection::AgentCpuRuntimeRejection;
+use timer::CpuQuantumTimer;
+
 #[derive(Copy, Clone)]
 pub(crate) struct AgentCpuRuntime {
     cpu: CpuIndex,
@@ -37,41 +43,6 @@ pub(crate) struct AgentCpuRuntime {
     pub(super) kernel_cr3: u64,
     pub(super) transition: &'static CpuTransitionStorage,
     timer: CpuQuantumTimer,
-}
-
-#[derive(Copy, Clone)]
-struct CpuQuantumTimer {
-    base: LocalApicBase,
-    physical_offset: u64,
-    initial_count: u32,
-}
-
-impl CpuQuantumTimer {
-    fn new(base: LocalApicBase, physical_offset: u64, initial_count: u32) -> Option<Self> {
-        if initial_count == 0 {
-            return None;
-        }
-        LocalApicMmio::new(base, physical_offset, VolatileMmio)?;
-        Some(Self {
-            base,
-            physical_offset,
-            initial_count,
-        })
-    }
-
-    fn arm(self) -> Option<()> {
-        LocalApicMmio::new(self.base, self.physical_offset, VolatileMmio)?
-            .arm_timer_one_shot(APIC_RESCHEDULE_VECTOR, self.initial_count)
-    }
-
-    fn finish(self, boundary: Option<NativeRunBoundary>) {
-        if let Some(mut apic) = LocalApicMmio::new(self.base, self.physical_offset, VolatileMmio) {
-            apic.mask_timer(APIC_RESCHEDULE_VECTOR);
-            if boundary == Some(NativeRunBoundary::QuantumExpired) {
-                apic.end_of_interrupt();
-            }
-        }
-    }
 }
 
 pub(crate) struct PreparedAgentCpu {
@@ -178,11 +149,7 @@ impl AgentCpuRuntime {
     }
 
     pub(super) fn accepts_memory(self, memory: &PreparedAgentMemory) -> bool {
-        memory.roots().kernel_cr3() == self.kernel_cr3
-            && self.transition.kernel_cr3() == self.kernel_cr3
-            && memory.kernel_address_space_active()
-            && current_privilege_level() == 0
-            && stack_canary_valid(self.kernel_stack)
+        self.rejection_for(memory).is_none()
     }
 
     pub(super) fn arm_quantum_timer(self) -> Option<()> {
@@ -264,6 +231,13 @@ impl PreparedAgentCpu {
 
     pub(crate) const fn runtime(&self) -> AgentCpuRuntime {
         self.runtime
+    }
+
+    pub(crate) fn rebind_rejection(
+        &self,
+        runtime: AgentCpuRuntime,
+    ) -> Option<AgentCpuRuntimeRejection> {
+        runtime.rejection_for(&self.memory)
     }
 
     pub(crate) fn rebind_runtime(mut self, runtime: AgentCpuRuntime) -> Option<Self> {
@@ -355,6 +329,13 @@ impl PreemptedAgentCpu {
 
     pub(crate) const fn runtime(&self) -> AgentCpuRuntime {
         self.runtime
+    }
+
+    pub(crate) fn rebind_rejection(
+        &self,
+        runtime: AgentCpuRuntime,
+    ) -> Option<AgentCpuRuntimeRejection> {
+        runtime.rejection_for(&self.memory)
     }
 
     pub(crate) fn rebind_runtime(mut self, runtime: AgentCpuRuntime) -> Option<Self> {

@@ -51,6 +51,8 @@ mod driver_invocation;
 mod driver_invocation_event;
 mod driver_invocation_runtime;
 mod driver_invocation_tick;
+mod driver_resource_tree;
+mod driver_resource_tree_store;
 mod driver_runtime_event;
 mod durable_state;
 mod error;
@@ -60,6 +62,7 @@ mod event_archive_checkpoint;
 mod event_archive_digest;
 mod event_archive_encoding;
 mod event_archive_preflight;
+mod event_archive_snapshot;
 mod event_log;
 mod fault;
 mod fault_compaction;
@@ -151,6 +154,10 @@ pub use driver_command::{
 };
 pub use driver_endpoint::{DriverEndpointDescriptor, DriverEndpointKind, DriverEndpointRecord};
 pub use driver_invocation::{DriverInvocationRecord, DriverInvocationStatus};
+pub use driver_resource_tree::{
+    DriverResourceRegion, DriverResourceTree, DriverResourceTreeSpec,
+    DRIVER_RESOURCE_REGION_CAPACITY,
+};
 pub use durable_state::{
     durable_state_signer_id, durable_state_signer_id_for_key, DurableAnchorMode,
     DurableArchiveAnchor, DurableArchiveCommitProof, DurableArchiveManifest,
@@ -171,6 +178,7 @@ pub use event_archive_encoding::{
     MAX_DURABLE_ARCHIVE_PAYLOAD_BYTES,
 };
 pub use event_archive_preflight::DurableArchivePreflight;
+pub use event_archive_snapshot::EventArchiveSnapshot;
 pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
