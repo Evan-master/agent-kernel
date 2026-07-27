@@ -23,4 +23,6 @@ pub use inventory::{discover_pci_functions, PciDiscoveryError, PciInventory};
 pub use resource_catalog::{
     probe_pci_resource_catalog, PciFunctionResources, PciResourceCatalog, PciResourceCatalogError,
 };
-pub use types::{PciClassCode, PciConfigRegister, PciFunction, PciFunctionAddress};
+pub use types::{
+    PciClassCode, PciConfigRegister, PciFunction, PciFunctionAddress, PciFunctionSelector,
+};

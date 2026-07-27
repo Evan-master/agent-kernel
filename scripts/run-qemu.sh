@@ -3,11 +3,15 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="$("$ROOT_DIR/scripts/build-qemu-image.sh" "$@")"
+PCI_SERIAL_OUTPUT="$(mktemp "${TMPDIR:-/tmp}/agent-kernel-pci-serial.XXXXXX")"
+trap 'rm -f "$PCI_SERIAL_OUTPUT"' EXIT
 
 set +e
 OUTPUT="$(qemu-system-x86_64 \
   -smp 2 \
   -drive "format=raw,file=$IMAGE" \
+  -chardev "file,id=agent_pci_serial,path=$PCI_SERIAL_OUTPUT" \
+  -device "pci-serial,chardev=agent_pci_serial,id=agent-pci-serial,addr=0x4" \
   -serial stdio \
   -display none \
   -no-reboot \
@@ -36,6 +40,11 @@ for expected in \
   "AGENT_KERNEL_PCI_BAR_CATALOG_OK" \
   "AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK" \
   "AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_TARGET_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_CAPABILITY_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_DRIVER_OK" \
   "AGENT_KERNEL_AP_TRAMPOLINE_OK" \
   "AGENT_KERNEL_SMP_AP_ONLINE_OK" \
   "AGENT_KERNEL_AP_AGENT_CALL_OK" \
@@ -617,6 +626,23 @@ for expected in \
   "event[415] resource_created" \
   "event[416] capability_granted" \
   "event[417] driver_endpoint_registered" \
+  "event[418] agent_image_retired" \
+  "event[419] agent_image_record_retired" \
+  "event[420] capability_derived" \
+  "event[421] agent_image_registered" \
+  "event[422] agent_image_verified" \
+  "event[423] agent_launched" \
+  "event[424] driver_bound" \
+  "event[425] device_event_raised" \
+  "event[426] device_event_delivered" \
+  "event[427] driver_invocation_queued" \
+  "event[428] driver_invocation_dispatched" \
+  "event[429] driver_invocation_ticked" \
+  "event[430] device_event_acknowledged" \
+  "event[431] driver_command_submitted" \
+  "event[432] driver_command_dispatched" \
+  "event[433] driver_command_completed" \
+  "event[434] driver_invocation_completed" \
   "AGENT_KERNEL_SMP_HANDOFF_READY" \
   "SUPERVISOR_HANDOFF_READY"
 do
@@ -627,8 +653,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Ec '^event\[[0-9]+\] ' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 417 ]]; then
-  printf 'expected exactly 417 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 434 ]]; then
+  printf 'expected exactly 434 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -643,7 +669,7 @@ while IFS= read -r event_line; do
   EXPECTED_EVENT_SEQUENCE=$((EXPECTED_EVENT_SEQUENCE + 1))
 done < <(grep -E '^event\[[0-9]+\] ' <<<"$OUTPUT")
 
-if [[ "$EXPECTED_EVENT_SEQUENCE" -ne 418 ]]; then
+if [[ "$EXPECTED_EVENT_SEQUENCE" -ne 435 ]]; then
   printf 'ordered kernel event sequence ended at %s\n' \
     "$((EXPECTED_EVENT_SEQUENCE - 1))" >&2
   exit 1
@@ -669,6 +695,11 @@ check_marker_count "AGENT_KERNEL_PCI_INVENTORY_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_BAR_CATALOG_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_TARGET_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_CAPABILITY_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_DRIVER_OK" 1
 check_marker_count "AGENT_KERNEL_BSP_LOCAL_APIC_QUANTUM_OK" 1
 check_marker_count "AGENT_KERNEL_AP_AGENT_CALL_OK" 1
 check_marker_count "AGENT_KERNEL_TLB_SHOOTDOWN_OK" 1
@@ -752,3 +783,19 @@ check_marker_count "AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_RETAINED_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK" 1
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSE_EXECUTION_OK" 2
 check_marker_count "AGENT_KERNEL_NATIVE_ADDRESS_SPACE_REUSED_RECLAIMED_OK" 1
+
+PCI_SERIAL_BYTES="$(wc -c <"$PCI_SERIAL_OUTPUT" | tr -d '[:space:]')"
+if [[ "$PCI_SERIAL_BYTES" -ne 1 ]]; then
+  printf 'expected one PCI serial output byte, observed %s\n' \
+    "$PCI_SERIAL_BYTES" >&2
+  exit 1
+fi
+
+PCI_SERIAL_HEX="$(
+  LC_ALL=C od -An -tx1 -v "$PCI_SERIAL_OUTPUT" | tr -d '[:space:]'
+)"
+if [[ "$PCI_SERIAL_HEX" != "50" ]]; then
+  printf 'expected PCI serial output byte 0x50, observed 0x%s\n' \
+    "$PCI_SERIAL_HEX" >&2
+  exit 1
+fi

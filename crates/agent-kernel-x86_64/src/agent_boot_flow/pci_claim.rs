@@ -9,8 +9,11 @@ use agent_kernel_x86_64::pci::PciFunctionClaim;
 
 use crate::{serial_write_line, smp_boot::SmpBootstrap, X86BootedKernel};
 
-pub(super) fn install(booted: &mut X86BootedKernel, smp: &mut SmpBootstrap) -> Option<()> {
-    let candidate = smp.pci_resources()?.claim_candidate()?;
+pub(super) fn install(
+    booted: &mut X86BootedKernel,
+    smp: &mut SmpBootstrap,
+) -> Option<PciFunctionClaim> {
+    let candidate = smp.pci_driver_candidate()?;
     let spec = candidate.driver_resource_spec()?;
     let report = *booted.report();
     let tree = booted
@@ -32,7 +35,8 @@ pub(super) fn install(booted: &mut X86BootedKernel, smp: &mut SmpBootstrap) -> O
     }
     serial_write_line("AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK");
     serial_write_line("AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK");
-    Some(())
+    serial_write_line("AGENT_KERNEL_PCI_SERIAL_TARGET_OK");
+    Some(claim)
 }
 
 fn claim_matches_kernel(

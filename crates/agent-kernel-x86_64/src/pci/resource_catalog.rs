@@ -10,7 +10,7 @@ use agent_kernel_core::{
 
 use super::{
     probe_pci_function_bars, PciBarKind, PciBarProbeError, PciBarSet, PciConfigMutationAccess,
-    PciFunction, PciFunctionAddress, PciInventory,
+    PciFunction, PciFunctionAddress, PciFunctionSelector, PciInventory,
 };
 
 const TYPE_ZERO_HEADER: u8 = 0;
@@ -116,6 +116,15 @@ impl<const CAPACITY: usize> PciResourceCatalog<CAPACITY> {
             .iter()
             .copied()
             .find(|resources| resources.driver_resource_spec().is_some())
+    }
+
+    pub fn claim_candidate_for(
+        &self,
+        selector: PciFunctionSelector,
+    ) -> Option<PciFunctionResources> {
+        self.functions().iter().copied().find(|resources| {
+            selector.matches(resources.function()) && resources.driver_resource_spec().is_some()
+        })
     }
 
     fn push(&mut self, resources: PciFunctionResources) -> Result<(), PciResourceCatalogError> {

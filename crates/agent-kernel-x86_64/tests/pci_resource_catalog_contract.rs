@@ -6,7 +6,7 @@ use agent_kernel_core::{
 use agent_kernel_x86_64::pci::{
     discover_pci_functions, probe_pci_resource_catalog, PciBarIndex, PciBarProbeError,
     PciConfigAccess, PciConfigMutationAccess, PciConfigRegister, PciFunctionAddress,
-    PciFunctionClaim, PciFunctionClaimError, PciResourceCatalogError,
+    PciFunctionClaim, PciFunctionClaimError, PciFunctionSelector, PciResourceCatalogError,
 };
 
 type ClaimKernel = AgentKernel<1, 8, 8, 64, 0, 0, 0, 0, 0, 0>;
@@ -193,6 +193,48 @@ fn catalog_capacity_and_probe_failures_publish_no_partial_catalog() {
     );
     assert_eq!(malformed.functions[1].command_status, original_command);
     assert_eq!(malformed.functions[1].bars[0], 0x8000_0006);
+}
+
+#[test]
+fn exact_selector_requires_matching_address_vendor_device_and_claimable_bars() {
+    let serial_address = PciFunctionAddress::new(0, 4, 0).unwrap();
+    let mut fabric = FabricConfig::representative();
+    let mut serial = FunctionModel::endpoint(
+        serial_address,
+        (0x07, 0x00, 0x02),
+        [0x0000_d001, 0, 0, 0, 0, 0],
+        [0xffff_fff9, 0, 0, 0, 0, 0],
+    );
+    serial.identity = 0x0002_1b36;
+    fabric.functions.push(serial);
+    let inventory = discover_pci_functions::<_, 8>(&mut fabric).unwrap();
+    let catalog = probe_pci_resource_catalog::<_, 8, 8>(&mut fabric, &inventory).unwrap();
+
+    let selector = PciFunctionSelector::new(serial_address, 0x1b36, 0x0002).unwrap();
+    let selected = catalog.claim_candidate_for(selector).unwrap();
+
+    assert_eq!(selected.function().address(), serial_address);
+    assert_eq!(selected.function().vendor_id(), 0x1b36);
+    assert_eq!(selected.function().device_id(), 0x0002);
+    assert_eq!(
+        selected.driver_resource_spec().unwrap().regions()[0],
+        Some(DriverEndpointDescriptor::port(0xd000, 8))
+    );
+    assert!(catalog
+        .claim_candidate_for(
+            PciFunctionSelector::new(PciFunctionAddress::new(0, 5, 0).unwrap(), 0x1b36, 0x0002,)
+                .unwrap(),
+        )
+        .is_none());
+    assert!(catalog
+        .claim_candidate_for(PciFunctionSelector::new(serial_address, 0x1b36, 0x0003).unwrap(),)
+        .is_none());
+
+    let serial = fabric.function_mut(serial_address).unwrap();
+    serial.bars[0] = 1;
+    let inventory = discover_pci_functions::<_, 8>(&mut fabric).unwrap();
+    let catalog = probe_pci_resource_catalog::<_, 8, 8>(&mut fabric, &inventory).unwrap();
+    assert!(catalog.claim_candidate_for(selector).is_none());
 }
 
 #[test]

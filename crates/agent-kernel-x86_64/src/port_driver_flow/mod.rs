@@ -8,12 +8,14 @@
 mod setup;
 mod terminal;
 
+pub(crate) use terminal::record_command_outcome;
+
 use agent_kernel_core::{
     AgentId, CapabilityId, DeviceEventId, DriverCommandId, DriverCommandRequest, DriverInvocationId,
 };
 use agent_kernel_x86_64::{port::PortIoBackend, NativePortIo};
 
-pub(super) const DRIVER: AgentId = AgentId::new(2);
+pub(crate) const DRIVER: AgentId = AgentId::new(2);
 pub(super) const INVOCATION_QUANTUM: u64 = 2;
 
 pub struct PortDriverSetup {

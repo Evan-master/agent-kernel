@@ -518,8 +518,11 @@ pub(super) fn run(
     } else {
         serial_write_line("AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK");
     }
-    if pci_claim::install(&mut booted, &mut smp_bootstrap).is_none() {
+    let Some(pci_claim) = pci_claim::install(&mut booted, &mut smp_bootstrap) else {
         fatal_boot("AGENT_KERNEL_PCI_FUNCTION_CLAIM_ERROR");
+    };
+    if crate::pci_serial_driver_flow::run(&mut booted, pci_claim).is_none() {
+        fatal_boot("AGENT_KERNEL_PCI_SERIAL_DRIVER_ERROR");
     }
     if event_archive.is_released() {
         event_trace::write(event_archive.events());

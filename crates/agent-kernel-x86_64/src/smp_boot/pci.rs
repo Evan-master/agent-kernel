@@ -1,17 +1,19 @@
 //! BSP-owned native PCI configuration discovery.
 //!
 //! This boot adapter creates the only Configuration Mechanism 1 owner while
-//! interrupts are disabled, validates the address latch, and returns a bounded
-//! immutable inventory for the remainder of the boot.
+//! interrupts are disabled, retains restored BAR observations, and validates
+//! an exact Function claim before handing it to the Driver flow.
 
 use agent_kernel_x86_64::{
     pci::{
         discover_pci_functions, probe_pci_resource_catalog, PciConfigMechanismOne,
-        PciConfigMechanismOneError, PciDiscoveryError, PciFunctionClaim, PciInventory,
-        PciResourceCatalog, PciResourceCatalogError,
+        PciConfigMechanismOneError, PciDiscoveryError, PciFunctionClaim, PciFunctionResources,
+        PciInventory, PciResourceCatalog, PciResourceCatalogError,
     },
     NativePortIo,
 };
+
+use crate::pci_serial_profile;
 
 use super::{SmpBootError, SmpBootstrap};
 
@@ -25,7 +27,7 @@ pub(crate) enum PciBootError {
     Discovery(PciDiscoveryError),
     InventoryUnavailable,
     ResourceCatalog(PciResourceCatalogError),
-    NoClaimableFunction,
+    ClaimTargetUnavailable,
     ClaimCandidateMismatch,
 }
 
@@ -82,6 +84,12 @@ impl SmpBootstrap {
         self.pci_resources.as_ref()
     }
 
+    pub(crate) fn pci_driver_candidate(&self) -> Option<PciFunctionResources> {
+        self.pci_resources
+            .as_ref()?
+            .claim_candidate_for(pci_serial_profile::selector()?)
+    }
+
     pub(crate) fn install_pci_claim(
         &mut self,
         claim: PciFunctionClaim,
@@ -90,10 +98,8 @@ impl SmpBootstrap {
             return Err(SmpBootError::PciClaimAlreadyInstalled);
         }
         let expected = self
-            .pci_resources
-            .as_ref()
-            .and_then(PciResourceCatalog::claim_candidate)
-            .ok_or(SmpBootError::Pci(PciBootError::NoClaimableFunction))?;
+            .pci_driver_candidate()
+            .ok_or(SmpBootError::Pci(PciBootError::ClaimTargetUnavailable))?;
         if claim.function() != expected.function() || claim.bars() != expected.bars() {
             return Err(SmpBootError::Pci(PciBootError::ClaimCandidateMismatch));
         }

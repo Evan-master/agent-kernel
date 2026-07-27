@@ -9,19 +9,22 @@ architecture-to-kernel claim boundary for x86_64 boot.
   -> segment-zero BDF scan
   -> immutable PciFunction records
   -> restored Type-0 BAR catalog
+  -> exact BDF + PCI ID selection
   -> atomic Resource / Capability / Driver Endpoint claim
+  -> BAR-scoped Driver Capability and Binding
+  -> immutable command -> bounded native backend
 ```
 
 ## Modules
 
 | Module | Responsibility |
 | --- | --- |
-| `types.rs` | validated BDF, register, class, and function values |
+| `types.rs` | validated BDF, register, class, function, and exact selector values |
 | `config.rs` | selector/data transactions, latch probe, explicit mutation trait |
 | `inventory.rs` | deterministic fixed-capacity discovery |
 | `bar.rs` | typed BAR values and fixed six-slot sets |
 | `bar_probe.rs` | decode-disable, sizing, restoration, and validation transaction |
-| `resource_catalog.rs` | stable BDF catalog and deterministic claim candidate |
+| `resource_catalog.rs` | stable BDF catalog plus generic and exact claim selection |
 | `claim.rs` | exact BAR-to-kernel-resource authority mapping |
 | `mod.rs` | public architecture boundary |
 
@@ -39,6 +42,7 @@ architecture-to-kernel claim boundary for x86_64 boot.
 - Every touched BAR and original command value is verified after restoration.
 - Reserved shapes, malformed pairs, unassigned bases, and overlapping regions
   cannot enter a claim.
+- Driver selection requires exact BDF, vendor ID, device ID, and claimable BARs.
 
 ## Authority
 
@@ -51,9 +55,20 @@ Core preflights authority, capacity, ranges, endpoint overlap, and Event
 capacity before appending any record. The architecture claim retains the exact
 BAR index, Resource, Capability, and immutable physical Driver Endpoint.
 
+The V23 boot profile targets QEMU `0000:00:04.0`, PCI ID `1b36:0002`, and
+BAR0 as an eight-byte I/O region. Core re-admits a completed Agent through a
+verified Driver image, derives only `Observe + Act`, binds the exact BAR
+Resource, and produces the immutable transmit request. `PciSerialBackend`
+polls the 16550 line-status register with a fixed budget before one native
+`OUT`; rejected requests perform no device write.
+
+The current physical executor is the ring-0 boot adapter. Native ring-3 Driver
+Agent Call operations remain a separate milestone.
+
 ## Deferred
 
 - host-bridge window allocation and zero-base BAR assignment;
-- bridge windows, expansion ROMs, MSI, and MSI-X;
+- bridge windows, expansion ROMs, INTx, MSI, and MSI-X;
 - DMA/IOMMU domains and bus-master enable;
-- endpoint detach and controller-specific Driver execution.
+- native ring-3 Driver Agent Call ABI;
+- endpoint detach and hotplug.

@@ -1,8 +1,8 @@
 //! Backend outcome, terminal syscall, and final record validation phase.
 
 use agent_kernel_core::{
-    AgentExecutionState, CapabilityId, DeviceEventStatus, DriverCommandId, DriverCommandStatus,
-    DriverInvocationStatus,
+    AgentExecutionState, AgentId, CapabilityId, DeviceEventStatus, DriverCommandId,
+    DriverCommandStatus, DriverInvocationStatus,
 };
 use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
 
@@ -13,8 +13,13 @@ impl PortCommandFlow {
     pub fn execute_and_record(&mut self, booted: &mut X86BootedKernel) -> bool {
         let outcome = self.backend.execute(self.request);
         let result = outcome.result();
-        if !record_command_outcome(booted, self.driver_capability, self.command, outcome)
-            || !matches!(outcome, DriverCommandOutcome::Completed(_))
+        if !record_command_outcome(
+            booted,
+            DRIVER,
+            self.driver_capability,
+            self.command,
+            outcome,
+        ) || !matches!(outcome, DriverCommandOutcome::Completed(_))
         {
             return false;
         }
@@ -54,8 +59,9 @@ impl PortCommandFlow {
     }
 }
 
-pub(super) fn record_command_outcome(
+pub(crate) fn record_command_outcome(
     booted: &mut X86BootedKernel,
+    driver: AgentId,
     capability: CapabilityId,
     command: DriverCommandId,
     outcome: DriverCommandOutcome,
@@ -66,13 +72,13 @@ pub(super) fn record_command_outcome(
             DriverCommandStatus::Completed,
             booted
                 .kernel_mut()
-                .sys_complete_driver_command(DRIVER, capability, command, result),
+                .sys_complete_driver_command(driver, capability, command, result),
         ),
         DriverCommandOutcome::Failed(_) => (
             DriverCommandStatus::Failed,
             booted
                 .kernel_mut()
-                .sys_fail_driver_command(DRIVER, capability, command, result),
+                .sys_fail_driver_command(driver, capability, command, result),
         ),
     };
     if transition.is_err() {

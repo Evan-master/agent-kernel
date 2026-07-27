@@ -27,6 +27,8 @@ mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
 mod native_runtime_admission_broker;
+mod pci_serial_driver_flow;
+mod pci_serial_profile;
 mod pic;
 mod port_driver_flow;
 mod privilege_runtime;
@@ -60,8 +62,11 @@ pub(crate) const X86_MEMORY_CELL_CAPACITY: usize = 5;
 pub(crate) const X86_NAMESPACE_ENTRY_CAPACITY: usize = 4;
 pub(crate) const X86_EVENT_ARCHIVE_WATERMARK: usize = 378;
 pub(crate) const X86_TERMINAL_EVENT_SEQUENCE: usize = 412;
-pub(crate) const X86_PCI_EVENT_RESERVE: usize =
+pub(crate) const X86_PCI_CLAIM_EVENT_RESERVE: usize =
     2 + agent_kernel_core::DRIVER_RESOURCE_REGION_CAPACITY * 3;
+pub(crate) const X86_PCI_DRIVER_EVENT_RESERVE: usize = 17;
+pub(crate) const X86_PCI_EVENT_RESERVE: usize =
+    X86_PCI_CLAIM_EVENT_RESERVE + X86_PCI_DRIVER_EVENT_RESERVE;
 pub(crate) const X86_HANDOFF_EVENT_RESERVE: usize = 64;
 pub(crate) const X86_EVENT_CAPACITY: usize =
     X86_TERMINAL_EVENT_SEQUENCE + X86_PCI_EVENT_RESERVE + X86_HANDOFF_EVENT_RESERVE;
@@ -80,10 +85,10 @@ pub(crate) type X86BootedKernel = BootedKernel<
     X86_INTENT_CAPACITY,
     X86_TASK_CAPACITY,
     2,
-    1,
-    1,
-    1,
-    1,
+    2,
+    2,
+    2,
+    2,
     4,
     X86_WAITER_CAPACITY,
     X86_FAULT_CAPACITY,

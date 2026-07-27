@@ -200,3 +200,43 @@ impl PciFunction {
         multifunction: false,
     };
 }
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct PciFunctionSelector {
+    address: PciFunctionAddress,
+    vendor_id: u16,
+    device_id: u16,
+}
+
+impl PciFunctionSelector {
+    pub const fn new(address: PciFunctionAddress, vendor_id: u16, device_id: u16) -> Option<Self> {
+        if vendor_id == 0 || vendor_id == u16::MAX || device_id == u16::MAX {
+            return None;
+        }
+        Some(Self {
+            address,
+            vendor_id,
+            device_id,
+        })
+    }
+
+    pub const fn address(self) -> PciFunctionAddress {
+        self.address
+    }
+
+    pub const fn vendor_id(self) -> u16 {
+        self.vendor_id
+    }
+
+    pub const fn device_id(self) -> u16 {
+        self.device_id
+    }
+
+    pub const fn matches(self, function: PciFunction) -> bool {
+        function.address.bus == self.address.bus
+            && function.address.device == self.address.device
+            && function.address.function == self.address.function
+            && function.vendor_id == self.vendor_id
+            && function.device_id == self.device_id
+    }
+}

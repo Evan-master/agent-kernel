@@ -21,6 +21,7 @@ pub mod native_durable_boot;
 pub mod native_runtime;
 pub mod native_tpm_boot;
 pub mod pci;
+pub mod pci_serial;
 pub mod per_cpu;
 pub mod port;
 pub mod privilege;

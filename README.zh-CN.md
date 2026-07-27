@@ -22,15 +22,15 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-[06] PCI device fabric ...... capability-bound
-kernel://devices/v22-resource-claims
+[06] PCI device fabric ...... driving native I/O
+kernel://devices/v23-native-pci-serial
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V22 / QEMU debug + release   PCI BAR authority       │
+│ VERIFIED   V23 / QEMU debug + release   native PCI command      │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -176,7 +176,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V22 不变量 |
+| 契约 | V13 至 V23 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -269,7 +269,18 @@ transaction       完整预检 / 有序 Event / 原子提交
 agent surface     ResourceId + Capability / 关闭原始配置修改
 ```
 
-`TPM CRB PATH` 完成 · `PCR POLICY` 完成 · `PCI AUTHORITY` 完成
+```text
+V23 CAPABILITY-BOUND PCI DRIVER
+target            0000:00:04.0 / 1b36:0002 / BAR0 I/O 8B
+admission         退休 Worker 入口 / 回收镜像槽 / Driver 镜像
+authority         BAR Capability / Observe + Act / Driver Binding
+execution         StateChanged / Invocation / 不可变 Write Command
+backend           有界 16550 THRE 轮询 / 原生 x86 OUT
+physical proof    File Chardev / 唯一字节 / 0x50
+executor          Ring-0 启动适配器 / Ring-3 Driver Call 待实现
+```
+
+`TPM CRB PATH` 完成 · `PCR POLICY` 完成 · `PCI NATIVE I/O` 完成
 
 ## `05 // AGENT CALL`
 
@@ -298,10 +309,10 @@ agent surface     ResourceId + Capability / 关闭原始配置修改
 ## `06 // 启动证据`
 
 ```text
-PROFILE            V22 pci-resource-claims
+PROFILE            V23 native-pci-serial-driver
 QEMU               debug + release
-EVENTS             1..417 / 精确历史
-AGENT CONTEXTS      11 个隔离上下文
+EVENTS             1..434 / 精确历史
+AGENT ENTRIES       12 个活跃入口 / 回收槽
 DISPATCHES          35
 FRAME OWNERSHIP     每 Agent 12..43
 BOOT FRAME POOL     77 帧封存
@@ -317,6 +328,9 @@ BOOT FRAME POOL     77 帧封存
 | Event 历史 | `AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK` |
 | PCI Function 认领 | `AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK` |
 | PCI 权限边界 | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
+| PCI Driver 准入 | `AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK` |
+| PCI 物理命令 | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
+| PCI 终态 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -400,6 +414,16 @@ Core transaction    Resource + Capability + Driver Endpoint
 claim mapping       每个 BAR Slot 绑定精确内核权限
 QEMU suffix         Event 413..417 / 一个已分配 BAR
 boot evidence       BAR_CATALOG_OK / FUNCTION_CLAIM_OK / CAPABILITY_BOUNDARY_OK
+```
+
+```text
+V23 PCI SERIAL DRIVER
+selection           精确 BDF + Vendor + Device / 必须存在可认领 BAR
+lifecycle           退休 Pending Image / 删除记录 / 复用槽位
+admission           Agent 10 重新启动为 BAR Scope Driver
+request             Write / Opcode 0 / Value 0x50 / 不可变因果链
+hardware            有界 LSR 轮询 / 单次 x86 OUT / 拒绝路径零 I/O
+QEMU suffix         Event 418..434 / 精确 0x50 Chardev 字节
 ```
 
 <details>
@@ -500,8 +524,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] 策略门控 TPM 签名 + ATA 断电恢复证明
 [done] 原生 PCI 配置访问 + 固定容量 Function 清单
 [done] 可逆 PCI BAR Probe + Capability 绑定的 Driver Function 认领
+[done] 精确 PCI Serial 选择 + Capability 绑定的物理命令
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
-[next] Capability 绑定的 PCI Controller Driver 执行
+[next] 原生 Ring-3 Driver Agent Call ABI + PCI INTx 路由
 [next] DMA/IOMMU Domain + MSI/MSI-X
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
@@ -513,7 +538,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
 | PCI 发现 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
-| 当前里程碑 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
+| PCI 权限 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
+| 当前里程碑 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 
 ## `10 // 项目`
 

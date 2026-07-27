@@ -22,15 +22,15 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-[06] PCI device fabric ...... capability-bound
-kernel://devices/v22-resource-claims
+[06] PCI device fabric ...... driving native I/O
+kernel://devices/v23-native-pci-serial
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V22 / QEMU debug + release   PCI BAR authority       │
+│ VERIFIED   V23 / QEMU debug + release   native PCI command      │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -176,7 +176,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V22 invariant |
+| Contract | V13 through V23 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -269,7 +269,18 @@ transaction       full preflight / ordered Events / atomic commit
 agent surface     ResourceId + Capability / raw config mutation closed
 ```
 
-`TPM CRB PATH` complete · `PCR POLICY` complete · `PCI AUTHORITY` complete
+```text
+V23 CAPABILITY-BOUND PCI DRIVER
+target            0000:00:04.0 / 1b36:0002 / BAR0 I/O 8B
+admission         retired Worker entry / reclaimed image slot / Driver image
+authority         BAR Capability / Observe + Act / Driver Binding
+execution         StateChanged / Invocation / immutable Write command
+backend           bounded 16550 THRE poll / native x86 OUT
+physical proof    file chardev / exactly one byte / 0x50
+executor          ring-0 boot adapter / ring-3 Driver Call deferred
+```
+
+`TPM CRB PATH` complete · `PCR POLICY` complete · `PCI NATIVE I/O` complete
 
 ## `05 // AGENT CALL`
 
@@ -298,10 +309,10 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ## `06 // PROOF`
 
 ```text
-PROFILE            V22 pci-resource-claims
+PROFILE            V23 native-pci-serial-driver
 QEMU               debug + release
-EVENTS             1..417 / exact history
-AGENT CONTEXTS      11 isolated
+EVENTS             1..434 / exact history
+AGENT ENTRIES       12 live / reclaimed slot
 DISPATCHES          35
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
@@ -317,6 +328,9 @@ BOOT FRAME POOL     77 sealed
 | Event history | `AGENT_KERNEL_NATIVE_EVENT_SNAPSHOT_HISTORY_OK` |
 | PCI Function claim | `AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK` |
 | PCI authority | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
+| PCI Driver admission | `AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK` |
+| PCI physical command | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
+| PCI terminal state | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -400,6 +414,16 @@ Core transaction    Resource + Capability + Driver Endpoint
 claim mapping       each BAR slot bound to exact kernel authority
 QEMU suffix         events 413..417 / one assigned BAR
 boot evidence       BAR_CATALOG_OK / FUNCTION_CLAIM_OK / CAPABILITY_BOUNDARY_OK
+```
+
+```text
+V23 PCI SERIAL DRIVER
+selection           exact BDF + vendor + device / claimable BAR required
+lifecycle           pending image retired / record removed / slot reused
+admission           Agent 10 relaunched as BAR-scoped Driver
+request             Write / opcode 0 / value 0x50 / immutable cause chain
+hardware            bounded LSR poll / one x86 OUT / no I/O on rejection
+QEMU suffix         Events 418..434 / exact 0x50 chardev byte
 ```
 
 <details>
@@ -500,8 +524,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] policy-gated TPM signature + ATA power-loss recovery proof
 [done] native PCI configuration access + fixed-capacity function inventory
 [done] reversible PCI BAR probe + capability-bound Driver function claim
+[done] exact PCI serial selection + capability-bound physical command
 [next] dedicated QEMU ATA image + emulator power-loss proof
-[next] capability-bound PCI controller Driver execution
+[next] native ring-3 Driver Agent Call ABI + PCI INTx routing
 [next] DMA/IOMMU domains + MSI/MSI-X
 [next] network + graphics + USB controllers + formal verification
 ```
@@ -513,7 +538,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
 | PCI discovery | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
-| Active milestone | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
+| PCI authority | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
+| Active milestone | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 
 ## `10 // PROJECT`
 
