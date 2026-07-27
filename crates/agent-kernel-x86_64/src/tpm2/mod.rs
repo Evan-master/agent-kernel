@@ -6,6 +6,7 @@
 mod acpi;
 mod crb;
 mod mmio;
+mod policy;
 mod public;
 mod service;
 mod signer;
@@ -14,17 +15,23 @@ mod wire;
 pub use acpi::{parse_tpm2_acpi_table, Tpm2AcpiTable, Tpm2AcpiTableError, Tpm2StartMethod};
 pub use crb::{CrbIo, CrbTransport, CrbTransportError};
 pub use mmio::{CrbMmioError, VolatileCrbIo};
+pub use policy::{Sha256PcrPolicy, TpmPcrPolicyError};
 pub use public::TpmPublicError;
 pub use service::{
     sign_retained_durable_request, KernelStateSigner, KernelStateSignerError,
     KernelStateSignerServiceError,
 };
 pub use signer::{
-    ProvisionedTpmSigner, ProvisionedTpmSignerConfig, TpmSignerConfigError, TpmSignerError,
+    ProvisionedTpmSigner, ProvisionedTpmSignerConfig, TpmSignerAuthorization, TpmSignerConfigError,
+    TpmSignerError,
 };
 pub use wire::{
-    encode_read_public, encode_sign_p256_digest, parse_p256_signature_response,
-    parse_read_public_response, DigestSignCommand, ReadPublicResponse, TpmPersistentHandle,
-    TpmWireError, MAX_TPM_NAME_BYTES, MAX_TPM_PUBLIC_BYTES, READ_PUBLIC_COMMAND_BYTES,
-    SIGN_COMMAND_BYTES,
+    encode_flush_context, encode_policy_command_code, encode_policy_pcr,
+    encode_policy_sign_p256_digest, encode_read_public, encode_sign_p256_digest,
+    encode_start_policy_session, parse_command_success, parse_p256_policy_signature_response,
+    parse_p256_signature_response, parse_read_public_response, parse_start_policy_session_response,
+    DigestSignCommand, ReadPublicResponse, TpmPersistentHandle, TpmPolicySessionHandle,
+    TpmWireError, FLUSH_CONTEXT_COMMAND_BYTES, MAX_TPM_NAME_BYTES, MAX_TPM_PUBLIC_BYTES,
+    POLICY_COMMAND_CODE_BYTES, POLICY_PCR_COMMAND_BYTES, READ_PUBLIC_COMMAND_BYTES,
+    SIGN_COMMAND_BYTES, START_POLICY_SESSION_COMMAND_BYTES,
 };

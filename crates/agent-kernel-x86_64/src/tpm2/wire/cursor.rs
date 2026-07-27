@@ -15,6 +15,10 @@ impl<'a> Cursor<'a> {
         Self { bytes, offset: 0 }
     }
 
+    pub(super) fn u8(&mut self) -> Result<u8, TpmWireError> {
+        Ok(self.take(1)?[0])
+    }
+
     pub(super) fn u16(&mut self) -> Result<u16, TpmWireError> {
         let bytes = self.take(2)?;
         Ok(u16::from_be_bytes([bytes[0], bytes[1]]))

@@ -17,7 +17,8 @@ use agent_kernel_x86_64::{
     durable_state::encode_durable_archive_manifest,
     tpm2::{
         sign_retained_durable_request, DigestSignCommand, KernelStateSignerServiceError,
-        ProvisionedTpmSigner, ProvisionedTpmSignerConfig, TpmPersistentHandle,
+        ProvisionedTpmSigner, ProvisionedTpmSignerConfig, Sha256PcrPolicy, TpmPersistentHandle,
+        TpmPolicySessionHandle,
     },
 };
 use p256::ecdsa::{signature::hazmat::PrehashSigner, Signature, SigningKey};
@@ -26,16 +27,24 @@ use sha2::{Digest, Sha256};
 use ata_block_support::SectorDevice;
 use durable_archive_kernel_support::{launched_archive_kernel, ArchiveKernelFixture};
 use durable_state_support::{p256_signer_record, POLICY_GENERATION};
-use tpm2_support::{public_fixture, signature_response, ScriptedTpm};
+use tpm2_support::{
+    command_success, policy_public_fixture, policy_session_response, policy_signature_response,
+    public_fixture, signature_response, ScriptedTpm,
+};
 
 const BASE_LBA: u64 = 256;
 const DEVICE_SECTORS: u64 = 4096;
 const CALL_DATA_GENERATION: u64 = 31;
 const HANDLE: TpmPersistentHandle =
     TpmPersistentHandle::new(0x8101_0001).expect("persistent handle");
+const SESSION_HANDLE: TpmPolicySessionHandle =
+    TpmPolicySessionHandle::new(0x0300_0042).expect("policy session handle");
+const PCR_SELECTION: [u8; 3] = [0x81, 0x08, 0];
+const PCR_DIGEST: [u8; 32] = [0xa5; 32];
+const TPM_NONCE: [u8; 16] = [0xc3; 16];
 
 #[test]
-fn provisioned_tpm_signature_commits_to_ata_and_survives_cold_recovery() {
+fn measured_policy_tpm_signature_commits_to_ata_and_survives_cold_recovery() {
     let key = SigningKey::from_slice(&[0x71; 32]).unwrap();
     let mut fixture = launched_archive_kernel();
     let (proposal, preflight, caller) = archive_contract(&fixture);
@@ -64,7 +73,7 @@ fn provisioned_tpm_signature_commits_to_ata_and_survives_cold_recovery() {
         )
         .unwrap();
     let retained = preparation.request_bytes();
-    let mut signer = provisioned_signer(&key, preparation.manifest());
+    let mut signer = measured_policy_signer(&key, preparation.manifest());
 
     let signed = sign_retained_durable_request(
         &retained,
@@ -75,10 +84,11 @@ fn provisioned_tpm_signature_commits_to_ata_and_survives_cold_recovery() {
     )
     .unwrap();
     let transport = signer.into_transport();
-    assert_eq!(transport.commands().len(), 2);
+    assert_eq!(transport.commands().len(), 6);
     let manifest_digest: [u8; 32] =
         Sha256::digest(encode_durable_archive_manifest(preparation.manifest())).into();
-    assert_eq!(&transport.commands()[1][31..63], &manifest_digest);
+    assert_eq!(&transport.commands()[4][31..63], &manifest_digest);
+    assert_eq!(&transport.commands()[2][16..48], &PCR_DIGEST);
 
     let mut verified = session
         .commit_prepared(caller, preflight, &signed)
@@ -207,6 +217,38 @@ fn provisioned_signer(
     .unwrap();
     ProvisionedTpmSigner::bind(
         ScriptedTpm::new([fixture.response, signature_response(signature)]),
+        config,
+    )
+    .unwrap()
+}
+
+fn measured_policy_signer(
+    key: &SigningKey,
+    manifest: agent_kernel_core::DurableArchiveManifest,
+) -> ProvisionedTpmSigner<ScriptedTpm> {
+    let mode = DigestSignCommand::SignDigestV185;
+    let policy = Sha256PcrPolicy::new(PCR_SELECTION, PCR_DIGEST).unwrap();
+    let fixture = policy_public_fixture(key, 0x0004_00b2, policy.authorization_digest(mode));
+    let digest: [u8; 32] = Sha256::digest(encode_durable_archive_manifest(manifest)).into();
+    let signature: Signature = key.sign_prehash(&digest).unwrap();
+    let config = ProvisionedTpmSignerConfig::new_pcr_policy(
+        HANDLE,
+        mode,
+        POLICY_GENERATION,
+        fixture.name,
+        fixture.compressed,
+        policy,
+    )
+    .unwrap();
+    ProvisionedTpmSigner::bind(
+        ScriptedTpm::new([
+            fixture.response,
+            policy_session_response(SESSION_HANDLE, TPM_NONCE),
+            command_success(),
+            command_success(),
+            policy_signature_response(signature, TPM_NONCE),
+            command_success(),
+        ]),
         config,
     )
     .unwrap()

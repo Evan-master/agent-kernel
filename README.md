@@ -22,14 +22,14 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-kernel://state-signer/v19-crb
+kernel://state-signer/v20-pcr-policy
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V19 native TPM    │
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V20 TPM policy    │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -175,7 +175,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V19 invariant |
+| Contract | V13 through V20 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -239,7 +239,16 @@ agent boundary    Call 56 / retained manifest only / no raw TPM channel
 recovery proof    TPM sign / ATA commit / power loss / cold recovery
 ```
 
-`ATA BACKEND` complete · `STATE SIGNER PACKAGE` complete · `TPM CRB PATH` complete
+```text
+V20 TPM MEASURED POLICY
+policy            SHA-256 PCR bitmap + expected composite digest
+authorization     PolicyPCR -> PolicyCommandCode -> Sign
+template          exact authPolicy / userWithAuth clear / adminWithPolicy set
+lifecycle         fresh session / explicit FlushContext / disable on fault
+recovery proof    PCR policy / TPM sign / ATA commit / cold recovery
+```
+
+`ATA BACKEND` complete · `TPM CRB PATH` complete · `PCR POLICY` complete
 
 ## `05 // AGENT CALL`
 
@@ -342,6 +351,15 @@ Agent Call         56 / generation-only payload
 closed loop        TPM response / ATA commit / cold recovery
 ```
 
+```text
+V20 TPM POLICY
+PCR                one SHA-256 bank / PCR 0..23 bitmap
+digest             PolicyPCR + PolicyCommandCode
+key binding        exact authPolicy / password bypass rejected
+session            create / assert / sign / flush
+closed loop        policy session / ATA commit / power loss / cold recovery
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -382,12 +400,15 @@ $ ruby scripts/build-state-signer-package.rb \
 ```console
 $ scripts/inspect-tpm-state-signer.rb \
     --handle 0x81010001 --command sign-digest-v185 \
-    --policy-generation 1 \
+    --policy-generation 1 --authorization pcr-policy \
+    --pcr-selection "$TPM_PCR_SELECTION" \
+    --pcr-digest "$TPM_PCR_DIGEST" \
     --name "$TPM_NAME" --public-key "$TPM_PUBLIC_KEY"
 ```
 
 The hardware profile defaults to `Disabled`. Activation uses
-`NativeTpmSignerProfile::Crb` and a matching ATA signer record.
+`NativeTpmSignerProfile::Crb`, the inspector's computed `authPolicy`, and a
+matching ATA signer record.
 
 ```console
 $ cargo check -p agent-kernel-x86_64 \
@@ -432,7 +453,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] V1/V2 signer agility + low-S ECDSA P-256/SHA-256
 [done] ACPI TPM2 discovery + CRB transport + provisioned signer binding
 [done] Agent Call 56 + built-in TPM provider + scripted TPM recovery proof
-[next] measured-boot policy sessions + sealed TPM authorization
+[done] SHA-256 PCR policy sessions + command-bound TPM authorization
+[done] policy-gated TPM signature + ATA power-loss recovery proof
 [next] dedicated QEMU ATA image + emulator power-loss proof
 [next] network + graphics + USB + formal verification
 ```
@@ -443,7 +465,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Runtime milestone | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | Durable protocol | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| Active milestone | [Native TPM State Signer V19](docs/superpowers/specs/2026-07-24-native-tpm-state-signer-v19-design.md) |
+| Active milestone | [TPM Measured Policy V20](docs/superpowers/specs/2026-07-24-tpm-measured-policy-v20-design.md) |
 
 ## `10 // PROJECT`
 

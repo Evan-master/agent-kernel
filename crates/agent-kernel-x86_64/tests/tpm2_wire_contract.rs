@@ -160,6 +160,6 @@ fn signature_response(r: [u8; 32], s: [u8; 32]) -> Vec<u8> {
     response.extend_from_slice(&0_u32.to_be_bytes());
     response.extend_from_slice(&(parameters.len() as u32).to_be_bytes());
     response.extend_from_slice(&parameters);
-    response.extend_from_slice(&[0, 0, 0, 0, 0]);
+    response.extend_from_slice(&[0, 0, 1, 0, 0]);
     response
 }

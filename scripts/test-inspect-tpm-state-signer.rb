@@ -59,6 +59,42 @@ Dir.mktmpdir("agent-kernel-tpm-profile-test") do |directory|
     "public-key evidence missing"
   )
   assert(output.include?("state_signer_id=#{signer_id}"), "signer ID evidence missing")
+  assert(output.include?("authorization=EmptyPassword"), "password authorization missing")
+
+  output, error, status = run(
+    RbConfig.ruby, INSPECTOR,
+    "--handle", "0x81010001",
+    "--command", "sign-digest-v185",
+    "--policy-generation", "8",
+    "--authorization", "pcr-policy",
+    "--pcr-selection", "810800",
+    "--pcr-digest", "a5" * 32,
+    "--name", name_path,
+    "--public-key", public_key
+  )
+  assert(status.success?, "inspector rejected a PCR policy profile\n#{output}#{error}")
+  assert(output.include?("authorization=PcrPolicy"), "PCR authorization missing")
+  assert(output.include?("pcr_selection=810800"), "PCR selection evidence missing")
+  assert(
+    output.include?(
+      "expected_auth_policy=acd40828fc7ac8d7fce55172c045a7dffa296af388510854c7063b5c36f90792"
+    ),
+    "PCR authPolicy evidence missing"
+  )
+
+  _output, error, status = run(
+    RbConfig.ruby, INSPECTOR,
+    "--handle", "0x81010001",
+    "--command", "sign-digest-v185",
+    "--policy-generation", "8",
+    "--authorization", "pcr-policy",
+    "--pcr-selection", "000000",
+    "--pcr-digest", "a5" * 32,
+    "--name", name_path,
+    "--public-key", public_key
+  )
+  assert(!status.success?, "inspector accepted an empty PCR selection")
+  assert(error.include?("at least one PCR"), "wrong empty PCR failure")
 
   File.binwrite(name_path, "\x00\x0c".b + ("\xa5".b * 32))
   _output, error, status = run(

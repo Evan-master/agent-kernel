@@ -12,7 +12,9 @@ ACPI TPM2
   -> bounded command transport
   -> ReadPublic provisioning check
   -> retained-manifest SHA-256
+  -> PolicyPCR + PolicyCommandCode
   -> SignDigest v185 | Sign v184
+  -> explicit policy-session cleanup
   -> verified low-S P-256 signature
 ```
 
@@ -26,6 +28,7 @@ ACPI TPM2
 | `crb/registers.rs` | PTP register offsets and masks |
 | `mmio.rs` | volatile access to one boot-owned device page |
 | `wire/` | fixed-capacity TPM command and response encoding |
+| `policy.rs` | SHA-256 PCR selection and object `authPolicy` digest |
 | `public.rs` | immutable ECC signing-template verification |
 | `signer.rs` | provisioned handle binding and manifest signing |
 | `service.rs` | retained durable-request signing policy |
@@ -42,6 +45,10 @@ ACPI TPM2
 - Command and response descriptors stay inside the locality-zero data window.
 - Cleanup failure poisons the transport.
 - Runtime transport, wire, and signature failures disable the signer instance.
+- Measured-policy keys reject `userWithAuth` and require the exact computed
+  `authPolicy`.
+- Every measured signature uses a fresh policy session and attempts explicit
+  `FlushContext` after the handle exists.
 - No software-key fallback exists.
 
 ## Tests

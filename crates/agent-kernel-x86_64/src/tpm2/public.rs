@@ -18,16 +18,20 @@ const ATTR_FIXED_TPM: u32 = 1 << 1;
 const ATTR_FIXED_PARENT: u32 = 1 << 4;
 const ATTR_SENSITIVE_DATA_ORIGIN: u32 = 1 << 5;
 const ATTR_USER_WITH_AUTH: u32 = 1 << 6;
+const ATTR_ADMIN_WITH_POLICY: u32 = 1 << 7;
 const ATTR_RESTRICTED: u32 = 1 << 16;
 const ATTR_DECRYPT: u32 = 1 << 17;
 const ATTR_SIGN_ENCRYPT: u32 = 1 << 18;
 const ATTR_X509_SIGN: u32 = 1 << 19;
-const REQUIRED_ATTRIBUTES: u32 = ATTR_FIXED_TPM
-    | ATTR_FIXED_PARENT
-    | ATTR_SENSITIVE_DATA_ORIGIN
-    | ATTR_USER_WITH_AUTH
-    | ATTR_SIGN_ENCRYPT;
-const FORBIDDEN_ATTRIBUTES: u32 = ATTR_RESTRICTED | ATTR_DECRYPT | ATTR_X509_SIGN;
+const BASE_REQUIRED_ATTRIBUTES: u32 =
+    ATTR_FIXED_TPM | ATTR_FIXED_PARENT | ATTR_SENSITIVE_DATA_ORIGIN | ATTR_SIGN_ENCRYPT;
+const BASE_FORBIDDEN_ATTRIBUTES: u32 = ATTR_RESTRICTED | ATTR_DECRYPT | ATTR_X509_SIGN;
+
+#[derive(Copy, Clone)]
+pub(super) enum ExpectedPublicAuthorization {
+    EmptyPassword,
+    PcrPolicy([u8; 32]),
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TpmPublicError {
@@ -39,6 +43,7 @@ pub enum TpmPublicError {
     MissingAttributes { missing: u32 },
     ForbiddenAttributes { present: u32 },
     NonemptyAuthorizationPolicy,
+    AuthorizationPolicyMismatch,
     UnsupportedSymmetric { algorithm: u16 },
     UnsupportedScheme { algorithm: u16 },
     UnsupportedSchemeHash { algorithm: u16 },
@@ -54,6 +59,7 @@ pub(super) fn verify_signing_public(
     response: &ReadPublicResponse,
     expected_name: [u8; 34],
     expected_public_key: [u8; 33],
+    expected_authorization: ExpectedPublicAuthorization,
 ) -> Result<(), TpmPublicError> {
     if response.name() != expected_name {
         return Err(TpmPublicError::NameMismatch);
@@ -74,16 +80,35 @@ pub(super) fn verify_signing_public(
         TpmPublicError::UnexpectedNameAlgorithm { algorithm }
     })?;
     let attributes = cursor.u32()?;
-    let missing = REQUIRED_ATTRIBUTES & !attributes;
+    let required = BASE_REQUIRED_ATTRIBUTES
+        | match expected_authorization {
+            ExpectedPublicAuthorization::EmptyPassword => ATTR_USER_WITH_AUTH,
+            ExpectedPublicAuthorization::PcrPolicy(_) => ATTR_ADMIN_WITH_POLICY,
+        };
+    let missing = required & !attributes;
     if missing != 0 {
         return Err(TpmPublicError::MissingAttributes { missing });
     }
-    let present = FORBIDDEN_ATTRIBUTES & attributes;
+    let forbidden = BASE_FORBIDDEN_ATTRIBUTES
+        | match expected_authorization {
+            ExpectedPublicAuthorization::EmptyPassword => 0,
+            ExpectedPublicAuthorization::PcrPolicy(_) => ATTR_USER_WITH_AUTH,
+        };
+    let present = forbidden & attributes;
     if present != 0 {
         return Err(TpmPublicError::ForbiddenAttributes { present });
     }
-    if !cursor.tpm2b()?.is_empty() {
-        return Err(TpmPublicError::NonemptyAuthorizationPolicy);
+    let authorization_policy = cursor.tpm2b()?;
+    match expected_authorization {
+        ExpectedPublicAuthorization::EmptyPassword if !authorization_policy.is_empty() => {
+            return Err(TpmPublicError::NonemptyAuthorizationPolicy);
+        }
+        ExpectedPublicAuthorization::PcrPolicy(expected)
+            if authorization_policy != expected.as_slice() =>
+        {
+            return Err(TpmPublicError::AuthorizationPolicyMismatch);
+        }
+        _ => {}
     }
     require(cursor.u16()?, TPM_ALG_NULL, |algorithm| {
         TpmPublicError::UnsupportedSymmetric { algorithm }

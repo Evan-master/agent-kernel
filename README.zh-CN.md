@@ -22,14 +22,14 @@ agent-kernel / native-x86_64
 [03] ring-3 agents .......... isolated
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
-kernel://state-signer/v19-crb
+kernel://state-signer/v20-pcr-policy
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V10 / QEMU debug + release   HEAD  V19 native TPM    │
+│ VERIFIED   V10 / QEMU debug + release   HEAD  V20 TPM policy    │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -175,7 +175,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V19 不变量 |
+| 契约 | V13 至 V20 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -239,7 +239,16 @@ agent boundary    Call 56 / 仅保留 Manifest / 无原始 TPM 通道
 recovery proof    TPM 签名 / ATA 提交 / 断电 / 冷启动恢复
 ```
 
-`ATA BACKEND` 完成 · `STATE SIGNER PACKAGE` 完成 · `TPM CRB PATH` 完成
+```text
+V20 TPM MEASURED POLICY
+policy            SHA-256 PCR 位图 + 预期复合摘要
+authorization     PolicyPCR -> PolicyCommandCode -> Sign
+template          精确 authPolicy / 关闭 userWithAuth / 启用 adminWithPolicy
+lifecycle         新建会话 / 显式 FlushContext / 故障后禁用
+recovery proof    PCR 策略 / TPM 签名 / ATA 提交 / 冷启动恢复
+```
+
+`ATA BACKEND` 完成 · `TPM CRB PATH` 完成 · `PCR POLICY` 完成
 
 ## `05 // AGENT CALL`
 
@@ -342,6 +351,15 @@ Agent Call         56 / 仅 Generation Payload
 closed loop        TPM Response / ATA 提交 / 冷启动恢复
 ```
 
+```text
+V20 TPM POLICY
+PCR                单 SHA-256 Bank / PCR 0..23 位图
+digest             PolicyPCR + PolicyCommandCode
+key binding        精确 authPolicy / 拒绝密码旁路
+session            创建 / 断言 / 签名 / 清理
+closed loop        Policy Session / ATA 提交 / 断电 / 冷启动恢复
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -382,12 +400,15 @@ $ ruby scripts/build-state-signer-package.rb \
 ```console
 $ scripts/inspect-tpm-state-signer.rb \
     --handle 0x81010001 --command sign-digest-v185 \
-    --policy-generation 1 \
+    --policy-generation 1 --authorization pcr-policy \
+    --pcr-selection "$TPM_PCR_SELECTION" \
+    --pcr-digest "$TPM_PCR_DIGEST" \
     --name "$TPM_NAME" --public-key "$TPM_PUBLIC_KEY"
 ```
 
 硬件 Profile 默认使用 `Disabled`。启用路径采用
-`NativeTpmSignerProfile::Crb`，并绑定匹配的 ATA Signer Record。
+`NativeTpmSignerProfile::Crb`、检查器计算的 `authPolicy` 与匹配的 ATA
+Signer Record。
 
 ```console
 $ cargo check -p agent-kernel-x86_64 \
@@ -432,7 +453,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] V1/V2 Signer 算法敏捷 + 低 S ECDSA P-256/SHA-256
 [done] ACPI TPM2 发现 + CRB 传输 + Provisioned Signer 绑定
 [done] Agent Call 56 + 内置 TPM Provider + 脚本化 TPM 恢复证明
-[next] 度量启动 Policy Session + 密封 TPM 授权
+[done] SHA-256 PCR Policy Session + 命令绑定 TPM 授权
+[done] 策略门控 TPM 签名 + ATA 断电恢复证明
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
 [next] Network + Graphics + USB + 形式化验证
 ```
@@ -443,7 +465,7 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Runtime 里程碑 | [SMP Runtime V12](docs/superpowers/specs/2026-07-23-smp-runtime-v12-design.md) |
 | 持久协议 | [Signed Durable State V13](docs/superpowers/specs/2026-07-23-signed-durable-state-v13-design.md) |
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
-| 当前里程碑 | [Native TPM State Signer V19](docs/superpowers/specs/2026-07-24-native-tpm-state-signer-v19-design.md) |
+| 当前里程碑 | [TPM Measured Policy V20](docs/superpowers/specs/2026-07-24-tpm-measured-policy-v20-design.md) |
 
 ## `10 // 项目`
 

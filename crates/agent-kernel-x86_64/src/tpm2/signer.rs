@@ -11,15 +11,22 @@ use agent_kernel_hal::TpmCommandTransport;
 use p256::ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
 
+use super::wire::recover_start_policy_session_handle;
 use super::{
-    encode_read_public, encode_sign_p256_digest, parse_p256_signature_response,
-    parse_read_public_response, public::verify_signing_public, DigestSignCommand,
-    KernelStateSigner, KernelStateSignerError, TpmPersistentHandle, TpmPublicError, TpmWireError,
+    encode_flush_context, encode_policy_command_code, encode_policy_pcr,
+    encode_policy_sign_p256_digest, encode_read_public, encode_sign_p256_digest,
+    encode_start_policy_session, parse_command_success, parse_p256_policy_signature_response,
+    parse_p256_signature_response, parse_read_public_response, parse_start_policy_session_response,
+    public::{verify_signing_public, ExpectedPublicAuthorization},
+    DigestSignCommand, KernelStateSigner, KernelStateSignerError, Sha256PcrPolicy,
+    TpmPersistentHandle, TpmPolicySessionHandle, TpmPublicError, TpmWireError,
 };
 
 const TPM_ALG_SHA256: u16 = 0x000b;
 const READ_PUBLIC_RESPONSE_BYTES: usize = 768;
 const SIGN_RESPONSE_BYTES: usize = 128;
+const POLICY_SESSION_RESPONSE_BYTES: usize = 64;
+const COMMAND_RESPONSE_BYTES: usize = 10;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum TpmSignerConfigError {
@@ -52,12 +59,19 @@ impl<T: TpmCommandTransport> KernelStateSigner for ProvisionedTpmSigner<T> {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum TpmSignerAuthorization {
+    EmptyPassword,
+    PcrPolicy(Sha256PcrPolicy),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ProvisionedTpmSignerConfig {
     handle: TpmPersistentHandle,
     mode: DigestSignCommand,
     policy_generation: u64,
     expected_name: [u8; 34],
     expected_public_key: [u8; 33],
+    authorization: TpmSignerAuthorization,
 }
 
 impl ProvisionedTpmSignerConfig {
@@ -67,6 +81,42 @@ impl ProvisionedTpmSignerConfig {
         policy_generation: u64,
         expected_name: [u8; 34],
         expected_public_key: [u8; 33],
+    ) -> Result<Self, TpmSignerConfigError> {
+        Self::new_with_authorization(
+            handle,
+            mode,
+            policy_generation,
+            expected_name,
+            expected_public_key,
+            TpmSignerAuthorization::EmptyPassword,
+        )
+    }
+
+    pub fn new_pcr_policy(
+        handle: TpmPersistentHandle,
+        mode: DigestSignCommand,
+        policy_generation: u64,
+        expected_name: [u8; 34],
+        expected_public_key: [u8; 33],
+        policy: Sha256PcrPolicy,
+    ) -> Result<Self, TpmSignerConfigError> {
+        Self::new_with_authorization(
+            handle,
+            mode,
+            policy_generation,
+            expected_name,
+            expected_public_key,
+            TpmSignerAuthorization::PcrPolicy(policy),
+        )
+    }
+
+    fn new_with_authorization(
+        handle: TpmPersistentHandle,
+        mode: DigestSignCommand,
+        policy_generation: u64,
+        expected_name: [u8; 34],
+        expected_public_key: [u8; 33],
+        authorization: TpmSignerAuthorization,
     ) -> Result<Self, TpmSignerConfigError> {
         if policy_generation == 0 {
             return Err(TpmSignerConfigError::ZeroPolicyGeneration);
@@ -83,6 +133,7 @@ impl ProvisionedTpmSignerConfig {
             policy_generation,
             expected_name,
             expected_public_key,
+            authorization,
         })
     }
 
@@ -105,6 +156,19 @@ impl ProvisionedTpmSignerConfig {
     pub const fn expected_public_key(self) -> [u8; 33] {
         self.expected_public_key
     }
+
+    pub const fn authorization(self) -> TpmSignerAuthorization {
+        self.authorization
+    }
+
+    fn expected_public_authorization(self) -> ExpectedPublicAuthorization {
+        match self.authorization {
+            TpmSignerAuthorization::EmptyPassword => ExpectedPublicAuthorization::EmptyPassword,
+            TpmSignerAuthorization::PcrPolicy(policy) => {
+                ExpectedPublicAuthorization::PcrPolicy(policy.authorization_digest(self.mode))
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -114,6 +178,7 @@ pub enum TpmSignerError<E> {
     Wire(TpmWireError),
     Public(TpmPublicError),
     SignatureVerification,
+    SessionCleanup,
     Disabled,
 }
 
@@ -142,8 +207,13 @@ impl<T: TpmCommandTransport> ProvisionedTpmSigner<T> {
         }
         let decoded =
             parse_read_public_response(&response[..length]).map_err(TpmSignerError::Wire)?;
-        verify_signing_public(&decoded, config.expected_name, config.expected_public_key)
-            .map_err(TpmSignerError::Public)?;
+        verify_signing_public(
+            &decoded,
+            config.expected_name,
+            config.expected_public_key,
+            config.expected_public_authorization(),
+        )
+        .map_err(TpmSignerError::Public)?;
         let public_key = DurableStatePublicKey::ecdsa_p256(config.expected_public_key)
             .ok_or(TpmSignerError::SignatureVerification)?;
         Ok(Self {
@@ -182,38 +252,112 @@ impl<T: TpmCommandTransport> ProvisionedTpmSigner<T> {
             return Err(TpmSignerError::Disabled);
         }
         let digest: [u8; 32] = Sha256::digest(manifest).into();
+        let result = match self.config.authorization {
+            TpmSignerAuthorization::EmptyPassword => self.sign_with_password(digest),
+            TpmSignerAuthorization::PcrPolicy(policy) => self.sign_with_pcr_policy(digest, policy),
+        };
+        if result.is_err() {
+            self.disabled = true;
+        }
+        result
+    }
+
+    pub fn into_transport(self) -> T {
+        self.transport
+    }
+
+    fn sign_with_password(
+        &mut self,
+        digest: [u8; 32],
+    ) -> Result<[u8; 64], TpmSignerError<T::Error>> {
         let command = encode_sign_p256_digest(self.config.handle, digest, self.config.mode);
         let mut response = [0; SIGN_RESPONSE_BYTES];
-        let length = match self.transport.execute(&command, &mut response) {
-            Ok(length) => length,
-            Err(error) => {
-                self.disabled = true;
-                return Err(TpmSignerError::Transport(error));
-            }
-        };
-        if length > response.len() {
-            self.disabled = true;
-            return Err(TpmSignerError::InvalidTransportLength {
-                reported: length,
-                capacity: response.len(),
-            });
-        }
-        let encoded = match parse_p256_signature_response(&response[..length]) {
-            Ok(signature) => signature,
-            Err(error) => {
-                self.disabled = true;
-                return Err(TpmSignerError::Wire(error));
-            }
-        };
+        let length = self.execute_command(&command, &mut response)?;
+        let encoded =
+            parse_p256_signature_response(&response[..length]).map_err(TpmSignerError::Wire)?;
         if !self.signature_is_valid(digest, encoded) {
-            self.disabled = true;
             return Err(TpmSignerError::SignatureVerification);
         }
         Ok(encoded)
     }
 
-    pub fn into_transport(self) -> T {
-        self.transport
+    fn sign_with_pcr_policy(
+        &mut self,
+        digest: [u8; 32],
+        policy: Sha256PcrPolicy,
+    ) -> Result<[u8; 64], TpmSignerError<T::Error>> {
+        let mut nonce = [0; 16];
+        nonce.copy_from_slice(&digest[..16]);
+        let command = encode_start_policy_session(nonce);
+        let mut response = [0; POLICY_SESSION_RESPONSE_BYTES];
+        let length = self.execute_command(&command, &mut response)?;
+        let session = match parse_start_policy_session_response(&response[..length]) {
+            Ok(session) => session,
+            Err(error) => {
+                if let Some(session) = recover_start_policy_session_handle(&response[..length]) {
+                    if self.flush_policy_session(session).is_err() {
+                        return Err(TpmSignerError::SessionCleanup);
+                    }
+                }
+                return Err(TpmSignerError::Wire(error));
+            }
+        };
+
+        let operation = self.run_policy_signature(session, digest, policy);
+        if self.flush_policy_session(session).is_err() {
+            return Err(TpmSignerError::SessionCleanup);
+        }
+        let encoded = operation?;
+        if !self.signature_is_valid(digest, encoded) {
+            return Err(TpmSignerError::SignatureVerification);
+        }
+        Ok(encoded)
+    }
+
+    fn run_policy_signature(
+        &mut self,
+        session: TpmPolicySessionHandle,
+        digest: [u8; 32],
+        policy: Sha256PcrPolicy,
+    ) -> Result<[u8; 64], TpmSignerError<T::Error>> {
+        self.execute_success(&encode_policy_pcr(session, policy))?;
+        self.execute_success(&encode_policy_command_code(session, self.config.mode))?;
+        let command =
+            encode_policy_sign_p256_digest(self.config.handle, digest, self.config.mode, session);
+        let mut response = [0; SIGN_RESPONSE_BYTES];
+        let length = self.execute_command(&command, &mut response)?;
+        parse_p256_policy_signature_response(&response[..length]).map_err(TpmSignerError::Wire)
+    }
+
+    fn flush_policy_session(
+        &mut self,
+        session: TpmPolicySessionHandle,
+    ) -> Result<(), TpmSignerError<T::Error>> {
+        self.execute_success(&encode_flush_context(session))
+    }
+
+    fn execute_success(&mut self, command: &[u8]) -> Result<(), TpmSignerError<T::Error>> {
+        let mut response = [0; COMMAND_RESPONSE_BYTES];
+        let length = self.execute_command(command, &mut response)?;
+        parse_command_success(&response[..length]).map_err(TpmSignerError::Wire)
+    }
+
+    fn execute_command(
+        &mut self,
+        command: &[u8],
+        response: &mut [u8],
+    ) -> Result<usize, TpmSignerError<T::Error>> {
+        let length = self
+            .transport
+            .execute(command, response)
+            .map_err(TpmSignerError::Transport)?;
+        if length > response.len() {
+            return Err(TpmSignerError::InvalidTransportLength {
+                reported: length,
+                capacity: response.len(),
+            });
+        }
+        Ok(length)
     }
 
     fn signature_is_valid(&self, digest: [u8; 32], encoded: [u8; 64]) -> bool {
