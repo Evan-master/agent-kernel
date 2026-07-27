@@ -7,6 +7,7 @@
 
 mod admission_supervisor;
 mod fault_handler;
+mod pci_serial_driver;
 mod resource_manager;
 mod reuse_worker;
 
@@ -15,6 +16,7 @@ use agent_kernel_x86_64::agent_call::AgentCallOperation;
 
 pub(crate) use admission_supervisor::{admission_supervisor, BootAdmissionSupervisorImage};
 pub(crate) use fault_handler::{fault_handler, BootFaultHandlerImage};
+pub(crate) use pci_serial_driver::{pci_serial_driver, BootPciSerialDriverImage};
 pub(crate) use resource_manager::{resource_manager, BootResourceManagerImage};
 pub(crate) use reuse_worker::{reuse_worker, BootReuseWorkerImage};
 

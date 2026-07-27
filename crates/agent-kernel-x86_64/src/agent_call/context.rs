@@ -1,6 +1,7 @@
 //! Scheduler-owned identity and authority for one Agent Call context.
 //!
-//! Common replies expose Agent, Task, Image, and nonce. Operation-specific
+//! Common replies expose Agent, execution identity, Image, and nonce. The
+//! execution identity is a Task or Driver Invocation. Operation-specific
 //! replies may add bounded kernel-owned identities. Delegated capability stays
 //! private to trusted kernel code and participates in context equality.
 
@@ -13,6 +14,7 @@ mod authentication;
 mod capability;
 mod capability_cleanup_revocation;
 mod capability_compaction;
+mod driver;
 mod durable_archive;
 mod event_archive;
 mod fault_compaction;
@@ -29,7 +31,9 @@ mod task_compaction;
 mod task_lifecycle;
 mod waiter_compaction;
 
-use agent_kernel_core::{AgentId, AgentImageId, CapabilityId, TaskId, TaskResult};
+use agent_kernel_core::{
+    AgentId, AgentImageId, CapabilityId, DriverInvocationId, TaskId, TaskResult,
+};
 
 use super::{
     AgentCallDecodeError, AgentCallRequest, AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION,
@@ -44,6 +48,7 @@ pub struct AgentCallContext {
     task: TaskId,
     image: AgentImageId,
     capability: CapabilityId,
+    driver_invocation: Option<DriverInvocationId>,
     runtime_admission_requester: Option<AgentId>,
 }
 
@@ -62,6 +67,26 @@ impl AgentCallContext {
             task,
             image,
             capability,
+            driver_invocation: None,
+            runtime_admission_requester: None,
+        })
+    }
+
+    pub const fn new_driver(
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        image: AgentImageId,
+        capability: CapabilityId,
+    ) -> Option<Self> {
+        if agent.raw() == 0 || invocation.raw() == 0 || image.raw() == 0 || capability.raw() == 0 {
+            return None;
+        }
+        Some(Self {
+            agent,
+            task: TaskId::new(0),
+            image,
+            capability,
+            driver_invocation: Some(invocation),
             runtime_admission_requester: None,
         })
     }
@@ -71,7 +96,11 @@ impl AgentCallContext {
         frame: &mut PrivilegeInterruptStackFrame,
         nonce: u64,
     ) -> Result<(), AgentCallDecodeError> {
-        self.encode_reply(frame, nonce, AGENT_CALL_DESCRIBE_CONTEXT)
+        self.encode_reply(frame, nonce, AGENT_CALL_DESCRIBE_CONTEXT)?;
+        if self.driver_invocation.is_some() {
+            frame.r10 = super::AGENT_CALL_CONTEXT_DRIVER;
+        }
+        Ok(())
     }
 
     pub fn encode_task_result_reply(
@@ -201,6 +230,10 @@ impl AgentCallContext {
         self.task
     }
 
+    pub const fn driver_invocation(self) -> Option<DriverInvocationId> {
+        self.driver_invocation
+    }
+
     pub const fn image(self) -> AgentImageId {
         self.image
     }
@@ -219,7 +252,10 @@ impl AgentCallContext {
         frame.rcx = AGENT_CALL_STATUS_OK;
         frame.rdx = operation;
         frame.rsi = self.agent.raw();
-        frame.rdi = self.task.raw();
+        frame.rdi = match self.driver_invocation {
+            Some(invocation) => invocation.raw(),
+            None => self.task.raw(),
+        };
         frame.r8 = self.image.raw();
         frame.r9 = nonce;
         frame.r10 = 0;
@@ -240,8 +276,24 @@ impl AgentCallContext {
         nonce: u64,
         expected_nonce: u64,
     ) -> bool {
-        agent.raw() == self.agent.raw()
+        self.driver_invocation.is_none()
+            && agent.raw() == self.agent.raw()
             && task.raw() == self.task.raw()
+            && image.raw() == self.image.raw()
+            && nonce == expected_nonce
+            && expected_nonce != 0
+    }
+
+    const fn matches_driver_identity(
+        self,
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        image: AgentImageId,
+        nonce: u64,
+        expected_nonce: u64,
+    ) -> bool {
+        matches!(self.driver_invocation, Some(expected) if expected.raw() == invocation.raw())
+            && agent.raw() == self.agent.raw()
             && image.raw() == self.image.raw()
             && nonce == expected_nonce
             && expected_nonce != 0

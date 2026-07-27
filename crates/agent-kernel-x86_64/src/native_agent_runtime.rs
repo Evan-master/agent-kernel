@@ -7,7 +7,7 @@
 
 mod dispatch;
 
-use agent_kernel_core::{AgentId, AgentImageId, MemoryCellId, RunQueueEntry};
+use agent_kernel_core::{AgentId, AgentImageId, DriverInvocationId, MemoryCellId, RunQueueEntry};
 use agent_kernel_x86_64::{agent_call::AgentCallContext, native_runtime::NativeAgentRuntimeStore};
 
 use crate::agent_cpu::{
@@ -37,7 +37,15 @@ impl NativeAgentContext {
 
     fn matches_entry(&self, entry: RunQueueEntry) -> bool {
         let context = self.context();
-        context.agent() == entry.agent && context.task() == entry.task
+        context.driver_invocation().is_none()
+            && context.agent() == entry.agent
+            && context.task() == entry.task
+    }
+
+    fn matches_driver(&self, driver: AgentId, invocation: DriverInvocationId) -> bool {
+        matches!(self, Self::Prepared(_) | Self::Preempted(_))
+            && self.context().agent() == driver
+            && self.context().driver_invocation() == Some(invocation)
     }
 
     fn references_memory_cell(&self, cell: MemoryCellId) -> bool {

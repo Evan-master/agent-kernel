@@ -26,6 +26,7 @@ mod fault_task_flow;
 mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
+mod native_driver_executor;
 mod native_runtime_admission_broker;
 mod pci_serial_driver_flow;
 mod pci_serial_profile;
@@ -64,7 +65,7 @@ pub(crate) const X86_EVENT_ARCHIVE_WATERMARK: usize = 378;
 pub(crate) const X86_TERMINAL_EVENT_SEQUENCE: usize = 412;
 pub(crate) const X86_PCI_CLAIM_EVENT_RESERVE: usize =
     2 + agent_kernel_core::DRIVER_RESOURCE_REGION_CAPACITY * 3;
-pub(crate) const X86_PCI_DRIVER_EVENT_RESERVE: usize = 17;
+pub(crate) const X86_PCI_DRIVER_EVENT_RESERVE: usize = 18;
 pub(crate) const X86_PCI_EVENT_RESERVE: usize =
     X86_PCI_CLAIM_EVENT_RESERVE + X86_PCI_DRIVER_EVENT_RESERVE;
 pub(crate) const X86_HANDOFF_EVENT_RESERVE: usize = 64;

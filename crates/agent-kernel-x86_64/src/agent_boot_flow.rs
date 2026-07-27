@@ -521,7 +521,17 @@ pub(super) fn run(
     let Some(pci_claim) = pci_claim::install(&mut booted, &mut smp_bootstrap) else {
         fatal_boot("AGENT_KERNEL_PCI_FUNCTION_CLAIM_ERROR");
     };
-    if crate::pci_serial_driver_flow::run(&mut booted, pci_claim).is_none() {
+    if crate::pci_serial_driver_flow::run(
+        &mut booted,
+        pci_claim,
+        &cpu_runtime,
+        &mut native_runtime,
+        &runtime_memory_pool,
+        &mut address_space_frame_pool,
+        &mut smp_bootstrap,
+    )
+    .is_none()
+    {
         fatal_boot("AGENT_KERNEL_PCI_SERIAL_DRIVER_ERROR");
     }
     if event_archive.is_released() {

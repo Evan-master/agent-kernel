@@ -97,7 +97,7 @@ def verify_common_header(name, bytes, version, flags: 0)
   assert(bytes.start_with?(MAGIC), "#{name} magic mismatch")
   assert(u16(bytes, 8) == version, "#{name} format must be #{version}")
   assert(u16(bytes, 10) == 1, "#{name} architecture must be x86_64")
-  assert((1..4).cover?(u16(bytes, 12)), "#{name} image kind is unsupported")
+  assert((1..6).cover?(u16(bytes, 12)), "#{name} image kind is unsupported")
   assert(u16(bytes, 14) == flags, "#{name} flags are noncanonical")
   assert(!u16(bytes, 16).zero? && !u16(bytes, 18).zero?, "#{name} versions must be nonzero")
 end
@@ -303,7 +303,8 @@ def verify_assembly_sources(images)
   Dir.mktmpdir("agent-image-audit") do |directory|
     {
       "fault-worker" => "fault_worker.S",
-      "admission-supervisor" => "admission_supervisor.S"
+      "admission-supervisor" => "admission_supervisor.S",
+      "pci-serial-driver" => "pci_serial_driver.S"
     }.each do |name, source|
       _format, capsule = image_map.fetch(name)
       assembled = assembled_sections(source, [".text"], clang, objcopy, directory).fetch(".text")
@@ -327,7 +328,7 @@ def verify_assembly_sources(images)
     end
   end
 
-  puts "[ OK ] 4 assembly sources / exact embedded .text and .rodata bytes"
+  puts "[ OK ] 5 assembly sources / exact embedded .text and .rodata bytes"
 end
 
 def occurrence_count(bytes, needle)
@@ -359,6 +360,8 @@ def verify_release_elf(images, path)
   reuse_rodata = reuse.byteslice(reuse_rodata_descriptor[:file_offset], reuse_rodata_descriptor[:file_length])
   _format, admission = image_map.fetch("admission-supervisor")
   admission_code = admission.byteslice(CAPSULE_V1_HEADER_BYTES..)
+  _format, pci_driver = image_map.fetch("pci-serial-driver")
+  pci_driver_code = pci_driver.byteslice(CAPSULE_V1_HEADER_BYTES..)
 
   {
     "Resource Manager Package v3" => package,
@@ -368,7 +371,9 @@ def verify_release_elf(images, path)
     "Reuse Worker code" => reuse_code,
     "Reuse Worker rodata" => reuse_rodata,
     "Admission Supervisor Capsule v1" => admission,
-    "Admission Supervisor code" => admission_code
+    "Admission Supervisor code" => admission_code,
+    "PCI Serial Driver Capsule v1" => pci_driver,
+    "PCI Serial Driver code" => pci_driver_code
   }.each do |name, bytes|
     count = occurrence_count(elf, bytes)
     assert(count == 1, "#{name} occurs #{count} times in #{path}; expected exactly one")
@@ -396,7 +401,8 @@ end
 
 [
   ["fault-handler", "fault_handler.rs"],
-  ["admission-supervisor", "admission_supervisor.rs"]
+  ["admission-supervisor", "admission_supervisor.rs"],
+  ["pci-serial-driver", "pci_serial_driver.rs"]
 ].each do |name, file|
   source = File.read(File.join(IMAGE_ROOT, file))
   images << [name, :v1, extract_bytes(source, "CAPSULE"), extract_digest(source, "DIGEST")]
@@ -439,7 +445,7 @@ images.each do |name, format, bytes, digest, signer_id, public_key, expected_rod
   puts format("[ OK ] %-20s %-10s %6d bytes  sha256:%s", name, format.to_s.upcase, bytes.bytesize, sha[0, 12])
 end
 
-puts "[ OK ] 8 native Agent images / canonical headers / digests / fixed addresses"
+puts "[ OK ] 9 native Agent images / canonical headers / digests / fixed addresses"
 puts "[ OK ] 2 Package v3 images / Ed25519 / distinct signers / code RX / rodata R+NX / ABS64"
 verify_assembly_sources(images) if assembly_audit
 verify_release_elf(images, elf_path) if elf_path

@@ -4,22 +4,24 @@
 //! syscalls and launches one BAR-scoped Driver entry before hardware access.
 
 use agent_kernel_core::{
-    AgentEntryKind, AgentImageDigest, AgentImageKind, AgentImageStatus, CapabilityId,
-    DriverBindingId, DriverEndpointRecord, DriverResourceRegion, Operation, OperationSet,
+    AgentEntryKind, AgentImageId, AgentImageKind, AgentImageStatus, CapabilityId, DriverBindingId,
+    DriverEndpointRecord, DriverResourceRegion, Operation, OperationSet,
 };
 
 use super::{DRIVER, RECLAIMABLE_IMAGE};
-use crate::{pci_serial_profile, serial_write_line, X86BootedKernel};
+use crate::{boot_agent_images::BootPciSerialDriverImage, serial_write_line, X86BootedKernel};
 
 pub(super) struct PciSerialAdmission {
     pub(super) capability: CapabilityId,
     pub(super) binding: DriverBindingId,
     pub(super) endpoint: DriverEndpointRecord,
+    pub(super) image: AgentImageId,
 }
 
 pub(super) fn prepare(
     booted: &mut X86BootedKernel,
     region: DriverResourceRegion,
+    contract: BootPciSerialDriverImage,
 ) -> Option<PciSerialAdmission> {
     let report = *booted.report();
     let reclaimable = booted.kernel().agent_image(RECLAIMABLE_IMAGE).ok()?;
@@ -86,7 +88,7 @@ pub(super) fn prepare(
             region.capability(),
             region.resource(),
             AgentImageKind::Driver,
-            AgentImageDigest::new([pci_serial_profile::TRANSMIT_BYTE; 32]),
+            contract.digest(),
             1,
             1,
         )
@@ -116,7 +118,13 @@ pub(super) fn prepare(
         )
         .ok()?;
     let endpoint = booted.kernel().driver_endpoint(region.resource()).ok()?;
-    if endpoint.resource != region.resource() || endpoint.descriptor != region.descriptor() {
+    let image_record = booted.kernel().agent_image(image).ok()?;
+    if image_record.kind != AgentImageKind::Driver
+        || image_record.digest != contract.digest()
+        || image_record.status != AgentImageStatus::Verified
+        || endpoint.resource != region.resource()
+        || endpoint.descriptor != region.descriptor()
+    {
         return None;
     }
 
@@ -126,6 +134,7 @@ pub(super) fn prepare(
         capability,
         binding,
         endpoint,
+        image,
     })
 }
 

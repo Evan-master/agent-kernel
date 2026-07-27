@@ -43,7 +43,10 @@ for expected in \
   "AGENT_KERNEL_PCI_SERIAL_TARGET_OK" \
   "AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK" \
   "AGENT_KERNEL_PCI_SERIAL_CAPABILITY_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK" \
   "AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK" \
+  "AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK" \
   "AGENT_KERNEL_PCI_SERIAL_DRIVER_OK" \
   "AGENT_KERNEL_AP_TRAMPOLINE_OK" \
   "AGENT_KERNEL_SMP_AP_ONLINE_OK" \
@@ -637,12 +640,13 @@ for expected in \
   "event[426] device_event_delivered" \
   "event[427] driver_invocation_queued" \
   "event[428] driver_invocation_dispatched" \
-  "event[429] driver_invocation_ticked" \
-  "event[430] device_event_acknowledged" \
-  "event[431] driver_command_submitted" \
-  "event[432] driver_command_dispatched" \
-  "event[433] driver_command_completed" \
-  "event[434] driver_invocation_completed" \
+  "event[429] driver_invocation_quantum_expired" \
+  "event[430] driver_invocation_dispatched" \
+  "event[431] device_event_acknowledged" \
+  "event[432] driver_command_submitted" \
+  "event[433] driver_command_dispatched" \
+  "event[434] driver_command_completed" \
+  "event[435] driver_invocation_completed" \
   "AGENT_KERNEL_SMP_HANDOFF_READY" \
   "SUPERVISOR_HANDOFF_READY"
 do
@@ -653,8 +657,8 @@ do
 done
 
 EVENT_COUNT="$(grep -Ec '^event\[[0-9]+\] ' <<<"$OUTPUT")"
-if [[ "$EVENT_COUNT" -ne 434 ]]; then
-  printf 'expected exactly 434 kernel events, observed %s\n' "$EVENT_COUNT" >&2
+if [[ "$EVENT_COUNT" -ne 435 ]]; then
+  printf 'expected exactly 435 kernel events, observed %s\n' "$EVENT_COUNT" >&2
   exit 1
 fi
 
@@ -669,7 +673,7 @@ while IFS= read -r event_line; do
   EXPECTED_EVENT_SEQUENCE=$((EXPECTED_EVENT_SEQUENCE + 1))
 done < <(grep -E '^event\[[0-9]+\] ' <<<"$OUTPUT")
 
-if [[ "$EXPECTED_EVENT_SEQUENCE" -ne 435 ]]; then
+if [[ "$EXPECTED_EVENT_SEQUENCE" -ne 436 ]]; then
   printf 'ordered kernel event sequence ended at %s\n' \
     "$((EXPECTED_EVENT_SEQUENCE - 1))" >&2
   exit 1
@@ -698,7 +702,10 @@ check_marker_count "AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_TARGET_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_CAPABILITY_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK" 1
+check_marker_count "AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK" 1
 check_marker_count "AGENT_KERNEL_PCI_SERIAL_DRIVER_OK" 1
 check_marker_count "AGENT_KERNEL_BSP_LOCAL_APIC_QUANTUM_OK" 1
 check_marker_count "AGENT_KERNEL_AP_AGENT_CALL_OK" 1

@@ -366,6 +366,10 @@ pub(super) fn run(
                 }
                 return Some(());
             }
+            AgentCallRequest::InspectDriverInvocation { .. }
+            | AgentCallRequest::AcknowledgeDeviceEvent { .. }
+            | AgentCallRequest::SubmitDriverCommand { .. }
+            | AgentCallRequest::CompleteDriverInvocation { .. } => return None,
         };
         let Some(outcome) = resume_next(resumable) else {
             crate::serial_write_line("AGENT_KERNEL_NATIVE_CALL_RESUME_ERROR");

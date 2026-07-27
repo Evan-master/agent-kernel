@@ -5,10 +5,11 @@
 //! the bare-metal executor. It performs no mutation or privileged operation.
 
 use agent_kernel_core::{
-    AgentId, AgentImageId, CapabilityId, FaultId, IntentId, IntentKind, MemoryCellId, MessageId,
-    MessageKind, MessagePayload, NamespaceEntryId, NamespaceKey, NamespaceObject,
-    NamespacePathSegment, OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId, TaskId,
-    TaskResult, VerificationRequirement, WaiterId,
+    AgentId, AgentImageId, CapabilityId, DeviceEventId, DriverCommandKind, DriverCommandPayload,
+    DriverInvocationId, FaultId, IntentId, IntentKind, MemoryCellId, MessageId, MessageKind,
+    MessagePayload, NamespaceEntryId, NamespaceKey, NamespaceObject, NamespacePathSegment,
+    OperationSet, ResourceId, ResourceKind, RuntimeAdmissionId, TaskId, TaskResult,
+    VerificationRequirement, WaiterId,
 };
 
 use super::AgentCallOperation;
@@ -461,6 +462,34 @@ pub enum AgentCallRequest {
         nonce: u64,
         generation: u64,
     },
+    InspectDriverInvocation {
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        image: AgentImageId,
+        nonce: u64,
+    },
+    AcknowledgeDeviceEvent {
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        image: AgentImageId,
+        nonce: u64,
+        event: DeviceEventId,
+    },
+    SubmitDriverCommand {
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        image: AgentImageId,
+        nonce: u64,
+        event: DeviceEventId,
+        kind: DriverCommandKind,
+        payload: DriverCommandPayload,
+    },
+    CompleteDriverInvocation {
+        agent: AgentId,
+        invocation: DriverInvocationId,
+        image: AgentImageId,
+        nonce: u64,
+    },
 }
 
 impl AgentCallRequest {
@@ -536,6 +565,10 @@ impl AgentCallRequest {
                 AgentCallOperation::CommitDurableArchiveFromMemory
             }
             Self::SignDurableArchive { .. } => AgentCallOperation::SignDurableArchive,
+            Self::InspectDriverInvocation { .. } => AgentCallOperation::InspectDriverInvocation,
+            Self::AcknowledgeDeviceEvent { .. } => AgentCallOperation::AcknowledgeDeviceEvent,
+            Self::SubmitDriverCommand { .. } => AgentCallOperation::SubmitDriverCommand,
+            Self::CompleteDriverInvocation { .. } => AgentCallOperation::CompleteDriverInvocation,
         }
     }
 }

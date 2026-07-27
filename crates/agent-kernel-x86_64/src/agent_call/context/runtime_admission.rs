@@ -35,6 +35,7 @@ impl AgentCallContext {
             task,
             image,
             capability,
+            driver_invocation: None,
             runtime_admission_requester: Some(requester),
         })
     }

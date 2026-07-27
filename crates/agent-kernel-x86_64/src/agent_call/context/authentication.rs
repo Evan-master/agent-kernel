@@ -7,6 +7,32 @@ impl AgentCallContext {
     pub fn authenticates(self, request: AgentCallRequest, expected_nonce: u64) -> bool {
         match request {
             AgentCallRequest::DescribeContext { .. } => false,
+            AgentCallRequest::InspectDriverInvocation {
+                agent,
+                invocation,
+                image,
+                nonce,
+            }
+            | AgentCallRequest::AcknowledgeDeviceEvent {
+                agent,
+                invocation,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::SubmitDriverCommand {
+                agent,
+                invocation,
+                image,
+                nonce,
+                ..
+            }
+            | AgentCallRequest::CompleteDriverInvocation {
+                agent,
+                invocation,
+                image,
+                nonce,
+            } => self.matches_driver_identity(agent, invocation, image, nonce, expected_nonce),
             AgentCallRequest::Yield {
                 agent,
                 task,

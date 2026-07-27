@@ -23,14 +23,14 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://devices/v23-native-pci-serial
+kernel://devices/v24-native-driver-call
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V23 / QEMU debug + release   native PCI command      │
+│ VERIFIED   V24 / QEMU debug + release   ring-3 PCI Driver       │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
@@ -176,7 +176,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V23 invariant |
+| Contract | V13 through V24 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -277,17 +277,27 @@ authority         BAR Capability / Observe + Act / Driver Binding
 execution         StateChanged / Invocation / immutable Write command
 backend           bounded 16550 THRE poll / native x86 OUT
 physical proof    file chardev / exactly one byte / 0x50
-executor          ring-0 boot adapter / ring-3 Driver Call deferred
+executor          ring-0 baseline / superseded by V24 native execution
 ```
 
-`TPM CRB PATH` complete · `PCR POLICY` complete · `PCI NATIVE I/O` complete
+```text
+V24 NATIVE DRIVER AGENT CALL
+image             Capsule v1 / kind 6 / 323 bytes / one RX page
+calls             Describe / Inspect / Acknowledge / Submit / Complete
+context           Agent + DriverInvocation + Image + Capability
+scheduler         Core FIFO / Local APIC preemption / full-frame resume
+authority         semantic IDs in ring 3 / endpoint and port retained in ring 0
+proof             five-call transcript / one 0x50 OUT / full frame reclamation
+```
+
+`TPM CRB PATH` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete
 
 ## `05 // AGENT CALL`
 
 ```text
 ┌─ REGISTER FRAME ────────────────────────────────────────────────┐
 │ rax magic    rbx ABI       rcx operation / status              │
-│ r8  Agent    rdi Task      rsi Image      r9 Nonce             │
+│ rsi Agent    rdi Task/Invocation    r8 Image    r9 Nonce       │
 │ r10..r15 + rbp             bounded payload                     │
 └────────────────────────────────────────────────────────────────┘
 
@@ -303,17 +313,19 @@ decode → snapshot → authenticate → preflight → mutate → reply
 | `44..52` | Namespace bind, resolve, compare, mutation, paths |
 | `53` | Agent image signer-policy rotation |
 | `54..56` | Durable archive prepare, TPM sign, and signed commit |
+| `57..60` | Driver Invocation inspect, Event acknowledge, command submit, completion |
 
 `TRANSPORT` private call-data page · `POINTERS` rejected · `REPLY` canonical registers
 
 ## `06 // PROOF`
 
 ```text
-PROFILE            V23 native-pci-serial-driver
+PROFILE            V24 native-driver-agent-call
 QEMU               debug + release
-EVENTS             1..434 / exact history
+EVENTS             1..435 / exact history
 AGENT ENTRIES       12 live / reclaimed slot
-DISPATCHES          35
+TASK DISPATCHES     35
+V24 DRIVER RUNS     2 / one quantum expiry
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
 ```
@@ -329,7 +341,10 @@ BOOT FRAME POOL     77 sealed
 | PCI Function claim | `AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK` |
 | PCI authority | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
 | PCI Driver admission | `AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK` |
+| Driver image | `AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK` |
+| Ring-3 Driver | `AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK` |
 | PCI physical command | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
+| Driver address-space reclaim | `AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK` |
 | PCI terminal state | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
@@ -417,13 +432,16 @@ boot evidence       BAR_CATALOG_OK / FUNCTION_CLAIM_OK / CAPABILITY_BOUNDARY_OK
 ```
 
 ```text
-V23 PCI SERIAL DRIVER
+V24 NATIVE PCI SERIAL DRIVER
 selection           exact BDF + vendor + device / claimable BAR required
 lifecycle           pending image retired / record removed / slot reused
 admission           Agent 10 relaunched as BAR-scoped Driver
-request             Write / opcode 0 / value 0x50 / immutable cause chain
+ring-3 calls         1,57,58,59,60 / offsets 46,85,182,220,289
+scheduling          dispatch / quantum expiry / frame resume / completion
+request              Write / opcode 0 / value 0x50 / immutable cause chain
 hardware            bounded LSR poll / one x86 OUT / no I/O on rejection
-QEMU suffix         Events 418..434 / exact 0x50 chardev byte
+reclamation         SMP TLB shootdown / exact frames zeroed and returned
+QEMU suffix         Events 418..435 / exact 0x50 chardev byte
 ```
 
 <details>
@@ -433,6 +451,9 @@ QEMU suffix         Events 418..434 / exact 0x50 chardev byte
 | :--- | :--- | ---: | ---: | :--- |
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
 | Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
+| PCI Serial Driver | Capsule v1 / kind 6 | 5 | 323 | `4b6775ca088f...95fb191f` |
+
+`AUDIT` 9 native images · 2 signed Package v3 images · 5 exact assembly sources
 
 </details>
 
@@ -525,8 +546,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] native PCI configuration access + fixed-capacity function inventory
 [done] reversible PCI BAR probe + capability-bound Driver function claim
 [done] exact PCI serial selection + capability-bound physical command
+[done] native ring-3 Driver Agent Calls + preempted PCI serial execution
 [next] dedicated QEMU ATA image + emulator power-loss proof
-[next] native ring-3 Driver Agent Call ABI + PCI INTx routing
+[next] PCI INTx routing + Driver fault containment and restart
 [next] DMA/IOMMU domains + MSI/MSI-X
 [next] network + graphics + USB controllers + formal verification
 ```
@@ -539,7 +561,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | Native storage | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
 | PCI discovery | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI authority | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
-| Active milestone | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
+| PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
+| Active milestone | [Native Driver Agent Call V24](docs/superpowers/specs/2026-07-27-native-driver-agent-call-v24-design.md) |
 
 ## `10 // PROJECT`
 

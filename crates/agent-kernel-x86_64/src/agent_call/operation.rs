@@ -62,4 +62,8 @@ pub enum AgentCallOperation {
     PrepareDurableArchive,
     CommitDurableArchiveFromMemory,
     SignDurableArchive,
+    InspectDriverInvocation,
+    AcknowledgeDeviceEvent,
+    SubmitDriverCommand,
+    CompleteDriverInvocation,
 }

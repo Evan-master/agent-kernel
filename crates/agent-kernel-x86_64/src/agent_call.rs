@@ -14,6 +14,7 @@ mod capability;
 mod capability_cleanup_revocation;
 mod capability_compaction;
 mod context;
+mod driver;
 mod durable_archive;
 mod event_archive;
 mod fault_compaction;
@@ -102,6 +103,16 @@ pub const AGENT_CALL_ROTATE_AGENT_IMAGE_SIGNER: u64 = 53;
 pub const AGENT_CALL_PREPARE_DURABLE_ARCHIVE: u64 = 54;
 pub const AGENT_CALL_COMMIT_DURABLE_ARCHIVE: u64 = 55;
 pub const AGENT_CALL_SIGN_DURABLE_ARCHIVE: u64 = 56;
+pub const AGENT_CALL_INSPECT_DRIVER_INVOCATION: u64 = 57;
+pub const AGENT_CALL_ACKNOWLEDGE_DEVICE_EVENT: u64 = 58;
+pub const AGENT_CALL_SUBMIT_DRIVER_COMMAND: u64 = 59;
+pub const AGENT_CALL_COMPLETE_DRIVER_INVOCATION: u64 = 60;
+pub const AGENT_CALL_CONTEXT_DRIVER: u64 = 1;
+pub const AGENT_CALL_DRIVER_COMMAND_WRITE: u64 = 1;
+pub const AGENT_CALL_EVENT_INTERRUPT: u64 = 1;
+pub const AGENT_CALL_EVENT_DATA_READY: u64 = 2;
+pub const AGENT_CALL_EVENT_FAULT: u64 = 3;
+pub const AGENT_CALL_EVENT_STATE_CHANGED: u64 = 4;
 pub const AGENT_CALL_MEMORY_REGION_PAGE_BYTES: u64 = 4096;
 pub const AGENT_CALL_MEMORY_REGION_MAX_PAGES: u64 = 4;
 pub const AGENT_CALL_MESSAGE_NOTIFY: u64 = 1;
@@ -204,6 +215,10 @@ impl AgentCallRequest {
             AGENT_CALL_PREPARE_DURABLE_ARCHIVE => AgentCallOperation::PrepareDurableArchive,
             AGENT_CALL_COMMIT_DURABLE_ARCHIVE => AgentCallOperation::CommitDurableArchiveFromMemory,
             AGENT_CALL_SIGN_DURABLE_ARCHIVE => AgentCallOperation::SignDurableArchive,
+            AGENT_CALL_INSPECT_DRIVER_INVOCATION => AgentCallOperation::InspectDriverInvocation,
+            AGENT_CALL_ACKNOWLEDGE_DEVICE_EVENT => AgentCallOperation::AcknowledgeDeviceEvent,
+            AGENT_CALL_SUBMIT_DRIVER_COMMAND => AgentCallOperation::SubmitDriverCommand,
+            AGENT_CALL_COMPLETE_DRIVER_INVOCATION => AgentCallOperation::CompleteDriverInvocation,
             _ => return Err(AgentCallDecodeError::UnsupportedOperation),
         };
         if frame.rdx != 0 {
@@ -349,6 +364,10 @@ impl AgentCallRequest {
                 durable_archive::decode_commit(frame)
             }
             AgentCallOperation::SignDurableArchive => durable_archive::decode_sign(frame),
+            AgentCallOperation::InspectDriverInvocation
+            | AgentCallOperation::AcknowledgeDeviceEvent
+            | AgentCallOperation::SubmitDriverCommand
+            | AgentCallOperation::CompleteDriverInvocation => driver::decode(frame, operation),
         }
     }
 }

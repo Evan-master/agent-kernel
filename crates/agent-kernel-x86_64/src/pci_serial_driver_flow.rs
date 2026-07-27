@@ -8,27 +8,40 @@ mod admission;
 mod evidence;
 
 use agent_kernel_core::{
-    AgentId, AgentImageId, DeviceEventKind, DeviceEventPayload, DriverCommandKind,
-    DriverCommandPayload, DriverCommandResult,
+    AgentId, AgentImageId, DeviceEventKind, DeviceEventPayload, DriverCommandResult,
 };
-use agent_kernel_hal::{DriverBackend, DriverCommandOutcome};
 use agent_kernel_x86_64::{
+    agent_call::AgentCallContext,
+    agent_image::{AgentImageFormat, VerifiedAgentImage},
     pci::{PciBarKind, PciFunctionClaim},
     pci_serial::{PciSerialBackend, PCI_SERIAL_RESULT_OK},
     NativePortIo,
 };
 
 use crate::{
-    pci_serial_profile, port_driver_flow::record_command_outcome, serial_write_line,
+    agent_cpu::AgentCpuRuntime,
+    agent_memory::{NativeAddressSpaceFramePool, RuntimeMemoryPool},
+    boot_agent_images,
+    native_address_space_service::NativeAddressSpaceService,
+    native_agent_runtime::NativeAgentRuntime,
+    native_driver_executor, pci_serial_profile, serial_write_line,
+    smp_boot::SmpBootstrap,
     X86BootedKernel,
 };
 
-const INVOCATION_QUANTUM: u64 = 2;
 const PCI_COMMAND_IO_SPACE_ENABLE: u16 = 1;
 const DRIVER: AgentId = AgentId::new(10);
 const RECLAIMABLE_IMAGE: AgentImageId = AgentImageId::new(15);
 
-pub(crate) fn run(booted: &mut X86BootedKernel, claim: PciFunctionClaim) -> Option<()> {
+pub(crate) fn run(
+    booted: &mut X86BootedKernel,
+    claim: PciFunctionClaim,
+    cpu_runtime: &AgentCpuRuntime,
+    runtime: &mut NativeAgentRuntime,
+    memory_pool: &RuntimeMemoryPool,
+    address_space_pool: &mut NativeAddressSpaceFramePool,
+    smp: &mut SmpBootstrap,
+) -> Option<()> {
     let selector = pci_serial_profile::selector()?;
     let function = claim.function();
     if !selector.matches(function) || function.command() & PCI_COMMAND_IO_SPACE_ENABLE == 0 {
@@ -49,9 +62,16 @@ pub(crate) fn run(booted: &mut X86BootedKernel, claim: PciFunctionClaim) -> Opti
     }
 
     let report = *booted.report();
-    let admission = admission::prepare(booted, region)?;
+    let image_contract = boot_agent_images::pci_serial_driver();
+    let admission = admission::prepare(booted, region, image_contract)?;
     let driver_capability = admission.capability;
     let binding = admission.binding;
+    let image_record = booted.kernel().agent_image(admission.image).ok()?;
+    let verified_image = VerifiedAgentImage::verify(image_record, image_contract.bytes()).ok()?;
+    if verified_image.format() != AgentImageFormat::CapsuleV1 {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK");
     // SAFETY: Core returned the immutable endpoint for the capability-bound BAR.
     let mut backend = PciSerialBackend::new(
         admission.endpoint,
@@ -77,58 +97,41 @@ pub(crate) fn run(booted: &mut X86BootedKernel, claim: PciFunctionClaim) -> Opti
         .kernel_mut()
         .sys_deliver_device_event(DRIVER, driver_capability, event)
         .ok()?;
-    if booted
-        .kernel_mut()
-        .sys_dispatch_next_driver_invocation(DRIVER, INVOCATION_QUANTUM)
-        .ok()?
-        != invocation
-    {
-        return None;
-    }
-    booted
-        .kernel_mut()
-        .sys_tick_driver_invocation(DRIVER, invocation)
-        .ok()?;
-    booted
-        .kernel_mut()
-        .sys_acknowledge_device_event(DRIVER, driver_capability, event)
-        .ok()?;
-
-    let command = booted
-        .kernel_mut()
-        .sys_submit_driver_command(
-            DRIVER,
-            driver_capability,
-            region.resource(),
-            Some(event),
-            DriverCommandKind::Write,
-            DriverCommandPayload {
-                opcode: 0,
-                value: u64::from(pci_serial_profile::TRANSMIT_BYTE),
-            },
-        )
-        .ok()?;
-    let request = booted
-        .kernel_mut()
-        .sys_dispatch_driver_command(DRIVER, driver_capability, command)
-        .ok()?;
-    if request.command != command
-        || request.binding != binding
-        || request.resource != region.resource()
-        || request.driver != DRIVER
-        || request.cause != Some(event)
-        || request.invocation != Some(invocation)
-        || request.kind != DriverCommandKind::Write
-        || request.payload.opcode != 0
-        || request.payload.value != u64::from(pci_serial_profile::TRANSMIT_BYTE)
+    let context =
+        AgentCallContext::new_driver(DRIVER, invocation, admission.image, driver_capability)?;
+    let initial_pool_len = address_space_pool.len();
+    let native_admission = NativeAddressSpaceService::admit(
+        address_space_pool,
+        runtime,
+        cpu_runtime,
+        memory_pool,
+        verified_image,
+        context,
+    )?
+    .ok()?;
+    if native_admission.agent() != DRIVER
+        || runtime.len() != 1
+        || !runtime.contains(DRIVER)
+        || address_space_pool.len() + native_admission.identity().owned_frame_count()
+            != initial_pool_len
     {
         return None;
     }
 
-    let outcome = backend.execute(request);
-    let result = outcome.result();
-    if !record_command_outcome(booted, DRIVER, driver_capability, command, outcome)
-        || !matches!(outcome, DriverCommandOutcome::Completed(_))
+    let execution = native_driver_executor::run(booted, runtime, DRIVER, invocation, &mut backend)?;
+    let command = execution.command();
+    let result = execution.result();
+    let completed = execution.completed();
+    if execution.dispatches() != 2
+        || execution.quantum_expiries() != 1
+        || completed.context() != context
+        || completed.nonce() != image_contract.nonce()
+        || completed.call_count() != 5
+        || completed.operations() != image_contract.expected_operations()
+        || completed.return_offsets() != image_contract.expected_return_offsets()
+        || completed.physical_quantum_generation() != 1
+        || completed.restart_generation() != 0
+        || !completed.reclamation_log().is_empty()
         || result
             != (DriverCommandResult {
                 code: PCI_SERIAL_RESULT_OK,
@@ -137,11 +140,8 @@ pub(crate) fn run(booted: &mut X86BootedKernel, claim: PciFunctionClaim) -> Opti
     {
         return None;
     }
+    serial_write_line("AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK");
     serial_write_line("AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK");
-    booted
-        .kernel_mut()
-        .sys_complete_driver_invocation(DRIVER, driver_capability, invocation)
-        .ok()?;
 
     if !evidence::terminal_matches(
         booted,
@@ -158,6 +158,25 @@ pub(crate) fn run(booted: &mut X86BootedKernel, claim: PciFunctionClaim) -> Opti
         return None;
     }
 
+    let identity = native_admission.identity();
+    let completed = execution.into_completed();
+    let reclamation = completed.prepare_address_space_reclamation(address_space_pool)?;
+    if reclamation.identity() != identity {
+        return None;
+    }
+    let quarantined = completed.quarantine_address_space(address_space_pool, reclamation)?;
+    let shootdown = smp
+        .shootdown_address_space(quarantined.tlb_address_space())
+        .ok()?;
+    let reclaimed = quarantined.reclaim_after_shootdown(address_space_pool, shootdown)?;
+    if !reclaimed.matches(DRIVER, identity)
+        || !runtime.is_empty()
+        || address_space_pool.len() != initial_pool_len
+        || !address_space_pool.all_reclaimed_and_zero()
+    {
+        return None;
+    }
+    serial_write_line("AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK");
     serial_write_line("AGENT_KERNEL_PCI_SERIAL_DRIVER_OK");
     Some(())
 }

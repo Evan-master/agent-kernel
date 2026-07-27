@@ -23,14 +23,14 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://devices/v23-native-pci-serial
+kernel://devices/v24-native-driver-call
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V23 / QEMU debug + release   native PCI command      │
+│ VERIFIED   V24 / QEMU debug + release   ring-3 PCI Driver       │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
@@ -176,7 +176,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V23 不变量 |
+| 契约 | V13 至 V24 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -277,17 +277,27 @@ authority         BAR Capability / Observe + Act / Driver Binding
 execution         StateChanged / Invocation / 不可变 Write Command
 backend           有界 16550 THRE 轮询 / 原生 x86 OUT
 physical proof    File Chardev / 唯一字节 / 0x50
-executor          Ring-0 启动适配器 / Ring-3 Driver Call 待实现
+executor          Ring-0 基线 / V24 原生执行路径接管
 ```
 
-`TPM CRB PATH` 完成 · `PCR POLICY` 完成 · `PCI NATIVE I/O` 完成
+```text
+V24 NATIVE DRIVER AGENT CALL
+image             Capsule v1 / kind 6 / 323 字节 / 单 RX 页
+calls             Describe / Inspect / Acknowledge / Submit / Complete
+context           Agent + DriverInvocation + Image + Capability
+scheduler         Core FIFO / Local APIC 抢占 / 完整 Frame 恢复
+authority         Ring 3 使用语义 ID / Ring 0 持有 Endpoint 与 Port
+proof             五次 Call Transcript / 单次 0x50 OUT / 完整帧回收
+```
+
+`TPM CRB PATH` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成
 
 ## `05 // AGENT CALL`
 
 ```text
 ┌─ REGISTER FRAME ────────────────────────────────────────────────┐
 │ rax magic    rbx ABI       rcx operation / status              │
-│ r8  Agent    rdi Task      rsi Image      r9 Nonce             │
+│ rsi Agent    rdi Task/Invocation    r8 Image    r9 Nonce       │
 │ r10..r15 + rbp             bounded payload                     │
 └────────────────────────────────────────────────────────────────┘
 
@@ -303,17 +313,19 @@ executor          Ring-0 启动适配器 / Ring-3 Driver Call 待实现
 | `44..52` | Namespace 绑定、解析、比较、修改、路径 |
 | `53` | Agent Image Signer 策略轮换 |
 | `54..56` | 持久归档 Prepare、TPM 签名与签名 Commit |
+| `57..60` | Driver Invocation 检查、Event 确认、命令提交、完成 |
 
 `TRANSPORT` 私有 call-data 页 · `POINTERS` 拒绝 · `REPLY` 规范寄存器
 
 ## `06 // 启动证据`
 
 ```text
-PROFILE            V23 native-pci-serial-driver
+PROFILE            V24 native-driver-agent-call
 QEMU               debug + release
-EVENTS             1..434 / 精确历史
+EVENTS             1..435 / 精确历史
 AGENT ENTRIES       12 个活跃入口 / 回收槽
-DISPATCHES          35
+TASK DISPATCHES     35
+V24 DRIVER RUNS     2 / 一次 Quantum Expiry
 FRAME OWNERSHIP     每 Agent 12..43
 BOOT FRAME POOL     77 帧封存
 ```
@@ -329,7 +341,10 @@ BOOT FRAME POOL     77 帧封存
 | PCI Function 认领 | `AGENT_KERNEL_PCI_FUNCTION_CLAIM_OK` |
 | PCI 权限边界 | `AGENT_KERNEL_PCI_CAPABILITY_BOUNDARY_OK` |
 | PCI Driver 准入 | `AGENT_KERNEL_PCI_SERIAL_AGENT_REUSED_OK` |
+| Driver 镜像 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_IMAGE_OK` |
+| Ring-3 Driver | `AGENT_KERNEL_PCI_SERIAL_RING3_DRIVER_OK` |
 | PCI 物理命令 | `AGENT_KERNEL_PCI_SERIAL_PHYSICAL_IO_OK` |
+| Driver 地址空间回收 | `AGENT_KERNEL_PCI_SERIAL_ADDRESS_SPACE_RECLAIMED_OK` |
 | PCI 终态 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
@@ -417,13 +432,16 @@ boot evidence       BAR_CATALOG_OK / FUNCTION_CLAIM_OK / CAPABILITY_BOUNDARY_OK
 ```
 
 ```text
-V23 PCI SERIAL DRIVER
+V24 NATIVE PCI SERIAL DRIVER
 selection           精确 BDF + Vendor + Device / 必须存在可认领 BAR
 lifecycle           退休 Pending Image / 删除记录 / 复用槽位
 admission           Agent 10 重新启动为 BAR Scope Driver
-request             Write / Opcode 0 / Value 0x50 / 不可变因果链
+ring-3 calls         1,57,58,59,60 / Offset 46,85,182,220,289
+scheduling          Dispatch / Quantum Expiry / Frame 恢复 / Completion
+request              Write / Opcode 0 / Value 0x50 / 不可变因果链
 hardware            有界 LSR 轮询 / 单次 x86 OUT / 拒绝路径零 I/O
-QEMU suffix         Event 418..434 / 精确 0x50 Chardev 字节
+reclamation         SMP TLB Shootdown / 精确帧清零并归还
+QEMU suffix         Event 418..435 / 精确 0x50 Chardev 字节
 ```
 
 <details>
@@ -433,6 +451,9 @@ QEMU suffix         Event 418..434 / 精确 0x50 Chardev 字节
 | :--- | :--- | ---: | ---: | :--- |
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
 | Admission Supervisor | Capsule v1 | 44 | 4,115 | `5058f2b16589...b0af197e` |
+| PCI Serial Driver | Capsule v1 / kind 6 | 5 | 323 | `4b6775ca088f...95fb191f` |
+
+`AUDIT` 9 个原生镜像 · 2 个签名 Package v3 镜像 · 5 个精确 Assembly 源
 
 </details>
 
@@ -525,8 +546,9 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 [done] 原生 PCI 配置访问 + 固定容量 Function 清单
 [done] 可逆 PCI BAR Probe + Capability 绑定的 Driver Function 认领
 [done] 精确 PCI Serial 选择 + Capability 绑定的物理命令
+[done] 原生 Ring-3 Driver Agent Call + 可抢占 PCI Serial 执行
 [next] QEMU 独立 ATA 镜像 + 模拟器断电验证
-[next] 原生 Ring-3 Driver Agent Call ABI + PCI INTx 路由
+[next] PCI INTx 路由 + Driver Fault 隔离与重启
 [next] DMA/IOMMU Domain + MSI/MSI-X
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
@@ -539,7 +561,8 @@ scripts/{run-qemu.sh,audit-agent-images.rb,build-state-signer-package.rb,inspect
 | 原生存储 | [Native ATA Durable State V14](docs/superpowers/specs/2026-07-23-native-ata-durable-state-v14-design.md) |
 | PCI 发现 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI 权限 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
-| 当前里程碑 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
+| PCI 设备路径 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
+| 当前里程碑 | [Native Driver Agent Call V24](docs/superpowers/specs/2026-07-27-native-driver-agent-call-v24-design.md) |
 
 ## `10 // 项目`
 
