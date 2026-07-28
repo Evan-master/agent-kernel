@@ -8,8 +8,8 @@ use agent_kernel_core::{CapabilityId, OperationSet, ResourceId, ResourceKind};
 
 use super::{
     decode_context_payload, AgentCallDecodeError, AgentCallRequest, AGENT_CALL_RESOURCE_DEVICE,
-    AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_SERVICE,
-    AGENT_CALL_RESOURCE_WORKSPACE,
+    AGENT_CALL_RESOURCE_DMA_DOMAIN, AGENT_CALL_RESOURCE_IOMMU, AGENT_CALL_RESOURCE_MEMORY,
+    AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_SERVICE, AGENT_CALL_RESOURCE_WORKSPACE,
 };
 use crate::context::PrivilegeInterruptStackFrame;
 
@@ -68,6 +68,8 @@ const fn decode_kind(code: u64) -> Option<ResourceKind> {
         AGENT_CALL_RESOURCE_SERVICE => Some(ResourceKind::Service),
         AGENT_CALL_RESOURCE_NETWORK => Some(ResourceKind::Network),
         AGENT_CALL_RESOURCE_DEVICE => Some(ResourceKind::Device),
+        AGENT_CALL_RESOURCE_IOMMU => Some(ResourceKind::Iommu),
+        AGENT_CALL_RESOURCE_DMA_DOMAIN => Some(ResourceKind::DmaDomain),
         _ => None,
     }
 }

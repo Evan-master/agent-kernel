@@ -9,6 +9,7 @@ repository.workspace = true
 default = []
 bare-metal = []
 qemu-durable-proof = []
+qemu-dma-iommu-proof = []
 
 [dependencies]
 acpi = { version = "=6.1.1", default-features = false }

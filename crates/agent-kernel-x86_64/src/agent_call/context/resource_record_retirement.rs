@@ -5,10 +5,10 @@ use agent_kernel_core::{Resource, ResourceKind, ResourceStatus};
 use super::AgentCallContext;
 use crate::{
     agent_call::{
-        AgentCallDecodeError, AGENT_CALL_RESOURCE_DEVICE, AGENT_CALL_RESOURCE_FILE,
-        AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_PROCESS,
-        AGENT_CALL_RESOURCE_SERVICE, AGENT_CALL_RESOURCE_WORKSPACE,
-        AGENT_CALL_RETIRE_RESOURCE_RECORD,
+        AgentCallDecodeError, AGENT_CALL_RESOURCE_DEVICE, AGENT_CALL_RESOURCE_DMA_DOMAIN,
+        AGENT_CALL_RESOURCE_FILE, AGENT_CALL_RESOURCE_IOMMU, AGENT_CALL_RESOURCE_MEMORY,
+        AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_PROCESS, AGENT_CALL_RESOURCE_SERVICE,
+        AGENT_CALL_RESOURCE_WORKSPACE, AGENT_CALL_RETIRE_RESOURCE_RECORD,
     },
     context::PrivilegeInterruptStackFrame,
 };
@@ -41,5 +41,7 @@ const fn resource_kind_code(kind: ResourceKind) -> u64 {
         ResourceKind::Device => AGENT_CALL_RESOURCE_DEVICE,
         ResourceKind::File => AGENT_CALL_RESOURCE_FILE,
         ResourceKind::Process => AGENT_CALL_RESOURCE_PROCESS,
+        ResourceKind::Iommu => AGENT_CALL_RESOURCE_IOMMU,
+        ResourceKind::DmaDomain => AGENT_CALL_RESOURCE_DMA_DOMAIN,
     }
 }

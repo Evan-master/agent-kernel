@@ -80,6 +80,26 @@ pub(super) fn map_tpm_crb_page(
     map_device_page(&mut mapper, &mut allocator, physical_offset, locality_base)
 }
 
+#[cfg(feature = "qemu-dma-iommu-proof")]
+pub(super) fn map_dma_mmio_pages(
+    boot_info: &mut BootInfo,
+    iommu_base: u64,
+    device_base: u64,
+) -> Result<(), ApicMappingError> {
+    let physical_offset = boot_info
+        .physical_memory_offset
+        .into_option()
+        .ok_or(ApicMappingError::MissingPhysicalMap)?;
+    if physical_offset != PHYSICAL_MEMORY_OFFSET {
+        return Err(ApicMappingError::UnexpectedPhysicalOffset);
+    }
+    // SAFETY: the BSP remains the sole processor and owns the active root.
+    let mut mapper = unsafe { active_mapper(physical_offset)? };
+    let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
+    map_device_page(&mut mapper, &mut allocator, physical_offset, iommu_base)?;
+    map_device_page(&mut mapper, &mut allocator, physical_offset, device_base)
+}
+
 pub(super) fn map_trampoline_page(
     boot_info: &mut BootInfo,
     physical_address: u64,

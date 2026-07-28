@@ -5,8 +5,9 @@ use agent_kernel_x86_64::{
     agent_call::{
         AgentCallContext, AgentCallDecodeError, AgentCallOperation, AgentCallRequest,
         AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_RESOURCE_DEVICE,
-        AGENT_CALL_RESOURCE_FILE, AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK,
-        AGENT_CALL_RESOURCE_PROCESS, AGENT_CALL_RESOURCE_SERVICE, AGENT_CALL_RESOURCE_WORKSPACE,
+        AGENT_CALL_RESOURCE_DMA_DOMAIN, AGENT_CALL_RESOURCE_FILE, AGENT_CALL_RESOURCE_IOMMU,
+        AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_PROCESS,
+        AGENT_CALL_RESOURCE_SERVICE, AGENT_CALL_RESOURCE_WORKSPACE,
         AGENT_CALL_RETIRE_RESOURCE_RECORD, AGENT_CALL_STATUS_OK,
     },
     context::PrivilegeInterruptStackFrame,
@@ -74,8 +75,10 @@ fn resource_record_retirement_reply_is_canonical() {
             AGENT_CALL_RESOURCE_DEVICE,
             AGENT_CALL_RESOURCE_FILE,
             AGENT_CALL_RESOURCE_PROCESS,
+            AGENT_CALL_RESOURCE_IOMMU,
+            AGENT_CALL_RESOURCE_DMA_DOMAIN,
         ],
-        [1, 2, 3, 4, 5, 6, 7]
+        [1, 2, 3, 4, 5, 6, 7, 8, 9]
     );
     let record = Resource {
         id: TARGET,
@@ -102,6 +105,8 @@ fn resource_record_retirement_reply_is_canonical() {
         (ResourceKind::Device, 5),
         (ResourceKind::File, 6),
         (ResourceKind::Process, 7),
+        (ResourceKind::Iommu, 8),
+        (ResourceKind::DmaDomain, 9),
     ] {
         let mut frame = request_frame();
         let record = Resource {

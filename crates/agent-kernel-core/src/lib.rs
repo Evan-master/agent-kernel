@@ -38,6 +38,10 @@ mod checkpoint;
 mod checkpoint_store;
 mod core;
 mod device_event;
+mod dma;
+mod dma_domain_store;
+mod dma_event;
+mod dma_mapping_store;
 mod driver;
 mod driver_command;
 mod driver_command_event;
@@ -148,6 +152,10 @@ pub use capability::{Capability, CapabilityCompaction};
 pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
 pub use device_event::{DeviceEventKind, DeviceEventPayload, DeviceEventRecord, DeviceEventStatus};
+pub use dma::{
+    DmaAccess, DmaAttachmentRecord, DmaDomainRecord, DmaMappingRecord, DmaMappingStatus,
+    DmaRequesterId, DMA_PAGE_BYTES,
+};
 pub use driver::DriverBindingRecord;
 pub use driver_command::{
     DriverCommandKind, DriverCommandPayload, DriverCommandRecord, DriverCommandRequest,
@@ -184,10 +192,10 @@ pub use fault::{FaultCompaction, FaultKind, FaultRecord};
 pub use fault_handler::FaultHandlerRecord;
 pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord};
 pub use id::{
-    ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, DeviceEventId, DriverBindingId,
-    DriverCommandId, DriverInvocationId, FaultHandlerId, FaultId, FaultPolicyId, IntentId,
-    MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId, RuntimeAdmissionId,
-    TaskId, WaiterId,
+    ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, DeviceEventId, DmaMappingId,
+    DriverBindingId, DriverCommandId, DriverInvocationId, FaultHandlerId, FaultId, FaultPolicyId,
+    IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId,
+    RuntimeAdmissionId, TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, VerificationRequirement};
 pub use memory::{MemoryCellRecord, MemoryCellRecordRetirement, MemoryValue};

@@ -5,11 +5,19 @@
 //! interrupt routes enter kernel state.
 
 mod discover;
+mod dmar;
 mod handler;
 mod parser;
 mod types;
 
-pub use discover::{load_acpi_topology, load_acpi_tpm2_table, AcpiTpm2DiscoveryError};
+pub use discover::{
+    load_acpi_dmar_table, load_acpi_topology, load_acpi_tpm2_table, AcpiDmarDiscoveryError,
+    AcpiTpm2DiscoveryError,
+};
+pub use dmar::{
+    parse_dmar, DmarDeviceScope, DmarDeviceScopeKind, DmarHardwareUnit, DmarPciPath,
+    DmarPciRequester, DmarTable, DmarTableError, MAX_DMAR_PATH_ENTRIES,
+};
 pub use handler::DirectAcpiHandler;
 pub use parser::parse_madt;
 pub use types::{

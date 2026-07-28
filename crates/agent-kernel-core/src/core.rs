@@ -5,10 +5,11 @@
 use crate::{
     ActionRecord, AgentEntryRecord, AgentExecutionContext, AgentImageRecord,
     AgentImageSignerRecord, AgentRecord, Capability, CheckpointRecord, DeviceEventRecord,
-    DriverBindingRecord, DriverCommandRecord, DriverEndpointRecord, DriverInvocationRecord,
-    DurableArchiveReceipt, Event, EventArchiveCheckpoint, FaultHandlerRecord, FaultPolicyRecord,
-    FaultRecord, Intent, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord,
-    Resource, RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
+    DmaAttachmentRecord, DmaDomainRecord, DmaMappingRecord, DriverBindingRecord,
+    DriverCommandRecord, DriverEndpointRecord, DriverInvocationRecord, DurableArchiveReceipt,
+    Event, EventArchiveCheckpoint, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
+    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
+    RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -66,6 +67,9 @@ pub struct KernelCore<
     pub(crate) device_events: [DeviceEventRecord; DEVICE_EVENTS],
     pub(crate) driver_commands: [DriverCommandRecord; DRIVER_COMMANDS],
     pub(crate) driver_invocations: [DriverInvocationRecord; DRIVER_INVOCATIONS],
+    pub(crate) dma_domains: [DmaDomainRecord; RESOURCES],
+    pub(crate) dma_attachments: [DmaAttachmentRecord; RESOURCES],
+    pub(crate) dma_mappings: [DmaMappingRecord; CAPS],
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
     pub(crate) agent_image_len: usize,
@@ -91,6 +95,9 @@ pub struct KernelCore<
     pub(crate) device_event_len: usize,
     pub(crate) driver_command_len: usize,
     pub(crate) driver_invocation_len: usize,
+    pub(crate) dma_domain_len: usize,
+    pub(crate) dma_attachment_len: usize,
+    pub(crate) dma_mapping_len: usize,
     pub(crate) retired_agent_floor: u64,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
@@ -113,6 +120,7 @@ pub struct KernelCore<
     pub(crate) next_device_event: u64,
     pub(crate) next_driver_command: u64,
     pub(crate) next_driver_invocation: u64,
+    pub(crate) next_dma_mapping: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -198,6 +206,9 @@ impl<
             device_events: [DeviceEventRecord::empty(); DEVICE_EVENTS],
             driver_commands: [DriverCommandRecord::empty(); DRIVER_COMMANDS],
             driver_invocations: [DriverInvocationRecord::empty(); DRIVER_INVOCATIONS],
+            dma_domains: [DmaDomainRecord::empty(); RESOURCES],
+            dma_attachments: [DmaAttachmentRecord::empty(); RESOURCES],
+            dma_mappings: [DmaMappingRecord::empty(); CAPS],
             agent_len: 0,
             agent_entry_len: 0,
             agent_image_len: 0,
@@ -223,6 +234,9 @@ impl<
             device_event_len: 0,
             driver_command_len: 0,
             driver_invocation_len: 0,
+            dma_domain_len: 0,
+            dma_attachment_len: 0,
+            dma_mapping_len: 0,
             retired_agent_floor: 0,
             next_resource: 1,
             next_capability: 1,
@@ -245,6 +259,7 @@ impl<
             next_device_event: 1,
             next_driver_command: 1,
             next_driver_invocation: 1,
+            next_dma_mapping: 1,
             next_sequence: 1,
         }
     }

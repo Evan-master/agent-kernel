@@ -7,6 +7,7 @@
 mod bar;
 mod bar_probe;
 mod claim;
+mod command;
 mod config;
 mod inventory;
 mod resource_catalog;
@@ -15,6 +16,7 @@ mod types;
 pub use bar::{PciBar, PciBarIndex, PciBarKind, PciBarSet, PCI_BAR_CAPACITY};
 pub use bar_probe::{probe_pci_function_bars, PciBarProbeError};
 pub use claim::{PciFunctionClaim, PciFunctionClaimError};
+pub use command::{PciCommandGate, PciCommandGateError, PciCommandState};
 pub use config::{
     PciConfigAccess, PciConfigIo, PciConfigMechanismOne, PciConfigMechanismOneError,
     PciConfigMutationAccess, PciConfigWriteIo,

@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![cfg_attr(feature = "qemu-dma-iommu-proof", allow(dead_code))]
 
 //! x86_64 bootloader entry for Agent Kernel.
 //!
@@ -19,6 +20,8 @@ mod agent_memory;
 mod boot_agent_images;
 mod boot_agent_trust;
 mod boot_config;
+#[cfg(feature = "qemu-dma-iommu-proof")]
+mod dma_iommu_boot;
 mod event_trace;
 mod exception_runtime;
 mod fault_handler_flow;
@@ -41,9 +44,10 @@ mod timer_task_flow;
 mod uart_interrupt;
 mod verifier_task_flow;
 
+use boot_config::BOOTLOADER_CONFIG;
+#[cfg(not(feature = "qemu-dma-iommu-proof"))]
 use boot_config::{
     durable_proof_role, durable_storage_profile, state_signer_profile, tpm_signer_profile,
-    BOOTLOADER_CONFIG,
 };
 use privilege_runtime::PrivilegeBoundary;
 use smp_boot::SmpBootstrap;
@@ -137,24 +141,31 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         fatal_boot("AGENT_KERNEL_ACPI_TOPOLOGY_ERROR");
     };
     serial_write_line("AGENT_KERNEL_ACPI_TOPOLOGY_OK");
-    let Some(durable_role) = durable_proof_role() else {
-        fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
-    };
-    let Some(durable_profile) = durable_storage_profile(durable_role) else {
-        fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
-    };
-    let Some(tpm_profile) = tpm_signer_profile(durable_role) else {
-        fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
-    };
-    agent_boot_flow::run(
-        boot_info,
-        privilege_boundary,
-        smp_bootstrap,
-        durable_profile,
-        tpm_profile,
-        durable_role,
-        state_signer_profile(durable_role),
-    )
+    #[cfg(feature = "qemu-dma-iommu-proof")]
+    {
+        dma_iommu_boot::run(boot_info, privilege_boundary, smp_bootstrap)
+    }
+    #[cfg(not(feature = "qemu-dma-iommu-proof"))]
+    {
+        let Some(durable_role) = durable_proof_role() else {
+            fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
+        };
+        let Some(durable_profile) = durable_storage_profile(durable_role) else {
+            fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
+        };
+        let Some(tpm_profile) = tpm_signer_profile(durable_role) else {
+            fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");
+        };
+        agent_boot_flow::run(
+            boot_info,
+            privilege_boundary,
+            smp_bootstrap,
+            durable_profile,
+            tpm_profile,
+            durable_role,
+            state_signer_profile(durable_role),
+        )
+    }
 }
 
 #[panic_handler]

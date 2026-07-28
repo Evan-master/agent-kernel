@@ -1,8 +1,10 @@
 //! Exhaustive structural coverage for the Resource reference preflight.
 
 use crate::{
-    AgentId, Capability, CapabilityId, Event, EventArchiveCheckpoint, EventArchiveProposal,
-    KernelCore, KernelError, NamespaceObject, OperationSet, ResourceId,
+    AgentId, Capability, CapabilityId, DmaAccess, DmaAttachmentRecord, DmaDomainRecord,
+    DmaMappingId, DmaMappingRecord, DmaMappingStatus, DmaRequesterId, Event,
+    EventArchiveCheckpoint, EventArchiveProposal, KernelCore, KernelError, NamespaceObject,
+    OperationSet, ResourceId,
 };
 
 type TestCore = KernelCore<2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2>;
@@ -13,7 +15,7 @@ const AUTHORITY: CapabilityId = CapabilityId::new(1);
 
 #[test]
 fn every_persistent_non_event_resource_reference_is_rejected() {
-    for case in 0..26 {
+    for case in 0..32 {
         let mut core = core_with_target();
         install_reference(&mut core, case);
         assert_eq!(
@@ -159,6 +161,53 @@ fn install_reference(core: &mut TestCore, case: usize) {
                 proposal, ACTOR, AUTHORITY, TARGET,
             ));
         }
+        26 => {
+            core.dma_domains[0] = DmaDomainRecord {
+                resource: TARGET,
+                iommu: ResourceId::new(8),
+                owner: ACTOR,
+            };
+            core.dma_domain_len = 1;
+        }
+        27 => {
+            core.dma_domains[0] = DmaDomainRecord {
+                resource: ResourceId::new(8),
+                iommu: TARGET,
+                owner: ACTOR,
+            };
+            core.dma_domain_len = 1;
+        }
+        28 => {
+            core.dma_attachments[0] = DmaAttachmentRecord {
+                domain: TARGET,
+                device: ResourceId::new(8),
+                requester: DmaRequesterId::new(0x28),
+            };
+            core.dma_attachment_len = 1;
+        }
+        29 => {
+            core.dma_attachments[0] = DmaAttachmentRecord {
+                domain: ResourceId::new(8),
+                device: TARGET,
+                requester: DmaRequesterId::new(0x28),
+            };
+            core.dma_attachment_len = 1;
+        }
+        30 => install_dma_mapping(core, TARGET, ResourceId::new(8)),
+        31 => install_dma_mapping(core, ResourceId::new(8), TARGET),
         _ => unreachable!(),
     }
+}
+
+fn install_dma_mapping(core: &mut TestCore, domain: ResourceId, memory: ResourceId) {
+    core.dma_mappings[0] = DmaMappingRecord {
+        id: DmaMappingId::new(1),
+        domain,
+        memory,
+        iova: 0x0100_0000,
+        page_count: 1,
+        access: DmaAccess::ReadWrite,
+        status: DmaMappingStatus::Released,
+    };
+    core.dma_mapping_len = 1;
 }

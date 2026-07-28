@@ -116,9 +116,11 @@ impl<
             | ResourceKind::Device
             | ResourceKind::Network
             | ResourceKind::Service => Ok(()),
-            ResourceKind::Memory | ResourceKind::File | ResourceKind::Process => {
-                Err(KernelError::ResourceKindMismatch)
-            }
+            ResourceKind::Memory
+            | ResourceKind::File
+            | ResourceKind::Process
+            | ResourceKind::Iommu
+            | ResourceKind::DmaDomain => Err(KernelError::ResourceKindMismatch),
         }
     }
 

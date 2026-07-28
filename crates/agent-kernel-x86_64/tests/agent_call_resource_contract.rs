@@ -6,9 +6,9 @@ use agent_kernel_x86_64::{
     agent_call::{
         AgentCallContext, AgentCallDecodeError, AgentCallOperation, AgentCallRequest,
         AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_CREATE_RESOURCE,
-        AGENT_CALL_RESOURCE_DEVICE, AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK,
-        AGENT_CALL_RESOURCE_SERVICE, AGENT_CALL_RESOURCE_WORKSPACE, AGENT_CALL_RETIRE_RESOURCE,
-        AGENT_CALL_STATUS_OK,
+        AGENT_CALL_RESOURCE_DEVICE, AGENT_CALL_RESOURCE_DMA_DOMAIN, AGENT_CALL_RESOURCE_IOMMU,
+        AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_SERVICE,
+        AGENT_CALL_RESOURCE_WORKSPACE, AGENT_CALL_RETIRE_RESOURCE, AGENT_CALL_STATUS_OK,
     },
     context::PrivilegeInterruptStackFrame,
 };
@@ -30,8 +30,10 @@ fn resource_requests_decode_and_authenticate_against_trusted_context() {
             AGENT_CALL_RESOURCE_SERVICE,
             AGENT_CALL_RESOURCE_NETWORK,
             AGENT_CALL_RESOURCE_DEVICE,
+            AGENT_CALL_RESOURCE_IOMMU,
+            AGENT_CALL_RESOURCE_DMA_DOMAIN,
         ],
-        [1, 2, 3, 4, 5]
+        [1, 2, 3, 4, 5, 8, 9]
     );
 
     let operations = child_operations();
@@ -52,6 +54,20 @@ fn resource_requests_decode_and_authenticate_against_trusted_context() {
     assert_eq!(create.operation(), AgentCallOperation::CreateResource);
     assert!(context().authenticates(create, NONCE));
     assert!(!context().authenticates(create, NONCE + 1));
+
+    for (code, expected) in [
+        (AGENT_CALL_RESOURCE_IOMMU, ResourceKind::Iommu),
+        (AGENT_CALL_RESOURCE_DMA_DOMAIN, ResourceKind::DmaDomain),
+    ] {
+        let mut frame = create_frame();
+        frame.r12 = code;
+        let AgentCallRequest::CreateResource { kind, .. } =
+            AgentCallRequest::decode(&frame).expect("DMA authority kind decodes")
+        else {
+            panic!("resource call decoded as the wrong request")
+        };
+        assert_eq!(kind, expected);
+    }
 
     let retire = AgentCallRequest::decode(&retire_frame()).unwrap();
     assert_eq!(

@@ -137,6 +137,18 @@ impl<
                 .iter()
                 .any(|record| record.resource == target)
             || self
+                .dma_domains()
+                .iter()
+                .any(|record| record.resource == target || record.iommu == target)
+            || self
+                .dma_attachments()
+                .iter()
+                .any(|record| record.domain == target || record.device == target)
+            || self
+                .dma_mappings()
+                .iter()
+                .any(|record| record.domain == target || record.memory == target)
+            || self
                 .event_archive_checkpoint
                 .is_some_and(|checkpoint| checkpoint.root() == target);
 

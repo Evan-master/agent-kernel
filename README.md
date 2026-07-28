@@ -23,17 +23,18 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://durability/v26-qemu-ata-power-loss
+[07] DMA authority .......... VT-d enforced
+kernel://dma/v27-native-iommu
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V26 / QEMU debug + release   ATA cut + cold boot     │
+│ VERIFIED   V27 / QEMU debug + release   VT-d grant + revoke     │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ STATE      ATA LBA48 A/B slots          AUTH   Capabilities     │
+│ STATE      ATA A/B + DMA domain         AUTH   Capabilities     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,7 +76,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, ATA PIO, TPM CRB, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-state-signer` | `no_std` signing policy and injected provider boundary |
 | `agent-supervisor` | Host simulation and user-space orchestration |
@@ -100,7 +101,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, I/O APIC IRQ, PCI BAR claims, port and ATA PIO access |
+| I/O | Capability-authorized HAL request, I/O APIC IRQ, PCI BAR claims, VT-d DMA, port and ATA PIO access |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -176,7 +177,7 @@ prepare(54) ──> private call-data ──> State Signer policy
 commit(55) <── exact 384B request <── low-S P-256 signature
 ```
 
-| Contract | V13 through V26 invariant |
+| Contract | V13 through V27 invariant |
 | :--- | :--- |
 | Slot | `64 KiB`; odd generations use `A`, even generations use `B` |
 | Payload | Exact Event Archive digest preimage; maximum `64 KiB - 512` |
@@ -308,7 +309,16 @@ cut               host SIGKILL after durable commit marker
 recovery          no TPM / Events 65..516 / unchanged disk / PCI byte 0x50
 ```
 
-`TPM CRB PATH` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete · `QEMU ATA POWER-LOSS` complete
+```text
+V27 NATIVE DMA/IOMMU AUTHORITY
+target            Q35 / 0000:00:05.0 / QEMU EDU 1234:11e8
+firmware          checksum-valid DMAR / exact DRHD requester scope
+authority         IOMMU + Device + Memory + DMA Domain Capabilities
+translation       Intel VT-d root/context/3-level second-level tables
+proof             bidirectional DMA / revoke / write fault / RAM unchanged
+```
+
+`TPM CRB` complete · `PCI NATIVE I/O` complete · `RING-3 DRIVER` complete · `ATA POWER-LOSS` complete · `VT-d DMA` complete
 
 ## `05 // AGENT CALL`
 
@@ -338,14 +348,18 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ## `06 // PROOF`
 
 ```text
-PROFILE            V26 qemu-ata-power-loss
-QEMU               debug + release / writer SIGKILL + cold recovery
+PROFILE A          V26 qemu-ata-power-loss
+PROFILE B          V27 qemu-dma-iommu
+QEMU               both profiles / debug + release
 BASELINE EVENTS     1..451 / exact V25 history
 DURABLE HEAD        generation 1 / Events 1..64
 RECOVERY EVENTS     65..516 / ordered contiguous history
 AGENT ENTRIES       12 live / reclaimed slot
 TASK DISPATCHES     35
 V25 DRIVER RUNS     6 / three quantum expiries / one restart
+V27 REQUESTER       0000:00:05.0 / source 0x28
+V27 MAPPING         IOVA 0x01000000 / one 4 KiB page
+V27 REVOCATION      VT-d reason 5 / write blocked / RAM unchanged
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
 ```
@@ -372,6 +386,13 @@ BOOT FRAME POOL     77 sealed
 | PCI terminal state | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
 | Durable writer commit | `AGENT_KERNEL_QEMU_DURABLE_COMMIT_OK` |
 | Abrupt-power recovery | `AGENT_KERNEL_QEMU_DURABLE_POWER_LOSS_OK` |
+| DMAR discovery | `AGENT_KERNEL_DMAR_DISCOVERY_OK` |
+| PCI Bus Master gate | `AGENT_KERNEL_DMA_BUS_MASTER_QUIESCED_OK` |
+| DMA capability | `AGENT_KERNEL_DMA_CAPABILITY_OK` |
+| VT-d translation | `AGENT_KERNEL_VTD_TRANSLATION_OK` |
+| Authorized DMA | `AGENT_KERNEL_DMA_ALLOWED_OK` |
+| Revoked DMA fault | `AGENT_KERNEL_DMA_REVOKED_FAULT_OK` |
+| DMA/IOMMU terminal proof | `AGENT_KERNEL_DMA_IOMMU_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -492,6 +513,16 @@ recovery            no TPM device / first Event 65 / terminal Event 516
 immutability        durable image SHA-256 equal before and after recovery
 ```
 
+```text
+V27 NATIVE DMA/IOMMU
+discovery           ACPI DMAR / DRHD / QEMU EDU BAR0
+gate                PCI memory + Bus Master clear during setup
+Core                domain create / requester attach / reserve / activate
+allowed             RAM -> EDU -> RAM / exact pattern restored
+revoke              leaf clear / context + IOTLB invalidate / release
+blocked             device write fault / source 0x28 / target page unchanged
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -517,6 +548,8 @@ $ cargo run -p agent-supervisor
 ```console
 $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
+$ scripts/run-qemu-dma-iommu.sh
+$ scripts/run-qemu-dma-iommu.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -560,7 +593,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // TREE`
 
@@ -576,7 +609,7 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-durable-power-loss.rb,inspect-qemu-durable-disk.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -605,7 +638,8 @@ tools/qemu-tpm-provision/
 [done] native ring-3 Driver Agent Calls + preempted PCI serial execution
 [done] PCI INTx routing + Driver fault containment and restart
 [done] dedicated QEMU ATA image + SIGKILL power-loss recovery proof
-[next] DMA/IOMMU domains + MSI/MSI-X
+[done] capability-bound DMA domain + Intel VT-d grant/revoke proof
+[next] MSI/MSI-X + multi-device DMA domains
 [next] network + graphics + USB controllers + formal verification
 ```
 
@@ -618,7 +652,8 @@ tools/qemu-tpm-provision/
 | PCI discovery | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI authority | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
-| Active milestone | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
+| Durable milestone | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
+| Active milestone | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
 
 ## `10 // PROJECT`
 

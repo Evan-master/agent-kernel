@@ -12,6 +12,7 @@ architecture-to-kernel claim boundary for x86_64 boot.
   -> exact BDF + PCI ID selection
   -> atomic Resource / Capability / Driver Endpoint claim
   -> BAR-scoped Driver Capability and Binding
+  -> capability-gated Bus Master transition
   -> immutable command -> bounded native backend
 ```
 
@@ -26,6 +27,7 @@ architecture-to-kernel claim boundary for x86_64 boot.
 | `bar_probe.rs` | decode-disable, sizing, restoration, and validation transaction |
 | `resource_catalog.rs` | stable BDF catalog plus generic and exact claim selection |
 | `claim.rs` | exact BAR-to-kernel-resource authority mapping |
+| `command.rs` | verified memory-decode and Bus Master state transitions |
 | `mod.rs` | public architecture boundary |
 
 ## Invariants
@@ -40,6 +42,8 @@ architecture-to-kernel claim boundary for x86_64 boot.
 - Missing and overflowing inventories fail closed.
 - BAR probing disables I/O, memory, and bus-master decode.
 - Every touched BAR and original command value is verified after restoration.
+- Bus Master stays clear until a DMA domain and active mapping exist.
+- DMA revocation clears Bus Master before VT-d teardown.
 - Reserved shapes, malformed pairs, unassigned bases, and overlapping regions
   cannot enter a claim.
 - Driver selection requires exact BDF, vendor ID, device ID, and claimable BARs.
@@ -65,10 +69,14 @@ polls the 16550 line-status register with a fixed budget before one native
 The current physical executor is the ring-0 boot adapter. Native ring-3 Driver
 Agent Call operations remain a separate milestone.
 
+The V27 proof profile targets QEMU EDU at `0000:00:05.0`, PCI ID `1234:11e8`.
+It binds the requester to a capability-authorized VT-d domain, verifies two-way
+DMA, revokes the mapping, and observes the expected hardware fault.
+
 ## Deferred
 
 - host-bridge window allocation and zero-base BAR assignment;
-- bridge windows, expansion ROMs, INTx, MSI, and MSI-X;
-- DMA/IOMMU domains and bus-master enable;
+- bridge windows, expansion ROMs, MSI, and MSI-X;
+- multi-device DMA domains and interrupt remapping;
 - native ring-3 Driver Agent Call ABI;
 - endpoint detach and hotplug.

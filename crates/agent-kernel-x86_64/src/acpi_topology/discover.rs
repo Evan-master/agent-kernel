@@ -9,7 +9,9 @@ use acpi::Handler;
 use crate::cpu::ApicId;
 use crate::tpm2::{parse_tpm2_acpi_table, Tpm2AcpiTable, Tpm2AcpiTableError};
 
-use super::{parse_madt, AcpiMachineTopology, AcpiTopologyError};
+use super::{
+    parse_dmar, parse_madt, AcpiMachineTopology, AcpiTopologyError, DmarTable, DmarTableError,
+};
 
 const RSDP_V1_BYTES: usize = 20;
 const RSDP_V2_BYTES: usize = 36;
@@ -18,6 +20,7 @@ const MAX_RSDP_BYTES: usize = 4096;
 const MAX_ROOT_TABLE_BYTES: usize = 64 * 1024;
 const MAX_MADT_BYTES: usize = 64 * 1024;
 const MAX_TPM2_TABLE_BYTES: usize = 4096;
+const MAX_DMAR_TABLE_BYTES: usize = 64 * 1024;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum AcpiTpm2DiscoveryError {
@@ -25,6 +28,14 @@ pub enum AcpiTpm2DiscoveryError {
     TableLengthOutOfBounds { length: usize },
     DuplicateTable,
     Table(Tpm2AcpiTableError),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum AcpiDmarDiscoveryError {
+    Firmware(AcpiTopologyError),
+    TableLengthOutOfBounds { length: usize },
+    DuplicateTable,
+    Table(DmarTableError),
 }
 
 /// Validate RSDP and root-table bytes before constructing upstream ACPI table
@@ -60,6 +71,23 @@ pub unsafe fn load_acpi_tpm2_table<H: Handler>(
     let root_length = unsafe { validate_root_table(&handler, revision, root_address) }
         .map_err(AcpiTpm2DiscoveryError::Firmware)?;
     unsafe { discover_tpm2(&handler, revision, root_address, root_length) }
+}
+
+/// Finds at most one checksum-valid ACPI `DMAR` table.
+///
+/// # Safety
+///
+/// `rsdp_address` and every root-table entry must remain readable through the
+/// supplied handler for the duration of this call.
+pub unsafe fn load_acpi_dmar_table<H: Handler, const UNITS: usize, const SCOPES: usize>(
+    handler: H,
+    rsdp_address: usize,
+) -> Result<Option<DmarTable<UNITS, SCOPES>>, AcpiDmarDiscoveryError> {
+    let (revision, root_address) = unsafe { validate_rsdp(&handler, rsdp_address) }
+        .map_err(AcpiDmarDiscoveryError::Firmware)?;
+    let root_length = unsafe { validate_root_table(&handler, revision, root_address) }
+        .map_err(AcpiDmarDiscoveryError::Firmware)?;
+    unsafe { discover_dmar(&handler, revision, root_address, root_length) }
 }
 
 unsafe fn validate_rsdp<H: Handler>(
@@ -204,6 +232,45 @@ unsafe fn discover_tpm2<H: Handler>(
             parse_tpm2_acpi_table(mapping_bytes(&complete))
                 .map_err(AcpiTpm2DiscoveryError::Table)?,
         );
+    }
+    Ok(discovered)
+}
+
+unsafe fn discover_dmar<H: Handler, const UNITS: usize, const SCOPES: usize>(
+    handler: &H,
+    revision: u8,
+    root_address: usize,
+    root_length: usize,
+) -> Result<Option<DmarTable<UNITS, SCOPES>>, AcpiDmarDiscoveryError> {
+    let root = unsafe { handler.map_physical_region::<u8>(root_address, root_length) };
+    let root_bytes = mapping_bytes(&root);
+    let entry_bytes = if revision == 0 { 4 } else { 8 };
+    let mut discovered = None;
+    for offset in (SDT_HEADER_BYTES..root_length).step_by(entry_bytes) {
+        let table_address = if entry_bytes == 4 {
+            read_u32(root_bytes, offset) as usize
+        } else {
+            read_u64(root_bytes, offset) as usize
+        };
+        if table_address == 0 {
+            continue;
+        }
+        let header = unsafe { handler.map_physical_region::<u8>(table_address, SDT_HEADER_BYTES) };
+        let header_bytes = mapping_bytes(&header);
+        if &header_bytes[..4] != b"DMAR" {
+            continue;
+        }
+        if discovered.is_some() {
+            return Err(AcpiDmarDiscoveryError::DuplicateTable);
+        }
+        let length = read_u32(header_bytes, 4) as usize;
+        if !(48..=MAX_DMAR_TABLE_BYTES).contains(&length) {
+            return Err(AcpiDmarDiscoveryError::TableLengthOutOfBounds { length });
+        }
+        drop(header);
+        let complete = unsafe { handler.map_physical_region::<u8>(table_address, length) };
+        discovered =
+            Some(parse_dmar(mapping_bytes(&complete)).map_err(AcpiDmarDiscoveryError::Table)?);
     }
     Ok(discovered)
 }

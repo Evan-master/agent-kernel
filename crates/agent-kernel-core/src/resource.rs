@@ -20,6 +20,8 @@ pub enum ResourceKind {
     Service,
     Network,
     Device,
+    Iommu,
+    DmaDomain,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

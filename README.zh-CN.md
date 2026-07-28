@@ -23,17 +23,18 @@ agent-kernel / native-x86_64
 [04] durable boot chain ..... armed
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
-kernel://durability/v26-qemu-ata-power-loss
+[07] DMA authority .......... VT-d enforced
+kernel://dma/v27-native-iommu
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V26 / QEMU debug + release   ATA cut + cold boot     │
+│ VERIFIED   V27 / QEMU debug + release   VT-d grant + revoke     │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ STATE      ATA LBA48 A/B slots          AUTH   Capability       │
+│ STATE      ATA A/B + DMA domain         AUTH   Capability       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,7 +76,7 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | :--- | :--- |
 | `agent-kernel-core` | 领域记录、固定容量 Store、状态转换、Event |
 | `agent-kernel` | 稳定的 `no_std` syscall 风格 Facade |
-| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、ATA PIO、TPM CRB、原生执行 |
+| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、ATA PIO、TPM CRB、DMAR、VT-d、原生执行 |
 | `agent-kernel-hal` | 不可变设备请求协议 |
 | `agent-state-signer` | `no_std` 签名策略与可注入 Provider 边界 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
@@ -100,7 +101,7 @@ Agent Package
 | 恢复 | `#UD`、`#GP`、`#PF`、修复、重启、回滚 |
 | IPC | 阻塞 Mailbox、唤醒、确认、回收 |
 | 内存 | 页/区域分配、First-Fit 复用、清零 |
-| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、PCI BAR 认领、端口与 ATA PIO 访问 |
+| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、PCI BAR 认领、VT-d DMA、端口与 ATA PIO 访问 |
 
 <details>
 <summary><code>用户地址空间</code></summary>
@@ -176,7 +177,7 @@ prepare(54) ──> 私有 call-data ──> State Signer policy
 commit(55) <── 精确 384B request <── 低 S P-256 signature
 ```
 
-| 契约 | V13 至 V26 不变量 |
+| 契约 | V13 至 V27 不变量 |
 | :--- | :--- |
 | 槽位 | `64 KiB`；奇数 generation 使用 `A`，偶数 generation 使用 `B` |
 | Payload | Event Archive 摘要的精确原像；上限 `64 KiB - 512` |
@@ -308,7 +309,16 @@ cut               宿主在持久提交标记后执行 SIGKILL
 recovery          无 TPM / Event 65..516 / 磁盘不变 / PCI 字节 0x50
 ```
 
-`TPM CRB PATH` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成 · `QEMU ATA POWER-LOSS` 完成
+```text
+V27 NATIVE DMA/IOMMU AUTHORITY
+target            Q35 / 0000:00:05.0 / QEMU EDU 1234:11e8
+firmware          校验有效的 DMAR / 精确 DRHD Requester Scope
+authority         IOMMU + Device + Memory + DMA Domain Capability
+translation       Intel VT-d Root/Context/三级 Second-Level 页表
+proof             双向 DMA / 撤销 / 写 Fault / RAM 保持不变
+```
+
+`TPM CRB` 完成 · `PCI NATIVE I/O` 完成 · `RING-3 DRIVER` 完成 · `ATA POWER-LOSS` 完成 · `VT-d DMA` 完成
 
 ## `05 // AGENT CALL`
 
@@ -338,14 +348,18 @@ recovery          无 TPM / Event 65..516 / 磁盘不变 / PCI 字节 0x50
 ## `06 // 启动证据`
 
 ```text
-PROFILE            V26 qemu-ata-power-loss
-QEMU               debug + release / Writer SIGKILL + 冷启动恢复
+PROFILE A          V26 qemu-ata-power-loss
+PROFILE B          V27 qemu-dma-iommu
+QEMU               两套 Profile / debug + release
 BASELINE EVENTS     1..451 / 精确 V25 历史
 DURABLE HEAD        Generation 1 / Event 1..64
 RECOVERY EVENTS     65..516 / 有序连续历史
 AGENT ENTRIES       12 个活跃入口 / 回收槽
 TASK DISPATCHES     35
 V25 DRIVER RUNS     6 / 三次 Quantum Expiry / 一次重启
+V27 REQUESTER       0000:00:05.0 / Source 0x28
+V27 MAPPING         IOVA 0x01000000 / 单个 4 KiB 页
+V27 REVOCATION      VT-d Reason 5 / 写入阻断 / RAM 不变
 FRAME OWNERSHIP     每 Agent 12..43
 BOOT FRAME POOL     77 帧封存
 ```
@@ -372,6 +386,13 @@ BOOT FRAME POOL     77 帧封存
 | PCI 终态 | `AGENT_KERNEL_PCI_SERIAL_DRIVER_OK` |
 | 持久 Writer 提交 | `AGENT_KERNEL_QEMU_DURABLE_COMMIT_OK` |
 | 强制断电恢复 | `AGENT_KERNEL_QEMU_DURABLE_POWER_LOSS_OK` |
+| DMAR 发现 | `AGENT_KERNEL_DMAR_DISCOVERY_OK` |
+| PCI Bus Master 门控 | `AGENT_KERNEL_DMA_BUS_MASTER_QUIESCED_OK` |
+| DMA Capability | `AGENT_KERNEL_DMA_CAPABILITY_OK` |
+| VT-d Translation | `AGENT_KERNEL_VTD_TRANSLATION_OK` |
+| 已授权 DMA | `AGENT_KERNEL_DMA_ALLOWED_OK` |
+| 已撤销 DMA Fault | `AGENT_KERNEL_DMA_REVOKED_FAULT_OK` |
+| DMA/IOMMU 终态证明 | `AGENT_KERNEL_DMA_IOMMU_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -492,6 +513,16 @@ recovery            无 TPM 设备 / 首条 Event 65 / 终态 Event 516
 immutability        恢复前后持久镜像 SHA-256 相同
 ```
 
+```text
+V27 NATIVE DMA/IOMMU
+discovery           ACPI DMAR / DRHD / QEMU EDU BAR0
+gate                配置阶段关闭 PCI Memory + Bus Master
+Core                创建 Domain / 绑定 Requester / Reserve / Activate
+allowed             RAM -> EDU -> RAM / 精确 Pattern 恢复
+revoke              清除 Leaf / Context + IOTLB Invalidate / Release
+blocked             设备写 Fault / Source 0x28 / 目标页不变
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -517,6 +548,8 @@ $ cargo run -p agent-supervisor
 ```console
 $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
+$ scripts/run-qemu-dma-iommu.sh
+$ scripts/run-qemu-dma-iommu.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -560,7 +593,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // 源码树`
 
@@ -576,7 +609,7 @@ crates/
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-durable-power-loss.rb,inspect-qemu-durable-disk.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -605,7 +638,8 @@ tools/qemu-tpm-provision/
 [done] 原生 Ring-3 Driver Agent Call + 可抢占 PCI Serial 执行
 [done] PCI INTx 路由 + Driver Fault 隔离与重启
 [done] QEMU 独立 ATA 镜像 + SIGKILL 断电恢复证明
-[next] DMA/IOMMU Domain + MSI/MSI-X
+[done] Capability 绑定 DMA Domain + Intel VT-d 授权/撤销证明
+[next] MSI/MSI-X + 多设备 DMA Domain
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
 
@@ -618,7 +652,8 @@ tools/qemu-tpm-provision/
 | PCI 发现 | [Native PCI Inventory V21](docs/superpowers/specs/2026-07-27-native-pci-inventory-v21-design.md) |
 | PCI 权限 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI 设备路径 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
-| 当前里程碑 | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
+| 持久化里程碑 | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
+| 当前里程碑 | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
 
 ## `10 // 项目`
 

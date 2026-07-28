@@ -105,6 +105,13 @@ pub fn format_event(event: &Event) -> String {
         EventKind::DriverCommandFailed => {
             format_driver_command_event(event, "driver_command_failed")
         }
+        EventKind::DmaDomainCreated => format_capability_event(event, "dma_domain_created"),
+        EventKind::DmaDeviceAttached => format_capability_event(event, "dma_device_attached"),
+        EventKind::DmaMappingReserved => format_capability_event(event, "dma_mapping_reserved"),
+        EventKind::DmaMappingActivated => format_capability_event(event, "dma_mapping_activated"),
+        EventKind::DmaMappingRevoking => format_capability_event(event, "dma_mapping_revoking"),
+        EventKind::DmaMappingReleased => format_capability_event(event, "dma_mapping_released"),
+        EventKind::DmaMappingCancelled => format_capability_event(event, "dma_mapping_cancelled"),
         EventKind::ResourceCreated => format_capability_event(event, "resource_created"),
         EventKind::ResourceRetired => format_capability_event(event, "resource_retired"),
         EventKind::ResourceRecordRetired => {

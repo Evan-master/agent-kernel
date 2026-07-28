@@ -12,6 +12,7 @@ mod agent_image_signer;
 mod agent_management;
 mod agent_record_retirement;
 mod capability;
+mod dma;
 mod driver;
 mod driver_endpoint;
 mod driver_runtime;
