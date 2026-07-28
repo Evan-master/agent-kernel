@@ -56,18 +56,35 @@ impl DmaDomainRecord {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DmaAttachmentStatus {
+    Attached,
+    Detaching,
+    Detached,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DmaAttachmentRecord {
     pub domain: ResourceId,
     pub device: ResourceId,
     pub requester: DmaRequesterId,
+    pub status: DmaAttachmentStatus,
 }
 
 impl DmaAttachmentRecord {
+    pub const fn status(self) -> DmaAttachmentStatus {
+        self.status
+    }
+
+    pub const fn occupies_attachment(self) -> bool {
+        !matches!(self.status, DmaAttachmentStatus::Detached)
+    }
+
     pub(crate) const fn empty() -> Self {
         Self {
             domain: ResourceId::new(0),
             device: ResourceId::new(0),
             requester: DmaRequesterId::new(0),
+            status: DmaAttachmentStatus::Detached,
         }
     }
 }

@@ -1,6 +1,9 @@
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "qemu-dma-iommu-proof", allow(dead_code))]
+#![cfg_attr(
+    any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"),
+    allow(dead_code)
+)]
 
 //! x86_64 bootloader entry for Agent Kernel.
 //!
@@ -20,12 +23,16 @@ mod agent_memory;
 mod boot_agent_images;
 mod boot_agent_trust;
 mod boot_config;
+#[cfg(all(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
+compile_error!("QEMU DMA/IOMMU and MSI/MSI-X proof profiles are mutually exclusive");
 #[cfg(feature = "qemu-dma-iommu-proof")]
 mod dma_iommu_boot;
 mod event_trace;
 mod exception_runtime;
 mod fault_handler_flow;
 mod fault_task_flow;
+#[cfg(feature = "qemu-msi-msix-proof")]
+mod msi_msix_boot;
 mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
@@ -45,7 +52,7 @@ mod uart_interrupt;
 mod verifier_task_flow;
 
 use boot_config::BOOTLOADER_CONFIG;
-#[cfg(not(feature = "qemu-dma-iommu-proof"))]
+#[cfg(not(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof")))]
 use boot_config::{
     durable_proof_role, durable_storage_profile, state_signer_profile, tpm_signer_profile,
 };
@@ -145,7 +152,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     {
         dma_iommu_boot::run(boot_info, privilege_boundary, smp_bootstrap)
     }
-    #[cfg(not(feature = "qemu-dma-iommu-proof"))]
+    #[cfg(feature = "qemu-msi-msix-proof")]
+    {
+        msi_msix_boot::run(boot_info, privilege_boundary, smp_bootstrap)
+    }
+    #[cfg(not(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof")))]
     {
         let Some(durable_role) = durable_proof_role() else {
             fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");

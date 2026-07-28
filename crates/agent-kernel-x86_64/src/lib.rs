@@ -37,6 +37,7 @@ pub mod tlb;
 pub mod tpm2;
 pub mod typed_call_data;
 pub mod user_memory;
+pub mod virtio_rng;
 
 mod namespace_object_wire;
 

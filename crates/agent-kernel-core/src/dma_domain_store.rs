@@ -5,9 +5,9 @@
 //! and appends one DMA-specific Event.
 
 use crate::{
-    AgentId, CapabilityId, DmaAttachmentRecord, DmaDomainRecord, DmaRequesterId, Event, EventKind,
-    KernelCore, KernelError, Operation, OperationSet, ResourceCreateOutcome, ResourceId,
-    ResourceKind,
+    AgentId, CapabilityId, DmaAttachmentRecord, DmaAttachmentStatus, DmaDomainRecord,
+    DmaRequesterId, Event, EventKind, KernelCore, KernelError, Operation, OperationSet,
+    ResourceCreateOutcome, ResourceId, ResourceKind,
 };
 
 impl<
@@ -120,14 +120,14 @@ impl<
         if self
             .dma_attachments()
             .iter()
-            .any(|attachment| attachment.device == device)
+            .any(|attachment| attachment.occupies_attachment() && attachment.device == device)
         {
             return Err(KernelError::DmaDeviceAlreadyAttached);
         }
         if self
             .dma_attachments()
             .iter()
-            .any(|attachment| attachment.requester == requester)
+            .any(|attachment| attachment.occupies_attachment() && attachment.requester == requester)
         {
             return Err(KernelError::DmaRequesterAlreadyAttached);
         }
@@ -140,6 +140,7 @@ impl<
             domain,
             device,
             requester,
+            status: DmaAttachmentStatus::Attached,
         };
         self.dma_attachment_len += 1;
         self.record_dma_event(
@@ -148,6 +149,46 @@ impl<
             device,
             domain_capability,
             Some(device_capability),
+        )
+    }
+
+    pub fn begin_dma_device_detach(
+        &mut self,
+        agent: AgentId,
+        domain_capability: CapabilityId,
+        domain: ResourceId,
+        device_capability: CapabilityId,
+        device: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.transition_dma_attachment(
+            agent,
+            domain_capability,
+            domain,
+            device_capability,
+            device,
+            DmaAttachmentStatus::Attached,
+            DmaAttachmentStatus::Detaching,
+            EventKind::DmaDeviceDetaching,
+        )
+    }
+
+    pub fn complete_dma_device_detach(
+        &mut self,
+        agent: AgentId,
+        domain_capability: CapabilityId,
+        domain: ResourceId,
+        device_capability: CapabilityId,
+        device: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.transition_dma_attachment(
+            agent,
+            domain_capability,
+            domain,
+            device_capability,
+            device,
+            DmaAttachmentStatus::Detaching,
+            DmaAttachmentStatus::Detached,
+            EventKind::DmaDeviceDetached,
         )
     }
 
@@ -166,6 +207,7 @@ impl<
     pub fn dma_attachment(&self, device: ResourceId) -> Result<DmaAttachmentRecord, KernelError> {
         self.dma_attachments()
             .iter()
+            .rev()
             .find(|attachment| attachment.device == device)
             .copied()
             .ok_or(KernelError::DmaDeviceNotAttached)
@@ -180,5 +222,47 @@ impl<
             .find(|domain| domain.resource == resource)
             .copied()
             .ok_or(KernelError::DmaDomainNotFound)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn transition_dma_attachment(
+        &mut self,
+        agent: AgentId,
+        domain_capability: CapabilityId,
+        domain: ResourceId,
+        device_capability: CapabilityId,
+        device: ResourceId,
+        expected: DmaAttachmentStatus,
+        next: DmaAttachmentStatus,
+        event_kind: EventKind,
+    ) -> Result<Event, KernelError> {
+        self.ensure_agent_active(agent)?;
+        let domain_record = self.find_dma_domain(domain)?;
+        self.find_resource(domain_record.iommu)?;
+        self.ensure_authorized(agent, domain_capability, domain, Operation::Rollback)?;
+        if self.find_resource(device)?.kind != ResourceKind::Device {
+            return Err(KernelError::ResourceKindMismatch);
+        }
+        self.ensure_authorized(agent, device_capability, device, Operation::Rollback)?;
+        let index = (0..self.dma_attachment_len)
+            .rev()
+            .find(|index| {
+                let attachment = self.dma_attachments[*index];
+                attachment.domain == domain && attachment.device == device
+            })
+            .ok_or(KernelError::DmaDeviceNotAttached)?;
+        if self.dma_attachments[index].status != expected {
+            return Err(KernelError::DmaAttachmentStatusMismatch);
+        }
+        self.ensure_event_slots(1)?;
+        self.dma_attachments[index].status = next;
+        self.record_dma_event_with_operation(
+            event_kind,
+            agent,
+            device,
+            domain_capability,
+            Some(device_capability),
+            Operation::Rollback,
+        )
     }
 }

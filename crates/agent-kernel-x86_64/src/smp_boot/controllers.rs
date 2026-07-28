@@ -7,6 +7,8 @@
 
 use core::arch::asm;
 
+#[cfg(feature = "qemu-msi-msix-proof")]
+use agent_kernel_x86_64::cpu::ApicId;
 use agent_kernel_x86_64::{
     apic::{LocalApicBase, LocalApicMmio, VolatileMmio, APIC_SPURIOUS_VECTOR, APIC_TIMER_VECTOR},
     cpu::{CpuIndex, CpuLifecycleState},
@@ -129,6 +131,25 @@ impl SmpBootstrap {
             .ok_or(SmpBootError::InvalidLocalApicMapping)?
             .mask_pci_intx()
             .map_err(SmpBootError::IoApicRouting)?;
+        if delivered {
+            self.local_apic
+                .as_mut()
+                .ok_or(SmpBootError::InvalidLocalApicMapping)?
+                .end_of_interrupt();
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "qemu-msi-msix-proof")]
+    pub(crate) fn bsp_apic_id(&self) -> ApicId {
+        self.topology.cpus().bsp().processor().apic_id()
+    }
+
+    #[cfg(feature = "qemu-msi-msix-proof")]
+    pub(crate) fn complete_message_interrupt(
+        &mut self,
+        delivered: bool,
+    ) -> Result<(), SmpBootError> {
         if delivered {
             self.local_apic
                 .as_mut()

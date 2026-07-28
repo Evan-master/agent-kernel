@@ -6,9 +6,10 @@ use agent_kernel_x86_64::{
     agent_call::{
         AgentCallContext, AgentCallDecodeError, AgentCallOperation, AgentCallRequest,
         AGENT_CALL_ABI_MAGIC, AGENT_CALL_ABI_VERSION, AGENT_CALL_CREATE_RESOURCE,
-        AGENT_CALL_RESOURCE_DEVICE, AGENT_CALL_RESOURCE_DMA_DOMAIN, AGENT_CALL_RESOURCE_IOMMU,
-        AGENT_CALL_RESOURCE_MEMORY, AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_SERVICE,
-        AGENT_CALL_RESOURCE_WORKSPACE, AGENT_CALL_RETIRE_RESOURCE, AGENT_CALL_STATUS_OK,
+        AGENT_CALL_RESOURCE_DEVICE, AGENT_CALL_RESOURCE_DMA_DOMAIN,
+        AGENT_CALL_RESOURCE_INTERRUPT_ROUTE, AGENT_CALL_RESOURCE_IOMMU, AGENT_CALL_RESOURCE_MEMORY,
+        AGENT_CALL_RESOURCE_NETWORK, AGENT_CALL_RESOURCE_SERVICE, AGENT_CALL_RESOURCE_WORKSPACE,
+        AGENT_CALL_RETIRE_RESOURCE, AGENT_CALL_STATUS_OK,
     },
     context::PrivilegeInterruptStackFrame,
 };
@@ -32,8 +33,9 @@ fn resource_requests_decode_and_authenticate_against_trusted_context() {
             AGENT_CALL_RESOURCE_DEVICE,
             AGENT_CALL_RESOURCE_IOMMU,
             AGENT_CALL_RESOURCE_DMA_DOMAIN,
+            AGENT_CALL_RESOURCE_INTERRUPT_ROUTE,
         ],
-        [1, 2, 3, 4, 5, 8, 9]
+        [1, 2, 3, 4, 5, 8, 9, 10]
     );
 
     let operations = child_operations();
@@ -58,6 +60,10 @@ fn resource_requests_decode_and_authenticate_against_trusted_context() {
     for (code, expected) in [
         (AGENT_CALL_RESOURCE_IOMMU, ResourceKind::Iommu),
         (AGENT_CALL_RESOURCE_DMA_DOMAIN, ResourceKind::DmaDomain),
+        (
+            AGENT_CALL_RESOURCE_INTERRUPT_ROUTE,
+            ResourceKind::InterruptRoute,
+        ),
     ] {
         let mut frame = create_frame();
         frame.r12 = code;

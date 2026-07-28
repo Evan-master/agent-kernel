@@ -8,8 +8,8 @@ use crate::{
     DmaAttachmentRecord, DmaDomainRecord, DmaMappingRecord, DriverBindingRecord,
     DriverCommandRecord, DriverEndpointRecord, DriverInvocationRecord, DurableArchiveReceipt,
     Event, EventArchiveCheckpoint, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
-    MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord, Resource,
-    RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
+    InterruptRouteRecord, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord,
+    Resource, RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -70,6 +70,7 @@ pub struct KernelCore<
     pub(crate) dma_domains: [DmaDomainRecord; RESOURCES],
     pub(crate) dma_attachments: [DmaAttachmentRecord; RESOURCES],
     pub(crate) dma_mappings: [DmaMappingRecord; CAPS],
+    pub(crate) interrupt_routes: [InterruptRouteRecord; RESOURCES],
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
     pub(crate) agent_image_len: usize,
@@ -98,6 +99,7 @@ pub struct KernelCore<
     pub(crate) dma_domain_len: usize,
     pub(crate) dma_attachment_len: usize,
     pub(crate) dma_mapping_len: usize,
+    pub(crate) interrupt_route_len: usize,
     pub(crate) retired_agent_floor: u64,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
@@ -209,6 +211,7 @@ impl<
             dma_domains: [DmaDomainRecord::empty(); RESOURCES],
             dma_attachments: [DmaAttachmentRecord::empty(); RESOURCES],
             dma_mappings: [DmaMappingRecord::empty(); CAPS],
+            interrupt_routes: [InterruptRouteRecord::empty(); RESOURCES],
             agent_len: 0,
             agent_entry_len: 0,
             agent_image_len: 0,
@@ -237,6 +240,7 @@ impl<
             dma_domain_len: 0,
             dma_attachment_len: 0,
             dma_mapping_len: 0,
+            interrupt_route_len: 0,
             retired_agent_floor: 0,
             next_resource: 1,
             next_capability: 1,

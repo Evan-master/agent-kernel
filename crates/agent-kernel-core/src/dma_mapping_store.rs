@@ -5,8 +5,9 @@
 //! and performs no hardware mutation.
 
 use crate::{
-    AgentId, CapabilityId, DmaAccess, DmaMappingId, DmaMappingRecord, DmaMappingStatus, Event,
-    EventKind, KernelCore, KernelError, Operation, ResourceId, ResourceKind, DMA_PAGE_BYTES,
+    AgentId, CapabilityId, DmaAccess, DmaAttachmentStatus, DmaMappingId, DmaMappingRecord,
+    DmaMappingStatus, Event, EventKind, KernelCore, KernelError, Operation, ResourceId,
+    ResourceKind, DMA_PAGE_BYTES,
 };
 
 impl<
@@ -77,11 +78,9 @@ impl<
         self.ensure_authorized(agent, domain_capability, domain, Operation::Act)?;
         self.find_resource(domain_record.iommu)?;
         let mut has_attached_device = false;
-        for attachment in self
-            .dma_attachments()
-            .iter()
-            .filter(|attachment| attachment.domain == domain)
-        {
+        for attachment in self.dma_attachments().iter().filter(|attachment| {
+            attachment.domain == domain && attachment.status == DmaAttachmentStatus::Attached
+        }) {
             has_attached_device = true;
             self.find_resource(attachment.device)?;
         }
@@ -207,7 +206,18 @@ impl<
         &self,
         resource: ResourceId,
     ) -> Result<(), KernelError> {
-        let busy =
+        let attachment_busy = self
+            .dma_attachments()
+            .iter()
+            .filter(|attachment| attachment.occupies_attachment())
+            .any(|attachment| {
+                attachment.domain == resource
+                    || attachment.device == resource
+                    || self.dma_domains().iter().any(|domain| {
+                        domain.resource == attachment.domain && domain.iommu == resource
+                    })
+            });
+        let mapping_busy =
             self.dma_mappings()
                 .iter()
                 .filter(|mapping| mapping.occupies_iova())
@@ -218,9 +228,12 @@ impl<
                             domain.resource == mapping.domain && domain.iommu == resource
                         })
                         || self.dma_attachments().iter().any(|attachment| {
-                            attachment.domain == mapping.domain && attachment.device == resource
+                            attachment.occupies_attachment()
+                                && attachment.domain == mapping.domain
+                                && attachment.device == resource
                         })
                 });
+        let busy = attachment_busy || mapping_busy;
         if busy {
             Err(KernelError::DmaResourceBusy)
         } else {

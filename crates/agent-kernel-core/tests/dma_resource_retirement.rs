@@ -123,11 +123,46 @@ fn mapped_resources_remain_active_until_revocation_completes() {
         .core
         .complete_dma_unmap(OWNER, domain_capability, mapping)
         .unwrap();
+    fixture
+        .core
+        .can_retire_resource(OWNER, fixture.memory_capability, fixture.memory)
+        .expect("released mapping no longer keeps memory busy");
+    for (resource, capability) in resources
+        .into_iter()
+        .filter(|(resource, _)| *resource != fixture.memory)
+    {
+        assert_eq!(
+            fixture
+                .core
+                .can_retire_resource(OWNER, capability, resource),
+            Err(KernelError::DmaResourceBusy)
+        );
+    }
+    fixture
+        .core
+        .begin_dma_device_detach(
+            OWNER,
+            domain_capability,
+            domain,
+            fixture.device_capability,
+            fixture.device,
+        )
+        .unwrap();
+    fixture
+        .core
+        .complete_dma_device_detach(
+            OWNER,
+            domain_capability,
+            domain,
+            fixture.device_capability,
+            fixture.device,
+        )
+        .unwrap();
     for (resource, capability) in resources {
         fixture
             .core
             .can_retire_resource(OWNER, capability, resource)
-            .expect("released mapping no longer keeps resources busy");
+            .expect("released mapping and detached requester are quiescent");
     }
 }
 
@@ -162,6 +197,34 @@ fn retired_dma_hardware_cannot_accept_new_attachments_or_mappings() {
 
     let mut device_fixture = fixture();
     let (domain, domain_capability) = attached_domain(&mut device_fixture);
+    assert_eq!(
+        device_fixture.core.retire_resource(
+            OWNER,
+            device_fixture.device_capability,
+            device_fixture.device,
+        ),
+        Err(KernelError::DmaResourceBusy)
+    );
+    device_fixture
+        .core
+        .begin_dma_device_detach(
+            OWNER,
+            domain_capability,
+            domain,
+            device_fixture.device_capability,
+            device_fixture.device,
+        )
+        .unwrap();
+    device_fixture
+        .core
+        .complete_dma_device_detach(
+            OWNER,
+            domain_capability,
+            domain,
+            device_fixture.device_capability,
+            device_fixture.device,
+        )
+        .unwrap();
     device_fixture
         .core
         .retire_resource(
@@ -171,6 +234,17 @@ fn retired_dma_hardware_cannot_accept_new_attachments_or_mappings() {
         )
         .unwrap();
     let events_before = device_fixture.core.events().len();
+    assert_eq!(
+        device_fixture.core.attach_dma_device(
+            OWNER,
+            domain_capability,
+            domain,
+            device_fixture.device_capability,
+            device_fixture.device,
+            DmaRequesterId::new(0x28),
+        ),
+        Err(KernelError::ResourceRetired)
+    );
     assert_eq!(
         device_fixture.core.reserve_dma_mapping(
             OWNER,
@@ -182,7 +256,7 @@ fn retired_dma_hardware_cannot_accept_new_attachments_or_mappings() {
             1,
             DmaAccess::ReadWrite,
         ),
-        Err(KernelError::ResourceRetired)
+        Err(KernelError::DmaDeviceNotAttached)
     );
     assert!(device_fixture.core.dma_mappings().is_empty());
     assert_eq!(device_fixture.core.events().len(), events_before);

@@ -14,7 +14,7 @@ const SOURCE_ID: u16 = 0x28;
 const QEMU_CAP: u64 = (1 << 9) | (38 << 16) | (0x22 << 24);
 
 #[test]
-fn legacy_tables_encode_one_39_bit_translation_and_remove_its_leaf() {
+fn legacy_tables_preserve_the_v27_entrypoint_over_shared_v28_tables() {
     let mut root = [0_u64; 512];
     let mut context = [0_u64; 512];
     let mut level3 = [0_u64; 512];
@@ -50,16 +50,17 @@ fn legacy_tables_encode_one_39_bit_translation_and_remove_its_leaf() {
 
     tables.remove(IOVA).unwrap();
     assert_eq!(tables.level1_entries()[0], 0);
-    assert_eq!(
-        tables.install(
+    tables
+        .install(
             DmarPciRequester::new(0, 0, 6, 0).unwrap(),
             domain,
             IOVA,
             0x7000,
             DmaAccess::Read,
-        ),
-        Err(VtdTableError::RequesterMismatch)
-    );
+        )
+        .unwrap();
+    assert_eq!(&tables.context_entries()[96..98], &[0x3001, 0x0101]);
+    assert_eq!(tables.level1_entries()[0], 0x7001);
     assert_eq!(
         tables.install(
             requester,
@@ -88,6 +89,24 @@ fn controller_programs_root_invalidations_and_translation_in_order() {
             Write::U64(DMAR_CCMD_REG, (1_u64 << 63) | (1_u64 << 61)),
             Write::U64(DMAR_IOTLB_REG, (1_u64 << 63) | (1_u64 << 60)),
             Write::U32(DMAR_GCMD_REG, 1 << 31),
+        ]
+    );
+}
+
+#[test]
+fn controller_commits_runtime_table_changes_with_both_global_invalidations() {
+    let io = ScriptedRegisters::new();
+    let mut controller = IntelVtd::bind(io, 8).unwrap();
+    controller.activate(0x1000).unwrap();
+
+    controller.invalidate().unwrap();
+    let io = controller.into_io();
+
+    assert_eq!(
+        &io.writes[5..],
+        [
+            Write::U64(DMAR_CCMD_REG, (1_u64 << 63) | (1_u64 << 61)),
+            Write::U64(DMAR_IOTLB_REG, (1_u64 << 63) | (1_u64 << 60)),
         ]
     );
 }

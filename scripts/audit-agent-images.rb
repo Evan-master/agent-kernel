@@ -250,8 +250,10 @@ def verify_package_v3(name, bytes, digest, expected_signer_id, public_key, expec
   assert(entry_offset < code.bytesize, "#{name} entry is outside code")
   signed_bytes = bytes.byteslice(0, signature_offset)
   signature = bytes.byteslice(signature_offset, SIGNATURE_BYTES)
-  verifying_key = OpenSSL::PKey.read(ED25519_SPKI_PREFIX + public_key)
-  assert(verifying_key.verify(nil, signature, signed_bytes), "#{name} Ed25519 signature is invalid")
+  assert(
+    verify_ed25519_signature(public_key, signature, signed_bytes),
+    "#{name} Ed25519 signature is invalid"
+  )
   verify_digest(name, bytes, digest)
 end
 
@@ -276,6 +278,44 @@ def run_command(*command)
   return if status.success?
 
   raise "audit failed: command #{command.first} exited #{status.exitstatus}\n#{output}#{error}"
+end
+
+def verify_ed25519_signature(public_key, signature, signed_bytes)
+  public_der = ED25519_SPKI_PREFIX + public_key
+  begin
+    return OpenSSL::PKey.read(public_der).verify(nil, signature, signed_bytes)
+  rescue OpenSSL::PKey::PKeyError
+    openssl = command_path(
+      "OPENSSL",
+      ["openssl", "/opt/homebrew/opt/openssl@3/bin/openssl", "/usr/local/opt/openssl@3/bin/openssl"]
+    )
+    assert(openssl, "Ed25519 verification requires an OpenSSL 1.1.1+ executable")
+  end
+
+  Dir.mktmpdir("agent-image-signature") do |directory|
+    public_path = File.join(directory, "public.der")
+    signature_path = File.join(directory, "signature.bin")
+    message_path = File.join(directory, "message.bin")
+    File.binwrite(public_path, public_der)
+    File.binwrite(signature_path, signature)
+    File.binwrite(message_path, signed_bytes)
+    _output, _error, status = Open3.capture3(
+      openssl,
+      "pkeyutl",
+      "-verify",
+      "-pubin",
+      "-keyform",
+      "DER",
+      "-inkey",
+      public_path,
+      "-sigfile",
+      signature_path,
+      "-rawin",
+      "-in",
+      message_path
+    )
+    status.success?
+  end
 end
 
 def assembled_sections(source_name, sections, clang, objcopy, temporary_directory)

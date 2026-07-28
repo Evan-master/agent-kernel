@@ -22,4 +22,13 @@ impl SmpBootstrap {
         memory::map_dma_mmio_pages(boot_info, iommu_base, device_base)
             .map_err(SmpBootError::ApicMapping)
     }
+
+    #[cfg(feature = "qemu-msi-msix-proof")]
+    pub(crate) fn prepare_dma_mmio_ranges(
+        &mut self,
+        boot_info: &mut BootInfo,
+        ranges: &[(u64, u64)],
+    ) -> Result<(), SmpBootError> {
+        memory::map_dma_mmio_ranges(boot_info, ranges).map_err(SmpBootError::ApicMapping)
+    }
 }

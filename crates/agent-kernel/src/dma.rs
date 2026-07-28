@@ -118,6 +118,40 @@ impl<
         )
     }
 
+    pub fn sys_begin_dma_device_detach(
+        &mut self,
+        agent: AgentId,
+        domain_capability: CapabilityId,
+        domain: ResourceId,
+        device_capability: CapabilityId,
+        device: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.core.begin_dma_device_detach(
+            agent,
+            domain_capability,
+            domain,
+            device_capability,
+            device,
+        )
+    }
+
+    pub fn sys_complete_dma_device_detach(
+        &mut self,
+        agent: AgentId,
+        domain_capability: CapabilityId,
+        domain: ResourceId,
+        device_capability: CapabilityId,
+        device: ResourceId,
+    ) -> Result<Event, KernelError> {
+        self.core.complete_dma_device_detach(
+            agent,
+            domain_capability,
+            domain,
+            device_capability,
+            device,
+        )
+    }
+
     pub fn sys_activate_dma_mapping(
         &mut self,
         agent: AgentId,

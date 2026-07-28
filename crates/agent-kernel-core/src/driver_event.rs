@@ -120,7 +120,8 @@ impl<
             | ResourceKind::File
             | ResourceKind::Process
             | ResourceKind::Iommu
-            | ResourceKind::DmaDomain => Err(KernelError::ResourceKindMismatch),
+            | ResourceKind::DmaDomain
+            | ResourceKind::InterruptRoute => Err(KernelError::ResourceKindMismatch),
         }
     }
 

@@ -149,6 +149,10 @@ impl<
                 .iter()
                 .any(|record| record.domain == target || record.memory == target)
             || self
+                .interrupt_routes()
+                .iter()
+                .any(|record| record.resource() == target || record.device() == target)
+            || self
                 .event_archive_checkpoint
                 .is_some_and(|checkpoint| checkpoint.root() == target);
 

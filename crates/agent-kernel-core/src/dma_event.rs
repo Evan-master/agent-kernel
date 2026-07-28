@@ -66,13 +66,32 @@ impl<
         capability: CapabilityId,
         source_capability: Option<CapabilityId>,
     ) -> Result<Event, KernelError> {
+        self.record_dma_event_with_operation(
+            kind,
+            agent,
+            resource,
+            capability,
+            source_capability,
+            Operation::Act,
+        )
+    }
+
+    pub(crate) fn record_dma_event_with_operation(
+        &mut self,
+        kind: EventKind,
+        agent: AgentId,
+        resource: ResourceId,
+        capability: CapabilityId,
+        source_capability: Option<CapabilityId>,
+        operation: Operation,
+    ) -> Result<Event, KernelError> {
         let mut event = Event::empty();
         event.agent = agent;
         event.kind = kind;
         event.resource = Some(resource);
         event.capability = Some(capability);
         event.source_capability = source_capability;
-        event.operation = Some(Operation::Act);
+        event.operation = Some(operation);
         self.record(event)
     }
 }

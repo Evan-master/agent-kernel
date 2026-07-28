@@ -80,7 +80,7 @@ pub(super) fn map_tpm_crb_page(
     map_device_page(&mut mapper, &mut allocator, physical_offset, locality_base)
 }
 
-#[cfg(feature = "qemu-dma-iommu-proof")]
+#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
 pub(super) fn map_dma_mmio_pages(
     boot_info: &mut BootInfo,
     iommu_base: u64,
@@ -98,6 +98,27 @@ pub(super) fn map_dma_mmio_pages(
     let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
     map_device_page(&mut mapper, &mut allocator, physical_offset, iommu_base)?;
     map_device_page(&mut mapper, &mut allocator, physical_offset, device_base)
+}
+
+#[cfg(feature = "qemu-msi-msix-proof")]
+pub(super) fn map_dma_mmio_ranges(
+    boot_info: &mut BootInfo,
+    ranges: &[(u64, u64)],
+) -> Result<(), ApicMappingError> {
+    let physical_offset = boot_info
+        .physical_memory_offset
+        .into_option()
+        .ok_or(ApicMappingError::MissingPhysicalMap)?;
+    if physical_offset != PHYSICAL_MEMORY_OFFSET {
+        return Err(ApicMappingError::UnexpectedPhysicalOffset);
+    }
+    // SAFETY: the BSP remains the sole processor and owns the active root.
+    let mut mapper = unsafe { active_mapper(physical_offset)? };
+    let mut allocator = BootFrameAllocator::new(&mut boot_info.memory_regions);
+    for &(base, length) in ranges {
+        map_device_range(&mut mapper, &mut allocator, physical_offset, base, length)?;
+    }
+    Ok(())
 }
 
 pub(super) fn map_trampoline_page(
@@ -156,6 +177,30 @@ fn map_device_page(
             tighten_huge_device_mapping(mapper, virtual_address, physical_address)
         }
         result => result,
+    }
+}
+
+#[cfg(feature = "qemu-msi-msix-proof")]
+fn map_device_range(
+    mapper: &mut OffsetPageTable<'_>,
+    allocator: &mut BootFrameAllocator<'_>,
+    physical_offset: u64,
+    base: u64,
+    length: u64,
+) -> Result<(), ApicMappingError> {
+    let last = base
+        .checked_add(length.checked_sub(1).ok_or(ApicMappingError::InvalidPage)?)
+        .ok_or(ApicMappingError::AddressOverflow)?;
+    let mut page = base & !0xfff;
+    let last_page = last & !0xfff;
+    loop {
+        map_device_page(mapper, allocator, physical_offset, page)?;
+        if page == last_page {
+            return Ok(());
+        }
+        page = page
+            .checked_add(4096)
+            .ok_or(ApicMappingError::AddressOverflow)?;
     }
 }
 

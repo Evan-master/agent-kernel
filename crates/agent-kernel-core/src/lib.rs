@@ -83,6 +83,8 @@ mod intent;
 mod intent_compaction;
 mod intent_event;
 mod intent_store;
+mod interrupt_route;
+mod interrupt_route_store;
 mod lookup;
 mod mailbox_event;
 mod mailbox_store;
@@ -153,8 +155,8 @@ pub use checkpoint::{CheckpointRecord, CheckpointStatus};
 pub use core::KernelCore;
 pub use device_event::{DeviceEventKind, DeviceEventPayload, DeviceEventRecord, DeviceEventStatus};
 pub use dma::{
-    DmaAccess, DmaAttachmentRecord, DmaDomainRecord, DmaMappingRecord, DmaMappingStatus,
-    DmaRequesterId, DMA_PAGE_BYTES,
+    DmaAccess, DmaAttachmentRecord, DmaAttachmentStatus, DmaDomainRecord, DmaMappingRecord,
+    DmaMappingStatus, DmaRequesterId, DMA_PAGE_BYTES,
 };
 pub use driver::DriverBindingRecord;
 pub use driver_command::{
@@ -198,6 +200,10 @@ pub use id::{
     RuntimeAdmissionId, TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, VerificationRequirement};
+pub use interrupt_route::{
+    InterruptMode, InterruptRouteRecord, InterruptRouteStatus, InterruptTarget,
+    INTERRUPT_DEVICE_VECTOR_MAX, INTERRUPT_DEVICE_VECTOR_MIN,
+};
 pub use memory::{MemoryCellRecord, MemoryCellRecordRetirement, MemoryValue};
 pub use message::{
     MessageKind, MessagePayload, MessageReceiveOutcome, MessageRecord, MessageRetirement,

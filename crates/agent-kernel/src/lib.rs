@@ -20,6 +20,7 @@ mod event_archive;
 mod fault;
 mod fault_compaction;
 mod intent_compaction;
+mod interrupt_route;
 mod kernel_default;
 mod mailbox;
 mod memory;

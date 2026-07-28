@@ -7,8 +7,10 @@ the x86_64 machine layer.
 DMAR DRHD
   -> root table
   -> bus context table
-  -> domain + requester binding
-  -> 3-level second-level page tables
+  -> one bus + one Domain binding
+  -> up to 256 requester contexts
+  -> one shared 3-level hierarchy
+  -> up to 512 leaves in one 2 MiB IOVA window
   -> context and IOTLB invalidation
   -> translation enable
   -> bounded fault observation
@@ -18,7 +20,8 @@ DMAR DRHD
 
 | Module | Responsibility |
 | --- | --- |
-| `tables.rs` | root, context, and second-level table encoding |
+| `table_types.rs` | addresses, Domain ID, capacities, and typed failures |
+| `tables.rs` | requester contexts and shared second-level table encoding |
 | `intel_vtd.rs` | register protocol, invalidation, enable, disable, and faults |
 | `mod.rs` | public architecture boundary |
 
@@ -26,14 +29,18 @@ DMAR DRHD
 
 - Every table page and translated address is 4 KiB aligned.
 - Root and context entries reference physical memory owned by the BSP.
-- One table set remains bound to its first Requester and Domain.
+- One table set remains bound to its first segment-zero bus and Domain.
+- All 256 functions on the bound bus have independent context entries.
+- Live mappings share one 2 MiB IOVA window with 512 independent leaves.
+- Detaching one requester preserves every other context and shared leaf.
+- Removing one leaf preserves every other mapping.
+- Context and leaf publication completes before MMIO invalidation commands.
 - Register polling has a fixed budget and typed failure.
 - Register-derived offsets remain inside the mapped 4 KiB MMIO page.
 - Capability width, fault-register layout, and invalidation replies are checked.
-- Mapping removal precedes context and IOTLB invalidation.
+- Table mutation precedes global context and IOTLB invalidation.
 - VT-d fault records are decoded before they are cleared.
 - Ring-3 Agents receive no table pointer or VT-d register mapping.
 
-V27 deliberately supports one requester, one domain, and one 4 KiB mapping.
-Multi-device domains, superpages, queued invalidation, and interrupt remapping
-remain future milestones.
+V28 keeps 2 MiB superpages, queued invalidation, multi-bus table ownership,
+interrupt remapping, and non-coherent table maintenance outside this profile.

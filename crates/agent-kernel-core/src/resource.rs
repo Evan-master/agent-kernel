@@ -22,6 +22,7 @@ pub enum ResourceKind {
     Device,
     Iommu,
     DmaDomain,
+    InterruptRoute,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

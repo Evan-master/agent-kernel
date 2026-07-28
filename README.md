@@ -24,17 +24,18 @@ agent-kernel / native-x86_64
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
 [07] DMA authority .......... VT-d enforced
-kernel://dma/v27-native-iommu
+[08] message interrupts ..... MSI/MSI-X active
+kernel://interrupt/v28-msi-msix
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V27 / QEMU debug + release   VT-d grant + revoke     │
+│ VERIFIED   V28 / QEMU debug + release   MSI + MSI-X + VT-d      │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ STATE      ATA A/B + DMA domain         AUTH   Capabilities     │
+│ STATE      ATA A/B + shared DMA domain  AUTH   Capabilities     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -76,7 +77,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, MSI/MSI-X, virtio-rng, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-state-signer` | `no_std` signing policy and injected provider boundary |
 | `agent-supervisor` | Host simulation and user-space orchestration |
@@ -101,7 +102,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, I/O APIC IRQ, PCI BAR claims, VT-d DMA, port and ATA PIO access |
+| I/O | Capability-authorized HAL request, INTx/MSI/MSI-X, PCI BAR claims, shared VT-d DMA, virtio-rng, port and ATA PIO |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -350,7 +351,8 @@ decode → snapshot → authenticate → preflight → mutate → reply
 ```text
 PROFILE A          V26 qemu-ata-power-loss
 PROFILE B          V27 qemu-dma-iommu
-QEMU               both profiles / debug + release
+PROFILE C          V28 qemu-msi-msix
+QEMU               all profiles / debug + release
 BASELINE EVENTS     1..451 / exact V25 history
 DURABLE HEAD        generation 1 / Events 1..64
 RECOVERY EVENTS     65..516 / ordered contiguous history
@@ -360,6 +362,9 @@ V25 DRIVER RUNS     6 / three quantum expiries / one restart
 V27 REQUESTER       0000:00:05.0 / source 0x28
 V27 MAPPING         IOVA 0x01000000 / one 4 KiB page
 V27 REVOCATION      VT-d reason 5 / write blocked / RAM unchanged
+V28 REQUESTERS      EDU 00:05.0 + virtio-rng 00:06.0 / Domain 1
+V28 ROUTES          MSI 0xd0 + MSI-X[0] 0xd1
+V28 DETACH          source 0x30 denied / EDU remains operational
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
 ```
@@ -393,6 +398,16 @@ BOOT FRAME POOL     77 sealed
 | Authorized DMA | `AGENT_KERNEL_DMA_ALLOWED_OK` |
 | Revoked DMA fault | `AGENT_KERNEL_DMA_REVOKED_FAULT_OK` |
 | DMA/IOMMU terminal proof | `AGENT_KERNEL_DMA_IOMMU_PROOF_OK` |
+| Interrupt Route capability | `AGENT_KERNEL_INTERRUPT_CAPABILITY_OK` |
+| Shared DMA Domain | `AGENT_KERNEL_MULTI_DEVICE_DMA_DOMAIN_OK` |
+| EDU MSI configured | `AGENT_KERNEL_MSI_CONFIGURED_OK` |
+| EDU MSI delivered | `AGENT_KERNEL_EDU_MSI_DELIVERED_OK` |
+| virtio-rng MSI-X configured | `AGENT_KERNEL_MSIX_CONFIGURED_OK` |
+| virtio-rng MSI-X delivered | `AGENT_KERNEL_VIRTIO_RNG_MSIX_DELIVERED_OK` |
+| Requester detach | `AGENT_KERNEL_DMA_REQUESTER_DETACHED_OK` |
+| Detached requester fault | `AGENT_KERNEL_DMA_DETACH_FAULT_OK` |
+| Shared-domain survivor | `AGENT_KERNEL_SHARED_DOMAIN_SURVIVOR_OK` |
+| MSI/MSI-X terminal proof | `AGENT_KERNEL_MSI_MSIX_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -523,6 +538,17 @@ revoke              leaf clear / context + IOTLB invalidate / release
 blocked             device write fault / source 0x28 / target page unchanged
 ```
 
+```text
+V28 NATIVE MSI/MSI-X
+routes              Core Resource / MSI 0xd0 / MSI-X entry 0 at 0xd1
+domain              Domain 1 / EDU 00:05.0 + virtio-rng 00:06.0
+mappings            EDU data + split queue + entropy / three 4 KiB leaves
+delivery            native IDT handlers / device cause ack / Local APIC EOI
+detach              remove requester 0x30 / context + IOTLB invalidation
+isolation           virtio DMA denied / entropy sentinel unchanged
+survivor            EDU DMA + MSI completes after virtio detachment
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -550,6 +576,8 @@ $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
 $ scripts/run-qemu-dma-iommu.sh
 $ scripts/run-qemu-dma-iommu.sh --release
+$ scripts/run-qemu-msi-msix.sh
+$ scripts/run-qemu-msi-msix.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -593,7 +621,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU + virtio-rng · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // TREE`
 
@@ -609,7 +637,7 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-durable-power-loss.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -639,7 +667,8 @@ tools/qemu-tpm-provision/
 [done] PCI INTx routing + Driver fault containment and restart
 [done] dedicated QEMU ATA image + SIGKILL power-loss recovery proof
 [done] capability-bound DMA domain + Intel VT-d grant/revoke proof
-[next] MSI/MSI-X + multi-device DMA domains
+[done] MSI/MSI-X Interrupt Routes + shared multi-device DMA Domain
+[done] modern virtio-rng + requester-specific VT-d detach proof
 [next] network + graphics + USB controllers + formal verification
 ```
 
@@ -653,7 +682,8 @@ tools/qemu-tpm-provision/
 | PCI authority | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 | Durable milestone | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
-| Active milestone | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
+| DMA foundation | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
+| Active milestone | [Native MSI/MSI-X V28](docs/superpowers/specs/2026-07-28-native-msi-msix-v28-design.md) |
 
 ## `10 // PROJECT`
 

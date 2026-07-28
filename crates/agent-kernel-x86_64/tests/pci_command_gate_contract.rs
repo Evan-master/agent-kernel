@@ -22,6 +22,31 @@ fn command_gate_keeps_bus_master_off_until_explicit_activation() {
     );
 }
 
+#[test]
+fn command_gate_disables_intx_without_changing_decode_or_bus_master_bits() {
+    let address = PciFunctionAddress::new(0, 5, 0).unwrap();
+    let mut gate = PciCommandGate::bind(Config { command: 0x0007 }, address);
+
+    let state = gate.disable_intx().unwrap();
+
+    assert!(state.io_space());
+    assert!(state.memory_space());
+    assert!(state.bus_master());
+    assert!(state.intx_disabled());
+}
+
+#[test]
+fn command_gate_can_open_mmio_while_bus_master_remains_quiesced() {
+    let address = PciFunctionAddress::new(0, 6, 0).unwrap();
+    let mut gate = PciCommandGate::bind(Config { command: 0x0005 }, address);
+
+    let state = gate.enable_memory_decode().unwrap();
+
+    assert!(state.io_space());
+    assert!(state.memory_space());
+    assert!(!state.bus_master());
+}
+
 struct Config {
     command: u16,
 }

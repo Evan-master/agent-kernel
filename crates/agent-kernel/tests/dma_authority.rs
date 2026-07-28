@@ -1,6 +1,7 @@
 use agent_kernel::AgentKernel;
 use agent_kernel_core::{
-    AgentId, DmaAccess, DmaMappingStatus, DmaRequesterId, Operation, OperationSet, ResourceKind,
+    AgentId, DmaAccess, DmaAttachmentStatus, DmaMappingStatus, DmaRequesterId, Operation,
+    OperationSet, ResourceKind,
 };
 
 type Kernel = AgentKernel<1, 8, 12, 32, 0, 0, 0, 0, 0, 0>;
@@ -10,7 +11,9 @@ fn dma_authority_is_exposed_only_through_the_kernel_facade() {
     let mut kernel = Kernel::new();
     let agent = AgentId::new(1);
     kernel.sys_register_agent(agent).unwrap();
-    let operations = OperationSet::only(Operation::Act).with(Operation::Observe);
+    let operations = OperationSet::only(Operation::Act)
+        .with(Operation::Observe)
+        .with(Operation::Rollback);
     let iommu = kernel
         .sys_register_resource(ResourceKind::Iommu, None)
         .unwrap();
@@ -56,5 +59,31 @@ fn dma_authority_is_exposed_only_through_the_kernel_facade() {
     assert_eq!(
         kernel.dma_mapping(mapping).unwrap().status,
         DmaMappingStatus::Active
+    );
+    kernel
+        .sys_begin_dma_device_detach(
+            agent,
+            domain.capability,
+            domain.resource,
+            device_capability,
+            device,
+        )
+        .unwrap();
+    kernel
+        .sys_complete_dma_device_detach(
+            agent,
+            domain.capability,
+            domain.resource,
+            device_capability,
+            device,
+        )
+        .unwrap();
+    assert_eq!(
+        kernel
+            .dma_attachments()
+            .last()
+            .expect("one DMA attachment")
+            .status(),
+        DmaAttachmentStatus::Detached
     );
 }

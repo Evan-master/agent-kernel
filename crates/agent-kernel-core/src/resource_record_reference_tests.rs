@@ -1,10 +1,10 @@
 //! Exhaustive structural coverage for the Resource reference preflight.
 
 use crate::{
-    AgentId, Capability, CapabilityId, DmaAccess, DmaAttachmentRecord, DmaDomainRecord,
-    DmaMappingId, DmaMappingRecord, DmaMappingStatus, DmaRequesterId, Event,
-    EventArchiveCheckpoint, EventArchiveProposal, KernelCore, KernelError, NamespaceObject,
-    OperationSet, ResourceId,
+    AgentId, Capability, CapabilityId, DmaAccess, DmaAttachmentRecord, DmaAttachmentStatus,
+    DmaDomainRecord, DmaMappingId, DmaMappingRecord, DmaMappingStatus, DmaRequesterId, Event,
+    EventArchiveCheckpoint, EventArchiveProposal, InterruptMode, InterruptRouteRecord,
+    InterruptTarget, KernelCore, KernelError, NamespaceObject, OperationSet, ResourceId,
 };
 
 type TestCore = KernelCore<2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2>;
@@ -15,7 +15,7 @@ const AUTHORITY: CapabilityId = CapabilityId::new(1);
 
 #[test]
 fn every_persistent_non_event_resource_reference_is_rejected() {
-    for case in 0..32 {
+    for case in 0..34 {
         let mut core = core_with_target();
         install_reference(&mut core, case);
         assert_eq!(
@@ -182,6 +182,7 @@ fn install_reference(core: &mut TestCore, case: usize) {
                 domain: TARGET,
                 device: ResourceId::new(8),
                 requester: DmaRequesterId::new(0x28),
+                status: DmaAttachmentStatus::Attached,
             };
             core.dma_attachment_len = 1;
         }
@@ -190,11 +191,30 @@ fn install_reference(core: &mut TestCore, case: usize) {
                 domain: ResourceId::new(8),
                 device: TARGET,
                 requester: DmaRequesterId::new(0x28),
+                status: DmaAttachmentStatus::Attached,
             };
             core.dma_attachment_len = 1;
         }
         30 => install_dma_mapping(core, TARGET, ResourceId::new(8)),
         31 => install_dma_mapping(core, ResourceId::new(8), TARGET),
+        32 => {
+            core.interrupt_routes[0] = InterruptRouteRecord::new(
+                TARGET,
+                ResourceId::new(8),
+                InterruptMode::Msi,
+                InterruptTarget::new(0, 0xd0).unwrap(),
+            );
+            core.interrupt_route_len = 1;
+        }
+        33 => {
+            core.interrupt_routes[0] = InterruptRouteRecord::new(
+                ResourceId::new(8),
+                TARGET,
+                InterruptMode::Msi,
+                InterruptTarget::new(0, 0xd0).unwrap(),
+            );
+            core.interrupt_route_len = 1;
+        }
         _ => unreachable!(),
     }
 }

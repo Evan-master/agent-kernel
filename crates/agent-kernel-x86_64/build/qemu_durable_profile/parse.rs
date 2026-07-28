@@ -168,7 +168,7 @@ impl ValidatedProfile {
         if through_sequence != 64 || call_data_generation != 1 {
             fail("V26 requires through_sequence=64 and call_data_generation=1");
         }
-        if !base_lba.is_multiple_of(128) {
+        if base_lba & 127 != 0 {
             fail("base_lba must be aligned to 128 sectors");
         }
         if !(0x8100_0000..=0x81ff_ffff).contains(&tpm_handle) {

@@ -5,6 +5,7 @@
 //! `agent-kernel-core`.
 
 mod intel_vtd;
+mod table_types;
 mod tables;
 
 pub use intel_vtd::{
@@ -12,6 +13,8 @@ pub use intel_vtd::{
     DMAR_CAP_REG, DMAR_CCMD_REG, DMAR_ECAP_REG, DMAR_FRCD_HIGH_REG, DMAR_FRCD_LOW_REG,
     DMAR_FSTS_REG, DMAR_GCMD_REG, DMAR_GSTS_REG, DMAR_IOTLB_REG, DMAR_RTADDR_REG, DMAR_VER_REG,
 };
-pub use tables::{
-    VtdDomainId, VtdLegacyTableAddresses, VtdLegacyTablePages, VtdTableError, VTD_ADDRESS_WIDTH,
+pub use table_types::{
+    VtdDomainId, VtdLegacyTableAddresses, VtdTableError, VTD_ADDRESS_WIDTH, VTD_MAPPING_CAPACITY,
+    VTD_REQUESTER_CAPACITY,
 };
+pub use tables::VtdLegacyTablePages;

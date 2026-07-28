@@ -24,17 +24,18 @@ agent-kernel / native-x86_64
 [05] native state signer .... TPM-bound
 [06] PCI device fabric ...... driving native I/O
 [07] DMA authority .......... VT-d enforced
-kernel://dma/v27-native-iommu
+[08] message interrupts ..... MSI/MSI-X active
+kernel://interrupt/v28-msi-msix
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V27 / QEMU debug + release   VT-d grant + revoke     │
+│ VERIFIED   V28 / QEMU debug + release   MSI + MSI-X + VT-d      │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ STATE      ATA A/B + DMA domain         AUTH   Capability       │
+│ STATE      ATA A/B + shared DMA domain  AUTH   Capability       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -76,7 +77,7 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | :--- | :--- |
 | `agent-kernel-core` | 领域记录、固定容量 Store、状态转换、Event |
 | `agent-kernel` | 稳定的 `no_std` syscall 风格 Facade |
-| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、ATA PIO、TPM CRB、DMAR、VT-d、原生执行 |
+| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、MSI/MSI-X、virtio-rng、ATA PIO、TPM CRB、DMAR、VT-d、原生执行 |
 | `agent-kernel-hal` | 不可变设备请求协议 |
 | `agent-state-signer` | `no_std` 签名策略与可注入 Provider 边界 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
@@ -101,7 +102,7 @@ Agent Package
 | 恢复 | `#UD`、`#GP`、`#PF`、修复、重启、回滚 |
 | IPC | 阻塞 Mailbox、唤醒、确认、回收 |
 | 内存 | 页/区域分配、First-Fit 复用、清零 |
-| I/O | Capability 授权的 HAL 请求、I/O APIC IRQ、PCI BAR 认领、VT-d DMA、端口与 ATA PIO 访问 |
+| I/O | Capability 授权的 HAL 请求、INTx/MSI/MSI-X、PCI BAR 认领、共享 VT-d DMA、virtio-rng、端口与 ATA PIO |
 
 <details>
 <summary><code>用户地址空间</code></summary>
@@ -350,7 +351,8 @@ proof             双向 DMA / 撤销 / 写 Fault / RAM 保持不变
 ```text
 PROFILE A          V26 qemu-ata-power-loss
 PROFILE B          V27 qemu-dma-iommu
-QEMU               两套 Profile / debug + release
+PROFILE C          V28 qemu-msi-msix
+QEMU               全部 Profile / debug + release
 BASELINE EVENTS     1..451 / 精确 V25 历史
 DURABLE HEAD        Generation 1 / Event 1..64
 RECOVERY EVENTS     65..516 / 有序连续历史
@@ -360,6 +362,9 @@ V25 DRIVER RUNS     6 / 三次 Quantum Expiry / 一次重启
 V27 REQUESTER       0000:00:05.0 / Source 0x28
 V27 MAPPING         IOVA 0x01000000 / 单个 4 KiB 页
 V27 REVOCATION      VT-d Reason 5 / 写入阻断 / RAM 不变
+V28 REQUESTERS      EDU 00:05.0 + virtio-rng 00:06.0 / Domain 1
+V28 ROUTES          MSI 0xd0 + MSI-X[0] 0xd1
+V28 DETACH          Source 0x30 被拒绝 / EDU 保持运行
 FRAME OWNERSHIP     每 Agent 12..43
 BOOT FRAME POOL     77 帧封存
 ```
@@ -393,6 +398,16 @@ BOOT FRAME POOL     77 帧封存
 | 已授权 DMA | `AGENT_KERNEL_DMA_ALLOWED_OK` |
 | 已撤销 DMA Fault | `AGENT_KERNEL_DMA_REVOKED_FAULT_OK` |
 | DMA/IOMMU 终态证明 | `AGENT_KERNEL_DMA_IOMMU_PROOF_OK` |
+| Interrupt Route Capability | `AGENT_KERNEL_INTERRUPT_CAPABILITY_OK` |
+| 共享 DMA Domain | `AGENT_KERNEL_MULTI_DEVICE_DMA_DOMAIN_OK` |
+| EDU MSI 配置 | `AGENT_KERNEL_MSI_CONFIGURED_OK` |
+| EDU MSI 送达 | `AGENT_KERNEL_EDU_MSI_DELIVERED_OK` |
+| virtio-rng MSI-X 配置 | `AGENT_KERNEL_MSIX_CONFIGURED_OK` |
+| virtio-rng MSI-X 送达 | `AGENT_KERNEL_VIRTIO_RNG_MSIX_DELIVERED_OK` |
+| Requester 脱离 | `AGENT_KERNEL_DMA_REQUESTER_DETACHED_OK` |
+| 已脱离 Requester Fault | `AGENT_KERNEL_DMA_DETACH_FAULT_OK` |
+| 共享 Domain 存活设备 | `AGENT_KERNEL_SHARED_DOMAIN_SURVIVOR_OK` |
+| MSI/MSI-X 终态证明 | `AGENT_KERNEL_MSI_MSIX_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -523,6 +538,17 @@ revoke              清除 Leaf / Context + IOTLB Invalidate / Release
 blocked             设备写 Fault / Source 0x28 / 目标页不变
 ```
 
+```text
+V28 NATIVE MSI/MSI-X
+routes              Core Resource / MSI 0xd0 / MSI-X Entry 0 at 0xd1
+domain              Domain 1 / EDU 00:05.0 + virtio-rng 00:06.0
+mappings            EDU Data + Split Queue + Entropy / 三个 4 KiB Leaf
+delivery            原生 IDT Handler / 设备 Cause Ack / Local APIC EOI
+detach              移除 Requester 0x30 / Context + IOTLB Invalidation
+isolation           virtio DMA 被拒绝 / Entropy Sentinel 不变
+survivor            virtio 脱离后 EDU DMA + MSI 继续完成
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -550,6 +576,8 @@ $ scripts/run-qemu.sh
 $ scripts/run-qemu.sh --release
 $ scripts/run-qemu-dma-iommu.sh
 $ scripts/run-qemu-dma-iommu.sh --release
+$ scripts/run-qemu-msi-msix.sh
+$ scripts/run-qemu-msi-msix.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -593,7 +621,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU + virtio-rng · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // 源码树`
 
@@ -609,7 +637,7 @@ crates/
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-durable-power-loss.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -639,7 +667,8 @@ tools/qemu-tpm-provision/
 [done] PCI INTx 路由 + Driver Fault 隔离与重启
 [done] QEMU 独立 ATA 镜像 + SIGKILL 断电恢复证明
 [done] Capability 绑定 DMA Domain + Intel VT-d 授权/撤销证明
-[next] MSI/MSI-X + 多设备 DMA Domain
+[done] MSI/MSI-X Interrupt Route + 共享多设备 DMA Domain
+[done] 现代 virtio-rng + Requester 级 VT-d 脱离证明
 [next] Network + Graphics + USB Controller + 形式化验证
 ```
 
@@ -653,7 +682,8 @@ tools/qemu-tpm-provision/
 | PCI 权限 | [PCI Resource Claims V22](docs/superpowers/specs/2026-07-27-pci-resource-claims-v22-design.md) |
 | PCI 设备路径 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 | 持久化里程碑 | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
-| 当前里程碑 | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
+| DMA 基础 | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
+| 当前里程碑 | [Native MSI/MSI-X V28](docs/superpowers/specs/2026-07-28-native-msi-msix-v28-design.md) |
 
 ## `10 // 项目`
 

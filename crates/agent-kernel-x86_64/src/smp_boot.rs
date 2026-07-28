@@ -8,7 +8,7 @@
 pub(crate) mod ap_worker;
 mod controllers;
 mod delay;
-#[cfg(feature = "qemu-dma-iommu-proof")]
+#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
 mod dma_iommu;
 mod interrupts;
 mod io_apic;
@@ -24,7 +24,7 @@ use core::{
     hint::spin_loop,
 };
 
-#[cfg(feature = "qemu-dma-iommu-proof")]
+#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
 use agent_kernel_x86_64::acpi_topology::{load_acpi_dmar_table, AcpiDmarDiscoveryError, DmarTable};
 use agent_kernel_x86_64::{
     acpi_topology::{
@@ -56,11 +56,11 @@ const IA32_APIC_BASE: u32 = 0x1b;
 const CR3_ROOT_MASK: u64 = 0x000f_ffff_ffff_f000;
 const CR4_PCIDE: u64 = 1 << 17;
 const TLB_ACK_WAIT_LIMIT: usize = 100_000_000;
-#[cfg(feature = "qemu-dma-iommu-proof")]
+#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
 pub(crate) const DMAR_UNIT_CAPACITY: usize = 2;
-#[cfg(feature = "qemu-dma-iommu-proof")]
+#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
 pub(crate) const DMAR_SCOPE_CAPACITY: usize = 64;
-#[cfg(feature = "qemu-dma-iommu-proof")]
+#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
 pub(crate) type BootDmarTable = DmarTable<DMAR_UNIT_CAPACITY, DMAR_SCOPE_CAPACITY>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -142,7 +142,7 @@ impl SmpBootError {
 pub(crate) struct SmpBootstrap {
     topology: AcpiMachineTopology<MAX_CPU_COUNT>,
     tpm2_table: Result<Option<Tpm2AcpiTable>, AcpiTpm2DiscoveryError>,
-    #[cfg(feature = "qemu-dma-iommu-proof")]
+    #[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
     dmar_table: Result<Option<BootDmarTable>, AcpiDmarDiscoveryError>,
     registry: CpuRegistry<MAX_CPU_COUNT>,
     local_apic_base: LocalApicBase,
@@ -206,7 +206,7 @@ impl SmpBootstrap {
         }
         .map_err(SmpBootError::Acpi)?;
         let tpm2_table = unsafe { load_acpi_tpm2_table(handler, rsdp_address) };
-        #[cfg(feature = "qemu-dma-iommu-proof")]
+        #[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
         let dmar_table = unsafe {
             load_acpi_dmar_table::<_, DMAR_UNIT_CAPACITY, DMAR_SCOPE_CAPACITY>(
                 handler,
@@ -223,7 +223,7 @@ impl SmpBootstrap {
         Ok(Self {
             topology,
             tpm2_table,
-            #[cfg(feature = "qemu-dma-iommu-proof")]
+            #[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
             dmar_table,
             registry,
             local_apic_base: apic_msr.base(),
