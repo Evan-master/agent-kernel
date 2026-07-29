@@ -233,6 +233,7 @@ fn install_reference(core: &mut TestCore, case: usize) {
                 TARGET,
                 NetworkTransferDirection::Receive,
                 NetworkFrameDescriptor::new(60, 0x0806, [1; 32]).unwrap(),
+                None,
                 NetworkTransferStatus::Completed,
             );
             core.network_transfer_len = 1;

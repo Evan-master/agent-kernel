@@ -4,7 +4,7 @@
 //! fixed-width values. Packet bytes and device registers remain architecture
 //! concerns.
 
-use crate::{KernelError, NetworkTransferId, ResourceId};
+use crate::{KernelError, NetworkDatagramDescriptor, NetworkTransferId, ResourceId};
 
 pub const NETWORK_MIN_MTU: u16 = 68;
 pub const NETWORK_MAX_MTU: u16 = 1500;
@@ -184,6 +184,7 @@ pub struct NetworkTransferRecord {
     endpoint: ResourceId,
     direction: NetworkTransferDirection,
     frame: NetworkFrameDescriptor,
+    datagram: Option<NetworkDatagramDescriptor>,
     status: NetworkTransferStatus,
 }
 
@@ -204,6 +205,10 @@ impl NetworkTransferRecord {
         self.frame
     }
 
+    pub const fn datagram(self) -> Option<NetworkDatagramDescriptor> {
+        self.datagram
+    }
+
     pub const fn status(self) -> NetworkTransferStatus {
         self.status
     }
@@ -213,6 +218,7 @@ impl NetworkTransferRecord {
         endpoint: ResourceId,
         direction: NetworkTransferDirection,
         frame: NetworkFrameDescriptor,
+        datagram: Option<NetworkDatagramDescriptor>,
         status: NetworkTransferStatus,
     ) -> Self {
         Self {
@@ -220,6 +226,7 @@ impl NetworkTransferRecord {
             endpoint,
             direction,
             frame,
+            datagram,
             status,
         }
     }
@@ -234,6 +241,7 @@ impl NetworkTransferRecord {
                 ether_type: 0x0600,
                 digest: [0; 32],
             },
+            datagram: None,
             status: NetworkTransferStatus::Failed,
         }
     }

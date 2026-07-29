@@ -7,7 +7,11 @@
 
 use core::arch::asm;
 
-#[cfg(any(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"))]
+#[cfg(any(
+    feature = "qemu-msi-msix-proof",
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
+))]
 use agent_kernel_x86_64::cpu::ApicId;
 use agent_kernel_x86_64::{
     apic::{LocalApicBase, LocalApicMmio, VolatileMmio, APIC_SPURIOUS_VECTOR, APIC_TIMER_VECTOR},
@@ -140,12 +144,20 @@ impl SmpBootstrap {
         Ok(())
     }
 
-    #[cfg(any(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"))]
+    #[cfg(any(
+        feature = "qemu-msi-msix-proof",
+        feature = "qemu-native-net-proof",
+        feature = "qemu-native-udp-driver-proof"
+    ))]
     pub(crate) fn bsp_apic_id(&self) -> ApicId {
         self.topology.cpus().bsp().processor().apic_id()
     }
 
-    #[cfg(any(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"))]
+    #[cfg(any(
+        feature = "qemu-msi-msix-proof",
+        feature = "qemu-native-net-proof",
+        feature = "qemu-native-udp-driver-proof"
+    ))]
     pub(crate) fn complete_message_interrupt(
         &mut self,
         delivered: bool,

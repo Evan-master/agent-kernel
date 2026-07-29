@@ -150,6 +150,18 @@ pub fn format_event(event: &Event) -> String {
         EventKind::NetworkReceiveRecorded => {
             format_capability_event(event, "network_receive_recorded")
         }
+        EventKind::NetworkDatagramTransmitPrepared => {
+            format_capability_event(event, "network_datagram_transmit_prepared")
+        }
+        EventKind::NetworkDatagramTransmitCompleted => {
+            format_capability_event(event, "network_datagram_transmit_completed")
+        }
+        EventKind::NetworkDatagramTransmitFailed => {
+            format_capability_event(event, "network_datagram_transmit_failed")
+        }
+        EventKind::NetworkDatagramReceiveRecorded => {
+            format_capability_event(event, "network_datagram_receive_recorded")
+        }
         EventKind::ResourceCreated => format_capability_event(event, "resource_created"),
         EventKind::ResourceRetired => format_capability_event(event, "resource_retired"),
         EventKind::ResourceRecordRetired => {

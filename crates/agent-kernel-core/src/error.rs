@@ -111,6 +111,8 @@ pub enum KernelError {
     NetworkEndpointStatusMismatch,
     NetworkTransferNotFound,
     NetworkFrameInvalid,
+    NetworkDatagramInvalid,
+    NetworkDatagramFrameMismatch,
     NetworkTransferStatusMismatch,
     NetworkTransferDirectionMismatch,
     NetworkTransferPending,

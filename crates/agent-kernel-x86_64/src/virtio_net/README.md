@@ -16,6 +16,7 @@ Allocation-free Virtio 1.x Ethernet support for the x86_64 architecture layer.
 | `tx_queue.rs` | Header encoding and write-free completion validation |
 | `device.rs` | Ordered ownership of transport and both queues |
 | `arp.rs` | Fixed Ethernet/ARP proof frame contract |
+| `ipv4_udp.rs` | Strict Ethernet II/IPv4/UDP codec and checksum validation |
 
 Core owns endpoint and transfer authority. PCI, VT-d, and MSI-X owners supply
 the surrounding hardware lifecycle.
@@ -50,3 +51,5 @@ requires all four RX/TX IOVA pages to be pairwise disjoint.
 - RX completion tokens expire before the buffer is published again.
 - TX rejects any device write into the packet descriptor.
 - Shutdown resets device status before queue reuse.
+- IPv4/UDP decode requires exact routes, no fragmentation, and valid IPv4 and
+  nonzero UDP checksums.

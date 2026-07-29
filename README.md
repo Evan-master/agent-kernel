@@ -25,15 +25,15 @@ agent-kernel / native-x86_64
 [06] PCI device fabric ...... driving native I/O
 [07] DMA authority .......... VT-d enforced
 [08] message interrupts ..... MSI/MSI-X active
-[09] native network ......... ARP round-trip
-kernel://network/v29-virtio-net
+[09] native network ......... ring-3 UDP echo
+kernel://network/v30-ipv4-udp-driver
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V29 / QEMU debug + release   virtio-net + VT-d       │
+│ VERIFIED   V30 / QEMU debug + release   ring-3 IPv4/UDP         │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA A/B + native Ethernet    AUTH   Capabilities     │
@@ -78,7 +78,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, MSI/MSI-X, virtio-rng, virtio-net, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, MSI/MSI-X, virtio-rng, virtio-net, IPv4/UDP, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-state-signer` | `no_std` signing policy and injected provider boundary |
 | `agent-supervisor` | Host simulation and user-space orchestration |
@@ -103,7 +103,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, native Ethernet, INTx/MSI/MSI-X, PCI BAR claims, shared VT-d DMA, virtio-rng, virtio-net, port and ATA PIO |
+| I/O | Capability-authorized HAL request, native Ethernet/IPv4/UDP, INTx/MSI/MSI-X, PCI BAR claims, shared VT-d DMA, virtio-rng, virtio-net, port and ATA PIO |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -354,6 +354,7 @@ PROFILE A          V26 qemu-ata-power-loss
 PROFILE B          V27 qemu-dma-iommu
 PROFILE C          V28 qemu-msi-msix
 PROFILE D          V29 qemu-native-net
+PROFILE E          V30 qemu-native-udp-driver
 QEMU               all profiles / debug + release
 BASELINE EVENTS     1..451 / exact V25 history
 DURABLE HEAD        generation 1 / Events 1..64
@@ -371,6 +372,10 @@ V29 ENDPOINT         52:54:00:12:34:56 / MTU 1500
 V29 QUEUES           RX 0 / TX 1 / one descriptor each
 V29 TRAFFIC          ARP request + gateway reply / MSI-X 0xd2 + 0xd3
 V29 DENIAL           detached source 0x28 / VT-d fault / no completion
+V30 DRIVER            Ring-3 / calls 57..60 / two fresh address spaces
+V30 DATAGRAM          10.0.2.15:40131 -> 10.0.2.2:40130 / 13 bytes
+V30 VALIDATION        IPv4 + UDP checksums / exact MAC, IP, and port route
+V30 TEARDOWN          endpoint released / requester detached / VT-d disabled
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
 ```
@@ -420,6 +425,12 @@ BOOT FRAME POOL     77 sealed
 | ARP round-trip | `AGENT_KERNEL_NATIVE_NET_ARP_REPLY_OK` |
 | Detached network DMA | `AGENT_KERNEL_NATIVE_NET_DMA_DENIAL_OK` |
 | Native network terminal proof | `AGENT_KERNEL_NATIVE_NET_PROOF_OK` |
+| Network Driver capability | `AGENT_KERNEL_NATIVE_UDP_DRIVER_CAPABILITY_OK` |
+| Ring-3 neighbor resolution | `AGENT_KERNEL_NATIVE_UDP_NEIGHBOR_DRIVER_OK` |
+| IPv4/UDP echo | `AGENT_KERNEL_NATIVE_UDP_ECHO_OK` |
+| Datagram Core evidence | `AGENT_KERNEL_NATIVE_UDP_CORE_EVIDENCE_OK` |
+| VT-d network teardown | `AGENT_KERNEL_NATIVE_UDP_VTD_TEARDOWN_OK` |
+| Network Driver terminal proof | `AGENT_KERNEL_NATIVE_UDP_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -572,6 +583,17 @@ evidence            SHA-256 frame descriptors / ordered Core Events
 isolation           requester detached / VT-d fault / zero completion IRQ
 ```
 
+```text
+V30 NATIVE IPv4/UDP DRIVER AGENT
+Agent               Capsule v1 / kind 6 / exact five-call transcript
+commands            0x3001 resolve neighbor / 0x3002 exchange UDP
+authority           delegated Device Capability + Network Endpoint evidence
+wire                Ethernet II / IPv4 IHL 5 / UDP / mandatory checksums
+traffic             10.0.2.15:40131 -> 10.0.2.2:40130 / AGENT-V30-UDP
+execution           two fresh Ring-3 address spaces / one quantum each
+terminal            endpoint + MSI-X + requester + four mappings released
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -580,8 +602,9 @@ isolation           requester detached / VT-d fault / zero completion IRQ
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
 | Admission Supervisor | Capsule v1 | 44 | 4,122 | `54eaa321a65c...923e10970` |
 | PCI Serial Driver | Capsule v1 / kind 6 | 5 | 437 | `95787586c02f...eec2e402` |
+| Network Driver | Capsule v1 / kind 6 | 5 | 381 | `c0aa7fc31502...0279a4df` |
 
-`AUDIT` 9 native images · 2 signed Package v3 images · 5 exact assembly sources
+`AUDIT` 10 native images · 2 signed Package v3 images · 6 exact assembly sources
 
 </details>
 
@@ -603,6 +626,8 @@ $ scripts/run-qemu-msi-msix.sh
 $ scripts/run-qemu-msi-msix.sh --release
 $ scripts/run-qemu-native-net.sh
 $ scripts/run-qemu-native-net.sh --release
+$ scripts/run-qemu-native-udp-driver.sh
+$ scripts/run-qemu-native-udp-driver.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -646,7 +671,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU + virtio-rng + virtio-net · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + slirp UDP + swtpm + Intel VT-d + EDU + virtio-rng + virtio-net · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // TREE`
 
@@ -662,7 +687,7 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-native-net.sh,run-qemu-durable-power-loss.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-native-net.sh,run-qemu-native-udp-driver.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -695,7 +720,8 @@ tools/qemu-tpm-provision/
 [done] MSI/MSI-X Interrupt Routes + shared multi-device DMA Domain
 [done] modern virtio-rng + requester-specific VT-d detach proof
 [done] capability-governed Network endpoint + modern virtio-net ARP proof
-[next] IPv4/UDP + graphics + USB controllers + formal verification
+[done] strict IPv4/UDP + Ring-3 Network Driver Agent + QEMU echo proof
+[next] graphics + USB controllers + multi-endpoint networking + formal verification
 ```
 
 | Track | Record |
@@ -709,7 +735,8 @@ tools/qemu-tpm-provision/
 | PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 | Durable milestone | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
 | DMA foundation | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
-| Active milestone | [Native Virtio Network V29](docs/superpowers/specs/2026-07-29-native-virtio-net-v29-design.md) |
+| Network foundation | [Native Virtio Network V29](docs/superpowers/specs/2026-07-29-native-virtio-net-v29-design.md) |
+| Active milestone | [Native IPv4/UDP Driver V30](docs/superpowers/specs/2026-07-29-native-ipv4-udp-driver-v30-design.md) |
 
 ## `10 // PROJECT`
 

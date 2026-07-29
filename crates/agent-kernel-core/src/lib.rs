@@ -104,6 +104,7 @@ mod namespace_lookup;
 mod namespace_path_rebinding;
 mod namespace_store;
 mod network;
+mod network_datagram;
 mod network_endpoint_store;
 mod network_transfer_store;
 mod observation;
@@ -221,6 +222,10 @@ pub use network::{
     NetworkEndpointConfig, NetworkEndpointRecord, NetworkEndpointStatus, NetworkFrameDescriptor,
     NetworkMacAddress, NetworkTransferDirection, NetworkTransferRecord, NetworkTransferStatus,
     ETHERNET_HEADER_BYTES, ETHERNET_MAX_FRAME_BYTES, NETWORK_MAX_MTU, NETWORK_MIN_MTU,
+};
+pub use network_datagram::{
+    NetworkDatagramDescriptor, NetworkIpv4Address, NetworkUdpPort, ETHERNET_MIN_FRAME_BYTES,
+    IPV4_HEADER_BYTES, UDP_HEADER_BYTES, UDP_IPV4_MAX_PAYLOAD_BYTES,
 };
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};

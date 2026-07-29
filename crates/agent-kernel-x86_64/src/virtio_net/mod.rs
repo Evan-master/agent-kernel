@@ -6,6 +6,7 @@
 mod arp;
 mod device;
 mod device_config;
+mod ipv4_udp;
 mod pci;
 mod queue_layout;
 mod rx_queue;
@@ -21,6 +22,9 @@ pub use arp::{
 pub use device::{VirtioNetDevice, VirtioNetDeviceError};
 pub use device_config::{
     VirtioNetDeviceConfigError, VirtioNetDeviceConfigIo, VolatileVirtioNetDeviceConfig,
+};
+pub use ipv4_udp::{
+    build_udp_ipv4_frame, decode_udp_ipv4_frame, UdpIpv4Error, UdpIpv4Packet, UdpIpv4Route,
 };
 pub use pci::{
     virtio_net_selector, VirtioNetPciCapabilities, VirtioNetPciCapabilityError, VirtioNetPciRegion,

@@ -4,9 +4,9 @@
 //! Capability authority. It does not retain packet bytes or perform I/O.
 
 use crate::{
-    AgentId, CapabilityId, EventKind, KernelCore, KernelError, NetworkEndpointStatus,
-    NetworkFrameDescriptor, NetworkTransferDirection, NetworkTransferId, NetworkTransferRecord,
-    NetworkTransferStatus, Operation, ResourceId,
+    AgentId, CapabilityId, EventKind, KernelCore, KernelError, NetworkDatagramDescriptor,
+    NetworkEndpointStatus, NetworkFrameDescriptor, NetworkTransferDirection, NetworkTransferId,
+    NetworkTransferRecord, NetworkTransferStatus, Operation, ResourceId,
 };
 
 impl<
@@ -68,21 +68,46 @@ impl<
         frame: NetworkFrameDescriptor,
     ) -> Result<NetworkTransferId, KernelError> {
         self.ensure_network_transfer_allowed(agent, capability, endpoint, frame, Operation::Act)?;
-        if self.network_transfers().iter().any(|transfer| {
-            transfer.endpoint() == endpoint
-                && transfer.direction() == NetworkTransferDirection::Transmit
-                && transfer.status() == NetworkTransferStatus::Prepared
-        }) {
-            return Err(KernelError::NetworkTransferPending);
-        }
+        self.ensure_no_pending_transmit(endpoint)?;
         self.insert_network_transfer(
             agent,
             capability,
             endpoint,
             frame,
+            None,
             NetworkTransferDirection::Transmit,
             NetworkTransferStatus::Prepared,
             EventKind::NetworkTransmitPrepared,
+            Operation::Act,
+        )
+    }
+
+    pub fn prepare_network_datagram_transmit(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        endpoint: ResourceId,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+    ) -> Result<NetworkTransferId, KernelError> {
+        self.ensure_network_datagram_allowed(
+            agent,
+            capability,
+            endpoint,
+            frame,
+            datagram,
+            Operation::Act,
+        )?;
+        self.ensure_no_pending_transmit(endpoint)?;
+        self.insert_network_transfer(
+            agent,
+            capability,
+            endpoint,
+            frame,
+            Some(datagram),
+            NetworkTransferDirection::Transmit,
+            NetworkTransferStatus::Prepared,
+            EventKind::NetworkDatagramTransmitPrepared,
             Operation::Act,
         )
     }
@@ -136,9 +161,39 @@ impl<
             capability,
             endpoint,
             frame,
+            None,
             NetworkTransferDirection::Receive,
             NetworkTransferStatus::Completed,
             EventKind::NetworkReceiveRecorded,
+            Operation::Observe,
+        )
+    }
+
+    pub fn record_network_datagram_receive(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        endpoint: ResourceId,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+    ) -> Result<NetworkTransferId, KernelError> {
+        self.ensure_network_datagram_allowed(
+            agent,
+            capability,
+            endpoint,
+            frame,
+            datagram,
+            Operation::Observe,
+        )?;
+        self.insert_network_transfer(
+            agent,
+            capability,
+            endpoint,
+            frame,
+            Some(datagram),
+            NetworkTransferDirection::Receive,
+            NetworkTransferStatus::Completed,
+            EventKind::NetworkDatagramReceiveRecorded,
             Operation::Observe,
         )
     }
@@ -178,6 +233,38 @@ impl<
         Ok(())
     }
 
+    fn ensure_network_datagram_allowed(
+        &self,
+        agent: AgentId,
+        capability: CapabilityId,
+        endpoint: ResourceId,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+        operation: Operation,
+    ) -> Result<(), KernelError> {
+        self.ensure_network_transfer_allowed(agent, capability, endpoint, frame, operation)?;
+        let endpoint_record = self.network_endpoint(endpoint)?;
+        if frame.ether_type() != 0x0800
+            || frame.length() != datagram.ethernet_frame_length()
+            || datagram.ipv4_packet_length() > endpoint_record.config().mtu()
+        {
+            return Err(KernelError::NetworkDatagramFrameMismatch);
+        }
+        Ok(())
+    }
+
+    fn ensure_no_pending_transmit(&self, endpoint: ResourceId) -> Result<(), KernelError> {
+        if self.network_transfers().iter().any(|transfer| {
+            transfer.endpoint() == endpoint
+                && transfer.direction() == NetworkTransferDirection::Transmit
+                && transfer.status() == NetworkTransferStatus::Prepared
+        }) {
+            Err(KernelError::NetworkTransferPending)
+        } else {
+            Ok(())
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn insert_network_transfer(
         &mut self,
@@ -185,6 +272,7 @@ impl<
         capability: CapabilityId,
         endpoint: ResourceId,
         frame: NetworkFrameDescriptor,
+        datagram: Option<NetworkDatagramDescriptor>,
         direction: NetworkTransferDirection,
         status: NetworkTransferStatus,
         event_kind: EventKind,
@@ -201,7 +289,7 @@ impl<
 
         let id = NetworkTransferId::new(self.next_network_transfer);
         self.network_transfers[self.network_transfer_len] =
-            NetworkTransferRecord::new(id, endpoint, direction, frame, status);
+            NetworkTransferRecord::new(id, endpoint, direction, frame, datagram, status);
         self.network_transfer_len += 1;
         self.next_network_transfer = next;
         self.record_network_event(event_kind, agent, capability, endpoint, operation)?;
@@ -232,6 +320,13 @@ impl<
             .find(|candidate| candidate.id() == transfer)
             .ok_or(KernelError::NetworkTransferNotFound)?;
         slot.set_status(status);
+        let event_kind = match (record.datagram(), status) {
+            (Some(_), NetworkTransferStatus::Completed) => {
+                EventKind::NetworkDatagramTransmitCompleted
+            }
+            (Some(_), NetworkTransferStatus::Failed) => EventKind::NetworkDatagramTransmitFailed,
+            _ => event_kind,
+        };
         self.record_network_event(
             event_kind,
             agent,
