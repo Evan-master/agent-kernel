@@ -1,4 +1,4 @@
-//! Core authority graph for the V29 native network proof.
+//! Core authority graph shared by the V29 and V30 network proofs.
 //!
 //! This boot child owns one Device, four DMA mappings, two MSI-X routes, and
 //! one Network endpoint. Hardware siblings execute every two-phase transition.
@@ -6,9 +6,9 @@
 use agent_kernel_boot::BootConfig;
 use agent_kernel_core::{
     ActionId, AgentId, DmaAccess, DmaAttachmentStatus, DmaMappingId, DmaRequesterId, InterruptMode,
-    InterruptRouteStatus, InterruptTarget, KernelError, NetworkEndpointConfig,
-    NetworkEndpointStatus, NetworkFrameDescriptor, NetworkMacAddress, NetworkTransferId, Operation,
-    OperationSet, ResourceCreateOutcome, ResourceKind,
+    InterruptRouteStatus, InterruptTarget, KernelError, NetworkDatagramDescriptor,
+    NetworkEndpointConfig, NetworkEndpointStatus, NetworkFrameDescriptor, NetworkMacAddress,
+    NetworkTransferId, Operation, OperationSet, ResourceCreateOutcome, ResourceId, ResourceKind,
 };
 
 use crate::X86BootedKernel;
@@ -33,6 +33,23 @@ pub(super) fn reserve(
     source_id: u16,
     mac: NetworkMacAddress,
 ) -> Result<(X86BootedKernel, NativeNetAuthority), KernelError> {
+    reserve_with_device_verification(destination, source_id, mac, false)
+}
+
+pub(super) fn reserve_for_driver(
+    destination: u32,
+    source_id: u16,
+    mac: NetworkMacAddress,
+) -> Result<(X86BootedKernel, NativeNetAuthority), KernelError> {
+    reserve_with_device_verification(destination, source_id, mac, true)
+}
+
+fn reserve_with_device_verification(
+    destination: u32,
+    source_id: u16,
+    mac: NetworkMacAddress,
+    verify_device_images: bool,
+) -> Result<(X86BootedKernel, NativeNetAuthority), KernelError> {
     let config = BootConfig::new(AgentId::new(1), ResourceKind::Workspace, ActionId::new(1));
     let mut booted = X86BootedKernel::boot(config)?;
     let report = *booted.report();
@@ -40,8 +57,13 @@ pub(super) fn reserve(
         .with(Operation::Observe)
         .with(Operation::Rollback)
         .with(Operation::Delegate);
+    let device_operations = if verify_device_images {
+        operations.with(Operation::Verify)
+    } else {
+        operations
+    };
     let iommu = child_resource(&mut booted, report, ResourceKind::Iommu, operations)?;
-    let device = child_resource(&mut booted, report, ResourceKind::Device, operations)?;
+    let device = child_resource(&mut booted, report, ResourceKind::Device, device_operations)?;
     let memories = [
         child_resource(&mut booted, report, ResourceKind::Memory, operations)?,
         child_resource(&mut booted, report, ResourceKind::Memory, operations)?,
@@ -136,6 +158,18 @@ pub(super) fn reserve(
 }
 
 impl NativeNetAuthority {
+    pub(super) const fn device(self) -> ResourceCreateOutcome {
+        self.device
+    }
+
+    pub(super) const fn endpoint_resource(self) -> ResourceId {
+        self.endpoint.resource
+    }
+
+    pub(super) const fn endpoint_capability(self) -> agent_kernel_core::CapabilityId {
+        self.endpoint.capability
+    }
+
     pub(super) fn activate(self, booted: &mut X86BootedKernel) -> Result<(), KernelError> {
         for mapping in self.mappings {
             booted.kernel_mut().sys_activate_dma_mapping(
@@ -184,6 +218,21 @@ impl NativeNetAuthority {
         )
     }
 
+    pub(super) fn prepare_datagram_transmit(
+        self,
+        booted: &mut X86BootedKernel,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+    ) -> Result<NetworkTransferId, KernelError> {
+        booted.kernel_mut().sys_prepare_network_datagram_transmit(
+            self.agent,
+            self.endpoint.capability,
+            self.endpoint.resource,
+            frame,
+            datagram,
+        )
+    }
+
     pub(super) fn record_receive(
         self,
         booted: &mut X86BootedKernel,
@@ -194,6 +243,21 @@ impl NativeNetAuthority {
             self.endpoint.capability,
             self.endpoint.resource,
             frame,
+        )
+    }
+
+    pub(super) fn record_datagram_receive(
+        self,
+        booted: &mut X86BootedKernel,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+    ) -> Result<NetworkTransferId, KernelError> {
+        booted.kernel_mut().sys_record_network_datagram_receive(
+            self.agent,
+            self.endpoint.capability,
+            self.endpoint.resource,
+            frame,
+            datagram,
         )
     }
 

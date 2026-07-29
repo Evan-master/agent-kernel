@@ -25,15 +25,15 @@ agent-kernel / native-x86_64
 [06] PCI device fabric ...... driving native I/O
 [07] DMA authority .......... VT-d enforced
 [08] message interrupts ..... MSI/MSI-X active
-[09] native network ......... ARP round-trip
-kernel://network/v29-virtio-net
+[09] native network ......... ring-3 UDP echo
+kernel://network/v30-ipv4-udp-driver
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V29 / QEMU debug + release   virtio-net + VT-d       │
+│ VERIFIED   V30 / QEMU debug + release   ring-3 IPv4/UDP         │
 │ KERNEL     no_std / 无堆                 ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
 │ STATE      ATA A/B + 原生以太网           AUTH   Capability       │
@@ -78,7 +78,7 @@ HAL      不可变请求 ──> Driver Binding ──> Hardware
 | :--- | :--- |
 | `agent-kernel-core` | 领域记录、固定容量 Store、状态转换、Event |
 | `agent-kernel` | 稳定的 `no_std` syscall 风格 Facade |
-| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、MSI/MSI-X、virtio-rng、virtio-net、ATA PIO、TPM CRB、DMAR、VT-d、原生执行 |
+| `agent-kernel-x86_64` | 启动、分页、特权切换、IRQ、PCI、MSI/MSI-X、virtio-rng、virtio-net、IPv4/UDP、ATA PIO、TPM CRB、DMAR、VT-d、原生执行 |
 | `agent-kernel-hal` | 不可变设备请求协议 |
 | `agent-state-signer` | `no_std` 签名策略与可注入 Provider 边界 |
 | `agent-supervisor` | 宿主模拟与用户空间编排 |
@@ -103,7 +103,7 @@ Agent Package
 | 恢复 | `#UD`、`#GP`、`#PF`、修复、重启、回滚 |
 | IPC | 阻塞 Mailbox、唤醒、确认、回收 |
 | 内存 | 页/区域分配、First-Fit 复用、清零 |
-| I/O | Capability 授权的 HAL 请求、原生以太网、INTx/MSI/MSI-X、PCI BAR 认领、共享 VT-d DMA、virtio-rng、virtio-net、端口与 ATA PIO |
+| I/O | Capability 授权的 HAL 请求、原生以太网/IPv4/UDP、INTx/MSI/MSI-X、PCI BAR 认领、共享 VT-d DMA、virtio-rng、virtio-net、端口与 ATA PIO |
 
 <details>
 <summary><code>用户地址空间</code></summary>
@@ -354,6 +354,7 @@ PROFILE A          V26 qemu-ata-power-loss
 PROFILE B          V27 qemu-dma-iommu
 PROFILE C          V28 qemu-msi-msix
 PROFILE D          V29 qemu-native-net
+PROFILE E          V30 qemu-native-udp-driver
 QEMU               全部 Profile / debug + release
 BASELINE EVENTS     1..451 / 精确 V25 历史
 DURABLE HEAD        Generation 1 / Event 1..64
@@ -371,6 +372,10 @@ V29 ENDPOINT         52:54:00:12:34:56 / MTU 1500
 V29 QUEUES           RX 0 / TX 1 / 每队列一个 Descriptor
 V29 TRAFFIC          ARP 请求 + 网关回复 / MSI-X 0xd2 + 0xd3
 V29 DENIAL           已脱离 Source 0x28 / VT-d Fault / 无完成中断
+V30 DRIVER            Ring-3 / Calls 57..60 / 两个全新地址空间
+V30 DATAGRAM          10.0.2.15:40131 -> 10.0.2.2:40130 / 13 字节
+V30 VALIDATION        IPv4 + UDP Checksum / 精确 MAC、IP 与 Port 路由
+V30 TEARDOWN          Endpoint 释放 / Requester 脱离 / VT-d 关闭
 FRAME OWNERSHIP     每 Agent 12..43
 BOOT FRAME POOL     77 帧封存
 ```
@@ -420,6 +425,12 @@ BOOT FRAME POOL     77 帧封存
 | ARP 往返 | `AGENT_KERNEL_NATIVE_NET_ARP_REPLY_OK` |
 | 已脱离 Network DMA | `AGENT_KERNEL_NATIVE_NET_DMA_DENIAL_OK` |
 | 原生网络终态证明 | `AGENT_KERNEL_NATIVE_NET_PROOF_OK` |
+| Network Driver Capability | `AGENT_KERNEL_NATIVE_UDP_DRIVER_CAPABILITY_OK` |
+| Ring-3 邻居解析 | `AGENT_KERNEL_NATIVE_UDP_NEIGHBOR_DRIVER_OK` |
+| IPv4/UDP 回显 | `AGENT_KERNEL_NATIVE_UDP_ECHO_OK` |
+| Datagram Core 证据 | `AGENT_KERNEL_NATIVE_UDP_CORE_EVIDENCE_OK` |
+| VT-d 网络回收 | `AGENT_KERNEL_NATIVE_UDP_VTD_TEARDOWN_OK` |
+| Network Driver 终态证明 | `AGENT_KERNEL_NATIVE_UDP_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -572,6 +583,17 @@ evidence            SHA-256 Frame Descriptor / 有序 Core Event
 isolation           Requester 脱离 / VT-d Fault / 零完成中断
 ```
 
+```text
+V30 NATIVE IPv4/UDP DRIVER AGENT
+Agent               Capsule v1 / kind 6 / 精确五次调用记录
+commands            0x3001 邻居解析 / 0x3002 UDP 交换
+authority           委派 Device Capability + Network Endpoint 证据
+wire                Ethernet II / IPv4 IHL 5 / UDP / 强制 Checksum
+traffic             10.0.2.15:40131 -> 10.0.2.2:40130 / AGENT-V30-UDP
+execution           两个全新 Ring-3 地址空间 / 各一个调度量子
+terminal            Endpoint + MSI-X + Requester + 四个 Mapping 全部释放
+```
+
 <details>
 <summary><code>已验证镜像清单</code></summary>
 
@@ -580,8 +602,9 @@ isolation           Requester 脱离 / VT-d Fault / 零完成中断
 | Resource Manager | Signed Package v3 | 44 | 17,093 | `4500e02b07cb...43d18745` |
 | Admission Supervisor | Capsule v1 | 44 | 4,122 | `54eaa321a65c...923e10970` |
 | PCI Serial Driver | Capsule v1 / kind 6 | 5 | 437 | `95787586c02f...eec2e402` |
+| Network Driver | Capsule v1 / kind 6 | 5 | 381 | `c0aa7fc31502...0279a4df` |
 
-`AUDIT` 9 个原生镜像 · 2 个签名 Package v3 镜像 · 5 个精确 Assembly 源
+`AUDIT` 10 个原生镜像 · 2 个签名 Package v3 镜像 · 6 个精确 Assembly 源
 
 </details>
 
@@ -603,6 +626,8 @@ $ scripts/run-qemu-msi-msix.sh
 $ scripts/run-qemu-msi-msix.sh --release
 $ scripts/run-qemu-native-net.sh
 $ scripts/run-qemu-native-net.sh --release
+$ scripts/run-qemu-native-udp-driver.sh
+$ scripts/run-qemu-native-udp-driver.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -646,7 +671,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU + virtio-rng + virtio-net · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + slirp UDP + swtpm + Intel VT-d + EDU + virtio-rng + virtio-net · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // 源码树`
 
@@ -662,7 +687,7 @@ crates/
 └─ agent-supervisor/     宿主 Supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-native-net.sh,run-qemu-durable-power-loss.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-native-net.sh,run-qemu-native-udp-driver.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -695,7 +720,8 @@ tools/qemu-tpm-provision/
 [done] MSI/MSI-X Interrupt Route + 共享多设备 DMA Domain
 [done] 现代 virtio-rng + Requester 级 VT-d 脱离证明
 [done] Capability 治理的 Network Endpoint + 现代 virtio-net ARP 证明
-[next] IPv4/UDP + Graphics + USB Controller + 形式化验证
+[done] 严格 IPv4/UDP + Ring-3 Network Driver Agent + QEMU 回显证明
+[next] Graphics + USB Controller + 多 Endpoint 网络 + 形式化验证
 ```
 
 | 轨道 | 记录 |
@@ -709,7 +735,8 @@ tools/qemu-tpm-provision/
 | PCI 设备路径 | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 | 持久化里程碑 | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
 | DMA 基础 | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
-| 当前里程碑 | [Native Virtio Network V29](docs/superpowers/specs/2026-07-29-native-virtio-net-v29-design.md) |
+| 网络基础 | [Native Virtio Network V29](docs/superpowers/specs/2026-07-29-native-virtio-net-v29-design.md) |
+| 当前里程碑 | [Native IPv4/UDP Driver V30](docs/superpowers/specs/2026-07-29-native-ipv4-udp-driver-v30-design.md) |
 
 ## `10 // 项目`
 

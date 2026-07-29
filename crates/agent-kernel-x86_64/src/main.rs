@@ -4,7 +4,8 @@
     any(
         feature = "qemu-dma-iommu-proof",
         feature = "qemu-msi-msix-proof",
-        feature = "qemu-native-net-proof"
+        feature = "qemu-native-net-proof",
+        feature = "qemu-native-udp-driver-proof"
     ),
     allow(dead_code)
 )]
@@ -30,7 +31,19 @@ mod boot_config;
 #[cfg(any(
     all(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"),
     all(feature = "qemu-dma-iommu-proof", feature = "qemu-native-net-proof"),
-    all(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof")
+    all(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"),
+    all(
+        feature = "qemu-dma-iommu-proof",
+        feature = "qemu-native-udp-driver-proof"
+    ),
+    all(
+        feature = "qemu-msi-msix-proof",
+        feature = "qemu-native-udp-driver-proof"
+    ),
+    all(
+        feature = "qemu-native-net-proof",
+        feature = "qemu-native-udp-driver-proof"
+    )
 ))]
 compile_error!("QEMU hardware proof profiles are mutually exclusive");
 #[cfg(feature = "qemu-dma-iommu-proof")]
@@ -45,7 +58,10 @@ mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
 mod native_driver_executor;
-#[cfg(feature = "qemu-native-net-proof")]
+#[cfg(any(
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
+))]
 mod native_net_boot;
 mod native_runtime_admission_broker;
 mod pci_serial_driver_flow;
@@ -65,7 +81,8 @@ use boot_config::BOOTLOADER_CONFIG;
 #[cfg(not(any(
     feature = "qemu-dma-iommu-proof",
     feature = "qemu-msi-msix-proof",
-    feature = "qemu-native-net-proof"
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
 )))]
 use boot_config::{
     durable_proof_role, durable_storage_profile, state_signer_profile, tpm_signer_profile,
@@ -174,10 +191,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     {
         native_net_boot::run(boot_info, privilege_boundary, smp_bootstrap)
     }
+    #[cfg(feature = "qemu-native-udp-driver-proof")]
+    {
+        native_net_boot::run(boot_info, privilege_boundary, smp_bootstrap)
+    }
     #[cfg(not(any(
         feature = "qemu-dma-iommu-proof",
         feature = "qemu-msi-msix-proof",
-        feature = "qemu-native-net-proof"
+        feature = "qemu-native-net-proof",
+        feature = "qemu-native-udp-driver-proof"
     )))]
     {
         let Some(durable_role) = durable_proof_role() else {

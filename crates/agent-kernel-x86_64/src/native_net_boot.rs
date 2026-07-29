@@ -1,7 +1,7 @@
-//! Native QEMU Virtio network, MSI-X, and VT-d closed-loop proof.
+//! Native QEMU Virtio network, MSI-X, and VT-d proof profiles.
 //!
-//! This V29 profile sends one ARP request through capability-governed queues,
-//! validates the gateway reply, then proves detached DMA is denied by VT-d.
+//! V29 proves ARP and detached-DMA denial. V30 reuses the hardware boundary for
+//! a Ring-3 Network Driver Agent and a strict IPv4/UDP echo exchange.
 
 mod authority;
 mod interrupts;
@@ -9,8 +9,12 @@ mod memory;
 mod network_proof;
 mod pci;
 mod proof;
+#[cfg(feature = "qemu-native-udp-driver-proof")]
+mod udp_driver_boot;
 
+#[cfg(feature = "qemu-native-net-proof")]
 use agent_kernel_core::{DmaAccess, NetworkMacAddress};
+#[cfg(feature = "qemu-native-net-proof")]
 use agent_kernel_x86_64::{
     iommu::{IntelVtd, VolatileVtdMmio, VtdDomainId},
     virtio_net::{
@@ -21,12 +25,13 @@ use agent_kernel_x86_64::{
 };
 use bootloader_api::BootInfo;
 
-use crate::{
-    exception_runtime, exit_qemu, fatal_boot, halt_forever, privilege_runtime::PrivilegeBoundary,
-    serial_write_line, smp_boot::SmpBootstrap,
-};
+#[cfg(feature = "qemu-native-net-proof")]
+use crate::{exception_runtime, exit_qemu, fatal_boot, halt_forever, serial_write_line};
+use crate::{privilege_runtime::PrivilegeBoundary, smp_boot::SmpBootstrap};
 
+#[cfg(feature = "qemu-native-net-proof")]
 use self::network_proof::{frame_descriptor, run_detached_dma_probe, rx_error_marker};
+#[cfg(feature = "qemu-native-net-proof")]
 use self::proof::{
     fatal_after_enable, mapped_bytes, mapped_pointer, publish_dma_memory, require_no_fault,
 };
@@ -42,6 +47,7 @@ const GUEST_MAC_BYTES: [u8; 6] = [0x52, 0x54, 0, 0x12, 0x34, 0x56];
 const MMIO_POLL_BUDGET: u32 = 100_000_000;
 pub(super) const FAULT_WAIT_SPINS: usize = 100_000_000;
 
+#[cfg(feature = "qemu-native-net-proof")]
 pub(super) fn run(
     boot_info: &'static mut BootInfo,
     privilege_boundary: PrivilegeBoundary,
@@ -335,4 +341,13 @@ pub(super) fn run(
     serial_write_line("AGENT_KERNEL_NATIVE_NET_PROOF_OK");
     exit_qemu(0x10);
     halt_forever()
+}
+
+#[cfg(feature = "qemu-native-udp-driver-proof")]
+pub(super) fn run(
+    boot_info: &'static mut BootInfo,
+    privilege_boundary: PrivilegeBoundary,
+    smp_bootstrap: SmpBootstrap,
+) -> ! {
+    udp_driver_boot::run(boot_info, privilege_boundary, smp_bootstrap)
 }

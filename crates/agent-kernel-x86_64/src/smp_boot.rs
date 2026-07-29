@@ -11,7 +11,8 @@ mod delay;
 #[cfg(any(
     feature = "qemu-dma-iommu-proof",
     feature = "qemu-msi-msix-proof",
-    feature = "qemu-native-net-proof"
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
 ))]
 mod dma_iommu;
 mod interrupts;
@@ -31,7 +32,8 @@ use core::{
 #[cfg(any(
     feature = "qemu-dma-iommu-proof",
     feature = "qemu-msi-msix-proof",
-    feature = "qemu-native-net-proof"
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
 ))]
 use agent_kernel_x86_64::acpi_topology::{load_acpi_dmar_table, AcpiDmarDiscoveryError, DmarTable};
 use agent_kernel_x86_64::{
@@ -67,19 +69,22 @@ const TLB_ACK_WAIT_LIMIT: usize = 100_000_000;
 #[cfg(any(
     feature = "qemu-dma-iommu-proof",
     feature = "qemu-msi-msix-proof",
-    feature = "qemu-native-net-proof"
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
 ))]
 pub(crate) const DMAR_UNIT_CAPACITY: usize = 2;
 #[cfg(any(
     feature = "qemu-dma-iommu-proof",
     feature = "qemu-msi-msix-proof",
-    feature = "qemu-native-net-proof"
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
 ))]
 pub(crate) const DMAR_SCOPE_CAPACITY: usize = 64;
 #[cfg(any(
     feature = "qemu-dma-iommu-proof",
     feature = "qemu-msi-msix-proof",
-    feature = "qemu-native-net-proof"
+    feature = "qemu-native-net-proof",
+    feature = "qemu-native-udp-driver-proof"
 ))]
 pub(crate) type BootDmarTable = DmarTable<DMAR_UNIT_CAPACITY, DMAR_SCOPE_CAPACITY>;
 
@@ -165,7 +170,8 @@ pub(crate) struct SmpBootstrap {
     #[cfg(any(
         feature = "qemu-dma-iommu-proof",
         feature = "qemu-msi-msix-proof",
-        feature = "qemu-native-net-proof"
+        feature = "qemu-native-net-proof",
+        feature = "qemu-native-udp-driver-proof"
     ))]
     dmar_table: Result<Option<BootDmarTable>, AcpiDmarDiscoveryError>,
     registry: CpuRegistry<MAX_CPU_COUNT>,
@@ -233,7 +239,8 @@ impl SmpBootstrap {
         #[cfg(any(
             feature = "qemu-dma-iommu-proof",
             feature = "qemu-msi-msix-proof",
-            feature = "qemu-native-net-proof"
+            feature = "qemu-native-net-proof",
+            feature = "qemu-native-udp-driver-proof"
         ))]
         let dmar_table = unsafe {
             load_acpi_dmar_table::<_, DMAR_UNIT_CAPACITY, DMAR_SCOPE_CAPACITY>(
@@ -254,7 +261,8 @@ impl SmpBootstrap {
             #[cfg(any(
                 feature = "qemu-dma-iommu-proof",
                 feature = "qemu-msi-msix-proof",
-                feature = "qemu-native-net-proof"
+                feature = "qemu-native-net-proof",
+                feature = "qemu-native-udp-driver-proof"
             ))]
             dmar_table,
             registry,

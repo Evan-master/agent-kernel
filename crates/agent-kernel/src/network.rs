@@ -4,9 +4,9 @@
 //! retain packet buffers, device queues, and transport registers.
 
 use agent_kernel_core::{
-    AgentId, CapabilityId, Event, KernelError, NetworkEndpointConfig, NetworkEndpointRecord,
-    NetworkFrameDescriptor, NetworkTransferId, NetworkTransferRecord, OperationSet,
-    ResourceCreateOutcome, ResourceId,
+    AgentId, CapabilityId, Event, KernelError, NetworkDatagramDescriptor, NetworkEndpointConfig,
+    NetworkEndpointRecord, NetworkFrameDescriptor, NetworkTransferId, NetworkTransferRecord,
+    OperationSet, ResourceCreateOutcome, ResourceId,
 };
 
 use crate::AgentKernel;
@@ -125,6 +125,18 @@ impl<
             .complete_network_transmit(agent, capability, transfer)
     }
 
+    pub fn sys_prepare_network_datagram_transmit(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        endpoint: ResourceId,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+    ) -> Result<NetworkTransferId, KernelError> {
+        self.core
+            .prepare_network_datagram_transmit(agent, capability, endpoint, frame, datagram)
+    }
+
     pub fn sys_fail_network_transmit(
         &mut self,
         agent: AgentId,
@@ -143,6 +155,18 @@ impl<
     ) -> Result<NetworkTransferId, KernelError> {
         self.core
             .record_network_receive(agent, capability, endpoint, frame)
+    }
+
+    pub fn sys_record_network_datagram_receive(
+        &mut self,
+        agent: AgentId,
+        capability: CapabilityId,
+        endpoint: ResourceId,
+        frame: NetworkFrameDescriptor,
+        datagram: NetworkDatagramDescriptor,
+    ) -> Result<NetworkTransferId, KernelError> {
+        self.core
+            .record_network_datagram_receive(agent, capability, endpoint, frame, datagram)
     }
 
     pub fn network_endpoints(&self) -> &[NetworkEndpointRecord] {

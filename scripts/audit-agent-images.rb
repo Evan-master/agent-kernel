@@ -344,7 +344,8 @@ def verify_assembly_sources(images)
     {
       "fault-worker" => "fault_worker.S",
       "admission-supervisor" => "admission_supervisor.S",
-      "pci-serial-driver" => "pci_serial_driver.S"
+      "pci-serial-driver" => "pci_serial_driver.S",
+      "network-driver" => "network_driver.S"
     }.each do |name, source|
       _format, capsule = image_map.fetch(name)
       assembled = assembled_sections(source, [".text"], clang, objcopy, directory).fetch(".text")
@@ -368,7 +369,7 @@ def verify_assembly_sources(images)
     end
   end
 
-  puts "[ OK ] 5 assembly sources / exact embedded .text and .rodata bytes"
+  puts "[ OK ] 6 assembly sources / exact embedded .text and .rodata bytes"
 end
 
 def occurrence_count(bytes, needle)
@@ -442,7 +443,8 @@ end
 [
   ["fault-handler", "fault_handler.rs"],
   ["admission-supervisor", "admission_supervisor.rs"],
-  ["pci-serial-driver", "pci_serial_driver.rs"]
+  ["pci-serial-driver", "pci_serial_driver.rs"],
+  ["network-driver", "network_driver.rs"]
 ].each do |name, file|
   source = File.read(File.join(IMAGE_ROOT, file))
   images << [name, :v1, extract_bytes(source, "CAPSULE"), extract_digest(source, "DIGEST")]
@@ -485,7 +487,7 @@ images.each do |name, format, bytes, digest, signer_id, public_key, expected_rod
   puts format("[ OK ] %-20s %-10s %6d bytes  sha256:%s", name, format.to_s.upcase, bytes.bytesize, sha[0, 12])
 end
 
-puts "[ OK ] 9 native Agent images / canonical headers / digests / fixed addresses"
+puts "[ OK ] 10 native Agent images / canonical headers / digests / fixed addresses"
 puts "[ OK ] 2 Package v3 images / Ed25519 / distinct signers / code RX / rodata R+NX / ABS64"
 verify_assembly_sources(images) if assembly_audit
 verify_release_elf(images, elf_path) if elf_path

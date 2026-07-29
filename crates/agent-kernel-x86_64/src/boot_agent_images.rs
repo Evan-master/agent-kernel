@@ -7,6 +7,8 @@
 
 mod admission_supervisor;
 mod fault_handler;
+#[cfg(feature = "qemu-native-udp-driver-proof")]
+mod network_driver;
 mod pci_serial_driver;
 mod resource_manager;
 mod reuse_worker;
@@ -16,6 +18,8 @@ use agent_kernel_x86_64::agent_call::AgentCallOperation;
 
 pub(crate) use admission_supervisor::{admission_supervisor, BootAdmissionSupervisorImage};
 pub(crate) use fault_handler::{fault_handler, BootFaultHandlerImage};
+#[cfg(feature = "qemu-native-udp-driver-proof")]
+pub(crate) use network_driver::{network_driver, BootNetworkDriverImage};
 pub(crate) use pci_serial_driver::{pci_serial_driver, BootPciSerialDriverImage};
 pub(crate) use resource_manager::{resource_manager, BootResourceManagerImage};
 pub(crate) use reuse_worker::{reuse_worker, BootReuseWorkerImage};
