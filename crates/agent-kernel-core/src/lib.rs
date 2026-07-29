@@ -103,6 +103,9 @@ mod namespace_hierarchy;
 mod namespace_lookup;
 mod namespace_path_rebinding;
 mod namespace_store;
+mod network;
+mod network_endpoint_store;
+mod network_transfer_store;
 mod observation;
 mod observation_store;
 mod operation;
@@ -196,8 +199,8 @@ pub use fault_policy::{FaultPolicyAction, FaultPolicyOutcome, FaultPolicyRecord}
 pub use id::{
     ActionId, AgentId, AgentImageId, CapabilityId, CheckpointId, DeviceEventId, DmaMappingId,
     DriverBindingId, DriverCommandId, DriverInvocationId, FaultHandlerId, FaultId, FaultPolicyId,
-    IntentId, MemoryCellId, MessageId, NamespaceEntryId, ObservationId, ResourceId,
-    RuntimeAdmissionId, TaskId, WaiterId,
+    IntentId, MemoryCellId, MessageId, NamespaceEntryId, NetworkTransferId, ObservationId,
+    ResourceId, RuntimeAdmissionId, TaskId, WaiterId,
 };
 pub use intent::{Intent, IntentCompaction, IntentKind, IntentStatus, VerificationRequirement};
 pub use interrupt_route::{
@@ -213,6 +216,11 @@ pub use namespace::{
     NamespaceEntryRecord, NamespaceEntryRetirement, NamespaceKey, NamespaceObject,
     NamespacePathRebinding, NamespacePathResolution, NamespacePathSegment,
     NAMESPACE_PATH_MAX_DEPTH,
+};
+pub use network::{
+    NetworkEndpointConfig, NetworkEndpointRecord, NetworkEndpointStatus, NetworkFrameDescriptor,
+    NetworkMacAddress, NetworkTransferDirection, NetworkTransferRecord, NetworkTransferStatus,
+    ETHERNET_HEADER_BYTES, ETHERNET_MAX_FRAME_BYTES, NETWORK_MAX_MTU, NETWORK_MIN_MTU,
 };
 pub use observation::ObservationRecord;
 pub use operation::{Operation, OperationSet};

@@ -8,8 +8,9 @@ use crate::{
     DmaAttachmentRecord, DmaDomainRecord, DmaMappingRecord, DriverBindingRecord,
     DriverCommandRecord, DriverEndpointRecord, DriverInvocationRecord, DurableArchiveReceipt,
     Event, EventArchiveCheckpoint, FaultHandlerRecord, FaultPolicyRecord, FaultRecord, Intent,
-    InterruptRouteRecord, MemoryCellRecord, MessageRecord, NamespaceEntryRecord, ObservationRecord,
-    Resource, RunQueueEntry, RuntimeAdmissionRecord, Task, WaiterRecord,
+    InterruptRouteRecord, MemoryCellRecord, MessageRecord, NamespaceEntryRecord,
+    NetworkEndpointRecord, NetworkTransferRecord, ObservationRecord, Resource, RunQueueEntry,
+    RuntimeAdmissionRecord, Task, WaiterRecord,
 };
 
 #[derive(Debug)]
@@ -71,6 +72,8 @@ pub struct KernelCore<
     pub(crate) dma_attachments: [DmaAttachmentRecord; RESOURCES],
     pub(crate) dma_mappings: [DmaMappingRecord; CAPS],
     pub(crate) interrupt_routes: [InterruptRouteRecord; RESOURCES],
+    pub(crate) network_endpoints: [NetworkEndpointRecord; RESOURCES],
+    pub(crate) network_transfers: [NetworkTransferRecord; CAPS],
     pub(crate) agent_len: usize,
     pub(crate) agent_entry_len: usize,
     pub(crate) agent_image_len: usize,
@@ -100,6 +103,8 @@ pub struct KernelCore<
     pub(crate) dma_attachment_len: usize,
     pub(crate) dma_mapping_len: usize,
     pub(crate) interrupt_route_len: usize,
+    pub(crate) network_endpoint_len: usize,
+    pub(crate) network_transfer_len: usize,
     pub(crate) retired_agent_floor: u64,
     pub(crate) next_resource: u64,
     pub(crate) next_capability: u64,
@@ -123,6 +128,7 @@ pub struct KernelCore<
     pub(crate) next_driver_command: u64,
     pub(crate) next_driver_invocation: u64,
     pub(crate) next_dma_mapping: u64,
+    pub(crate) next_network_transfer: u64,
     pub(crate) next_sequence: u64,
 }
 
@@ -212,6 +218,8 @@ impl<
             dma_attachments: [DmaAttachmentRecord::empty(); RESOURCES],
             dma_mappings: [DmaMappingRecord::empty(); CAPS],
             interrupt_routes: [InterruptRouteRecord::empty(); RESOURCES],
+            network_endpoints: [NetworkEndpointRecord::empty(); RESOURCES],
+            network_transfers: [NetworkTransferRecord::empty(); CAPS],
             agent_len: 0,
             agent_entry_len: 0,
             agent_image_len: 0,
@@ -241,6 +249,8 @@ impl<
             dma_attachment_len: 0,
             dma_mapping_len: 0,
             interrupt_route_len: 0,
+            network_endpoint_len: 0,
+            network_transfer_len: 0,
             retired_agent_floor: 0,
             next_resource: 1,
             next_capability: 1,
@@ -264,6 +274,7 @@ impl<
             next_driver_command: 1,
             next_driver_invocation: 1,
             next_dma_mapping: 1,
+            next_network_transfer: 1,
             next_sequence: 1,
         }
     }

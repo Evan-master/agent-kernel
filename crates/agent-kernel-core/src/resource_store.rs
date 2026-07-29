@@ -108,6 +108,7 @@ impl<
         self.ensure_authorized(agent, capability, resource, Operation::Rollback)?;
         self.ensure_dma_resource_quiescent(resource)?;
         self.ensure_interrupt_resource_quiescent(resource)?;
+        self.ensure_network_resource_quiescent(resource)?;
         self.ensure_event_slots(1)
     }
 

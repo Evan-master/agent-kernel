@@ -4,7 +4,9 @@ use crate::{
     AgentId, Capability, CapabilityId, DmaAccess, DmaAttachmentRecord, DmaAttachmentStatus,
     DmaDomainRecord, DmaMappingId, DmaMappingRecord, DmaMappingStatus, DmaRequesterId, Event,
     EventArchiveCheckpoint, EventArchiveProposal, InterruptMode, InterruptRouteRecord,
-    InterruptTarget, KernelCore, KernelError, NamespaceObject, OperationSet, ResourceId,
+    InterruptTarget, KernelCore, KernelError, NamespaceObject, NetworkEndpointConfig,
+    NetworkEndpointRecord, NetworkFrameDescriptor, NetworkMacAddress, NetworkTransferDirection,
+    NetworkTransferId, NetworkTransferRecord, NetworkTransferStatus, OperationSet, ResourceId,
 };
 
 type TestCore = KernelCore<2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2>;
@@ -15,7 +17,7 @@ const AUTHORITY: CapabilityId = CapabilityId::new(1);
 
 #[test]
 fn every_persistent_non_event_resource_reference_is_rejected() {
-    for case in 0..34 {
+    for case in 0..37 {
         let mut core = core_with_target();
         install_reference(&mut core, case);
         assert_eq!(
@@ -215,8 +217,36 @@ fn install_reference(core: &mut TestCore, case: usize) {
             );
             core.interrupt_route_len = 1;
         }
+        34 => {
+            core.network_endpoints[0] =
+                NetworkEndpointRecord::new(TARGET, ResourceId::new(8), network_config());
+            core.network_endpoint_len = 1;
+        }
+        35 => {
+            core.network_endpoints[0] =
+                NetworkEndpointRecord::new(ResourceId::new(8), TARGET, network_config());
+            core.network_endpoint_len = 1;
+        }
+        36 => {
+            core.network_transfers[0] = NetworkTransferRecord::new(
+                NetworkTransferId::new(1),
+                TARGET,
+                NetworkTransferDirection::Receive,
+                NetworkFrameDescriptor::new(60, 0x0806, [1; 32]).unwrap(),
+                NetworkTransferStatus::Completed,
+            );
+            core.network_transfer_len = 1;
+        }
         _ => unreachable!(),
     }
+}
+
+fn network_config() -> NetworkEndpointConfig {
+    NetworkEndpointConfig::new(
+        NetworkMacAddress::new([0x52, 0x54, 0, 0x12, 0x34, 0x56]).unwrap(),
+        1500,
+    )
+    .unwrap()
 }
 
 fn install_dma_mapping(core: &mut TestCore, domain: ResourceId, memory: ResourceId) {

@@ -288,3 +288,16 @@ impl IntentId {
         self.0
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NetworkTransferId(u64);
+
+impl NetworkTransferId {
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}

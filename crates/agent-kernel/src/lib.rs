@@ -25,6 +25,7 @@ mod kernel_default;
 mod mailbox;
 mod memory;
 mod namespace;
+mod network;
 mod resource;
 mod runtime_admission;
 mod scheduler;

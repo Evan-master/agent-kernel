@@ -23,7 +23,7 @@ impl SmpBootstrap {
             .map_err(SmpBootError::ApicMapping)
     }
 
-    #[cfg(feature = "qemu-msi-msix-proof")]
+    #[cfg(any(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"))]
     pub(crate) fn prepare_dma_mmio_ranges(
         &mut self,
         boot_info: &mut BootInfo,

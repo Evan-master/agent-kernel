@@ -153,6 +153,14 @@ impl<
                 .iter()
                 .any(|record| record.resource() == target || record.device() == target)
             || self
+                .network_endpoints()
+                .iter()
+                .any(|record| record.resource() == target || record.device() == target)
+            || self
+                .network_transfers()
+                .iter()
+                .any(|record| record.endpoint() == target)
+            || self
                 .event_archive_checkpoint
                 .is_some_and(|checkpoint| checkpoint.root() == target);
 

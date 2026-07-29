@@ -1,7 +1,11 @@
 #![no_std]
 #![no_main]
 #![cfg_attr(
-    any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"),
+    any(
+        feature = "qemu-dma-iommu-proof",
+        feature = "qemu-msi-msix-proof",
+        feature = "qemu-native-net-proof"
+    ),
     allow(dead_code)
 )]
 
@@ -23,8 +27,12 @@ mod agent_memory;
 mod boot_agent_images;
 mod boot_agent_trust;
 mod boot_config;
-#[cfg(all(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
-compile_error!("QEMU DMA/IOMMU and MSI/MSI-X proof profiles are mutually exclusive");
+#[cfg(any(
+    all(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"),
+    all(feature = "qemu-dma-iommu-proof", feature = "qemu-native-net-proof"),
+    all(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof")
+))]
+compile_error!("QEMU hardware proof profiles are mutually exclusive");
 #[cfg(feature = "qemu-dma-iommu-proof")]
 mod dma_iommu_boot;
 mod event_trace;
@@ -37,6 +45,8 @@ mod native_address_space_service;
 mod native_agent_executor;
 mod native_agent_runtime;
 mod native_driver_executor;
+#[cfg(feature = "qemu-native-net-proof")]
+mod native_net_boot;
 mod native_runtime_admission_broker;
 mod pci_serial_driver_flow;
 mod pci_serial_interrupt;
@@ -52,7 +62,11 @@ mod uart_interrupt;
 mod verifier_task_flow;
 
 use boot_config::BOOTLOADER_CONFIG;
-#[cfg(not(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof")))]
+#[cfg(not(any(
+    feature = "qemu-dma-iommu-proof",
+    feature = "qemu-msi-msix-proof",
+    feature = "qemu-native-net-proof"
+)))]
 use boot_config::{
     durable_proof_role, durable_storage_profile, state_signer_profile, tpm_signer_profile,
 };
@@ -156,7 +170,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     {
         msi_msix_boot::run(boot_info, privilege_boundary, smp_bootstrap)
     }
-    #[cfg(not(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof")))]
+    #[cfg(feature = "qemu-native-net-proof")]
+    {
+        native_net_boot::run(boot_info, privilege_boundary, smp_bootstrap)
+    }
+    #[cfg(not(any(
+        feature = "qemu-dma-iommu-proof",
+        feature = "qemu-msi-msix-proof",
+        feature = "qemu-native-net-proof"
+    )))]
     {
         let Some(durable_role) = durable_proof_role() else {
             fatal_boot("AGENT_KERNEL_QEMU_DURABLE_PROFILE_ERROR");

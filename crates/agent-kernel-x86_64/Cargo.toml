@@ -11,6 +11,7 @@ bare-metal = []
 qemu-durable-proof = []
 qemu-dma-iommu-proof = []
 qemu-msi-msix-proof = []
+qemu-native-net-proof = []
 
 [dependencies]
 acpi = { version = "=6.1.1", default-features = false }

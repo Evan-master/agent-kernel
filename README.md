@@ -25,17 +25,18 @@ agent-kernel / native-x86_64
 [06] PCI device fabric ...... driving native I/O
 [07] DMA authority .......... VT-d enforced
 [08] message interrupts ..... MSI/MSI-X active
-kernel://interrupt/v28-msi-msix
+[09] native network ......... ARP round-trip
+kernel://network/v29-virtio-net
 </pre>
 
 </div>
 
 ```text
 ┌─ SYSTEM STATUS ─────────────────────────────────────────────────┐
-│ VERIFIED   V28 / QEMU debug + release   MSI + MSI-X + VT-d      │
+│ VERIFIED   V29 / QEMU debug + release   virtio-net + VT-d       │
 │ KERNEL     no_std / heap-free           ISA    x86_64           │
 │ MODE       ring 0 + ring 3              ABI    Agent Call       │
-│ STATE      ATA A/B + shared DMA domain  AUTH   Capabilities     │
+│ STATE      ATA A/B + native Ethernet    AUTH   Capabilities     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -77,7 +78,7 @@ HAL      immutable request ──> driver binding ──> hardware
 | :--- | :--- |
 | `agent-kernel-core` | Records, fixed-capacity Stores, transitions, Events |
 | `agent-kernel` | Stable `no_std` syscall-style facade |
-| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, MSI/MSI-X, virtio-rng, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
+| `agent-kernel-x86_64` | Boot, paging, ring transitions, IRQ, PCI, MSI/MSI-X, virtio-rng, virtio-net, ATA PIO, TPM CRB, DMAR, VT-d, native execution |
 | `agent-kernel-hal` | Immutable device-request protocol |
 | `agent-state-signer` | `no_std` signing policy and injected provider boundary |
 | `agent-supervisor` | Host simulation and user-space orchestration |
@@ -102,7 +103,7 @@ Agent package
 | Recovery | `#UD`, `#GP`, `#PF`, repair, restart, rollback |
 | IPC | Blocking mailbox, wake, acknowledge, retire |
 | Memory | Page/region allocation, first-fit reuse, zeroing |
-| I/O | Capability-authorized HAL request, INTx/MSI/MSI-X, PCI BAR claims, shared VT-d DMA, virtio-rng, port and ATA PIO |
+| I/O | Capability-authorized HAL request, native Ethernet, INTx/MSI/MSI-X, PCI BAR claims, shared VT-d DMA, virtio-rng, virtio-net, port and ATA PIO |
 
 <details>
 <summary><code>USER ADDRESS MAP</code></summary>
@@ -352,6 +353,7 @@ decode → snapshot → authenticate → preflight → mutate → reply
 PROFILE A          V26 qemu-ata-power-loss
 PROFILE B          V27 qemu-dma-iommu
 PROFILE C          V28 qemu-msi-msix
+PROFILE D          V29 qemu-native-net
 QEMU               all profiles / debug + release
 BASELINE EVENTS     1..451 / exact V25 history
 DURABLE HEAD        generation 1 / Events 1..64
@@ -365,6 +367,10 @@ V27 REVOCATION      VT-d reason 5 / write blocked / RAM unchanged
 V28 REQUESTERS      EDU 00:05.0 + virtio-rng 00:06.0 / Domain 1
 V28 ROUTES          MSI 0xd0 + MSI-X[0] 0xd1
 V28 DETACH          source 0x30 denied / EDU remains operational
+V29 ENDPOINT         52:54:00:12:34:56 / MTU 1500
+V29 QUEUES           RX 0 / TX 1 / one descriptor each
+V29 TRAFFIC          ARP request + gateway reply / MSI-X 0xd2 + 0xd3
+V29 DENIAL           detached source 0x28 / VT-d fault / no completion
 FRAME OWNERSHIP     12..43 per Agent
 BOOT FRAME POOL     77 sealed
 ```
@@ -408,6 +414,12 @@ BOOT FRAME POOL     77 sealed
 | Detached requester fault | `AGENT_KERNEL_DMA_DETACH_FAULT_OK` |
 | Shared-domain survivor | `AGENT_KERNEL_SHARED_DOMAIN_SURVIVOR_OK` |
 | MSI/MSI-X terminal proof | `AGENT_KERNEL_MSI_MSIX_PROOF_OK` |
+| Network capability | `AGENT_KERNEL_NATIVE_NET_CAPABILITY_OK` |
+| Network DMA Domain | `AGENT_KERNEL_NATIVE_NET_DMA_DOMAIN_OK` |
+| Virtio-net TX MSI-X | `AGENT_KERNEL_NATIVE_NET_TX_MSIX_DELIVERED_OK` |
+| ARP round-trip | `AGENT_KERNEL_NATIVE_NET_ARP_REPLY_OK` |
+| Detached network DMA | `AGENT_KERNEL_NATIVE_NET_DMA_DENIAL_OK` |
+| Native network terminal proof | `AGENT_KERNEL_NATIVE_NET_PROOF_OK` |
 | Handoff | `SUPERVISOR_HANDOFF_READY` |
 
 ```text
@@ -549,6 +561,17 @@ isolation           virtio DMA denied / entropy sentinel unchanged
 survivor            EDU DMA + MSI completes after virtio detachment
 ```
 
+```text
+V29 NATIVE VIRTIO NETWORK
+authority           Network Resource / Act + Observe + Rollback
+identity            MAC 52:54:00:12:34:56 / MTU 1500
+queues              RX 0 + TX 1 / one descriptor / four DMA pages
+delivery            MSI-X vectors 0xd2 + 0xd3 / Local APIC EOI
+traffic             ARP request 10.0.2.15 -> gateway 10.0.2.2
+evidence            SHA-256 frame descriptors / ordered Core Events
+isolation           requester detached / VT-d fault / zero completion IRQ
+```
+
 <details>
 <summary><code>VERIFIED IMAGE INVENTORY</code></summary>
 
@@ -578,6 +601,8 @@ $ scripts/run-qemu-dma-iommu.sh
 $ scripts/run-qemu-dma-iommu.sh --release
 $ scripts/run-qemu-msi-msix.sh
 $ scripts/run-qemu-msi-msix.sh --release
+$ scripts/run-qemu-native-net.sh
+$ scripts/run-qemu-native-net.sh --release
 $ ruby scripts/audit-agent-images.rb --assembly
 $ ruby scripts/test-state-signer-package.rb
 $ ruby scripts/test-inspect-tpm-state-signer.rb
@@ -621,7 +646,7 @@ $ cargo check -p agent-kernel-x86_64 \
     --target x86_64-unknown-none
 ```
 
-`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU + virtio-rng · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
+`TOOLCHAIN` Rust nightly · `EMULATOR` QEMU x86_64 + swtpm + Intel VT-d + EDU + virtio-rng + virtio-net · `PROVISIONER` Go · `TARGET` x86_64-unknown-none
 
 ## `08 // TREE`
 
@@ -637,7 +662,7 @@ crates/
 └─ agent-supervisor/     host supervisor
 
 docs/superpowers/{specs,plans}/
-scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-durable-power-loss.rb}
+scripts/{run-qemu.sh,run-qemu-dma-iommu.sh,run-qemu-msi-msix.sh,run-qemu-native-net.sh,run-qemu-durable-power-loss.rb}
 tools/qemu-tpm-provision/
 ```
 
@@ -669,7 +694,8 @@ tools/qemu-tpm-provision/
 [done] capability-bound DMA domain + Intel VT-d grant/revoke proof
 [done] MSI/MSI-X Interrupt Routes + shared multi-device DMA Domain
 [done] modern virtio-rng + requester-specific VT-d detach proof
-[next] network + graphics + USB controllers + formal verification
+[done] capability-governed Network endpoint + modern virtio-net ARP proof
+[next] IPv4/UDP + graphics + USB controllers + formal verification
 ```
 
 | Track | Record |
@@ -683,7 +709,7 @@ tools/qemu-tpm-provision/
 | PCI device path | [Native PCI Serial Driver V23](docs/superpowers/specs/2026-07-27-native-pci-serial-driver-v23-design.md) |
 | Durable milestone | [QEMU ATA Power-Loss V26](docs/superpowers/specs/2026-07-28-qemu-ata-power-loss-v26-design.md) |
 | DMA foundation | [Native DMA/IOMMU V27](docs/superpowers/specs/2026-07-28-native-dma-iommu-v27-design.md) |
-| Active milestone | [Native MSI/MSI-X V28](docs/superpowers/specs/2026-07-28-native-msi-msix-v28-design.md) |
+| Active milestone | [Native Virtio Network V29](docs/superpowers/specs/2026-07-29-native-virtio-net-v29-design.md) |
 
 ## `10 // PROJECT`
 

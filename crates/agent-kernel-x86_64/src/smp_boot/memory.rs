@@ -80,7 +80,11 @@ pub(super) fn map_tpm_crb_page(
     map_device_page(&mut mapper, &mut allocator, physical_offset, locality_base)
 }
 
-#[cfg(any(feature = "qemu-dma-iommu-proof", feature = "qemu-msi-msix-proof"))]
+#[cfg(any(
+    feature = "qemu-dma-iommu-proof",
+    feature = "qemu-msi-msix-proof",
+    feature = "qemu-native-net-proof"
+))]
 pub(super) fn map_dma_mmio_pages(
     boot_info: &mut BootInfo,
     iommu_base: u64,
@@ -100,7 +104,7 @@ pub(super) fn map_dma_mmio_pages(
     map_device_page(&mut mapper, &mut allocator, physical_offset, device_base)
 }
 
-#[cfg(feature = "qemu-msi-msix-proof")]
+#[cfg(any(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"))]
 pub(super) fn map_dma_mmio_ranges(
     boot_info: &mut BootInfo,
     ranges: &[(u64, u64)],
@@ -180,7 +184,7 @@ fn map_device_page(
     }
 }
 
-#[cfg(feature = "qemu-msi-msix-proof")]
+#[cfg(any(feature = "qemu-msi-msix-proof", feature = "qemu-native-net-proof"))]
 fn map_device_range(
     mapper: &mut OffsetPageTable<'_>,
     allocator: &mut BootFrameAllocator<'_>,

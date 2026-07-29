@@ -126,6 +126,30 @@ pub fn format_event(event: &Event) -> String {
         EventKind::InterruptRouteReleased => {
             format_capability_event(event, "interrupt_route_released")
         }
+        EventKind::NetworkEndpointReserved => {
+            format_capability_event(event, "network_endpoint_reserved")
+        }
+        EventKind::NetworkEndpointActivated => {
+            format_capability_event(event, "network_endpoint_activated")
+        }
+        EventKind::NetworkEndpointRevoking => {
+            format_capability_event(event, "network_endpoint_revoking")
+        }
+        EventKind::NetworkEndpointReleased => {
+            format_capability_event(event, "network_endpoint_released")
+        }
+        EventKind::NetworkTransmitPrepared => {
+            format_capability_event(event, "network_transmit_prepared")
+        }
+        EventKind::NetworkTransmitCompleted => {
+            format_capability_event(event, "network_transmit_completed")
+        }
+        EventKind::NetworkTransmitFailed => {
+            format_capability_event(event, "network_transmit_failed")
+        }
+        EventKind::NetworkReceiveRecorded => {
+            format_capability_event(event, "network_receive_recorded")
+        }
         EventKind::ResourceCreated => format_capability_event(event, "resource_created"),
         EventKind::ResourceRetired => format_capability_event(event, "resource_retired"),
         EventKind::ResourceRecordRetired => {
